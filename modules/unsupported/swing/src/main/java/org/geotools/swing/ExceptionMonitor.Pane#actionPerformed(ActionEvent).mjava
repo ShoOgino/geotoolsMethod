@@ -1,0 +1,71 @@
+        /**
+         * Displays the exception trace below the message. This method is
+         * called automatically when the dialog box's "Debug" button is
+         * pressed.  If the exception trace still hasn't been written, this
+         * method will construct the necessary components once and for all.
+         */
+        public void actionPerformed(final ActionEvent event) {
+            if (event.getSource() != traceButton) {
+                dispose();
+                return;
+            }
+            /*
+             * Constructs the exception trace once and for all if it hasn't
+             * already been constructed.
+             */
+            if (trace == null) {
+                JComponent traceComponent = null;
+                for (Throwable cause  = exception;
+                cause != null;
+                cause  = cause.getCause()) {
+                    final JTextArea text = new JTextArea(1, DEFAULT_WIDTH);
+                    text.setTabSize(4);
+                    text.setText(GraphicsUtilities.printStackTrace(cause));
+                    text.setEditable(false);
+                    final JScrollPane scroll = new JScrollPane(text);
+                    if (traceComponent != null) {
+                        if (!(traceComponent instanceof JTabbedPane)) {
+                            String classname = Classes.getShortClassName(exception);
+                            JTabbedPane tabs = new JTabbedPane(JTabbedPane.TOP,
+                                                               JTabbedPane.SCROLL_TAB_LAYOUT);
+                            tabs.addTab(classname, traceComponent);
+                            traceComponent = tabs;
+                        }
+                        String classname = Classes.getShortClassName(cause);
+                        ((JTabbedPane) traceComponent).addTab(classname, scroll);
+                    } else {
+                        traceComponent = scroll;
+                    }
+                }
+                if (traceComponent == null) {
+                    // Should not happen
+                    return;
+                }
+                traceComponent.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createEmptyBorder(12, 0, 0, 0),
+                traceComponent.getBorder()));
+                trace = traceComponent;
+            }
+            /*
+             * Inserts or hides the exception trace.  Even if the trace is
+             * hidden, it will not be destroyed if the user would like to
+             * redisplay it.
+             */
+            traceButton.setText(resources.getString(
+                    traceVisible ? VocabularyKeys.DEBUG : VocabularyKeys.HIDE));
+            traceVisible = !traceVisible;
+            if (dialog instanceof Dialog) {
+                ((Dialog) dialog).setResizable(traceVisible);
+            } else {
+                ((JInternalFrame) dialog).setResizable(traceVisible);
+            }
+            if (traceVisible) {
+                messageContainer.add(trace, BorderLayout.CENTER);
+                dialog.setSize(initialSize.width, DEFAULT_HEIGHT);
+            } else {
+                messageContainer.remove(trace);
+                dialog.setSize(initialSize);
+            }
+            dialog.validate();
+        }
+

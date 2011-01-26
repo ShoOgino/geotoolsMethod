@@ -1,0 +1,93 @@
+    /**
+     * Constructs a new {@code Element}.
+     *
+     * @param  text       The text to parse.
+     * @param  position   In input, the position where to start parsing from.
+     *                    In output, the first character after the separator.
+     */
+    Element(final AbstractParser parser, final String text, final ParsePosition position)
+            throws ParseException
+    {
+        /*
+         * Find the first keyword in the specified string. If a keyword is found, then
+         * the position is set to the index of the first character after the keyword.
+         */
+        int lower = position.getIndex();
+        final int length = text.length();
+        while (lower<length && Character.isWhitespace(text.charAt(lower))) {
+            lower++;
+        }
+        offset = lower;
+        int upper = lower;
+        while (upper<length && Character.isUnicodeIdentifierPart(text.charAt(upper))) {
+            upper++;
+        }
+        if (upper <= lower) {
+            position.setErrorIndex(lower);
+            throw unparsableString(text, position);
+        }
+        keyword = text.substring(lower, upper).toUpperCase(parser.symbols.locale);
+        position.setIndex(upper);
+        /*
+         * Parse the opening bracket. According CTS's specification, two characters
+         * are acceptable: '[' and '('.  At the end of this method, we will require
+         * the matching closing bracket. For example if the opening bracket was '[',
+         * then we will require that the closing bracket is ']' and not ')'.
+         */
+        int bracketIndex = -1;
+        do {
+            if (++bracketIndex >= parser.symbols.openingBrackets.length) {
+                list = null;
+                return;
+            }
+        }
+        while (!parseOptionalSeparator(text, position, parser.symbols.openingBrackets[bracketIndex]));
+        list = new LinkedList<Object>();
+        /*
+         * Parse all elements inside the bracket. Elements are parsed sequentially
+         * and their type are selected according their first character:
+         *
+         *   - If the first character is a quote, then the element is parsed as a String.
+         *   - Otherwise, if the first character is a unicode identifier start, then the
+         *     element is parsed as a chidren Element.
+         *   - Otherwise, the element is parsed as a number.
+         */
+        do {
+            if (position.getIndex() >= length) {
+                throw missingCharacter(parser.symbols.close, length);
+            }
+            //
+            // Try to parse the next element as a quoted string. We will take
+            // it as a string if the first non-blank character is a quote.
+            //
+            if (parseOptionalSeparator(text, position, parser.symbols.quote)) {
+                lower = position.getIndex();
+                upper = text.indexOf(parser.symbols.quote, lower);
+                if (upper < lower) {
+                    position.setErrorIndex(++lower);
+                    throw missingCharacter(parser.symbols.quote, lower);
+                }
+                list.add(text.substring(lower, upper).trim());
+                position.setIndex(upper + 1);
+                continue;
+            }
+            //
+            // Try to parse the next element as a number. We will take it as a number if
+            // the first non-blank character is not the begining of an unicode identifier.
+            //
+            lower = position.getIndex();
+            if (!Character.isUnicodeIdentifierStart(text.charAt(lower))) {
+                final Number number = parser.parseNumber(text, position);
+                if (number == null) {
+                    // Do not update the error index; it is already updated by NumberFormat.
+                    throw unparsableString(text, position);
+                }
+                list.add(number);
+                continue;
+            }
+            // Otherwise, add the element as a child element.
+            list.add(new Element(parser, text, position));
+        } while (parseOptionalSeparator(text, position, parser.symbols.separator));
+        parseSeparator(text, position, parser.symbols.closingBrackets[bracketIndex]);
+    }
+

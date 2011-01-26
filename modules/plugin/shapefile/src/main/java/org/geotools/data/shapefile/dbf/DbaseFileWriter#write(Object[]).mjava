@@ -1,0 +1,41 @@
+    /**
+     * Write a single dbase record.
+     * 
+     * @param record
+     *                The entries to write.
+     * @throws IOException
+     *                 If IO error occurs.
+     * @throws DbaseFileException
+     *                 If the entry doesn't comply to the header.
+     */
+    public void write(Object[] record) throws IOException, DbaseFileException {
+        if (record.length != header.getNumFields()) {
+            throw new DbaseFileException("Wrong number of fields "
+                    + record.length + " expected " + header.getNumFields());
+        }
+
+        buffer.position(0);
+
+        // put the 'not-deleted' marker
+        buffer.put((byte) ' ');
+
+        byte[] bytes;
+        for (int i = 0; i < header.getNumFields(); i++) {
+            // convert this column to bytes
+            if (record[i] == null) {
+                bytes = nullValues[i];
+            } else {
+                bytes = fieldBytes(record[i], i);
+                // if the returned array is not the proper length
+                // write a null instead; this will only happen
+                // when the formatter handles a value improperly.
+                if (bytes.length != nullValues[i].length) {
+                    bytes = nullValues[i];
+                }
+            }
+            buffer.put(bytes);
+        }
+
+        write();
+    }
+

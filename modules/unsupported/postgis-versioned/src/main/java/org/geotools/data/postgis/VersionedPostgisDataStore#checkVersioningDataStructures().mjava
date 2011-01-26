@@ -1,0 +1,97 @@
+    /**
+     * Makes sure the required versioning data structures are available in the database
+     * 
+     * @throws IOException
+     */
+    protected synchronized void checkVersioningDataStructures() throws IOException {
+        Connection conn = null;
+        Statement st = null;
+        ResultSet tables = null;
+        try {
+            // gather a connection in auto commit mode, DDL are not subject to
+            // transactions anyways
+            conn = wrapped.getDataSource().getConnection();
+            conn.setAutoCommit(false);
+
+            // gather all table names and check the required tables are there
+            boolean changeSets = false;
+            boolean tablesChanged = false;
+            boolean versionedTables = false;
+            DatabaseMetaData meta = conn.getMetaData();
+            String[] tableType = { "TABLE" };
+            tables = meta.getTables(null, getConfig().getDatabaseSchemaName(), "%", tableType);
+            while (tables.next()) {
+                String tableName = tables.getString(3);
+                if (tableName.equals(TBL_CHANGESETS))
+                    changeSets = true;
+                if (tableName.equals(TBL_TABLESCHANGED))
+                    tablesChanged = true;
+                if (tableName.equals(TBL_VERSIONEDTABLES))
+                    versionedTables = true;
+
+            }
+
+            // if all tables are there, assume their schema is ok and go on
+            // TODO: really check the schema is the one we want
+            if (!(changeSets && tablesChanged && versionedTables)) {
+
+                // if we have a partial match, become really angry, someone
+                // messed up with the schema
+                if (changeSets || tablesChanged || versionedTables) {
+                    String msg = "The versioning tables are not complete, yet some table with the same name is there.\n";
+                    msg += "Remove tables (";
+                    if (changeSets)
+                        msg += TBL_CHANGESETS + " ";
+                    if (tablesChanged)
+                        msg += TBL_TABLESCHANGED + " ";
+                    if (versionedTables)
+                        msg += TBL_VERSIONEDTABLES;
+                    msg += ") before using again the versioned data store";
+                    throw new IOException(msg);
+                }
+
+                // ok, lets create versioning support tables then
+                st = conn.createStatement();
+                // according to internet searches, the max length of postgres
+                // tables identifiers
+                // is 63 chars
+                // (http://www.postgresql.org/docs/faqs.FAQ_DEV.html#item2.2,
+                // NAMEDATALEN is 64 but the string is null terminated)
+                execute(st, "CREATE TABLE " + TBL_VERSIONEDTABLES + "(ID SERIAL PRIMARY KEY, "
+                        + "SCHEMA VARCHAR(63) NOT NULL, NAME VARCHAR(63) NOT NULL, "
+                        + "VERSIONED BOOLEAN NOT NULL)");
+                execute(st, "CREATE TABLE " + TBL_CHANGESETS + "(REVISION BIGSERIAL PRIMARY KEY, "
+                        + "AUTHOR VARCHAR(256), "
+                        + "DATE TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, " //
+                        + "MESSAGE TEXT)");
+                String schema = getConfig().getDatabaseSchemaName();
+                if (schema == null)
+                    schema = "public";
+                execute(st, "SELECT ADDGEOMETRYCOLUMN('" + schema + "', '" + TBL_CHANGESETS
+                        + "', 'bbox', 4326,  'POLYGON', 2)");
+
+                execute(st, "CREATE TABLE " + TBL_TABLESCHANGED
+                        + "(REVISION BIGINT NOT NULL REFERENCES " + TBL_CHANGESETS
+                        + ", VERSIONEDTABLE INT NOT NULL REFERENCES " + TBL_VERSIONEDTABLES
+                        + ", PRIMARY KEY (REVISION, VERSIONEDTABLE))");
+
+                // and finally commit table creation (yes, Postgres supports
+                // transacted DDL)
+                conn.commit();
+            }
+        } catch (SQLException sqlException) {
+            JDBCUtils.close(conn, Transaction.AUTO_COMMIT, sqlException);
+            conn = null;
+
+            String message = "Error querying database for list of tables:"
+                    + sqlException.getMessage();
+            throw new DataSourceException(message, sqlException);
+        } finally {
+            JDBCUtils.close(tables);
+            JDBCUtils.close(st);
+            JDBCUtils.close(conn, Transaction.AUTO_COMMIT, null);
+        }
+
+        resetTypeInfo();
+    }
+

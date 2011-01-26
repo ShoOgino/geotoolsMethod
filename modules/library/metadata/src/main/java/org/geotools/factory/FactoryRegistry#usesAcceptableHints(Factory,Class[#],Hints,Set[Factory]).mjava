@@ -1,0 +1,113 @@
+    /**
+     * Returns {@code true} is the specified {@code factory} meets the requirements specified
+     * by a map of {@code hints}. This method checks only the hints; it doesn't check the
+     * {@link Filter}, the {@linkplain OptionalFactory#isAvailable availability} or the
+     * user-overrideable {@link #isAcceptable(Object, Class, Hints)} method. This method
+     * invokes itself recursively.
+     *
+     * @param factory     The factory to checks.
+     * @param category    The factory category. Usually an interface.
+     * @param hints       The user requirements ({@code null} not allowed).
+     * @param alreadyDone Should be {@code null} except on recursive calls (for internal use only).
+     * @return {@code true} if the {@code factory} meets the hints requirements.
+     */
+    private boolean usesAcceptableHints(final Factory  factory,
+                                        final Class<?> category,
+                                        final Hints    hints,
+                                        Set<Factory>   alreadyDone)
+    {
+        /*
+         * Ask for implementation hints with special care against infinite recursivity.
+         * Some implementations use deferred algorithms fetching dependencies only when
+         * first needed. The call to getImplementationHints() is sometime a trigger for
+         * fetching dependencies (in order to return accurate hints).   For example the
+         * BufferedCoordinateOperationFactory implementation asks for an other instance
+         * of CoordinateOperationFactory, the instance to cache behind a buffer,  which
+         * should not be itself. Of course BufferedCoordinateOperation will checks that
+         * it is not caching itself, but its test happen too late for preventing a never-
+         * ending loop if we don't put a 'testingHints' guard here. It is also a safety
+         * against broken factory implementations.
+         */
+        if (!testingHints.add(factory)) {
+            return false;
+        }
+        final Map<RenderingHints.Key, ?> implementationHints;
+        try {
+            implementationHints = Hints.stripNonKeys(factory.getImplementationHints());
+        } finally {
+            if (!testingHints.remove(factory)) {
+                throw new AssertionError(factory); // Should never happen.
+            }
+        }
+        if (implementationHints == null) {
+            // factory was bad and did not meet contract - assume it used no Hints
+            return true;
+        }
+        /*
+         * We got the implementation hints. Now tests their compatibility.
+         */
+        Hints remaining = null;
+        for (final Map.Entry<?,?> entry : implementationHints.entrySet()) {
+            final Object    key   = entry.getKey();
+            final Object    value = entry.getValue();
+            final Object expected = hints.get(key);
+            if (expected != null) {
+                /*
+                 * We have found a hint that matter. Check if the
+                 * available factory meets the user's criterions.
+                 */
+                if (expected instanceof Class<?>) {
+                    if (!((Class<?>) expected).isInstance(value)) {
+                        return false;
+                    }
+                } else if (expected instanceof Class<?>[]) {
+                    final Class<?>[] types = (Class<?>[]) expected;
+                    int i = 0;
+                    do if (i >= types.length) return false;
+                    while (!types[i++].isInstance(value));
+                } else if (!expected.equals(value)) {
+                    return false;
+                }
+            }
+            /*
+             * Checks recursively in factory dependencies, if any. Note that the dependencies
+             * will be checked against a subset of user's hints. More specifically, all hints
+             * processed by the current pass will NOT be passed to the factories dependencies.
+             * This is because the same hint may appears in the "parent" factory and a "child"
+             * dependency with different value. For example the FORCE_LONGITUDE_FIRST_AXIS_ORDER
+             * hint has the value TRUE in OrderedAxisAuthorityFactory, but the later is basically
+             * a wrapper around the ThreadedEpsgFactory (typically), which has the value FALSE
+             * for the same hint.
+             *
+             * Additional note: The 'alreadyDone' set is a safety against cyclic dependencies,
+             * in order to protect ourself against never-ending loops. This is not the same
+             * kind of dependencies than 'testingHints'. It is a "factory A depends on factory
+             * B which depends on factory A" loop, which is legal.
+             */
+            if (value instanceof Factory) {
+                final Factory dependency = (Factory) value;
+                if (alreadyDone == null) {
+                    alreadyDone = new HashSet<Factory>();
+                }
+                if (!alreadyDone.contains(dependency)) {
+                    alreadyDone.add(factory);
+                    if (remaining == null) {
+                        remaining = new Hints(hints);
+                        remaining.keySet().removeAll(implementationHints.keySet());
+                    }
+                    final Class<?> type;
+                    if (key instanceof Hints.Key) {
+                        type = ((Hints.Key) key).getValueClass();
+                    } else {
+                        type = Factory.class; // Kind of unknown factory type...
+                    }
+                    // Recursive call to this method for scanning dependencies.
+                    if (!usesAcceptableHints(dependency, type, remaining, alreadyDone)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+

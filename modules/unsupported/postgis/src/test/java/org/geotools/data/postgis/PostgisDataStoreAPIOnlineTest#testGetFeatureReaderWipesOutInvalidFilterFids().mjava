@@ -1,0 +1,51 @@
+    /**
+     * GEOT-2182, make sure no invalid fids are passed down to the database
+     */
+    public void testGetFeatureReaderWipesOutInvalidFilterFids() throws IOException, IllegalFilterException {
+        FeatureReader<SimpleFeatureType, SimpleFeature> reader;
+
+        //grab some valid fids...
+        reader = data.getFeatureReader(new DefaultQuery("road"), Transaction.AUTO_COMMIT);
+        final String fid1, fid2, fid3;
+        try{
+            //roads contains initially 3 features, as set up in #dataSetup()
+            fid1 = reader.next().getID();
+            fid2 = reader.next().getID();
+            fid3 = reader.next().getID();
+        }finally{
+            reader.close();
+        }
+        
+        FilterFactory2 factory = CommonFactoryFinder.getFilterFactory2(null);
+        
+        Set<Identifier> ids = new HashSet<Identifier>();
+        ids.add(factory.featureId(fid1));
+        ids.add(factory.featureId(fid2));
+        // the following one should be stripped out from the request. Its structure keeps being
+        // <someString>.<number> but the FIDMapper.isValid() method should return false for it
+        ids.add(factory.featureId("_" + fid3));
+        
+        org.opengis.filter.Filter filter = factory.id(ids);
+
+        Transaction t = new DefaultTransaction();
+        reader = data.getFeatureReader(new DefaultQuery("road", filter), t);
+        assertNotNull(reader);
+        try {
+            Set<String> expected = new HashSet<String>();
+            expected.add(fid1);
+            expected.add(fid2);
+            
+            Set<String> returned = new HashSet<String>();
+            assertTrue(reader.hasNext());
+            returned.add( reader.next().getID());
+            assertTrue(reader.hasNext());
+            returned.add( reader.next().getID() );
+            assertFalse("expected only 2 features", reader.hasNext());
+            
+            assertEquals(expected, returned);
+        } finally {
+            reader.close();
+            t.close();
+        }
+    }
+

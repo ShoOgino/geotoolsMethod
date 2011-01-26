@@ -1,0 +1,45 @@
+	/**
+	 * Gets the list of attribute names required for both featureType and filter
+	 *
+	 * @param featureType
+	 *            The FeatureType to get attribute names for.
+	 * @param filter
+	 *            The filter which needs attributes to filter.
+	 *
+	 * @return The list of attribute names required by a filter.
+	 *
+	 * @throws IOException
+	 *             If we can't get the schema.
+	 */
+	protected String[] attributeNames(SimpleFeatureType featureType, Filter filter)
+			throws IOException {
+		String typeName = featureType.getTypeName();
+		SimpleFeatureType origional = getSchema(typeName);
+		SQLBuilder sqlBuilder = getSqlBuilder(typeName);
+
+		if (featureType.getAttributeCount() == origional.getAttributeCount()) {
+			// featureType is complete (so filter must require subset
+			return DataUtilities.attributeNames(featureType);
+		}
+
+		String[] typeAttributes = DataUtilities.attributeNames(featureType);
+		String[] filterAttributes = DataUtilities.attributeNames(sqlBuilder
+				.getPostQueryFilter(filter));
+
+		if ((filterAttributes == null) || (filterAttributes.length == 0)) {
+			// no filter attributes required
+			return typeAttributes;
+		}
+
+		Set set = new HashSet();
+		set.addAll(Arrays.asList(typeAttributes));
+		set.addAll(Arrays.asList(filterAttributes));
+
+		if (set.size() == typeAttributes.length) {
+			// filter required a subset of featureType attributes
+			return typeAttributes;
+		} else {
+			return (String[]) set.toArray(new String[set.size()]);
+		}
+	}
+

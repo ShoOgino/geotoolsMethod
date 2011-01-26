@@ -1,0 +1,71 @@
+	public void addGranules(final Collection<SimpleFeature> granules, final Transaction transaction) throws IOException {
+		Utilities.ensureNonNull("granuleMetadata",granules);
+		final Lock lock=rwLock.writeLock();
+		try{
+			lock.lock();
+			// check if the index has been cleared
+			checkStore();
+			
+			
+			FeatureWriter<SimpleFeatureType, SimpleFeature> fw =null;
+			try{
+				// create a writer that appends this features
+				fw = tileIndexStore.getFeatureWriterAppend(typeName,transaction);
+
+				//add them all
+				for(SimpleFeature f:granules){
+					
+					// create a new feature
+					final SimpleFeature feature = fw.next();
+					
+					// get attributes and copy them over
+					for(int i=f.getAttributeCount()-1;i>=0;i--){
+						Object attribute = f.getAttribute(i);
+						
+						
+						// special case for postgis
+						if(spi instanceof PostgisNGJNDIDataStoreFactory||spi instanceof PostgisNGDataStoreFactory)
+						{
+							final AttributeDescriptor descriptor = tileIndexStore.getSchema(typeName).getDescriptor(i);
+							if(descriptor.getType().getBinding().equals(String.class))
+							{
+								// escape the string correctly
+								attribute=((String) attribute).replace("\\", "\\\\");
+							}
+
+							if(descriptor.getType().getBinding().equals(Date.class))
+							{
+								// escape the date correctly
+								Calendar cal = Calendar.getInstance(UTC_TZ);
+								cal.setTime(((Date) attribute));
+								attribute=cal.getTime();
+							}
+
+						}
+						
+						feature.setAttribute(i, attribute);
+					}
+					
+					//write down
+					fw.write();
+
+				}
+			}
+			catch (Throwable e) {
+				if(LOGGER.isLoggable(Level.SEVERE))
+					LOGGER.log(Level.SEVERE,e.getLocalizedMessage(),e);
+			}finally{
+				if(fw!=null)
+					fw.close();
+			}
+			
+			// do your thing
+			
+			//update bounds
+			bounds=tileIndexStore.getFeatureSource(typeName).getBounds(Query.ALL);
+		}finally{
+			lock.unlock();
+		}	
+		
+	}
+

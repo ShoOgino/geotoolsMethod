@@ -1,0 +1,58 @@
+    /**
+     * Separates the specified math transform. This method returns a math transform that uses
+     * only the specified {@linkplain #getSourceDimensions source dimensions} and returns only
+     * the specified {@linkplain #getTargetDimensions target dimensions}. Special case:
+     * <p>
+     * <ul>
+     *   <li><p>If {@linkplain #getSourceDimensions source dimensions} are unspecified, then the
+     *       returned transform will expects all source dimensions as input but will produces only
+     *       the specified {@linkplain #getTargetDimensions target dimensions} as output.</p></li>
+     *
+     *   <li><p>If {@linkplain #getTargetDimensions target dimensions} are unspecified, then the
+     *       returned transform will expects only the specified {@linkplain #getSourceDimensions
+     *       source dimensions} as input, and the target dimensions will be inferred
+     *       automatically.</p></li>
+     * </ul>
+     *
+     * @param  transform The transform to separate.
+     * @return The separated math transform.
+     * @throws FactoryException if the transform can't be separated.
+     */
+    public MathTransform separate(MathTransform transform) throws FactoryException {
+        if (sourceDimensions == null) {
+            sourceDimensions = series(0, transform.getSourceDimensions());
+            if (targetDimensions == null) {
+                targetDimensions = series(0, transform.getTargetDimensions());
+                return transform;
+            }
+            return separateOutput(transform);
+        }
+        final int[] target = targetDimensions;
+        transform = separateInput(transform);
+        assert XArray.isStrictlySorted(targetDimensions);
+        if (target != null) {
+            final int[] step = targetDimensions;
+            targetDimensions = new int[target.length];
+            for (int i=0; i<target.length; i++) {
+                final int j = Arrays.binarySearch(step, target[i]);
+                if (j < 0) {
+                    /*
+                     * The user is asking for some target dimensions that we can't keep, probably
+                     * because at least one of the requested target dimension as a dependency to
+                     * an source dimension that do not appears in the list of source dimensions to
+                     * kept.
+                     *
+                     * TODO: provide a more accurate error message.
+                     */
+                    throw new FactoryException(Errors.format(ErrorKeys.INSEPARABLE_TRANSFORM));
+                }
+                targetDimensions[i] = j;
+            }
+            transform = separateOutput(transform);
+            targetDimensions = target;
+        }
+        assert sourceDimensions.length == transform.getSourceDimensions() : transform;
+        assert targetDimensions.length == transform.getTargetDimensions() : transform;
+        return transform;
+    }
+

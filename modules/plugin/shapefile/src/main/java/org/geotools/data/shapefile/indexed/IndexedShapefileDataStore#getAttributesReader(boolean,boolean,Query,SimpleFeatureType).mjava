@@ -1,0 +1,100 @@
+    /**
+     * Returns the attribute reader, allowing for a pure shape reader, or a
+     * combined dbf/shp reader. Will return null if reading the indexes confirms there is nothing
+     * to read
+     * 
+     * @param readDbf -
+     *                if true, the dbf fill will be opened and read
+     * @param readGeometry
+     *                DOCUMENT ME!
+     * @param filter -
+     *                a Filter to use
+     * 
+     * 
+     * @throws IOException
+     */
+    protected IndexedShapefileAttributeReader getAttributesReader(
+            boolean readDbf, boolean readGeometry, Query query, SimpleFeatureType targetSchema)
+            throws IOException {
+        Envelope bbox = new ReferencedEnvelope(); // will be bbox.isNull() to
+        // start
+
+        Filter filter = query != null ? query.getFilter() : null;
+        CloseableIterator<Data> goodRecs = null;
+        if (filter instanceof Id && shpFiles.isLocal() && existsOrCreateFidIndex()) {
+            Id fidFilter = (Id) filter;
+
+            TreeSet idsSet = new TreeSet(new IdentifierComparator());
+            idsSet.addAll(fidFilter.getIdentifiers());
+            List<Data> records = queryFidIndex(idsSet);
+            if(records != null) {
+            	goodRecs = new CloseableIteratorWrapper<Data>(records.iterator());
+            }
+        } else {
+            if (filter != null) {
+                // Add additional bounds from the filter
+                // will be null for Filter.EXCLUDES
+                bbox = (Envelope) filter.accept(
+                        ExtractBoundsFilterVisitor.BOUNDS_VISITOR, bbox);
+                if (bbox == null) {
+                    bbox = new ReferencedEnvelope();
+                    // we hit Filter.EXCLUDES consider returning an empty
+                    // reader?
+                    // (however should simplify the filter to detect ff.not(
+                    // fitler.EXCLUDE )
+                }
+            }
+
+            if (!bbox.isNull() && this.useIndex) {
+                try {
+                    goodRecs = this.queryQuadTree(bbox);
+                } catch (TreeException e) {
+                    throw new IOException("Error querying index: "
+                            + e.getMessage());
+                }
+            }
+        }
+        List<AttributeDescriptor> atts = targetSchema.getAttributeDescriptors();
+
+        IndexedDbaseFileReader dbfR = null;
+        
+        // do we have anything to read at all? If not don't bother opening all the files
+        if(goodRecs != null && !goodRecs.hasNext()) {
+            // System.out.println("Empty results for " + targetSchema.getName().getLocalPart() + ", skipping read");
+            goodRecs.close();
+            return null;
+        }
+
+        if (!readDbf) {
+            LOGGER.fine("The DBF file won't be opened since no attributes "
+                    + "will be read from it");
+            atts = new ArrayList<AttributeDescriptor>(1);
+            atts.add(schema.getGeometryDescriptor());
+
+            if (!readGeometry) {
+                atts = new ArrayList<AttributeDescriptor>(1);
+            }
+        } else {
+            dbfR = (IndexedDbaseFileReader) openDbfReader();
+        }
+
+        Hints hints = query != null ? query.getHints() : null;
+        final ShapefileReader shapeReader = openShapeReader(getGeometryFactory(hints), goodRecs != null);
+        IndexedShapefileAttributeReader reader =  new IndexedShapefileAttributeReader(atts, 
+                shapeReader, dbfR, goodRecs);
+        reader.setTargetBBox(bbox);
+        if(hints != null) {
+            Number simplificationDistance = (Number) hints.get(Hints.GEOMETRY_DISTANCE);    
+            if(simplificationDistance != null) {
+                reader.setSimplificationDistance(simplificationDistance.doubleValue());
+            }
+            reader.setScreenMap((ScreenMap) hints.get(Hints.SCREENMAP));
+            
+            if(Boolean.TRUE.equals(hints.get(Hints.FEATURE_2D))) {
+                shapeReader.setFlatGeometry(true);
+            }
+        }
+        
+        return reader;
+    }
+

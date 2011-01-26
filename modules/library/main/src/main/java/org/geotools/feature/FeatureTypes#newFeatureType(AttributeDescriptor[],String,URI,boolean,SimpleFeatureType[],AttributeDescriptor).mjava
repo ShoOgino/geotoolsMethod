@@ -1,0 +1,53 @@
+    /**
+     * The most specific way to create a new FeatureType.
+     *
+     * @param types The AttributeTypes to create the FeatureType with.
+     * @param name The typeName of the FeatureType. Required, may not be null.
+     * @param ns The namespace of the FeatureType. Optional, may be null.
+     * @param isAbstract True if this created type should be abstract.
+     * @param superTypes A Collection of types the FeatureType will inherit from. Currently, all
+     *        types inherit from feature in the opengis namespace.
+     * @return A new FeatureType created from the given arguments.
+     * @throws FactoryRegistryException If there are problems creating a factory.
+     * @throws SchemaException If the AttributeTypes provided are invalid in some way.
+     */
+    public static SimpleFeatureType newFeatureType( AttributeDescriptor[] types, String name, URI ns,
+            boolean isAbstract, SimpleFeatureType[] superTypes, AttributeDescriptor defaultGeometry )
+            throws FactoryRegistryException, SchemaException {
+        SimpleFeatureTypeBuilder tb = new SimpleFeatureTypeBuilder();
+
+        tb.setName(name);
+        tb.setNamespaceURI(ns);
+        tb.setAbstract(isAbstract);
+        if(types != null) {
+            tb.addAll(types);
+        }
+
+        if ( defaultGeometry != null ) {
+            //make sure that the default geometry was one of the types specified
+            boolean add = true;
+            for ( int i = 0; i < types.length; i++ ) {
+                if (types[i] == defaultGeometry) {
+                    add = false;
+                    break;
+                }
+            }
+            if ( add ) {
+                tb.add(defaultGeometry);
+            }
+            tb.setDefaultGeometry(defaultGeometry.getLocalName());
+        }
+        if ( superTypes != null && superTypes.length > 0) {
+            if ( superTypes.length > 1 ) {
+                throw new SchemaException("Can only specify a single super type");
+            }
+            tb.setSuperType(superTypes[0]);
+
+        }
+        else {
+            //use the default super type
+            tb.setSuperType(ABSTRACT_FEATURE_TYPE);
+        }
+        return (SimpleFeatureType) tb.buildFeatureType();
+    }
+

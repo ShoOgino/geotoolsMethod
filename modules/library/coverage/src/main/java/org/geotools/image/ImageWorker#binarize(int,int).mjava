@@ -1,0 +1,37 @@
+    /**
+     * Binarizes the {@linkplain #image} (if not already done) and replace all 0
+     * values by {@code value0} and all 1 values by {@code value1}. If the
+     * image should be binarized using a custom threshold value (instead of the
+     * automatic one), invoke {@link #binarize(double)} explicitly before this
+     * method.
+     *
+     * @return this {@link ImageWorker}.
+     * @see #isBinary
+     * @see #binarize()
+     * @see #binarize(double)
+     * @see BinarizeDescriptor
+     * @see LookupDescriptor
+     */
+    public final ImageWorker binarize(final int value0, final int value1) {
+        tileCacheEnabled(false);
+        binarize();
+        tileCacheEnabled(true);
+        final LookupTableJAI table;
+        final int min = Math.min(value0, value1);
+        if (min >= 0) {
+            final int max = Math.max(value0, value1);
+            if (max < 256) {
+                table = new LookupTableJAI(new byte[] {(byte) value0, (byte) value1});
+            } else if (max < 65536) {
+                table = new LookupTableJAI(new short[] {(short) value0, (short) value1}, true);
+            } else {
+                table = new LookupTableJAI(new int[] {value0, value1});
+            }
+        } else {
+            table = new LookupTableJAI(new int[] { value0, value1 });
+        }
+        image = LookupDescriptor.create(image, table, getRenderingHints());
+        invalidateStatistics();
+        return this;
+    }
+

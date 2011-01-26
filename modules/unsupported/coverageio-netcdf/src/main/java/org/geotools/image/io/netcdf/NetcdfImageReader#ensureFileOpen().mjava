@@ -1,0 +1,69 @@
+    /**
+     * Ensures that the NetCDF file is open, but do not load any variable yet.
+     * The {@linkplain #variable} will be read by {@link #prepareVariable} only.
+     */
+    private void ensureFileOpen() throws IOException {
+        if (dataset == null) {
+            /*
+             * Clears the 'abort' flag here (instead of in 'read' method only) because
+             * we pass this ImageReader instance to the NetCDF DataSet as a CancelTask.
+             */
+            lastError = null;
+            clearAbortRequest();
+            final String dodsURL = getInputDODS();
+            if (dodsURL != null) {
+                if (variableNames == null) {
+                    final int s = dodsURL.indexOf('?');
+                    if (s >= 0) {
+                        variableNames = new String[] {
+                            dodsURL.substring(s + 1)
+                        };
+                    }
+                }
+                dataset = new NetcdfDataset(new DODSNetcdfFile(dodsURL, this), false);
+            } else {
+                final File inputFile = getInputFile();
+                dataset = NetcdfDataset.openDataset(inputFile.getPath(), false, this);
+                if (dataset == null) {
+                    throw new FileNotFoundException(Errors.format(
+                            ErrorKeys.FILE_DOES_NOT_EXIST_$1, inputFile));
+                }
+            }
+            if (variableNames == null) {
+                /*
+                 * Gets a list of every variables found in the NetcdfDataset and copies the names
+                 * in a filtered list which exclude every variable that are dimension of an other
+                 * variable. For example "longitude" may be a variable found in the NetcdfDataset,
+                 * but is declared only because it is needed as a dimension for the "temperature"
+                 * variable. The "longitude" variable is usually not of direct interest to the user
+                 * (the interresting variable is "temperature"), so we exclude it.
+                 */
+                final List variables = dataset.getVariables();
+                final String[] filtered = new String[variables.size()];
+                int count = 0;
+                for (int i=0; i<filtered.length; i++) {
+                    final VariableIF candidate = (VariableIF) variables.get(i);
+                    /*
+                     * - Images require at least 2 dimensions. They may have more dimensions,
+                     *   in which case a slice will be taken later.
+                     *
+                     * - Excludes characters, strings and structures, which can not be easily
+                     *   mapped to an image type. In addition, 2-dimensional character arrays
+                     *   are often used for annotations and we don't wan't to confuse them
+                     *   with images.
+                     *
+                     * - Excludes axis. They are often already excluded by the first condition
+                     *   because axis are usually 1-dimensional, but some are 2-dimensional,
+                     *   e.g. a localization grid.
+                     */
+                    if (candidate.getRank()>=2 && VALID_TYPES.contains(candidate.getDataType()) &&
+                            !isAxis(candidate, variables))
+                    {
+                        filtered[count++] = candidate.getName();
+                    }
+                }
+                variableNames = XArray.resize(filtered, count);
+            }
+        }
+    }
+

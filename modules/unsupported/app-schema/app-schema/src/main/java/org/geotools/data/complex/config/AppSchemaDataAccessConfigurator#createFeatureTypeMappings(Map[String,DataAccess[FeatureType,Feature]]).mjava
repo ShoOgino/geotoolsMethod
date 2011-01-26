@@ -1,0 +1,34 @@
+    private Set<FeatureTypeMapping> createFeatureTypeMappings(
+            Map<String, DataAccess<FeatureType, Feature>> sourceDataStores) throws IOException {
+        Set mappingsConfigs = config.getTypeMappings();
+
+        Set<FeatureTypeMapping> featureTypeMappings = new HashSet<FeatureTypeMapping>();
+
+        for (Iterator it = mappingsConfigs.iterator(); it.hasNext();) {
+            TypeMapping dto = (TypeMapping) it.next();
+
+            FeatureSource featureSource = getFeatureSource(dto, sourceDataStores);
+            // get CRS from underlying feature source and pass it on
+            AttributeDescriptor target = getTargetDescriptor(dto, featureSource.getSchema()
+                    .getCoordinateReferenceSystem());
+
+            // set original schema locations for encoding
+            target.getType().getUserData().put("schemaURI", schemaURIs);
+            
+            List attMappings = getAttributeMappings(target, dto.getAttributeMappings(), dto.getItemXpath());
+
+            FeatureTypeMapping mapping;
+
+            mapping = FeatureTypeMappingFactory.getInstance(featureSource, target, attMappings, namespaces,
+                    dto.getItemXpath(), dto.isXmlDataStore());
+            
+            String mappingName = dto.getMappingName();
+            if (mappingName != null) {
+                mapping.setName(Types.degloseName(mappingName, namespaces));
+            }
+
+            featureTypeMappings.add(mapping);
+        }
+        return featureTypeMappings;
+    }
+

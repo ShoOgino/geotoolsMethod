@@ -1,0 +1,146 @@
+    /**
+     * This method performs the task of searching the file for a public class or interface
+     * and its associated javadoc comment block. If found, the comment block is searched
+     * for a source tag which, if absent, will be generated and inserted into the file.
+     *
+     * @param file file to process
+     * @return true if the source tag was inserted into the file; false otherwise
+     *
+     * @throws FileNotFoundException
+     * @throws IOException
+     */
+    private boolean processFile(File file) throws FileNotFoundException, IOException {
+        List<String> buffer = new ArrayList<String>();
+
+        boolean inCommentBlock = false;
+        boolean nonEmptyLines = false;
+        boolean completedSearch = false;
+
+        int commentStartLine = -1;
+        int commentEndLine = -1;
+        int sourceTagLine = -1;
+
+        Matcher matcher = null;
+        String text;
+        String sourceTagText;
+
+        /**
+         * Find the svn repo path: trunk, tags or branches
+         */
+        matcher = findSVNLine.matcher(file.getAbsolutePath());
+        if (matcher.matches()) {
+            int pos = matcher.start(1);
+
+            StringBuilder sb = new StringBuilder(" * @source $URL: ");
+            sb.append("http://svn.somewhere.foo/org/geotools/");
+            sb.append(file.getAbsolutePath().substring(pos));
+            sb.append(" $");
+            sourceTagText = sb.toString();
+
+        } else {
+            // don't process this file
+            return false;
+        }
+
+        LineNumberReader reader = new LineNumberReader( new FileReader(file) );
+
+        /**
+         * We want the first line of text to be line 0 so
+         * that line numbers match buffer indices
+         */
+        reader.setLineNumber(-1);
+        
+        while ( (text = reader.readLine()) != null ) {
+            buffer.add(text);
+            
+            if (completedSearch) {
+                continue;
+            }
+
+            if (inCommentBlock) {
+                matcher = findCommentEnd.matcher(text);
+                if (matcher.find()) {
+                    inCommentBlock = false;
+                    commentEndLine = reader.getLineNumber();
+                }
+                
+            } else {
+                matcher = findCommentStart.matcher(text);
+                if (matcher.find()) {
+                    inCommentBlock = true;
+                    nonEmptyLines = false;
+                    commentStartLine = reader.getLineNumber();
+
+                } else {
+                    matcher = findClass.matcher(text);
+                    if (matcher.find()) {
+
+                        /*
+                         * If no javadoc comment block preceded the class header
+                         * there is nothing to do
+                         */
+                        if (commentStartLine < 0) {
+                            return false;
+                        }
+
+                        /* If there were any non-blank lines between the comment and
+                         * the class header we will act safely and not modify the file
+                         */
+                        if (nonEmptyLines) {
+                            return false;
+                        }
+
+                        /*
+                         * Check if the source tag already exists
+                         */
+                        for (int i = commentStartLine; i <= commentEndLine; i++) {
+                            matcher = findSourceTag.matcher(buffer.get(i));
+                            if (matcher.find()) {
+                                return false;
+                            }
+                        }
+
+                        /*
+                         * Check if the version tag exists. If it does we
+                         * will place the source tag on the line before it
+                         */
+                        for (int i = commentStartLine; i <= commentEndLine; i++) {
+                            matcher = findVersionTag.matcher(buffer.get(i));
+                            if (matcher.find()) {
+                                sourceTagLine = i;
+                                break;
+                            }
+                        }
+
+                        if (sourceTagLine < 0) {
+                            sourceTagLine = commentEndLine;
+                        }
+
+                        completedSearch = true;
+
+                    } else {
+                        /**
+                         * Not a comment line or the class header. Check if it is
+                         * a non-emptyLine
+                         */
+                        if (text.trim().length() > 0) {
+                            nonEmptyLines = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        reader.close();
+
+        /*
+         * Close the input file and call the writing method
+         * that will insert the source tag
+         */
+        if (completedSearch) {
+            return writeFile(file, buffer, sourceTagLine, sourceTagText);
+        }
+
+        return false;
+    }
+

@@ -1,0 +1,34 @@
+    /**
+     * Creates the backing store for the specified data source. This method usually returns
+     * a new instance of {@link AccessDialectEpsgFactory} or {@link AnsiDialectEpsgFactory}.
+     * Subclasses may override this method in order to returns an instance tuned for the
+     * SQL syntax of the underlying database. Example for a PostgreSQL data source:
+     *
+     * <blockquote><pre>
+     * protected AbstractAuthorityFactory createBackingStore(Hints hints) throws SQLException {
+     *     return new AnsiDialectEpsgFactory(hints, getDataSource().getConnection());
+     * }
+     * </pre></blockquote>
+     *
+     * @param  hints A map of hints, including the low-level factories to use for CRS creation.
+     *         This argument should be given unchanged to {@code DirectEpsgFactory} constructor.
+     * @return The {@linkplain DirectEpsgFactory EPSG factory} using SQL queries appropriate
+     *         for this data source.
+     * @throws SQLException if connection to the database failed.
+     */
+    protected AbstractAuthorityFactory createBackingStore(final Hints hints) throws SQLException {
+        final DataSource source = getDataSource();
+        final Connection connection = source.getConnection();
+        final String quote = connection.getMetaData().getIdentifierQuoteString();
+        if (quote.equals("\"")) {
+            /*
+             * PostgreSQL quotes the indentifiers with "..." while MS-Access quotes the
+             * identifiers with [...], so we use the identifier quote string metadata as
+             * a way to distinguish the two cases. However I'm not sure that it is a robust
+             * criterion. Subclasses should always override as a safety.
+             */
+            return new FactoryUsingAnsiSQL(hints, connection);
+        }
+        return new FactoryUsingSQL(hints, connection);
+    }
+

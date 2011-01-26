@@ -1,0 +1,39 @@
+    /**
+     * Resolves the code list to an unique instance after deserialization. The instance is resolved
+     * using its {@linkplain #name() name} only (not its {@linkplain #ordinal() ordinal}).
+     *
+     * @return This code list as an unique instance.
+     * @throws ObjectStreamException if the deserialization failed.
+     */
+    protected Object readResolve() throws ObjectStreamException {
+        final Class<? extends CodeList> codeType = getClass();
+        final Collection<? extends CodeList> values;
+        synchronized (VALUES) {
+            values = VALUES.get(codeType);
+        }
+        if (values != null) {
+            synchronized (values) {
+                for (final CodeList code : values) {
+                    if (!codeType.isInstance(code)) {
+                        // Paranoiac check - should never happen unless the subclass
+                        // modifies itself the collection given to the constructor,
+                        // in which case we will not touch it.
+                        return this;
+                    }
+                    if (code.matches(name)) {
+                        return code;
+                    }
+                }
+                // We have verified with codeType.isInstance(code) that every elements are
+                // of the appropriate class. This is the best we can do for type safety.
+                @SuppressWarnings("unchecked")
+                final Collection<CodeList> unsafe = (Collection) values;
+                if (!unsafe.add(this)) {
+                    // Paranoiac check - should never happen.
+                    throw new InvalidObjectException(name);
+                }
+            }
+        }
+        return this;
+    }
+

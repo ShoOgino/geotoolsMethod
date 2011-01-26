@@ -1,0 +1,159 @@
+    /**
+     * Separates the math transform on the basis of {@linkplain #sourceDimensions input dimensions}.
+     * The remaining {@linkplain #targetDimensions output dimensions} will be selected automatically
+     * according the specified input dimensions.
+     *
+     * @param  transform The transform to reduces.
+     * @return A transform expecting only the specified input dimensions.
+     * @throws FactoryException if the transform is not separable.
+     */
+    private MathTransform separateInput(final MathTransform transform) throws FactoryException {
+        final int dimSource = transform.getSourceDimensions();
+        final int dimTarget = transform.getTargetDimensions();
+        final int dimInput  = sourceDimensions.length;
+        final int lower     = sourceDimensions[0];
+        final int upper     = sourceDimensions[dimInput-1] + 1;
+        assert XArray.isStrictlySorted(sourceDimensions);
+        if (upper > dimSource) {
+            throw new IllegalArgumentException(Errors.format(
+                    ErrorKeys.ILLEGAL_ARGUMENT_$2, "sourceDimensions", upper-1));
+        }
+        /*
+         * Check for easiest cases: same transform, identity transform or concatenated transforms.
+         */
+        if (dimInput == dimSource) {
+            assert lower==0 && upper==dimSource;
+            targetDimensions = series(0, dimTarget);
+            return transform;
+        }
+        if (transform.isIdentity()) {
+            targetDimensions = sourceDimensions;
+            return factory.createAffineTransform(MatrixFactory.create(dimInput+1));
+        }
+        if (transform instanceof ConcatenatedTransform) {
+            final ConcatenatedTransform ctr = (ConcatenatedTransform) transform;
+            final int[] original = sourceDimensions;
+            final MathTransform step1, step2;
+            step1 = separateInput(ctr.transform1); sourceDimensions = targetDimensions;
+            step2 = separateInput(ctr.transform2); sourceDimensions = original;
+            return factory.createConcatenatedTransform(step1, step2);
+        }
+        /*
+         * Special case for the pass through transform:  if at least one input dimension
+         * belong to the passthrough's sub-transform, then delegates part of the work to
+         * {@code subTransform(passThrough.transform, ...)}
+         */
+        if (transform instanceof PassThroughTransform) {
+            final PassThroughTransform passThrough = (PassThroughTransform) transform;
+            final int dimPass  = passThrough.subTransform.getSourceDimensions();
+            final int dimDiff  = passThrough.subTransform.getTargetDimensions() - dimPass;
+            final int subLower = passThrough.firstAffectedOrdinate;
+            final int subUpper = subLower + dimPass;
+            final DimensionFilter subFilter = new DimensionFilter(factory);
+            for (int i=0; i<sourceDimensions.length; i++) {
+                int n = sourceDimensions[i];
+                if (n>=subLower && n<subUpper) {
+                    // Dimension n belong to the subtransform.
+                    subFilter.addSourceDimension(n - subLower);
+                } else {
+                    // Dimension n belong to heading or trailing dimensions.
+                    // Passthrough, after adjustement for trailing dimensions.
+                    if (n >= subUpper) {
+                        n += dimDiff;
+                    }
+                    targetDimensions = add(targetDimensions, n);
+                }
+            }
+            if (subFilter.sourceDimensions == null) {
+                /*
+                 * No source dimensions belong to the sub-transform. The only remaining
+                 * sources are heading and trailing dimensions. A passthrough transform
+                 * without its sub-transform is an identity transform...
+                 */
+                return factory.createAffineTransform(MatrixFactory.create(dimInput+1));
+            }
+            /*
+             * There is at least one dimension to separate in the sub-transform. Performs this
+             * separation and gets the list of output dimensions. We need to offset the output
+             * dimensions by the amount of leading dimensions once the separation is done, in
+             * order to translate from the sub-transform's dimension numbering to the transform's
+             * numbering.
+             */
+            final MathTransform subTransform = subFilter.separateInput(passThrough.subTransform);
+            for (int i=0; i<subFilter.targetDimensions.length; i++) {
+                subFilter.targetDimensions[i] += subLower;
+            }
+            targetDimensions = add(targetDimensions, subFilter.targetDimensions);
+            /*
+             * If all source dimensions not in the sub-transform are consecutive numbers, we can
+             * use our pass though transform implementation. The "consecutive numbers" requirement
+             * (expressed in the 'if' statement below) is a consequence of a limitation in our
+             * current implementation: our pass through transform doesn't accept arbitrary index
+             * for modified ordinates.
+             */
+            if (containsAll(sourceDimensions, lower, subLower) &&
+                containsAll(sourceDimensions, subUpper, upper))
+            {
+                final int firstAffectedOrdinate = Math.max(0, subLower-lower);
+                final int  numTrailingOrdinates = Math.max(0, upper-subUpper);
+                return factory.createPassThroughTransform(
+                        firstAffectedOrdinate, subTransform, numTrailingOrdinates);
+            }
+            // TODO: handle more general case here...
+            targetDimensions = null; // Clear before to fallback on the LinearTransform case.
+        }
+        /*
+         * If the transform is affine (or at least projective), express the transform as a matrix.
+         * Then, select output dimensions that depends only on selected input dimensions. If an
+         * output dimension depends on at least one discarted input dimension, then this output
+         * dimension will be discarted as well.
+         */
+        if (transform instanceof LinearTransform) {
+            int           nRows = 0;
+            boolean  hasLastRow = false;
+            final Matrix matrix = ((LinearTransform) transform).getMatrix();
+            assert dimSource+1 == matrix.getNumCol() &&
+                   dimTarget+1 == matrix.getNumRow() : matrix;
+            double[][] rows = new double[dimTarget+1][];
+reduce:     for (int j=0; j<rows.length; j++) {
+                final double[] row = new double[dimInput+1];
+                /*
+                 * For each output dimension (i.e. a matrix row), find the matrix elements for
+                 * each input dimension to be kept. If a dependance to at least one discarted
+                 * input dimension is found, then the whole output dimension is discarted.
+                 *
+                 * NOTE: The following loop stops at matrix.getNumCol()-1 because we don't
+                 *       want to check the translation term.
+                 */
+                int nCols=0, scan=0;
+                for (int i=0; i<dimSource; i++) {
+                    final double element = matrix.getElement(j,i);
+                    if (scan<sourceDimensions.length && sourceDimensions[scan]==i) {
+                        row[nCols++] = element;
+                        scan++;
+                    } else if (element != 0) {
+                        // Output dimension 'j' depends on one of discarted input dimension 'i'.
+                        // The whole row will be discarted.
+                        continue reduce;
+                    }
+                }
+                row[nCols++] = matrix.getElement(j, dimSource); // Copy the translation term.
+                assert nCols == row.length : nCols;
+                if (j == dimTarget) {
+                    hasLastRow = true;
+                } else {
+                    targetDimensions = add(targetDimensions, j);
+                }
+                rows[nRows++] = row;
+            }
+            rows = XArray.resize(rows, nRows);
+            if (hasLastRow) {
+                return factory.createAffineTransform(new GeneralMatrix(rows));
+            }
+            // In an affine transform,  the last row is not supposed to have dependency
+            // to any input dimension. But in this particuler case, our matrix has such
+            // dependencies. TODO: is there anything we could do about that?
+        }
+        throw new FactoryException(Errors.format(ErrorKeys.INSEPARABLE_TRANSFORM));
+    }
+

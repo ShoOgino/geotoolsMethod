@@ -1,0 +1,42 @@
+    /**
+     * Prints a list of CRS that can't be instantiated. This is used for implementation of
+     * {@linkplain #main main method} in order to check the content of the {@value #FILENAME}
+     * file (or whatever property file used as backing store for this factory) from the command
+     * line.
+     *
+     * @param  out The writer where to print the report.
+     * @return The set of codes that can't be instantiated.
+     * @throws FactoryException if an error occured while
+     *         {@linkplain #getAuthorityCodes fetching authority codes}.
+     *
+     * @since 2.4
+     */
+    protected Set reportInstantiationFailures(final PrintWriter out) throws FactoryException {
+        final Set<String> codes = getAuthorityCodes(CoordinateReferenceSystem.class);
+        final Map<String,String> failures = new TreeMap<String,String>();
+        for (final String code : codes) {
+            try {
+                createCoordinateReferenceSystem(code);
+            } catch (FactoryException exception) {
+                failures.put(code, exception.getLocalizedMessage());
+            }
+        }
+        if (!failures.isEmpty()) {
+            final TableWriter writer = new TableWriter(out, " ");
+            for (final Map.Entry<String,String> entry : failures.entrySet()) {
+                writer.write(entry.getKey());
+                writer.write(':');
+                writer.nextColumn();
+                writer.write(entry.getValue());
+                writer.nextLine();
+            }
+            try {
+                writer.flush();
+            } catch (IOException e) {
+                // Should not happen, since we are writting to a PrintWriter
+                throw new AssertionError(e);
+            }
+        }
+        return failures.keySet();
+    }
+

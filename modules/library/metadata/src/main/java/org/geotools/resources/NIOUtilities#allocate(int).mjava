@@ -1,0 +1,38 @@
+    /**
+     * Allocates and returns a {@link ByteBuffer}. The buffer capacity will generally be greater than
+     * of two that can contain the specified limit, the buffer limit will be set at the specified
+     * value. The buffers are pooled, so remember to call {@link #clean(ByteBuffer, false)} to return
+     * the buffer to the pool.
+     * 
+     * @param limit
+     * @return
+     */
+    public static ByteBuffer allocate(int size) {
+        // look for a free cached buffer that has still not been garbage collected
+        Queue<Object> buffers = getBuffers(size);
+        Object sr = null;
+        while ((sr = buffers.poll()) != null) {
+            ByteBuffer buffer = null;
+            // what did we get, a soft or a hard reference?
+            if(sr instanceof BufferSoftReference) {
+                buffer = ((BufferSoftReference)sr).get();
+            } else {
+                // we're removing a hard reference from the cache, lower the usage figure
+                buffer = (ByteBuffer) sr;
+                hardCacheSize.addAndGet(-buffer.capacity());
+            }
+            // clean up the buffer and return it
+            if (buffer != null) {
+                buffer.clear();
+                return buffer;
+            }
+        }
+
+        // we could not find one, then allocated it
+        if(directBuffersEnabled) {
+            return ByteBuffer.allocateDirect(size);
+        } else {
+            return ByteBuffer.allocate(size);
+        }
+    }
+

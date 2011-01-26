@@ -1,0 +1,83 @@
+    /**
+     * Construct CoordinateList as described by GTYPE.
+     * 
+     * <p>
+     * GTYPE encodes the following information:
+     * 
+     * <ul>
+     * <li>
+     * D: Dimension of ordinates
+     * </li>
+     * <li>
+     * L: Dimension of LRS measures
+     * </li>
+     * </ul>
+     * </p>
+     * 
+     * <p>
+     * The number of ordinates per coordinate are taken to be L+D, and the
+     * number of ordinates should be a multiple of this value.
+     * </p>
+     * 
+     * <p>
+     * In the Special case of GTYPE 2001 and a three ordinates are interpreted
+     * as a single Coordinate rather than an error.
+     * </p>
+     *
+     * @param f CoordinateSequenceFactory used to encode ordiantes for JTS 
+     * @param GTYPE Encoding of <b>D</b>imension, <b>L</b>RS and <b>TT</b>ype
+     * @param ordinates
+     *
+     *
+     * @throws IllegalArgumentException DOCUMENT ME!
+     */
+    public static CoordinateSequence coordinates(CoordinateSequenceFactory f,
+        final int GTYPE, double[] ordinates) {
+        if ((ordinates == null) || (ordinates.length == 0)) {
+            return f.create(new Coordinate[0]);
+        }
+
+        final int D = SDO.D(GTYPE);
+        final int L = SDO.L(GTYPE);
+        final int TT = SDO.TT(GTYPE);
+
+        //      POINT_TYPE Special Case
+        //
+        if ((D == 2) && (L == 0) && (TT == 01) && (ordinates.length == 3)) {
+            return f.create(new Coordinate[] {
+                    new Coordinate(ordinates[0], ordinates[1], ordinates[2]),
+                });
+        }
+
+        final int LEN = D + L;
+
+        if ((ordinates.length % LEN) != 0) {
+            throw new IllegalArgumentException("Dimension D:" + D + " and L:"
+                + L + " denote Coordiantes " + "of " + LEN
+                + " ordinates. This cannot be resolved with"
+                + "an ordinate array of length " + ordinates.length);
+        }
+
+        final int LENGTH = ordinates.length / LEN;
+
+        OrdinateList x = new OrdinateList(ordinates, 0, LEN);
+        OrdinateList y = new OrdinateList(ordinates, 1, LEN);
+        OrdinateList z = null;
+
+        if (D == 3) {
+            z = new OrdinateList(ordinates, 2, LEN);
+        }
+
+        if (L != 0) {
+            OrdinateList[] m = new OrdinateList[L];
+
+            for (int i = 0; i < L; i++) {
+                m[i] = new OrdinateList(ordinates, D + i, LEN);
+            }
+
+            return coordiantes(f, x, y, z, m);
+        } else {
+            return coordiantes(f, x, y, z);
+        }
+    }
+

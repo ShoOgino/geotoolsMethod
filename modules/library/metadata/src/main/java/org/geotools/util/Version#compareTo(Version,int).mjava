@@ -1,0 +1,51 @@
+    /**
+     * Compares this version with an other version object, up to the specified limit. A limit
+     * of 1 compares only the {@linkplain #getMajor major} version number. A limit of 2 compares
+     * the major and {@linkplain #getMinor minor} version numbers, <cite>etc</cite>. The
+     * comparaisons are performed as {@link Integer} object if possible, or as {@link String}
+     * otherwise.
+     *
+     * @param  other The other version object to compare with.
+     * @param  limit The maximum number of components to compare.
+     * @return A negative value if this version is lower than the supplied version, a positive
+     *         value if it is higher, or 0 if they are equal.
+     */
+    public int compareTo(final Version other, final int limit) {
+        for (int i=0; i<limit; i++) {
+            final Comparable<?> v1 =  this.getComponent(i);
+            final Comparable<?> v2 = other.getComponent(i);
+            if (v1 == null) {
+                return (v2 == null) ? 0 : -1;
+            } else if (v2 == null) {
+                return +1;
+            }
+            final int dr = getTypeRank(v1) - getTypeRank(v2);
+            if (dr != 0) {
+                /*
+                 * One value is a text while the other value is a number.  We could be tempted to
+                 * force a comparaison by converting the number to a String and then invoking the
+                 * String.compareTo(String) method, but this strategy would violate the following
+                 * contract from Comparable.compareTo(Object):  "The implementor must also ensure
+                 * that the relation is transitive". Use case:
+                 *
+                 *    A is the integer 10
+                 *    B is the string "8Z"
+                 *    C is the integer 5.
+                 *
+                 * If mismatched types are converted to String before being compared, then we
+                 * would have A < B < C. Transitivity implies that A < C, but if we compare A
+                 * and C directly we get A > C because they are compared as numbers.  An easy
+                 * way to fix this inconsistency is to define all String as lexicographically
+                 * preceding Integer, no matter their content. This is what we do here.
+                 */
+                return dr;
+            }
+            @SuppressWarnings("unchecked")
+            final int c = ((Comparable) v1).compareTo(v2);
+            if (c != 0) {
+                return c;
+            }
+        }
+        return 0;
+    }
+

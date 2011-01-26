@@ -1,0 +1,31 @@
+    /**
+     * Implementation of {@link #put} and {@link #remove} operations.
+     */
+    private synchronized V intern(final K key, final V value) {
+        assert WeakCollectionCleaner.DEFAULT.isAlive();
+        assert valid() : count;
+        /*
+         * Check if {@code obj} is already contained in this
+         * {@code WeakValueHashMap}. If yes, clear it.
+         */
+        V oldValue = null;
+        final int hash = key.hashCode() & 0x7FFFFFFF;
+        int index = hash % table.length;
+        for (Entry e=table[index]; e!=null; e=e.next) {
+            if (key.equals(e.key)) {
+                oldValue = e.get();
+                e.clear();
+            }
+        }
+        if (value != null) {
+            if (count >= threshold) {
+                rehash(true);
+                index = hash % table.length;
+            }
+            table[index] = new Entry(key, value, table[index], index);
+            count++;
+        }
+        assert valid();
+        return oldValue;
+    }
+

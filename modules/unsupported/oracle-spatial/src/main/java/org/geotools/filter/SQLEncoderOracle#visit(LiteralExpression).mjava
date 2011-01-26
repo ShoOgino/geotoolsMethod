@@ -1,0 +1,35 @@
+    /**
+     * Converts a literal expression into a valid SDO object. Only handles
+     * Literal Geometries, all other literals are passed up to the parent.
+     *
+     * @param literal The Literal expression to encode.
+     *
+     * @see org.geotools.filter.FilterVisitor#visit(org.geotools.filter.LiteralExpression)
+     */
+    public void visit(LiteralExpression literal) {
+        if (literal.getType() == DefaultExpression.LITERAL_GEOMETRY) {
+            Geometry geometry = (Geometry) literal.getLiteral();
+
+            try {
+                int srid = -1;
+                Integer sridO = (Integer) srids.get(currentGeomColumnName);
+
+                if (sridO == null) {
+                    // try for default
+                    sridO = (Integer) srids.get(null);
+                }
+
+                if (sridO != null) {
+                    srid = sridO.intValue();
+                }
+
+                out.write(toSDOGeom(geometry, srid));
+            } catch (IOException e) {
+                LOGGER.warning("IO Error exporting Literal Geometry");
+            }
+        } else {
+            // can't do it, send it off to the parent
+            super.visit(literal);
+        }
+    }
+

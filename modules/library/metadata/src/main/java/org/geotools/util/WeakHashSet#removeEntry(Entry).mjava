@@ -1,0 +1,43 @@
+    /**
+     * Invoked by {@link Entry} when an element has been collected by the garbage
+     * collector. This method will remove the weak reference from {@link #table}.
+     */
+    private synchronized void removeEntry(final Entry toRemove) {
+        assert valid() : count;
+        final int i = toRemove.index;
+        // Index 'i' may not be valid if the reference 'toRemove'
+        // has been already removed in a previous rehash.
+        if (i < table.length) {
+            Entry prev = null;
+            Entry e = table[i];
+            while (e != null) {
+                if (e == toRemove) {
+                    if (prev != null) {
+                        prev.next = e.next;
+                    } else {
+                        table[i] = e.next;
+                    }
+                    count--;
+                    assert valid();
+
+                    // If the number of elements has dimunished
+                    // significatively, rehash the table.
+                    if (count <= threshold/4) {
+                        rehash(false);
+                    }
+                    // We must not continue the loop, since
+                    // variable 'e' is no longer valid.
+                    return;
+                }
+                prev = e;
+                e = e.next;
+            }
+        }
+        assert valid();
+        /*
+         * If we reach this point, its mean that reference 'toRemove' has not
+         * been found. This situation may occurs if 'toRemove' has already been
+         * removed in a previous run of {@link #rehash}.
+         */
+    }
+

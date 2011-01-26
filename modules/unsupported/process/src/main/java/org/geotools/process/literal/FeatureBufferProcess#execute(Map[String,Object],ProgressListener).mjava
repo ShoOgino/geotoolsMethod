@@ -1,0 +1,61 @@
+	public Map<String, Object> execute(Map<String, Object> input, ProgressListener monitor)
+	{
+		Map<String,Object> result   = new HashMap<String, Object>();
+
+		if (this.started)
+		{
+			throw new IllegalStateException("Process can only be run once");
+		}
+
+		this.started = true;
+
+		if (null == monitor)
+		{
+			monitor = new NullProgressListener();
+		}
+
+		try
+		{
+			monitor.started();
+            monitor.setTask(Text.text("Fetching arguments"));
+            monitor.progress(10.0f);
+
+            Feature input_a = (Feature)input.get(FeatureBufferFactory.INPUT_A.key);          
+            Double  input_b = (Double)input.get( FeatureBufferFactory.INPUT_B.key);
+
+            monitor.setTask(Text.text("Buffering Feature"));
+            monitor.progress(25.0f);
+
+            // Buffer
+            for(Property prop : input_a.getProperties())
+            {
+            	if (monitor.isCanceled())
+                {
+                    return null; // user has cancelled this operation
+                }
+
+            	if (false == Geometry.class.equals(prop.getType().getBinding()))
+            	{
+            		continue;
+            	}
+
+            	Geometry buffered = ((Geometry)prop.getValue()).buffer(input_b);
+
+            	prop.setValue(buffered);
+            }
+
+            monitor.setTask(Text.text("Encoding result"));
+            monitor.progress(90.0f);
+
+            result.put(FeatureBufferFactory.RESULT.key, input_a);
+            monitor.complete(); // same as 100.0f
+		} catch(Exception e) {
+			monitor.exceptionOccurred(e);
+            return null;
+		} finally {
+            monitor.dispose();
+        }
+
+		return result;
+	}
+

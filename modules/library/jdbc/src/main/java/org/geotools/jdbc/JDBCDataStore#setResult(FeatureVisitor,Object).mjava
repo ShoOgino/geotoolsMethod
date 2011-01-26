@@ -1,0 +1,45 @@
+    /**
+     * Helper method for setting the result of a aggregate functino on a visitor.
+     * TODO: Remove this method when there is an interface for aggregate visitors.
+     * See GEOT-2325 for details.
+     */
+    boolean setResult(FeatureVisitor visitor,Object result) {
+        try {
+            Method s = null;
+            try {
+                s = visitor.getClass().getMethod("setValue",result.getClass());
+            }
+            catch( Exception e ) {}
+            
+            if ( s == null ) {
+                for ( Method m : visitor.getClass().getMethods()) {
+                    if ( "setValue".equals( m.getName() ) ) {
+                        s = m;
+                        break;
+                    }
+                }
+            }
+            if ( s != null ){
+                Class type = s.getParameterTypes()[0];
+                if ( !type.isInstance( result ) ) {
+                    //convert
+                    Object converted = Converters.convert( result, type );
+                    if ( converted != null ) {
+                        result = converted;
+                    }
+                    else {
+                        //could not set value
+                        return false;
+                    }
+                }
+                
+                s.invoke( visitor, result );
+                return true;
+            }
+        }
+        catch( Exception e ) {
+            //ignore for now
+        }
+        return false;
+    }
+

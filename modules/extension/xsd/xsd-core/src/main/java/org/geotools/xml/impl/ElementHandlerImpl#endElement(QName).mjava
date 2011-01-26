@@ -1,0 +1,39 @@
+    public void endElement(QName qName) throws SAXException {
+        if (isMixed()) {
+            ((NodeImpl)node).collapseWhitespace();
+        }
+        
+        //get the containing type (we do this for anonymous complex types)
+        XSDTypeDefinition container = null;
+        if (getParentHandler().getComponent() != null) {
+            container = getParentHandler().getComponent().getTypeDefinition();
+        }
+
+        ParseExecutor executor = new ParseExecutor(element, node, getParentHandler().getContext(),
+                parser);
+        parser.getBindingWalker()
+              .walk(element.getElementDeclaration(), executor, container,
+            getParentHandler().getContext());
+
+        //cache the parsed value
+        value = executor.getValue();
+
+        if (value == null) {
+            //TODO: instead of continuuing, just remove the element from 
+            // the parent, or figure out if the element is 'optional' and 
+            // remove
+            if (parser.getLogger().isLoggable(Level.FINE)) {
+                parser.getLogger().fine("Binding for " + element.getName() + " returned null");
+            }
+        }
+
+        //set the value for this node in the parse tree
+        node.setValue(value);
+
+        //end this child handler
+        parent.endChildHandler(this);
+
+        //kill the context
+        parent.getContext().removeChildContainer(getContext());
+    }
+

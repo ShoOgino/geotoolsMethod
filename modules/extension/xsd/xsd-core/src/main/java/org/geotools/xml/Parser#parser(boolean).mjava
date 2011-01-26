@@ -1,0 +1,47 @@
+    protected SAXParser parser(boolean validate) throws ParserConfigurationException, SAXException {
+        //JD: we use xerces directly here because jaxp does seem to allow use to 
+        // override all the namespaces to validate against
+        SAXParser parser = new SAXParser();
+
+        //set the appropriate features
+        parser.setFeature("http://xml.org/sax/features/namespaces", true);
+
+        if (validate) {
+            parser.setFeature("http://xml.org/sax/features/validation", true);
+            parser.setFeature("http://apache.org/xml/features/validation/schema", true);
+            parser.setFeature("http://apache.org/xml/features/validation/schema-full-checking", true);
+        }
+
+        //set the schema sources of this configuration, and all dependent ones
+        StringBuffer schemaLocation = new StringBuffer();
+
+        for (Iterator d = handler.getConfiguration().allDependencies().iterator(); d.hasNext();) {
+            Configuration dependency = (Configuration) d.next();
+
+            //ignore xs namespace
+            if (XS.NAMESPACE.equals(dependency.getNamespaceURI())) {
+                continue;
+            }
+
+            //seperate entries by space
+            if (schemaLocation.length() > 0) {
+                schemaLocation.append(" ");
+            }
+
+            //add the entry
+            schemaLocation.append(dependency.getNamespaceURI());
+            schemaLocation.append(" ");
+            schemaLocation.append(dependency.getSchemaFileURL());
+        }
+
+        //set hte property to map namespaces to schema locations
+        parser.setProperty("http://apache.org/xml/properties/schema/external-schemaLocation",
+            schemaLocation.toString());
+
+        //set the default location
+        parser.setProperty("http://apache.org/xml/properties/schema/external-noNamespaceSchemaLocation",
+            handler.getConfiguration().getSchemaFileURL());
+
+        return parser;
+    }
+

@@ -1,0 +1,38 @@
+    /**
+     * Returns an unmodifiable copy of this metadata. Any attempt to modify an attribute of the
+     * returned object will throw an {@link UnmodifiableMetadataException}. If this metadata is
+     * already unmodifiable, then this method returns {@code this}.
+     * <p>
+     * The default implementation {@linkplain #clone() clone} this metadata and
+     * {@linkplain #freeze() freeze} the clone before to return it.
+     *
+     * @return An unmodifiable copy of this metadata.
+     */
+    public synchronized AbstractMetadata unmodifiable() {
+        // Reminder: 'unmodifiable' is reset to null by checkWritePermission().
+        if (unmodifiable == null) {
+            final ModifiableMetadata candidate;
+            try {
+                /*
+                 * Need a SHALLOW copy of this metadata, because some attributes
+                 * may already be unmodifiable and we don't want to clone them.
+                 */
+                candidate = clone();
+            } catch (CloneNotSupportedException exception) {
+                /*
+                 * The metadata is not cloneable for some reason left to the user
+                 * (for example it may be backed by some external database).
+                 * Assumes that the metadata is unmodifiable.
+                 */
+                Logging.unexpectedException(LOGGER, exception);
+                return this;
+            }
+            candidate.freeze();
+            // Set the field only after success. The 'unmodifiable' field must
+            // stay null if an exception occured during clone() or freeze().
+            unmodifiable = candidate;
+        }
+        assert !unmodifiable.isModifiable();
+        return unmodifiable;
+    }
+

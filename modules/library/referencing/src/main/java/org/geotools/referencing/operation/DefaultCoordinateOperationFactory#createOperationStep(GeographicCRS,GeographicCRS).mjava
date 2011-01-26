@@ -1,0 +1,139 @@
+    /**
+     * Creates an operation between two geographic coordinate reference systems. The default
+     * implementation can adjust axis order and orientation (e.g. transforming from
+     * {@code (NORTH,WEST)} to {@code (EAST,NORTH)}), performs units conversion
+     * and apply datum shifts if needed.
+     *
+     * @param  sourceCRS Input coordinate reference system.
+     * @param  targetCRS Output coordinate reference system.
+     * @return A coordinate operation from {@code sourceCRS} to {@code targetCRS}.
+     * @throws FactoryException If the operation can't be constructed.
+     *
+     * @todo When rotating the prime meridian, we should ensure that
+     *       transformed longitudes stay in the range [-180..+180°].
+     */
+    protected CoordinateOperation createOperationStep(final GeographicCRS sourceCRS,
+                                                      final GeographicCRS targetCRS)
+            throws FactoryException
+    {
+        final EllipsoidalCS sourceCS    = sourceCRS.getCoordinateSystem();
+        final EllipsoidalCS targetCS    = targetCRS.getCoordinateSystem();
+        final GeodeticDatum sourceDatum = sourceCRS.getDatum();
+        final GeodeticDatum targetDatum = targetCRS.getDatum();
+        final PrimeMeridian sourcePM    = sourceDatum.getPrimeMeridian();
+        final PrimeMeridian targetPM    = targetDatum.getPrimeMeridian();
+        if (equalsIgnorePrimeMeridian(sourceDatum, targetDatum)) {
+            /*
+             * If both geographic CRS use the same datum, then there is no need for a datum shift.
+             * Just swap axis order, and rotate the longitude coordinate if prime meridians are
+             * different. Note: this special block is mandatory for avoiding never-ending loop,
+             * since it is invoked by 'createOperationStep(GeocentricCRS...)'.
+             *
+             * TODO: We should ensure that longitude is in range [-180..+180°].
+             */
+            final Matrix matrix = swapAndScaleAxis(sourceCS, targetCS, sourcePM, targetPM);
+            return createFromAffineTransform(AXIS_CHANGES, sourceCRS, targetCRS, matrix);
+        }
+        /*
+         * The two geographic CRS use different datum. If Molodenski transformations
+         * are allowed, try them first. Note that is some case if the datum shift can't
+         * be performed in a single Molodenski transformation step (i.e. if we need to
+         * go through at least one intermediate datum), then we will use the geocentric
+         * transform below instead: it allows to concatenates many Bursa Wolf parameters
+         * in a single affine transform.
+         */
+        if (molodenskiMethod != null) {
+            ReferenceIdentifier identifier = DATUM_SHIFT;
+            BursaWolfParameters bursaWolf  = null;
+            if (sourceDatum instanceof DefaultGeodeticDatum) {
+                bursaWolf = ((DefaultGeodeticDatum) sourceDatum).getBursaWolfParameters(targetDatum);
+            }
+            if (bursaWolf == null) {
+                /*
+                 * No direct path found. Try the more expensive matrix calculation, and
+                 * see if we can retrofit the result in a BursaWolfParameters object.
+                 */
+                final Matrix shift = DefaultGeodeticDatum.getAffineTransform(sourceDatum, targetDatum);
+                if (shift != null) try {
+                    bursaWolf = new BursaWolfParameters(targetDatum);
+                    bursaWolf.setAffineTransform(shift, 1E-4);
+                } catch (IllegalArgumentException ignore) {
+                    /*
+                     * A matrix exists, but we are unable to retrofit it as a set of Bursa-Wolf
+                     * parameters. Do NOT set the 'bursaWolf' variable: it must stay null, which
+                     * means to perform the datum shift using geocentric coordinates.
+                     */
+                } else if (lenientDatumShift) {
+                    /*
+                     * No BursaWolf parameters available. No affine transform to be applied in
+                     * geocentric coordinates are available neither (the "shift" matrix above),
+                     * so performing a geocentric transformation will not help. But the user wants
+                     * us to perform the datum shift anyway. We will notify the user through
+                     * positional accuracy, which is set indirectly through ELLIPSOID_SHIFT.
+                     */
+                    bursaWolf  = new BursaWolfParameters(targetDatum);
+                    identifier = ELLIPSOID_SHIFT;
+                }
+            }
+            /*
+             * Applies the Molodenski transformation now. Note: in current parameters, we can't
+             * specify a different input and output dimension. However, our Molodenski transform
+             * allows that. We should expand the parameters block for this case (TODO).
+             */
+            if (bursaWolf!=null && bursaWolf.isTranslation()) {
+                final Ellipsoid sourceEllipsoid = sourceDatum.getEllipsoid();
+                final Ellipsoid targetEllipsoid = targetDatum.getEllipsoid();
+                if (bursaWolf.isIdentity() && equalsIgnoreMetadata(sourceEllipsoid, targetEllipsoid)) {
+                    final Matrix matrix = swapAndScaleAxis(sourceCS, targetCS, sourcePM, targetPM);
+                    return createFromAffineTransform(identifier, sourceCRS, targetCRS, matrix);
+                }
+                final int sourceDim = getDimension(sourceCRS);
+                final int targetDim = getDimension(targetCRS);
+                final ParameterValueGroup parameters;
+                parameters = getMathTransformFactory().getDefaultParameters(molodenskiMethod);
+                parameters.parameter("src_semi_major").setValue(sourceEllipsoid.getSemiMajorAxis());
+                parameters.parameter("src_semi_minor").setValue(sourceEllipsoid.getSemiMinorAxis());
+                parameters.parameter("tgt_semi_major").setValue(targetEllipsoid.getSemiMajorAxis());
+                parameters.parameter("tgt_semi_minor").setValue(targetEllipsoid.getSemiMinorAxis());
+                parameters.parameter("dx")            .setValue(bursaWolf.dx);
+                parameters.parameter("dy")            .setValue(bursaWolf.dy);
+                parameters.parameter("dz")            .setValue(bursaWolf.dz);
+                parameters.parameter("dim")           .setValue(sourceDim);
+                if (sourceDim == targetDim) {
+                    final CoordinateOperation step1, step2, step3;
+                    final GeographicCRS normSourceCRS = normalize(sourceCRS, true);
+                    final GeographicCRS normTargetCRS = normalize(targetCRS, true);
+                    step1 = createOperationStep(sourceCRS, normSourceCRS);
+                    step2 = createFromParameters(identifier, normSourceCRS, normTargetCRS, parameters);
+                    step3 = createOperationStep(normTargetCRS, targetCRS);
+                    return concatenate(step1, step2, step3);
+                } else {
+                    // TODO: Need some way to pass 'targetDim' to Molodenski.
+                    //       Fallback on geocentric transformations for now.
+                }
+            }
+        }
+        /*
+         * If the two geographic CRS use different datum, transform from the
+         * source to target datum through the geocentric coordinate system.
+         * The transformation chain is:
+         *
+         *     source geographic CRS                                               -->
+         *     geocentric CRS with a preference for datum using Greenwich meridian -->
+         *     target geographic CRS
+         */
+        final CartesianCS STANDARD = DefaultCartesianCS.GEOCENTRIC;
+        final GeocentricCRS stepCRS;
+        final CRSFactory crsFactory = getFactoryContainer().getCRSFactory();
+        if (getGreenwichLongitude(targetPM) == 0) {
+            stepCRS = crsFactory.createGeocentricCRS(
+                      getTemporaryName(targetCRS), targetDatum, STANDARD);
+        } else {
+            stepCRS = crsFactory.createGeocentricCRS(
+                      getTemporaryName(sourceCRS), sourceDatum, STANDARD);
+        }
+        final CoordinateOperation step1 = createOperationStep(sourceCRS, stepCRS);
+        final CoordinateOperation step2 = createOperationStep(stepCRS, targetCRS);
+        return concatenate(step1, step2);
+    }
+

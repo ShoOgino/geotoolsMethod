@@ -1,0 +1,123 @@
+    public void testComplexFeature() {
+        FeatureType fType = createFeatureType();
+
+        ComplexType complexAttType = (ComplexType) fType.getDescriptor(COMPLEX_ATTRIBUTE).getType();
+        ComplexType rootAttType = (ComplexType) complexAttType.getDescriptor(ROOT_ATTRIBUTE)
+                .getType();
+
+        // feature properties
+        Collection<Property> properties = new ArrayList<Property>(fType.getDescriptors().size());
+
+        /**
+         * Build the feature properties
+         */
+        // eg:simpleAttribute
+        AttributeDescriptor attDesc = (AttributeDescriptor) fType.getDescriptor(SIMPLE_ATTRIBUTE);
+        AttributeImpl simpleAttribute = new AttributeImpl("simple value", attDesc, null);
+        properties.add(simpleAttribute);
+        // eg:complexAttribute/eg:rootAttribute[1]
+        Collection<Property> rootPropertiesOne = new ArrayList<Property>();
+        attDesc = (AttributeDescriptor) rootAttType.getDescriptor(MULTI_LEAF_ATTRIBUTE);
+        // eg:complexAttribute/eg:rootAttribute[1]/eg:multiLeafAttribute[1]
+        AttributeImpl leafOne = new AttributeImpl("multi leaf value 1", attDesc, null);
+        rootPropertiesOne.add(leafOne);
+        // eg:complexAttribute/eg:rootAttribute[1]/eg:multiLeafAttribute[2]
+        AttributeImpl leafTwo = new AttributeImpl("multi leaf value 2", attDesc, null);
+        rootPropertiesOne.add(leafTwo);
+        // eg:complexAttribute/eg:rootAttribute[1]/eg:singleLeafAttribute
+        attDesc = (AttributeDescriptor) rootAttType.getDescriptor(SINGLE_LEAF_ATTRIBUTE);
+        AttributeImpl singleLeaf = new AttributeImpl("single leaf value", attDesc, null);
+        rootPropertiesOne.add(singleLeaf);
+
+        AttributeDescriptor rootDesc = (AttributeDescriptor) complexAttType
+                .getDescriptor(ROOT_ATTRIBUTE);
+        AttributeImpl rootOne = new ComplexAttributeImpl(rootPropertiesOne, rootDesc, null);
+
+        // eg:complexAttribute/eg:rootAttribute[2]
+        Collection<Property> rootPropertiesTwo = new ArrayList<Property>();
+        // eg:complexAttribute/eg:rootAttribute[2]/eg:multiLeafAttribute[1]
+        rootPropertiesTwo.add(leafOne);
+        AttributeImpl rootTwo = new ComplexAttributeImpl(rootPropertiesTwo, rootDesc, null);
+
+        // eg:complexAttribute/eg:rootAttribute[3]
+        Collection<Property> rootPropertiesThree = new ArrayList<Property>();
+        // eg:complexAttribute/eg:rootAttribute[3]/eg:singleLeafAttribute
+        rootPropertiesThree.add(singleLeaf);
+        AttributeImpl rootThree = new ComplexAttributeImpl(rootPropertiesThree, rootDesc, null);
+
+        Collection<Property> complexProperties = new ArrayList<Property>(2);
+        complexProperties.add(rootOne);
+        complexProperties.add(rootTwo);
+        complexProperties.add(rootThree);
+        AttributeImpl complexAttribute = new ComplexAttributeImpl(complexProperties,
+                complexAttType, null);
+        properties.add(complexAttribute);
+
+        Feature feature = new FeatureImpl(properties, fType, new FeatureIdImpl("test1"));
+
+        /**
+         * Test evaluating complex feature
+         */
+        // test evaluating simple property
+        AttributeExpressionImpl ex = new AttributeExpressionImpl("eg:simpleAttribute", new Hints(
+                FeaturePropertyAccessorFactory.NAMESPACE_CONTEXT, NAMESPACES));
+        assertEquals(simpleAttribute, ex.evaluate(feature));
+
+        // test evaluating complex property
+        ex = new AttributeExpressionImpl("eg:complexAttribute", new Hints(
+                FeaturePropertyAccessorFactory.NAMESPACE_CONTEXT, NAMESPACES));
+        assertEquals(complexAttribute, ex.evaluate(feature));
+
+        // test multi-valued nested properties
+        ex = new AttributeExpressionImpl("eg:complexAttribute/eg:rootAttribute", new Hints(
+                FeaturePropertyAccessorFactory.NAMESPACE_CONTEXT, NAMESPACES));
+        // no index would return the first one
+        assertEquals(rootOne, ex.evaluate(feature));
+
+        // index specified
+        ex = new AttributeExpressionImpl("eg:complexAttribute/eg:rootAttribute[2]", new Hints(
+                FeaturePropertyAccessorFactory.NAMESPACE_CONTEXT, NAMESPACES));
+        assertEquals(rootTwo, ex.evaluate(feature));
+
+        // single valued nested property
+        ex = new AttributeExpressionImpl(
+                "eg:complexAttribute/eg:rootAttribute[3]/eg:singleLeafAttribute", new Hints(
+                        FeaturePropertyAccessorFactory.NAMESPACE_CONTEXT, NAMESPACES));
+        assertEquals(singleLeaf, ex.evaluate(feature));
+
+        // null values
+        ex = new AttributeExpressionImpl(
+                "eg:complexAttribute/eg:rootAttribute[3]/eg:multiLeafAttribute", new Hints(
+                        FeaturePropertyAccessorFactory.NAMESPACE_CONTEXT, NAMESPACES));
+        assertEquals(null, ex.evaluate(feature));
+
+        // deeper nesting
+        ex = new AttributeExpressionImpl(
+                "eg:complexAttribute/eg:rootAttribute[2]/eg:multiLeafAttribute", new Hints(
+                        FeaturePropertyAccessorFactory.NAMESPACE_CONTEXT, NAMESPACES));
+        assertEquals(leafOne, ex.evaluate(feature));
+
+        // property index doesn't exist
+        ex = new AttributeExpressionImpl(
+                "eg:complexAttribute/eg:rootAttribute[2]/eg:multiLeafAttribute[2]", new Hints(
+                        FeaturePropertyAccessorFactory.NAMESPACE_CONTEXT, NAMESPACES));
+        assertEquals(null, ex.evaluate(feature));
+
+        // expect an exception when object supplied is not a complex attribute
+        boolean exceptionThrown = false;
+        try {
+            ex.setLenient(false); //NC -added, only exception if lenient off
+            assertEquals(null, ex.evaluate(singleLeaf));
+        } catch (Exception e) {
+            exceptionThrown = true;
+        }
+        if (!exceptionThrown) {
+            fail("Expecting Exception since object passed in is not a complex attribute.");
+        }
+
+        // invalid property
+        ex = new AttributeExpressionImpl("randomAttribute", new Hints(
+                FeaturePropertyAccessorFactory.NAMESPACE_CONTEXT, NAMESPACES));
+        assertEquals(null, ex.evaluate(feature));
+    }
+

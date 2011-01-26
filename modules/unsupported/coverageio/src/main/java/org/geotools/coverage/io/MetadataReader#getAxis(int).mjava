@@ -1,0 +1,54 @@
+    /**
+     * Constructs an {@linkplain CoordinateSystemAxis axis} using the information from
+     * the {@linkplain GeographicMetadata metadata}, or returns {@code null} if the axis
+     * does not exist in the metadata tree.
+     *
+     * @param dimension The dimension to consider. It should be lower than
+     *                  {@link ImageGeometry#getDimension()}
+     * @return An axis with information gotten from the
+     *         {@linkplain GeographicMetadata metadata}, or {@code null} if the axis
+     *         does not exist for the specified dimension.
+     * @throws MetadataException if the method {@link CSFactory#createCoordinateSystemAxis}
+     *                           has not succeed.
+     */
+    public synchronized CoordinateSystemAxis getAxis(final int dimension)
+            throws MetadataException
+    {
+        final ImageReferencing referencing = metadata.getReferencing();
+        if (metadata.getGeometry().getDimension() < dimension) {
+            return null;
+        }
+        final Axis axis = referencing.getAxis(dimension);
+        String axisName = axis.getName();
+        AxisDirection direction = AxisDirection.valueOf(axis.getDirection());
+        if (axisName == null) {
+            final String projectionName = referencing.getProjectionName();
+            switch (dimension) {
+                case 0: axisName  = (projectionName == null) ? "longitude"          : "x";
+                        direction = (direction      == null) ? AxisDirection.EAST   : direction; break;
+                case 1: axisName  = (projectionName == null) ? "latitude"           : "y";
+                        direction = (direction      == null) ? AxisDirection.NORTH  : direction; break;
+                case 2: axisName  = (projectionName == null) ? "depth"              : "z";
+                        direction = (direction      == null) ? AxisDirection.UP     : direction; break;
+                case 3: axisName  = (projectionName == null) ? "time"               : "t";
+                        direction = (direction      == null) ? AxisDirection.FUTURE : direction; break;
+            }
+        }
+        final DefaultCoordinateSystemAxis axisFound =
+                DefaultCoordinateSystemAxis.getPredefined(axisName, direction);
+        if (axisFound != null) {
+            return axisFound;
+        }
+        /* The current axis defined in the metadata tree is not already known in the Geotools
+         * implementation, so one will build it using those information.
+         */
+        final String unitName = axis.getUnits();
+        final Unit<?> unit = getUnit(unitName);
+        final Map<String,String> map = Collections.singletonMap("name", axisName);
+        try {
+            return factories.getCSFactory().createCoordinateSystemAxis(map, axisName, direction, unit);
+        } catch (FactoryException e) {
+            throw new MetadataException(e.getLocalizedMessage());
+        }
+    }
+

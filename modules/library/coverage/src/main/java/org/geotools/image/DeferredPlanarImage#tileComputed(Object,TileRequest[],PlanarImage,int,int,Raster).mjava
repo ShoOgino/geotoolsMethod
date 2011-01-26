@@ -1,0 +1,39 @@
+    /**
+     * Invoked when a tile has been computed.
+     *
+     * @param eventSource The caller of this method.
+     * @param requests    The relevant tile computation requests as returned by the method
+     *                    used to queue the tile.
+     * @param image       The image for which tiles are being computed as specified to the
+     *                    {@link TileScheduler}.
+     * @param tileX       The X index of the tile in the tile array.
+     * @param tileY       The Y index of the tile in the tile array.
+     * @param tile        The computed tile.
+     */
+    public void tileComputed(final Object     eventSource,
+                             final TileRequest[] requests,
+                             final PlanarImage      image,
+                             final int              tileX,
+                             final int              tileY,
+                             final Raster            tile)
+    {
+        synchronized (this) {
+            final int tileIndice = getTileIndice(tileX, tileY);
+            if (waitings!=null && waitings[tileIndice]) {
+                /*
+                 * Notify the 'getTile(...)' method in only ONE thread that a tile is available.
+                 * If tiles computation occurs in two or more background thread, then there is no
+                 * garantee that the notified thread is really the one waiting for this particular
+                 * tile. However, this is not a damageable problem; the delay hint may just not be
+                 * accuratly respected (the actual delay may be shorter for wrongly notified tile).
+                 */
+                notify();
+            }
+            if (pendings==null || pendings[tileIndice]==null) {
+                return;
+            }
+            pendings[tileIndice] = null;
+        }
+        fireTileUpdate(tileX, tileY, false);
+    }
+

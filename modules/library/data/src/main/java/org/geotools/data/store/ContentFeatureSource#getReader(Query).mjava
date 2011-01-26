@@ -1,0 +1,86 @@
+    /**
+     * Returns a reader for the features specified by a query.
+     * 
+     */
+    public final  FeatureReader<SimpleFeatureType, SimpleFeature> getReader(Query query) throws IOException {
+        query = joinQuery( query );
+        query = resolvePropertyNames(query);
+        
+        // see if we need to enable native sorting in order to support stable paging
+        final int offset = query.getStartIndex() != null ? query.getStartIndex() : 0;
+        if(offset > 0 & query.getSortBy() == null) {
+            if(!getQueryCapabilities().supportsSorting(query.getSortBy()))
+                throw new IOException("Feature source does not support this sorting " +
+                        "so there is no way a stable paging (offset/limit) can be performed");
+            
+            Query dq = new Query(query);
+            dq.setSortBy(new SortBy[] {SortBy.NATURAL_ORDER});
+            query = dq;
+        }
+        
+        FeatureReader<SimpleFeatureType, SimpleFeature> reader = getReaderInternal( query );
+        
+        //
+        //apply wrappers based on subclass capabilities
+        //
+        //filtering
+        if ( !canFilter() ) {
+            if (query.getFilter() != null && query.getFilter() != Filter.INCLUDE ) {
+                reader = new FilteringFeatureReader<SimpleFeatureType, SimpleFeature>( reader, query.getFilter() );
+            }    
+        }
+        
+        // reprojection
+        if ( !canReproject() ) {
+            if (query.getCoordinateSystemReproject() != null) {
+                try {
+                    reader = new ReprojectFeatureReader(reader, query.getCoordinateSystemReproject());
+                } catch (Exception e) {
+                    if(e instanceof IOException)
+                        throw (IOException) e;
+                    else
+                        throw (IOException) new IOException("Error occurred trying to reproject data").initCause(e);
+                }
+            }    
+        }
+        
+        // offset
+        if( !canOffset() && offset > 0 ) {
+            // skip the first n records
+            for(int i = 0; i < offset && reader.hasNext(); i++) {
+                reader.next();
+            }
+        }
+        
+        // max feature limit
+        if ( !canLimit() ) {
+            if (query.getMaxFeatures() != -1 && query.getMaxFeatures() < Integer.MAX_VALUE ) {
+                reader = new MaxFeatureReader<SimpleFeatureType, SimpleFeature>(reader, query.getMaxFeatures());
+            }    
+        }
+        
+        //sorting
+        if ( !canSort() ) {
+            if ( query.getSortBy() != null && query.getSortBy().length != 0 ) {
+                throw new UnsupportedOperationException( "sorting unsupported" );
+            }
+        }
+        
+        //retyping
+        if ( !canRetype() ) {
+            if ( query.getPropertyNames() != Query.ALL_NAMES ) {
+                //rebuild the type and wrap the reader
+                SimpleFeatureType target = 
+                    SimpleFeatureTypeBuilder.retype(getSchema(), query.getPropertyNames());
+                
+                // do an equals check because we may have needlessly retyped (that is,
+                // the subclass might be able to only partially retype)
+                if ( !target.equals( reader.getFeatureType() ) ) {
+                    reader = new ReTypeFeatureReader( reader, target, false );    
+                }
+            }
+        }
+        
+        return reader;
+    }
+

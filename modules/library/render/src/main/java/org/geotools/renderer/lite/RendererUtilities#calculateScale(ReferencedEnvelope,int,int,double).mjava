@@ -1,0 +1,160 @@
+	/**
+	 * Find the scale denominator of the map. Method: 1. find the diagonal
+	 * distance (meters) 2. find the diagonal distance (pixels) 3. find the
+	 * diagonal distance (meters) -- use DPI 4. calculate scale (#1/#2)
+	 * 
+	 * NOTE: return the scale denominator not the actual scale (1/scale =
+	 * denominator)
+	 * 
+	 * TODO: (SLD spec page 28): Since it is common to integrate the output of
+	 * multiple servers into a single displayed result in the web-mapping
+	 * environment, it is important that different map servers have consistent
+	 * behaviour with respect to processing scales, so that all of the
+	 * independent servers will select or deselect rules at the same scales. To
+	 * insure consistent behaviour, scales relative to coordinate spaces must be
+	 * handled consistently between map servers. For geographic coordinate
+	 * systems, which use angular units, the angular coverage of a map should be
+	 * converted to linear units for computation of scale by using the
+	 * circumference of the Earth at the equator and by assuming perfectly
+	 * square linear units. For linear coordinate systems, the size of the
+	 * coordinate space should be used directly without compensating for
+	 * distortions in it with respect to the shape of the real Earth.
+	 * 
+	 * NOTE: we are actually doing a a much more exact calculation, and
+	 * accounting for non-square pixels (which are allowed in WMS) ADDITIONAL
+	 * NOTE from simboss: I added soe minor fixes. See below.
+	 * 
+	 * @param envelope
+	 * @param imageWidth
+	 * @param imageHeight
+	 * @param DPI
+	 *            screen dots per inch (OGC standard is 90)
+	 * 
+	 * 
+	 * TODO should I take into account also the destination CRS? Otherwise I am
+	 * just assuming that the final crs is lon,lat that is it maps lon to x (n
+	 * raster space) and lat to y (in raster space).
+	 * @throws TransformException
+	 * @throws FactoryException
+	 * 
+	 */
+	public static double calculateScale(ReferencedEnvelope envelope,
+			int imageWidth, int imageHeight, double DPI)
+			throws TransformException, FactoryException {
+
+		final double diagonalGroundDistance;
+		if (!(envelope.getCoordinateReferenceSystem() instanceof EngineeringCRS)) { // geographic or cad?
+			// //
+			//
+			// get CRS2D for this referenced envelope, check that its 2d
+			//
+			// //
+			final CoordinateReferenceSystem tempCRS = CRS.getHorizontalCRS(envelope.getCoordinateReferenceSystem());
+	        if(tempCRS==null)
+	            throw new TransformException(Errors.format(
+	                      ErrorKeys.CANT_REDUCE_TO_TWO_DIMENSIONS_$1,
+	                      envelope.getCoordinateReferenceSystem()));
+			// make sure the crs is 2d
+			envelope = new ReferencedEnvelope((Envelope) envelope, tempCRS);
+			final MathTransform toWGS84 = CRS.findMathTransform(tempCRS, DefaultGeographicCRS.WGS84, true);
+
+			// //
+			// Try to compute the source crs envelope, either by asking CRS or
+			// by trying to project the WGS84 envelope (world) to the specified
+			// CRS
+			// //
+			GeneralEnvelope sourceCRSEnvelope = (GeneralEnvelope) CRS
+					.getEnvelope(tempCRS);
+			if (sourceCRSEnvelope == null) {
+				try {
+					// try to compute the envelope by reprojecting the WGS84
+					// envelope
+					sourceCRSEnvelope = CRS.transform(toWGS84
+							.inverse(), CRS.getEnvelope(DefaultGeographicCRS.WGS84));
+				} catch (TransformException e) {
+					// for some transformations this is normal, it's not possible
+					// to project the whole WGS84 envelope in many transforms,
+					// such as Mercator or Gauss (the transform does diverge)
+				}catch ( AssertionError ae){
+                                    // same reason as above basically.  For some 
+                                    // projections the assertion will complain.  Nothing can be done about this
+                                }
+			}
+
+			// //
+			//
+			// Make sure it intersect the world in the source projection by
+			// intersecting the provided envelope with the envelope of its crs.
+			//
+			// This will also prevent us from having problems with requests for
+			// images bigger than the world (thanks Dave!!!)
+			//
+			// It is important to note that I also have to update the image
+			// width in case the provided envelope is bigger than the envelope of the
+			// source crs.
+			// //
+			final GeneralEnvelope intersectedEnvelope = new GeneralEnvelope(
+					envelope);
+			if (sourceCRSEnvelope != null) {
+				intersectedEnvelope.intersect(sourceCRSEnvelope);
+				if (intersectedEnvelope.isEmpty())
+					throw new IllegalArgumentException(
+							"The provided envelope is outside the source CRS definition area");
+				if (!intersectedEnvelope.equals(envelope)) {
+					final double scale0 = intersectedEnvelope.getLength(0)
+							/ envelope.getLength(0);
+					final double scale1 = intersectedEnvelope.getLength(1)
+							/ envelope.getLength(1);
+					imageWidth *= scale0;
+					imageHeight *= scale1;
+				}
+			}
+
+			// //
+			//
+			// Go to WGS84 in order to see how things are there
+			//
+			// //
+			final GeneralEnvelope geographicEnvelope = CRS.transform(
+					toWGS84, intersectedEnvelope);
+			geographicEnvelope.setCoordinateReferenceSystem(DefaultGeographicCRS.WGS84);
+
+			// //
+			//
+			// Instantiate a geodetic calculator for GCS WGS84 and get the
+			// orthodromic distance between LLC and UC of the geographic
+			// envelope.
+			//
+			// //
+			final GeodeticCalculator calculator = new GeodeticCalculator(
+					DefaultGeographicCRS.WGS84);
+			final DirectPosition lowerLeftCorner = geographicEnvelope
+					.getLowerCorner();
+			final DirectPosition upperRightCorner = geographicEnvelope
+					.getUpperCorner();
+			calculator.setStartingGeographicPoint(lowerLeftCorner
+					.getOrdinate(0), lowerLeftCorner.getOrdinate(1));
+			calculator.setDestinationGeographicPoint(upperRightCorner
+					.getOrdinate(0), upperRightCorner.getOrdinate(1));
+			diagonalGroundDistance = calculator
+					.getOrthodromicDistance();
+		} else {
+			// if it's an engineering crs, compute only the graphical scale, assuming a CAD space
+			diagonalGroundDistance = Math.sqrt(envelope.getWidth() * envelope.getWidth()
+					+ envelope.getHeight() * envelope.getHeight());
+		}
+
+		// //
+		//
+		// Compute the distances on the requested image using the provided DPI.
+		//
+		// //
+		// pythagorus theorm
+		double diagonalPixelDistancePixels = Math.sqrt(imageWidth * imageWidth
+				+ imageHeight * imageHeight);
+		double diagonalPixelDistanceMeters = diagonalPixelDistancePixels / DPI
+				* 2.54 / 100; // 2.54 = cm/inch, 100= cm/m
+		return diagonalGroundDistance / diagonalPixelDistanceMeters;
+		// remember, this is the denominator, not the actual scale;
+	}
+

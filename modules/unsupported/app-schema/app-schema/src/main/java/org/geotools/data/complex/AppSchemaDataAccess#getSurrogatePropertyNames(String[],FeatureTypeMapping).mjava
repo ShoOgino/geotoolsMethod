@@ -1,0 +1,64 @@
+    /**
+     * 
+     * @param mappingProperties
+     * @param mapping
+     * @return <code>null</code> if all surrogate attributes shall be queried, else the list of
+     *         needed surrogate attributes to satisfy the mapping of prorperties in
+     *         <code>mappingProperties</code>
+     */
+    private List<String> getSurrogatePropertyNames(String[] mappingProperties,
+            FeatureTypeMapping mapping) {
+        List<String> propNames = null;
+        //NC - get source type
+        final AttributeType mappedType = mapping.getSource().getSchema();
+        if (mappingProperties != null && mappingProperties.length > 0) {
+            Set<String> requestedSurrogateProperties = new HashSet<String>();
+            // add all surrogate attributes involved in mapping of the requested
+            // target schema attributes
+            List<AttributeMapping> attMappings = mapping.getAttributeMappings();
+            List<String> requestedProperties = new ArrayList<String>( Arrays.asList(mappingProperties));
+            //NC - add feature to list, to include its ID expression
+            requestedProperties.add(mapping.getTargetFeature().getName().getLocalPart());
+            for (String requestedProperty : requestedProperties) {
+                for (final AttributeMapping entry : attMappings) {
+                    final StepList targetSteps = entry.getTargetXPath();
+                    // i.e.: requested "measurement", found mapping of
+                    // "measurement/result".
+                    // "result" must be included to create "measurement"
+                    //NC - requested Properties are only top level nodes, get all mappings inside node
+                    if (targetSteps.get(0).getName().getLocalPart().equals(requestedProperty) ) {
+                        
+                        final Expression sourceExpression = entry.getSourceExpression();
+                        final Expression idExpression = entry.getIdentifierExpression();
+                        //NC - include client properties
+                        final Collection<Expression> clientProperties = entry.getClientProperties().values();
+                        
+                        FilterAttributeExtractor extractor = new FilterAttributeExtractor();
+                        sourceExpression.accept(extractor, null);
+                        idExpression.accept(extractor, null);
+                        Iterator<Expression> it = clientProperties.iterator(); 
+                        while (it.hasNext()) {
+                            it.next().accept(extractor, null);
+                        }
+                        Set<String> exprAtts = extractor.getAttributeNameSet();
+                        for (String mappedAtt : exprAtts) {
+                            if (!mappedAtt.equals("Expression.NIL")) { //NC - ignore Nil Expression
+                               PropertyName propExpr = filterFac.property(mappedAtt);
+                               Object object = propExpr.evaluate(mappedType);
+                               AttributeDescriptor mappedAttribute = (AttributeDescriptor) object;
+                               if (mappedAttribute != null) {
+                                    requestedSurrogateProperties.add(mappedAtt);
+                               } else {
+                                    LOGGER.info("mapped type does not contains property " + mappedAtt);
+                                }
+                            }
+                        }
+                        LOGGER.fine("adding atts needed for : " + exprAtts);
+                    }
+                }
+            }
+            propNames = new ArrayList<String>(requestedSurrogateProperties);
+        }
+        return propNames;
+    }
+

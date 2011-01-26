@@ -1,0 +1,43 @@
+    /**
+     * Returns the preferred name for the specified object. If the specified
+     * object contains a name from the preferred authority (usually
+     * {@linkplain Citations#OGC Open Geospatial}), then this name is
+     * returned. Otherwise, the first name found is returned.
+     *
+     * @param  info The object to looks for a preferred name.
+     * @return The preferred name.
+     */
+    public String getName(final IdentifiedObject info) {
+        final Identifier name = info.getName();
+        if (!authorityMatches(name.getAuthority())) {
+            final Collection<GenericName> aliases = info.getAlias();
+            if (aliases != null) {
+                /*
+                 * The main name doesn't matches. Search in alias. We will first
+                 * check if alias implements Identifier (this is the case of
+                 * Geotools implementation). Otherwise, we will look at the
+                 * scope in generic name.
+                 */
+                for (final GenericName alias : aliases) {
+                    if (alias instanceof Identifier) {
+                        final Identifier candidate = (Identifier) alias;
+                        if (authorityMatches(candidate.getAuthority())) {
+                            return candidate.getCode();
+                        }
+                    }
+                }
+                // The "null" locale argument is required for getting the unlocalized version.
+                final String title = authority.getTitle().toString(null);
+                for (final GenericName alias : aliases) {
+                    final GenericName scope = alias.scope().name();
+                    if (scope != null) {
+                        if (title.equalsIgnoreCase(scope.toString())) {
+                            return alias.tip().toString();
+                        }
+                    }
+                }
+            }
+        }
+        return name.getCode();
+    }
+

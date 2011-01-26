@@ -1,0 +1,48 @@
+    /**
+     * Computes and returns the stroke
+     */
+    public java.awt.Stroke getStroke() {
+        Stroke stroke = ls.getStroke();
+
+        if (stroke == null) {
+            return null;
+        }
+
+        // resolve join type into a join code
+        String joinType;
+        int joinCode;
+
+        joinType = evaluateExpression(stroke.getLineJoin(), feature, "miter");
+
+        joinCode = SLDStyleFactory.lookUpJoin(joinType);
+
+        // resolve cap type into a cap code
+        String capType;
+        int capCode;
+
+        capType = evaluateExpression(stroke.getLineCap(), feature, "square");
+        capCode = SLDStyleFactory.lookUpCap(capType);
+
+        // get the other properties needed for the stroke
+        float[] dashes = stroke.getDashArray();
+        float width = ((Float) stroke.getWidth().evaluate(feature, Float.class)).floatValue();
+        float dashOffset = ((Float) stroke.getDashOffset().evaluate(feature, Float.class)).floatValue();
+
+        // Simple optimization: let java2d use the fast drawing path if the line width
+        // is small enough...
+        if (width <= 1) {
+            width = 0;
+        }
+
+        // now set up the stroke
+        BasicStroke stroke2d;
+
+        if ((dashes != null) && (dashes.length > 0)) {
+            stroke2d = new BasicStroke(width, capCode, joinCode, 1, dashes, dashOffset);
+        } else {
+            stroke2d = new BasicStroke(width, capCode, joinCode, 1);
+        }
+
+        return stroke2d;
+    }
+

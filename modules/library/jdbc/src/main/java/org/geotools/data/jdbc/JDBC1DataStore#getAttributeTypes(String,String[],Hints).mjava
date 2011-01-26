@@ -1,0 +1,48 @@
+	/**
+	 * Gets the attribute types from from a given type.
+	 *
+	 * @param typeName
+	 *            The name of the feature type to get the AttributeTypes for.
+	 * @param propertyNames
+	 *            The list of propertyNames to get AttributeTypes for.
+	 *
+	 * @return the array of attribute types from the schema which match
+	 *         propertyNames.
+	 *
+	 * @throws IOException
+	 *             If we can't get the schema.
+	 * @throws SchemaException
+	 *             if query contains a propertyName that is not a part of this
+	 *             type's schema.
+	 */
+	protected final AttributeDescriptor[] getAttributeTypes(String typeName,
+			String[] propertyNames, Hints hints) throws IOException, SchemaException {
+		SimpleFeatureType schema = getSchema(typeName);
+		AttributeDescriptor[] types = new AttributeDescriptor[propertyNames.length];
+
+		for (int i = 0; i < propertyNames.length; i++) {
+			types[i] = schema.getDescriptor(propertyNames[i]);
+
+			if (types[i] == null) {
+				throw new SchemaException(typeName
+						+ " does not contain requested " + propertyNames[i]
+						+ " attribute");
+			}
+			
+			// if we are asked to return a 2d feature make sure to return the
+			// proper coordinate dimension
+			if(hints != null && hints.containsKey(Hints.FEATURE_2D) 
+			        && Boolean.TRUE.equals(hints.get(Hints.FEATURE_2D))
+			        && types[i] instanceof GeometryDescriptor &&
+			        !Integer.valueOf(2).equals(types[i].getUserData().get(Hints.COORDINATE_DIMENSION))) {
+			    AttributeTypeBuilder builder = new AttributeTypeBuilder();
+			    builder.init(types[i]);
+			    builder.userData(Hints.COORDINATE_DIMENSION, 2);
+			    GeometryType type = builder.buildGeometryType();
+			    types[i] = builder.buildDescriptor(types[i].getName(), type);
+			}
+		}
+
+		return types;
+	}
+

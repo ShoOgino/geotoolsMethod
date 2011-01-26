@@ -1,0 +1,79 @@
+    /**
+     * Returns a code list of the given type.
+     *
+     * @param  type The type, as a subclass of {@link CodeList}.
+     * @param  identifier The identifier in the code list. This method accepts either The numerical
+     *         value of the code to search for (usually the primary key), or the code name.
+     * @return The code list element.
+     * @throws SQLException if a SQL query failed.
+     */
+    private CodeList getCodeList(final Class<?> type, String identifier) throws SQLException {
+        assert Thread.holdsLock(this);
+        final String className = getClassName(type);
+        int     code;          // The identifier as an integer.
+        boolean isNumerical;   // 'true' if 'code' is valid.
+        try {
+            code = Integer.parseInt(identifier);
+            isNumerical = true;
+        } catch (NumberFormatException exception) {
+            code = 0;
+            isNumerical = false;
+        }
+        /*
+         * Converts the numerical value into the code list name.
+         */
+        if (isNumerical) {
+            MetadataResult result = statements.get(type);
+            if (result == null) {
+                result = new MetadataResult(connection, codeQuery, getTableName(className));
+                statements.put(type, result);
+            }
+            identifier = result.getString(identifier);
+        }
+        /*
+         * Search a code list with the same name than the one declared
+         * in the database. We will use name instead of code numerical
+         * value, since the later is more bug prone.
+         */
+        final CodeList<?>[] values;
+        try {
+            values = (CodeList[]) type.getMethod("values", (Class []) null)
+                                      .invoke   (null,     (Object[]) null);
+        } catch (NoSuchMethodException exception) {
+            throw new MetadataException("Can't read code list.", exception); // TODO: localize
+        } catch (IllegalAccessException exception) {
+            throw new MetadataException("Can't read code list.", exception); // TODO: localize
+        } catch (InvocationTargetException exception) {
+            throw new MetadataException("Can't read code list.", exception); // TODO: localize
+        }
+        CodeList<?> candidate;
+        final StringBuilder candidateName = new StringBuilder(className);
+        candidateName.append('.');
+        final int base = candidateName.length();
+        if (code>=1 && code<values.length) {
+            candidate = values[code-1];
+            candidateName.append(candidate.name());
+            if (identifier.equals(geoApiToIso.getProperty(candidateName.toString()))) {
+                return candidate;
+            }
+        }
+        /*
+         * The previous code was an optimization which checked directly the code list
+         * for the same code than the one used in the database. Most of the time, the
+         * name matches and this loop is never executed. If we reach this point, then
+         * maybe the numerical code are not the same in the database than in the Java
+         * CodeList implementation. Check each code list element by name.
+         */
+        for (int i=0; i<values.length; i++) {
+            candidate = values[i];
+            candidateName.setLength(base);
+            candidateName.append(candidate.name());
+            if (identifier.equals(geoApiToIso.getProperty(candidateName.toString()))) {
+                return candidate;
+            }
+        }
+        // TODO: localize
+        throw new SQLException("Unknow code list: \""+identifier+"\" in table \"" +
+                               getTableName(className)+'"');
+    }
+

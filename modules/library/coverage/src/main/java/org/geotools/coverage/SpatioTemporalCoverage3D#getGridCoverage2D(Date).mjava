@@ -1,0 +1,34 @@
+    /**
+     * Returns a 2 dimensional grid coverage for the given date. The grid geometry will be computed
+     * in order to produces image with the {@linkplain #getDefaultPixelSize() default pixel size},
+     * if any.
+     *
+     * @param  time The date where to evaluate.
+     * @return The grid coverage at the specified time, or {@code null}
+     *         if the requested date fall in a hole in the data.
+     * @throws PointOutsideCoverageException if {@code time} is outside coverage.
+     * @throws CannotEvaluateException if the computation failed for some other reason.
+     *
+     * @see #getRenderableImage(Date)
+     * @see RenderableImage#createDefaultRendering()
+     */
+    public GridCoverage2D getGridCoverage2D(final Date time) throws CannotEvaluateException {
+        final InternationalString name = getName();
+        final CoordinateReferenceSystem crs = CRS.getHorizontalCRS(this.crs);
+        if (crs == null) {
+            throw new CannotEvaluateException(
+                    Errors.format(ErrorKeys.CANT_SEPARATE_CRS_$1, this.crs.getName()));
+        }
+        final RenderedImage           image = getRenderableImage(time).createDefaultRendering();
+        final GridSampleDimension[]   bands = new GridSampleDimension[getNumSampleDimensions()];
+        for (int i=0; i<getNumSampleDimensions(); i++){
+            bands[i] = GridSampleDimension.wrap(getSampleDimension(i));
+        }
+        final MathTransform gridToCRS;
+        gridToCRS = ProjectiveTransform.create((AffineTransform) image.getProperty("gridToCRS"));
+        if (factory == null) {
+            factory = CoverageFactoryFinder.getGridCoverageFactory(HINTS);
+        }
+        return factory.create(name, image, crs, gridToCRS, bands, null, null);
+    }
+

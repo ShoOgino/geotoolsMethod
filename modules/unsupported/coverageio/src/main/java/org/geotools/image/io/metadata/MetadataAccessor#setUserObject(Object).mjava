@@ -1,0 +1,38 @@
+    /**
+     * Sets the {@linkplain IIOMetadataNode#setUserObject user object} associated with the
+     * {@linkplain #selectChild selected element}. This is the only {@code set} method that
+     * doesn't invoke {@link #setAttributeAsString} with a formatted value.
+     * <p>
+     * If the specified value is formattable (i.e. is a {@linkplain CharSequence character
+     * sequence}, a {@linkplain Number number} or an array of the above), then this method
+     * also {@linkplain IIOMetadataNode#setNodeValue sets the node value} as a string. This
+     * is mostly a convenience for formatting purpose since {@link IIOMetadataNode} don't
+     * use the node value. But it may help some libraries that are not designed to work with
+     * with user objects, since they are particular to Image I/O metadata.
+     *
+     * @param  value The user object, or {@code null} if none.
+     * @throws UnsupportedImplementationException if the selected element is not an instance of
+     *         {@link IIOMetadataNode}.
+     *
+     * @see #getUserObject()
+     */
+    protected void setUserObject(final Object value) throws UnsupportedImplementationException {
+        final Element element = currentElement();
+        String asText = null;
+        if (value != null) {
+            final Class<?> type = value.getClass();
+            if (isFormattable(type)) {
+                asText = value.toString();
+            } else if (isFormattable(type.getComponentType())) {
+                asText = formatSequence(value);
+            }
+        }
+        if (element instanceof IIOMetadataNode) {
+            ((IIOMetadataNode) element).setUserObject(value);
+        } else if (value!=null && asText==null) {
+            throw new UnsupportedImplementationException(Errors.format(ErrorKeys.ILLEGAL_CLASS_$2,
+                    Classes.getClass(element), IIOMetadataNode.class));
+        }
+        element.setNodeValue(asText);
+    }
+

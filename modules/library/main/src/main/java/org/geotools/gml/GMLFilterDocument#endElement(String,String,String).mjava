@@ -1,0 +1,70 @@
+    /**
+     * Checks for GML element end and - if not a coordinates element -  sends
+     * it directly on down the chain to the appropriate parent handler.  If it
+     * is a coordinates (or coord) element,  it uses internal methods to set
+     * the current state of the coordinates reader appropriately.
+     * 
+     * <p>
+     * Modified by Sean Geoghegan. When we reach the end of a coord or
+     * coordinate element, then the buffer is passed to the handler for
+     * processing.
+     * </p>
+     *
+     * @param namespaceURI The namespace of the element.
+     * @param localName The local name of the element.
+     * @param qName The full name of the element, including namespace prefix.
+     *
+     * @throws SAXException Some parsing error occurred while  reading
+     *         coordinates.
+     */
+    public void endElement(String namespaceURI, String localName, String qName)
+        throws SAXException {
+        LOGGER.entering("GMLFilterDocument", "endElement",
+            new Object[] { namespaceURI, localName, qName });
+
+        /* if leaving a GML element, handle and pass to appropriate
+         * internal or external method
+         */
+        if (namespaceURI.equals(GML_NAMESPACE) || !namespaceAware) {
+            // if geometry, pass on down the chain to appropriate handlers
+            if (BASE_GEOMETRY_TYPES.contains(localName)) {
+                parent.geometryEnd(localName);
+            } else if (SUB_GEOMETRY_TYPES.contains(localName)) {
+                parent.geometrySub(localName);
+            } else if (COORDINATES_NAME.equals(localName)) {
+                // Convert the string buffer to a string and process the
+                // coordinate, then end the coordinate status in the handler.
+                coordinateReader.readCoordinates(buffer.toString());
+                coordinateReader.insideCoordinates(false);
+            } else if (COORD_NAME.equals(localName)) {
+                coordinateReader.readCoord(buffer.toString());
+                coordinateReader.insideCoord(false);
+            } else if (X_NAME.equals(localName)) {
+                coordinateReader.readCoord(buffer.toString());
+                coordinateReader.insideX(false);
+            } else if (Y_NAME.equals(localName)) {
+                coordinateReader.readCoord(buffer.toString());
+                coordinateReader.insideY(false);
+            } else if (Z_NAME.equals(localName)) {
+                coordinateReader.readCoord(buffer.toString());
+                coordinateReader.insideZ(false);
+            } else if (!namespaceAware) {
+                /* if not namespace aware, then just pass element through;
+                 * otherwise, there is some error in the GML
+                 */
+                parent.endElement(namespaceURI, localName, qName);
+            } else {
+                parent.endElement(namespaceURI, localName, qName);
+            }
+
+            //else { throw new SAXException("Unrecognized GML element."); }
+        } else {
+            /* all non-GML elements passed on down the filter chain
+             * without modification
+             */
+            parent.endElement(namespaceURI, localName, qName);
+        }
+
+        LOGGER.exiting("GMLFilterDocument", "endElement");
+    }
+

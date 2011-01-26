@@ -1,0 +1,45 @@
+    /**
+     * Returns the {@linkplain #output output} as an {@linkplain BufferedWriter buffered writer}.
+     * If the output is already a buffered writer, it is returned unchanged. Otherwise this method
+     * creates a new {@linkplain BufferedWriter buffered writer} from various output types
+     * including {@link File}, {@link URL}, {@link URLConnection}, {@link Writer},
+     * {@link OutputStream} and {@link ImageOutputStream}.
+     * <p>
+     * This method creates a new {@linkplain BufferedWriter writer} only when first invoked.
+     * All subsequent calls will returns the same instance. Consequently, the returned writer
+     * should never be closed by the caller. It may be {@linkplain #close closed} automatically
+     * when {@link #setOutput setOutput(Object)}, {@link #reset() reset()} or {@link #dispose()
+     * dispose()} methods are invoked.
+     *
+     * @param  parameters The write parameters, or {@code null} for the defaults.
+     * @return {@link #getOutput} as a {@link BufferedWriter}.
+     * @throws IllegalStateException if the {@linkplain #output output} is not set.
+     * @throws IOException If the output stream can't be created for an other reason.
+     *
+     * @see #getOutput
+     * @see #getOutputStream
+     */
+    protected BufferedWriter getWriter(final ImageWriteParam parameters)
+            throws IllegalStateException, IOException
+    {
+        if (writer == null) {
+            final Object output = getOutput();
+            if (output instanceof BufferedWriter) {
+                writer = (BufferedWriter) output;
+                closeOnReset = null; // We don't own the underlying writer, so don't close it.
+            } else if (output instanceof Writer) {
+                writer = new BufferedWriter((Writer) output);
+                closeOnReset = null; // We don't own the underlying writer, so don't close it.
+            } else {
+                final OutputStream stream = getOutputStream();
+                final Charset charset = getCharset(parameters);
+                writer = new BufferedWriter((charset != null) ?
+                        new OutputStreamWriter(stream, charset) : new OutputStreamWriter(stream));
+                if (closeOnReset == stream) {
+                    closeOnReset = writer;
+                }
+            }
+        }
+        return writer;
+    }
+

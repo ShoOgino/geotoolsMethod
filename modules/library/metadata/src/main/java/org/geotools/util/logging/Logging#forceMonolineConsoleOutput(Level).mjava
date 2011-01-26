@@ -1,0 +1,31 @@
+    /**
+     * Same as {@link #forceMonolineConsoleOutput()}, but additionnaly set an optional logging
+     * level. If the specified level is non-null, then all {@link java.util.logging.Handler}s
+     * using the monoline formatter will be set to the specified level.
+     * <p>
+     * <b>Note:</b> Avoid this method as much as possible, since it overrides user's level
+     * setting. A user trying to configure his logging properties may find confusing to see
+     * his setting ignored.
+     *
+     * @see org.geotools.factory.GeoTools#init
+     */
+    public void forceMonolineConsoleOutput(final Level level) {
+        final Logger logger = Logger.getLogger(name); // Really Java logging, not the redirected one.
+        synchronized (EMPTY) {
+            final MonolineFormatter f = MonolineFormatter.configureConsoleHandler(logger, level);
+            if (f.getSourceFormat() == null) {
+                // Set the source format only if the user didn't specified
+                // an explicit one in the jre/lib/logging.properties file.
+                f.setSourceFormat("class:short");
+            }
+            if (level != null) {
+                // If a level was specified, changes to a finer level if needed
+                // (e.g. from FINE to FINER, but not the opposite).
+                final Level current = logger.getLevel();
+                if (current == null || current.intValue() > level.intValue()) {
+                    logger.setLevel(level);
+                }
+            }
+        }
+    }
+

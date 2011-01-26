@@ -1,0 +1,26 @@
+    /**
+     * Constructs the {@link PlanarImage} from the {@linkplain SerializableRenderedImage}
+     * after deserialization.
+     */
+    private void readObject(final ObjectInputStream in) throws IOException, ClassNotFoundException {
+        in.defaultReadObject();
+        try {
+            /*
+             * Set the 'image' field using reflection, because this field is final.
+             * This is a legal usage for deserialization according Field.set(...)
+             * documentation in J2SE 1.5.
+             */
+            final Field field = GridCoverage2D.class.getDeclaredField("image");
+            field.setAccessible(true);
+            field.set(this, PlanarImage.wrapRenderedImage(serializedImage));
+        } catch (NoSuchFieldException cause) {
+            InvalidClassException e = new InvalidClassException(cause.getLocalizedMessage());
+            e.initCause(cause);
+            throw e;
+        } catch (IllegalAccessException cause) {
+            InvalidObjectException e = new InvalidObjectException(cause.getLocalizedMessage());
+            e.initCause(cause);
+            throw e;
+        }
+    }
+

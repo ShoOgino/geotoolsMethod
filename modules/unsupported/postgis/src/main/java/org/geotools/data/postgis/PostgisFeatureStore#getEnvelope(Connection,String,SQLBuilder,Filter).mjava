@@ -1,0 +1,50 @@
+    //REVISIT: do we want maxFeatures here too?  If we don't have maxFeatures then the answer
+    //is still always going to be right (and guaranteed to be right, as opposed to two selects
+    // that could be slightly different).  And the performance hit shouldn't be all that much.
+    protected ReferencedEnvelope getEnvelope(
+        Connection conn,
+        String geomName,
+        SQLBuilder sqlBuilder,
+        Filter filter)
+        throws SQLException, SQLEncoderException, IOException, ParseException {
+        String typeName = getSchema().getTypeName();
+        
+        StringBuffer sql = new StringBuffer();
+        sql.append("SELECT AsText(force_2d(Envelope(" );
+        
+        //check if we can apply the estimated_extent optimization
+        boolean useEstimatedExtent = ( filter == null || filter == Filter.INCLUDE ) 
+        	&& ((PostgisDataStore)getDataStore()).isEstimatedExtent();
+        
+        if ( useEstimatedExtent ) {
+        	sql.append("estimated_extent(");	
+        	sql.append("'" + typeName + "','" + geomName + "'))));");
+        }
+        else {
+        	sql.append("Extent(\"" + geomName + "\")))) " );
+        	sqlBuilder.sqlFrom(sql, typeName);
+            sqlBuilder.sqlWhere(sql, filter);
+        }
+        
+      
+        LOGGER.fine("SQL: " + sql);
+
+        Statement statement = conn.createStatement();
+        ResultSet results = statement.executeQuery(sql.toString());
+        results.next();
+
+        String wkt = results.getString(1);
+        ReferencedEnvelope retEnv = null;
+
+        if (wkt == null) {
+            return null;
+        } else {
+            retEnv = ReferencedEnvelope.reference(geometryReader.read(wkt).getEnvelopeInternal());
+        }
+
+        results.close();
+        statement.close();
+
+        return retEnv;
+    }	
+

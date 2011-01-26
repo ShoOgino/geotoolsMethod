@@ -1,0 +1,68 @@
+    public void commit() throws IOException {
+        // first, check we touched at least one versioned table
+        if (!dirtyTypes.isEmpty()) {
+            // grab author and message, they might have been updated since revsion insertion
+            String author = (String) transaction.getProperty(VersioningDataStore.AUTHOR);
+            String message = (String) transaction.getProperty(VersioningDataStore.MESSAGE);
+            
+            // first write down modified envelope
+            SimpleFeature f = null;
+            FeatureWriter<SimpleFeatureType, SimpleFeature> writer = null;
+            try {
+                // build filter to extract the appropriate changeset record
+                FilterFactory ff = CommonFactoryFinder.getFilterFactory(null);
+                Filter revisionFilter = ff.id(Collections.singleton(ff.featureId(VersionedPostgisDataStore.TBL_CHANGESETS + "." + getRevision())));
+
+                // get a writer for the changeset record we want to update
+                writer = wrapped.getFeatureWriter(VersionedPostgisDataStore.TBL_CHANGESETS,
+                        (org.geotools.filter.Filter) revisionFilter, transaction);
+                if (!writer.hasNext()) {
+                    // who ate my changeset record ?!?
+                    throw new IOException("Could not find the changeset record "
+                            + "that should have been set in the versioned datastore on "
+                            + "versioned jdbc state creation");
+                }
+                
+                // update it
+                f = writer.next();
+                f.setAttribute("author", author);
+                f.setAttribute("message", message);
+                f.setDefaultGeometry(toLatLonRectange(bbox));
+                writer.write();
+            } catch (IllegalAttributeException e) {
+                // if this happens there's a programming error
+                throw new DataSourceException("Could not set an attribute in changesets, "
+                        + "most probably the table schema has been tampered with.", e);
+            } finally {
+                if (writer != null)
+                    writer.close();
+            }
+
+            // then write down the modified feature types
+            Statement st = null;
+            try {
+                st = getConnection().createStatement();
+                for (Iterator it = dirtyTypes.iterator(); it.hasNext();) {
+                    String typeName = (String) it.next();
+                    execute(st, "INSERT INTO " + VersionedPostgisDataStore.TBL_TABLESCHANGED + " "
+                            + "SELECT " + revision + ", id " + "FROM "
+                            + VersionedPostgisDataStore.TBL_VERSIONEDTABLES + " WHERE SCHEMA = '"
+                            + wrapped.getConfig().getDatabaseSchemaName() + "' " + "AND NAME = '"
+                            + typeName + "'");
+                }
+            } catch (SQLException e) {
+                throw new DataSourceException(
+                        "Error occurred while trying to save modified tables for "
+                                + "this changeset. This should not happen, probaly there's a "
+                                + "bug at work here.", e);
+            } finally {
+                JDBCUtils.close(st);
+            }
+        }
+
+        // aah, all right, now we can really commit this transaction and be happy
+        super.commit();
+        // reset revision, we create a new revision for each new commit
+        reset();
+    }
+

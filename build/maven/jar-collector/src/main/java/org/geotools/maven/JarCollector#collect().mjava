@@ -1,0 +1,67 @@
+    /**
+     * Implementation of the {@link #execute} method.
+     */
+    private void collect() throws MojoExecutionException, IOException {
+        /*
+         * Make sure that we are collecting the JAR file from a module which produced
+         * such file. Some modules use pom packaging, which do not produce any JAR file.
+         */
+        final File jarFile = new File(outputDirectory, jarName + ".jar");
+        if (!jarFile.isFile()) {
+            return;
+        }
+        /*
+         * Get the "target" directory of the parent pom.xml and make sure it exists.
+         */
+        File collect = new File(collectDirectory);
+        if (!collect.exists()) {
+            if (!collect.mkdir()) {
+                throw new MojoExecutionException("Failed to create target directory: " + collect.getAbsolutePath());
+            }
+        }
+        if (collect.getCanonicalFile().equals(jarFile.getParentFile().getCanonicalFile())) {
+            /*
+             * The parent's directory is the same one than this module's directory.
+             * In other words, this plugin is not executed from the parent POM. Do
+             * not copy anything, since this is not the place where we want to
+             * collect the JAR files.
+             */
+            return;
+        }
+        /*
+         * Creates a "binaries" subdirectory inside the "target" directory.
+         */
+        collect = new File(collect, SUB_DIRECTORY);
+        if (!collect.exists()) {
+            if (!collect.mkdir()) {
+                throw new MojoExecutionException("Failed to create binaries directory.");
+            }
+        }
+        FileUtils.copyFileToDirectory(jarFile, collect);
+        if (dependencies != null) {
+            for (final Artifact artifact : dependencies) {
+                final String scope = artifact.getScope();
+                if (scope != null &&  // Maven 2.0.6 bug?
+                   (scope.equalsIgnoreCase(Artifact.SCOPE_COMPILE) ||
+                    scope.equalsIgnoreCase(Artifact.SCOPE_RUNTIME)))
+                {
+                    final File file = artifact.getFile();
+                    if (!artifact.getGroupId().startsWith("org.geotools")) {
+                        final File copy = new File(collect, file.getName());
+                        if (copy.exists()) {
+                            /*
+                             * Copies the dependency only if it was not already copied. Note that
+                             * the module's JAR was copied inconditionnaly above (because it may
+                             * be the result of a new compilation). If a Geotools JAR from the
+                             * dependencies list changed, it will be copied inconditionnaly when
+                             * the module for this JAR will be processed by Maven.
+                             */
+                            continue;
+                        }
+                    }
+                    FileUtils.copyFileToDirectory(file, collect);
+                }
+            }
+        }
+    }
+

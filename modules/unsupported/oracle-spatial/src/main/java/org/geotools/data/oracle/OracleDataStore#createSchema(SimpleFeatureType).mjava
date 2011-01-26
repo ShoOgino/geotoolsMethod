@@ -1,0 +1,40 @@
+    public void createSchema(SimpleFeatureType featureType) throws IOException {
+    	String tableName = featureType.getTypeName();
+    	Transaction t = new DefaultTransaction("createSchema");
+    	
+    	//CoordinateReferenceSystem crs = featureType.getDefaultGeometry().getCoordinateSystem();
+    	// TODO: lookup srid for crs
+    	Envelope bounds = new Envelope();
+		bounds.expandToInclude( -180, -90 );
+		bounds.expandToInclude( 180, 90 );
+		int srid = -1;
+		
+    	SQLEncoderOracle encoder = new SQLEncoderOracle("fid",srid); // should figure out from encoding
+    	SqlStatementEncoder statements = new SqlStatementEncoder( encoder, tableName, "fid" );
+    	
+    	try {
+			sql( t, "DROP TABLE "+tableName );
+			sql( t, "DELETE FROM user_sdo_geom_metadata WHERE TABLE_NAME='"+tableName+"'");			
+    	}
+    	catch( SQLException ignore ){
+    		// table probably did not exist
+    	}
+    	try{
+    		sql( t, statements.makeCreateTableSQL( featureType ) );
+    		
+  
+    		sql( t, statements.makeAddGeomMetadata( featureType, bounds, srid ) );
+    		//sql( t, statements.makeCreateFidIndex() );
+    		//sql( t, statements.makeCreateGeomIndex( featureType ) );
+    		
+    		t.commit();
+    		
+    	} catch (SQLException e) {
+    		t.rollback();
+    		throw (IOException) new IOException( e.getLocalizedMessage() ).initCause( e );
+		}    	    	
+    	finally {
+    		t.close();
+    	}
+    }
+

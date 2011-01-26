@@ -1,0 +1,45 @@
+    /**
+     * Invoked when any method from a metadata interface is invoked.
+     *
+     * @param proxy  The object on which the method is invoked.
+     * @param method The method invoked.
+     * @param args   The argument given to the method.
+     */
+    public Object invoke(final Object proxy,
+                         final Method method,
+                         final Object[] args)
+    {
+        final Class<?> type = method.getDeclaringClass();
+        if (type.getName().startsWith(source.metadataPackage)) {
+            if (args!=null && args.length!=0) {
+                throw new MetadataException("Unexpected argument."); // TODO: localize
+            }
+            /*
+             * The method invoked is a method from the metadata interface.
+             * Consequently, the information should exists in the underlying
+             * database.
+             */
+            try {
+                return source.getValue(type, method, identifier);
+            } catch (SQLException e) {
+                throw new MetadataException("Failed to query the database.", e); // TODO: localize
+            }
+        } else {
+            /*
+             * The method invoked is a method inherit from a parent class,
+             * like Object.toString() or Object.hashCode(). This information
+             * is not expected to exists in the database. Forward the call
+             * to this object object, since they is only one instance by proxy.
+             * Note: do not forward to the proxy in order to avoid never-ending
+             * loop.
+             */
+            try {
+                return method.invoke(this, args);
+            } catch (IllegalAccessException e) {
+                throw new MetadataException("Illegal method call.", e); // TODO: localize
+            } catch (InvocationTargetException e) {
+                throw new MetadataException("Illegal method call.", e); // TODO: localize
+            }
+        }
+    }
+

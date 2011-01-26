@@ -1,0 +1,44 @@
+    /**
+     * Returns either a standard feature writer, or a pure append feature writer
+     */
+    protected FeatureWriter<SimpleFeatureType, SimpleFeature> getFeatureWriterInternal(String typeName, Filter filter,
+            Transaction transaction, boolean append) throws IOException, DataSourceException {
+        // check transaction definition is ok
+        // checkTransactionProperties(transaction);
+
+        // if transaction is auto-commit, we have to create one, otherwise
+        // the database structure may be ruined, plus we need support for
+        // transaction state and properties.
+        // Yet, we need to remember and commit the transaction when writer is
+        // closed
+        boolean autoCommit = false;
+        if (transaction.equals(Transaction.AUTO_COMMIT)) {
+            transaction = new DefaultTransaction();
+            autoCommit = true;
+        }
+
+        // build a filter that extracts the last revision and remaps fid filters
+        Filter revisionedFilter = buildVersionedFilter(typeName, filter, new RevisionInfo());
+
+        // Gather the update writer, used to expire old revisions, and the
+        // append writer, used to create new revisions
+        FeatureWriter<SimpleFeatureType, SimpleFeature> updateWriter;
+        if (append)
+            updateWriter = null;
+        else
+            updateWriter = wrapped.getFeatureWriter(typeName, revisionedFilter, transaction);
+        FeatureWriter<SimpleFeatureType, SimpleFeature> appendWriter = wrapped.getFeatureWriterAppend(typeName, transaction);
+
+        // mark this feature type as dirty
+        VersionedJdbcTransactionState state = wrapped.getVersionedJdbcTransactionState(transaction);
+        state.setTypeNameDirty(typeName);
+
+        // finally, return a feature writer that will do the proper
+        // versioning job
+        VersionedFIDMapper mapper = (VersionedFIDMapper) getFIDMapper(typeName);
+        VersionedFeatureWriter writer = new VersionedFeatureWriter(updateWriter, appendWriter,
+                getSchema(typeName), state, mapper, autoCommit);
+        writer.setFeatureListenerManager(listenerManager);
+        return writer;
+    }
+

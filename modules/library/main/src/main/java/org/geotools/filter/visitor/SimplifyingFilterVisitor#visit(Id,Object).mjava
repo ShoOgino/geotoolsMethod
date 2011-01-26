@@ -1,0 +1,36 @@
+    /**
+     * Uses the current {@link FIDValidator} to wipe out illegal feature ids from the returned
+     * filters.
+     * 
+     * @return a filter containing only valid fids as per the current {@link FIDValidator}, may be
+     *         {@link Filter#EXCLUDE} if none matches or the filter is already empty 
+     */
+    @Override
+    public Object visit(Id filter, Object extraData) {
+        // if the set of ID is empty, it's actually equivalent to Filter.EXCLUDE
+        if (filter.getIDs().size() == 0) {
+            return Filter.EXCLUDE;
+        }
+
+        Set<Identifier> validFids = new HashSet<Identifier>();
+
+        for (Identifier id : filter.getIdentifiers()) {
+            if(id instanceof FeatureId || id instanceof GmlObjectId){
+                // both FeatureId an GmlObjectId.getID() return String, but Identifier.getID()
+                // returns Object. Yet, FeatureId and GmlObjectId are the only known subclasses of
+                // Identifier that apply to Feature land
+                if (fidValidator.isValid((String)id.getID())) {
+                    validFids.add(id);
+                }
+            }
+        }
+
+        Filter validIdFilter;
+        if (validFids.size() == 0) {
+            validIdFilter = Filter.EXCLUDE;
+        } else {
+            validIdFilter = getFactory(extraData).id(validFids);
+        }
+        return validIdFilter;
+    }
+

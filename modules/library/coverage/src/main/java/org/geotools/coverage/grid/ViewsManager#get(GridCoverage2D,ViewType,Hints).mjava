@@ -1,0 +1,43 @@
+    /**
+     * Invoked by {@linkplain GridCoverage2D#view} for getting a view.
+     *
+     * <strong>NOTE:</strong> {@link GridCoverage2D#toString()} requires that this method is
+     * synchronized on {@code this}.
+     */
+    public synchronized GridCoverage2D get(final GridCoverage2D caller, final ViewType type,
+                                           final Hints userHints)
+    {
+        GridCoverage2D coverage = views.get(type);
+        if (coverage != null) {
+            return coverage;
+        }
+        coverage = views.get(ViewType.NATIVE);
+        if (coverage == null) {
+            // TODO: localize.
+            throw new IllegalStateException("This coverage has been disposed.");
+        }
+        switch (type) {
+            case RENDERED:     coverage = rendered(caller,            userHints); break;
+            case PACKED:       coverage = geophysics(coverage, false, userHints); break;
+            case GEOPHYSICS:   coverage = geophysics(coverage, true,  userHints); break;
+            case PHOTOGRAPHIC: coverage = photographic(coverage,      userHints); break;
+            default: {
+                /*
+                 * We don't want a case for:
+                 *  - SAME   because it should be handled by "GridCoverage2D.view(...)"
+                 *  - NATIVE because it should be handled by "views.get(type)".
+                 *
+                 * Getting there with one of the above type is an error.
+                 */
+                throw new IllegalArgumentException(Errors.format(
+                        ErrorKeys.ILLEGAL_ARGUMENT_$2, "type", type));
+            }
+        }
+        coverage = caller.specialize(coverage);
+        if (caller.copyViewsTo(coverage) != this) {
+            throw new AssertionError(); // Should never happen.
+        }
+        views.put(type, coverage);
+        return coverage;
+    }
+

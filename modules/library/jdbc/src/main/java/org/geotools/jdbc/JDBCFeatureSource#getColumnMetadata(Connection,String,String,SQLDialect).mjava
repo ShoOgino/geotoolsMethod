@@ -1,0 +1,63 @@
+    /**
+     * Computes the column metadata from a plain database table
+     * @param cx
+     * @param databaseSchema
+     * @param tableName
+     * @param dialect
+     * @return
+     * @throws SQLException
+     */
+    List<ColumnMetadata> getColumnMetadata(Connection cx, String databaseSchema, String tableName, SQLDialect dialect)
+            throws SQLException {
+        List<ColumnMetadata> result = new ArrayList<ColumnMetadata>();
+
+        DatabaseMetaData metaData = cx.getMetaData();
+
+        /*
+         * <UL>
+         * <LI><B>COLUMN_NAME</B> String => column name
+         * <LI><B>DATA_TYPE</B> int => SQL type from java.sql.Types
+         * <LI><B>TYPE_NAME</B> String => Data source dependent type name, for a UDT the type name
+         * is fully qualified
+         * <LI><B>COLUMN_SIZE</B> int => column size. For char or date types this is the maximum
+         * number of characters, for numeric or decimal types this is precision.
+         * <LI><B>BUFFER_LENGTH</B> is not used.
+         * <LI><B>DECIMAL_DIGITS</B> int => the number of fractional digits
+         * <LI><B>NUM_PREC_RADIX</B> int => Radix (typically either 10 or 2)
+         * <LI><B>NULLABLE</B> int => is NULL allowed.
+         * <UL>
+         * <LI>columnNoNulls - might not allow <code>NULL</code> values
+         * <LI>columnNullable - definitely allows <code>NULL</code> values
+         * <LI>columnNullableUnknown - nullability unknown
+         * </UL>
+         * <LI><B>COLUMN_DEF</B> String => default value (may be <code>null</code>)
+         * <LI>
+         * <B>IS_NULLABLE</B> String => "NO" means column definitely does not allow NULL values;
+         * "YES" means the column might allow NULL values. An empty string means nobody knows.
+         * </UL>
+         */
+        ResultSet columns = metaData.getColumns(null, databaseSchema, tableName, "%");
+
+        try {
+            while (columns.next()) {
+                ColumnMetadata column = new ColumnMetadata();
+                column.name = columns.getString("COLUMN_NAME");
+                column.typeName = columns.getString("TYPE_NAME");
+                column.sqlType = columns.getInt("DATA_TYPE");
+                column.nullable = "YES".equalsIgnoreCase(columns.getString("IS_NULLABLE"));
+                column.binding = dialect.getMapping(columns, cx);
+                
+                //support for user defined types, allow the dialect to handle them
+                if (column.sqlType == Types.DISTINCT) {
+                    dialect.handleUserDefinedType(columns, column, cx);
+                }
+                
+                result.add(column);
+            }
+        } finally {
+            getDataStore().closeSafe(columns);
+        }
+
+        return result;
+    }
+

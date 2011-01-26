@@ -1,0 +1,98 @@
+    /**
+     * Returns a reader created by the {@linkplain #getImageReaderSpi provider} and setup for
+     * reading the image from the {@linkplain #getInput input}. If a reader is already setup with
+     * the right input, then it is returned immediately. Otherwise if the image reader can accept
+     * the {@linkplain #getInput input} directly, than that input is given to the image reader.
+     * Otherwise the input is wrapped in an {@linkplain ImageInputStream image input stream}.
+     * <p>
+     * This method is invoked automatically by {@link MosaicImageReader} and should not needs
+     * to be invoked directly. If an {@linkplain ImageInputStream image input stream} has been
+     * created, it will be closed automatically when needed.
+     * <p>
+     * Note that this method will typically returns an instance to be shared by every tiles in
+     * the given {@link MosaicImageReader}. Callers should not {@linkplain ImageReader#dispose
+     * dispose} the reader or change its configuration, unless the {@code mosaic} argument was
+     * null.
+     *
+     * @param mosaic          The caller, or {@code null} if none.
+     * @param seekForwardOnly If {@code true}, images and metadata may only be read
+     *                        in ascending order from the input source.
+     * @param ignoreMetadata  If {@code true}, metadata may be ignored during reads.
+     * @return An image reader with its {@linkplain ImageReader#getInput input} set.
+     * @throws IOException if the image reader can't be initialized.
+     */
+    protected ImageReader getImageReader(final MosaicImageReader mosaic,
+                                         final boolean seekForwardOnly,
+                                         final boolean ignoreMetadata)
+            throws IOException
+    {
+        final ImageReaderSpi provider = getImageReaderSpi();
+        final ImageReader reader;
+        final Object currentInput;
+        if (mosaic != null) {
+            reader = mosaic.getTileReader(provider);
+            currentInput = mosaic.getRawInput(reader);
+        } else {
+            reader = provider.createReaderInstance();
+            currentInput = null;
+        }
+        /*
+         * If the current reader input is suitable, we will keep it in order to preserve
+         * any data that may be cached in the ImageReader instance. Only if the input is
+         * not suitable, we will invoke ImageReader.setInput(...).
+         */
+        final Object input = getInput();
+        final boolean sameInput = Utilities.equals(input, currentInput);
+        if ( !sameInput                                      ||
+            ( getImageIndex() <  reader.getMinIndex())       ||
+            (!seekForwardOnly && reader.isSeekForwardOnly()) ||
+            (!ignoreMetadata  && reader.isIgnoringMetadata()))
+        {
+            Object actualInput = reader.getInput();
+            reader.setInput(null); // Necessary for releasing the stream, in case it holds it.
+            if (mosaic != null) {
+                mosaic.setRawInput(reader, null); // For keeping the map consistent.
+            }
+            ImageInputStream stream = null;
+            if (actualInput instanceof ImageInputStream) {
+                stream = (ImageInputStream) actualInput;
+            }
+            final ImageReaderSpi spi = reader.getOriginatingProvider();
+            if (spi == null || isValidInput(spi.getInputTypes(), input)) {
+                // We are allowed to use the input directly. Closes the stream
+                // as a paranoiac safety (it should not be opened anyway).
+                if (stream != null) {
+                    stream.close();
+                    stream = null;
+                }
+                actualInput = input;
+            } else {
+                // We are not allowed to use the input directly. Creates a new input
+                // stream, or reuse the previous one if it still useable.
+                if (stream != null) {
+                    if (sameInput) try {
+                        stream.seek(0);
+                    } catch (IndexOutOfBoundsException e) {
+                        // We tried to reuse the same stream in order to preserve cached data, but it was
+                        // not possible to seek to the begining. Closes it; we will open a new one later.
+                        Logging.recoverableException(Tile.class, "getImageReader", e);
+                        stream.close();
+                        stream = null;
+                    } else {
+                        stream.close();
+                        stream = null;
+                    }
+                }
+                if (stream == null) {
+                    stream = getInputStream();
+                }
+                actualInput = stream;
+            }
+            reader.setInput(actualInput, seekForwardOnly, ignoreMetadata);
+            if (mosaic != null) {
+                mosaic.setRawInput(reader, input);
+            }
+        }
+        return reader;
+    }
+

@@ -1,0 +1,106 @@
+    /**
+     * Append the specified {@code Formattable} object. This method will automatically append
+     * the keyword (e.g. <code>"GEOCS"</code>), the name and the authority code, and will invokes
+     * <code>formattable.{@linkplain Formattable#formatWKT formatWKT}(this)</code> for completing
+     * the inner part of the WKT.
+     *
+     * @param formattable The formattable object to append to the WKT.
+     */
+    public void append(final Formattable formattable) {
+        /*
+         * Formats the opening bracket and the object name (e.g. "NAD27").
+         * The WKT entity name (e.g. "PROJCS") will be formatted later.
+         * The result of this code portion looks like the following:
+         *
+         *         <previous text>,
+         *           ["NAD27 / Idaho Central"
+         */
+        appendSeparator(true);
+        int base = buffer.length();
+        buffer.append(symbols.open);
+        final IdentifiedObject info = (formattable instanceof IdentifiedObject)
+                                    ? (IdentifiedObject) formattable : null;
+        if (info != null) {
+            final String c = getNameColor(info);
+            if (c != null) {
+                setColor(c);
+            }
+            buffer.append(symbols.quote).append(getName(info)).append(symbols.quote);
+            if (c != null) {
+                resetColor();
+            }
+        }
+        /*
+         * Formats the part after the object name, then insert the WKT element name
+         * in front of them. The result of this code portion looks like the following:
+         *
+         *         <previous text>,
+         *           PROJCS["NAD27 / Idaho Central",
+         *             GEOGCS[...etc...],
+         *             ...etc...
+         */
+        indent(+1);
+        lineChanged = false;
+        String keyword = formattable.formatWKT(this);
+        if (colorEnabled && invalidWKT) {
+            invalidWKT = false;
+            buffer.insert(base, ERROR_COLOR + X364.BACKGROUND_DEFAULT);
+            base += ERROR_COLOR.length();
+        }
+        buffer.insert(base, keyword);
+        /*
+         * Formats the AUTHORITY[<name>,<code>] entity, if there is one. The entity
+         * will be on the same line than the enclosing one if no line separator were
+         * added (e.g. SPHEROID["Clarke 1866", ..., AUTHORITY["EPSG","7008"]]), or on
+         * a new line otherwise. After this block, the result looks like the following:
+         *
+         *         <previous text>,
+         *           PROJCS["NAD27 / Idaho Central",
+         *             GEOGCS[...etc...],
+         *             ...etc...
+         *             AUTHORITY["EPSG","26769"]]
+         */
+        final Identifier identifier = getIdentifier(info);
+        if (identifier!=null && authorityAllowed(info)) {
+            final Citation authority = identifier.getAuthority();
+            if (authority != null) {
+                /*
+                 * Since WKT often use abbreviations, search for the shortest
+                 * title or alternate title. If one is found, it will be used
+                 * as the authority name (e.g. "EPSG").
+                 */
+                InternationalString inter = authority.getTitle();
+                String title = (inter!=null) ? inter.toString(symbols.locale) : null;
+                for (final InternationalString alt : authority.getAlternateTitles()) {
+                    if (alt != null) {
+                        final String candidate = alt.toString(symbols.locale);
+                        if (candidate != null) {
+                            if (title==null || candidate.length() < title.length()) {
+                                title = candidate;
+                            }
+                        }
+                    }
+                }
+                if (title != null) {
+                    appendSeparator(lineChanged);
+                    buffer.append("AUTHORITY")
+                          .append(symbols.open)
+                          .append(symbols.quote)
+                          .append(title)
+                          .append(symbols.quote);
+                    final String code = identifier.getCode();
+                    if (code != null) {
+                        buffer.append(symbols.separator)
+                              .append(symbols.quote)
+                              .append(code)
+                              .append(symbols.quote);
+                    }
+                    buffer.append(symbols.close);
+                }
+            }
+        }
+        buffer.append(symbols.close);
+        lineChanged = true;
+        indent(-1);
+    }
+

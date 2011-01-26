@@ -1,0 +1,34 @@
+    /**
+     * Construct and SDO_GEOMETRY attribute.
+     * 
+     * @see org.geotools.data.jdbc.JDBCDataStore#buildAttributeType(java.sql.ResultSet) 
+     * @param tableName
+     * @param columnName
+     * @param isNillable 
+     */
+    private AttributeDescriptor getSDOGeometryAttribute(String tableName, String columnName, boolean isNullable ) {
+    	int srid = 0; // aka NULL
+    	AttributeTypeBuilder build = new AttributeTypeBuilder();
+        build.setNillable(isNullable);
+        try {
+            Class geomClass = determineGeometryClass(tableName, columnName);
+            build.setBinding(geomClass); 
+        } catch (Exception e) {
+            LOGGER.warning("could not determin Geometry class");
+        }
+		try {
+			srid = determineSRID( tableName, columnName );
+			CoordinateReferenceSystem crs = null;
+            try {
+              crs = CRS.decode("EPSG:" + srid);
+            } catch(Exception e) {
+              crs = determineCRS( srid );
+            }
+            build.setCRS(crs);
+    
+		} catch (Exception e) {
+			LOGGER.warning( "Could not map SRID "+srid+" to CRS:"+e );
+		}
+		return build.buildDescriptor(columnName);		
+	}
+

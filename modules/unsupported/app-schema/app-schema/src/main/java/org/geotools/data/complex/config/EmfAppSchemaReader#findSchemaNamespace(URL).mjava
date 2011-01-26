@@ -1,0 +1,49 @@
+    /**
+     * Finds out the targetNamespace of the xsd schema referenced by <code>location</code>
+     * 
+     * @param location
+     * @return
+     * @throws IOException
+     */
+    public String findSchemaNamespace(URL location) throws IOException {
+        String targetNamespace = null;
+        // parse some of the instance document to find out the
+        // schema location
+        URL resolvedLocation = new URL(resolver.resolve(location.toExternalForm()));
+        InputStream input = resolvedLocation.openStream();
+
+        // create stream parser
+        XmlPullParser parser = null;
+
+        try {
+            XmlPullParserFactory factory = XmlPullParserFactory.newInstance();
+            factory.setNamespaceAware(true);
+            factory.setValidating(false);
+
+            // parse root element
+            parser = factory.newPullParser();
+            parser.setInput(input, "UTF-8");
+            parser.nextTag();
+
+            // look for schema location
+            for (int i = 0; i < parser.getAttributeCount(); i++) {
+                if ("targetNamespace".equals(parser.getAttributeName(i))) {
+                    targetNamespace = parser.getAttributeValue(i);
+                    break;
+                }
+            }
+            // reset input stream
+            parser.setInput(null);
+        } catch (XmlPullParserException e) {
+            String msg = "Cannot find target namespace for schema document " + resolvedLocation;
+            throw (RuntimeException) new RuntimeException(msg).initCause(e);
+        } finally {
+            input.close();
+        }
+        if (targetNamespace == null) {
+            throw new IllegalArgumentException(
+                    "Input document does not specifies a targetNamespace");
+        }
+        return targetNamespace;
+    }
+

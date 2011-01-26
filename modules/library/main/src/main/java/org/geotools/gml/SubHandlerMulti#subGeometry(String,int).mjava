@@ -1,0 +1,35 @@
+    /**
+     * Handles all internal (sub) geometries.
+     *
+     * @param message The sub geometry type found.
+     * @param type Whether or not it is at a start or end.
+     */
+    public void subGeometry(String message, int type) {
+        LOGGER.fine("subGeometry message = " + message + " type = " + type);
+
+        // if the internal type is not yet set, set it
+        if (!internalTypeSet) {
+            if (BASE_GEOMETRY_TYPES.contains(message)) {
+                internalType = message;
+                internalTypeSet = true;
+                LOGGER.fine("Internal type set to " + message);
+            }
+        }
+
+        // if the internal type is already set, then either:
+        // create a new handler, if at start of geometry, or
+        // return the completed geometry, if at the end of it
+        if (message.equals(internalType)) {
+            if (type == GEOMETRY_START) {
+                currentHandler = handlerFactory.create(internalType);
+            } else if (type == GEOMETRY_END) {
+                geometries.add(currentHandler.create(geometryFactory));
+            } else if (type == GEOMETRY_SUB) {
+                currentHandler.subGeometry(message, type);
+            }
+        } else {
+            currentHandler.subGeometry(message, type);
+            LOGGER.fine(internalType + " != " + message);
+        }
+    }
+

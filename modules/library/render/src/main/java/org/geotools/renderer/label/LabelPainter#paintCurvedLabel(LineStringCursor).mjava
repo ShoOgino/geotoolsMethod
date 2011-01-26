@@ -1,0 +1,74 @@
+    /**
+     * Paints a label that follows the line, centered in the current cursor
+     * position
+     * 
+     * @param cursor
+     */
+    public void paintCurvedLabel(LineStringCursor cursor) {
+        // 0 is unfortunately an acceptable value if people only want to draw shields
+        if(labelItem.getTextStyle().getFont().getSize() == 0)
+            return;
+        
+        GlyphVector glyphVector = lines.get(0).gv;
+        AffineTransform oldTransform = graphics.getTransform();
+        try {
+            // first off, check if we are walking the line so that the label is
+            // looking up, if not, reverse the line
+            if (!isLabelUpwards(cursor) && labelItem.isForceLeftToRightEnabled()) {
+                LineStringCursor reverse = cursor.reverse();
+                reverse.moveTo(cursor.getLineStringLength() - cursor.getCurrentOrdinate());
+                cursor = reverse;
+            }
+
+            // find out the true centering position
+            double anchorY = getLinePlacementYAnchor();
+
+            // init, move to the starting position
+            double mid = cursor.getCurrentOrdinate();
+            Coordinate c = new Coordinate();
+            c = cursor.getCurrentPosition(c);
+            graphics.setPaint(Color.BLACK);
+
+            double startOrdinate = mid - getStraightLabelWidth() / 2;
+            if (startOrdinate < 0)
+                startOrdinate = 0;
+            cursor.moveTo(startOrdinate);
+            final int numGlyphs = glyphVector.getNumGlyphs();
+            float nextAdvance = glyphVector.getGlyphMetrics(0).getAdvance() * 0.5f;
+            Shape[] outlines = new Shape[numGlyphs];
+            AffineTransform[] transforms = new AffineTransform[numGlyphs];
+            for (int i = 0; i < numGlyphs; i++) {
+                outlines[i] = glyphVector.getGlyphOutline(i);
+                Point2D p = glyphVector.getGlyphPosition(i);
+                float advance = nextAdvance;
+                nextAdvance = i < numGlyphs - 1 ? glyphVector.getGlyphMetrics(i + 1).getAdvance() * 0.5f
+                        : 0;
+
+                c = cursor.getCurrentPosition(c);
+                AffineTransform t = new AffineTransform();
+                t.setToTranslation(c.x, c.y);
+                t.rotate(cursor.getCurrentAngle());
+                t.translate(-p.getX() - advance, -p.getY() + getLineHeight() * anchorY);
+                transforms[i] = t;
+
+                cursor.moveTo(cursor.getCurrentOrdinate() + advance + nextAdvance);
+            }
+
+            // draw halo and label
+            if (labelItem.getTextStyle().getHaloFill() != null) {
+                configureHalo();
+                for (int i = 0; i < numGlyphs; i++) {
+                    graphics.setTransform(transforms[i]);
+                    graphics.draw(outlines[i]);
+                }
+            }
+            configureLabelStyle();
+            for (int i = 0; i < numGlyphs; i++) {
+                graphics.setTransform(transforms[i]);
+                graphics.fill(outlines[i]);
+            }
+        } finally {
+            graphics.setTransform(oldTransform);
+        }
+    }
+

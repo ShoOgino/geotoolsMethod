@@ -1,0 +1,73 @@
+    /**
+     * Implementation of {@link #getAuthorityCodes} as a private method, for protecting
+     * {@link #getDescriptionText} from user overriding of {@link #getAuthorityCodes}.
+     */
+    private synchronized Set<String> getAuthorityCodes0(final Class<?> type) throws FactoryException {
+        /*
+         * If the set were already requested previously for the given type, returns it.
+         * Otherwise, a new one will be created (but will not use the database connection yet).
+         */
+        Reference<AuthorityCodes> reference = authorityCodes.get(type);
+        AuthorityCodes candidate = (reference!=null) ? reference.get() : null;
+        if (candidate != null) {
+            return candidate;
+        }
+        Set<String> result = Collections.emptySet();
+        for (int i=0; i<TABLES_INFO.length; i++) {
+            final TableInfo table = TABLES_INFO[i];
+            /*
+             * We test 'isAssignableFrom' in the two ways, which may seems strange but try
+             * to catch the following use cases:
+             *
+             *  - table.type.isAssignableFrom(type)
+             *    is for the case where a table is for CoordinateReferenceSystem while the user
+             *    type is some subtype like GeographicCRS. The GeographicCRS need to be queried
+             *    into the CoordinateReferenceSystem table. An additional filter will be applied
+             *    inside the AuthorityCodes class implementation.
+             *
+             *  - type.isAssignableFrom(table.type)
+             *    is for the case where the user type is IdentifiedObject or Object, in which
+             *    case we basically want to iterate through every tables.
+             */
+            if (table.type.isAssignableFrom(type) || type.isAssignableFrom(table.type)) {
+                /*
+                 * Maybe an instance already existed but was not found above because the user
+                 * specified some implementation class instead of an interface class. Before
+                 * to return the newly created set, check again in the cached sets using the
+                 * type computed by AuthorityCodes itself.
+                 */
+                final AuthorityCodes codes;
+                codes = new AuthorityCodes(TABLES_INFO[i], type, this);
+                reference = authorityCodes.get(codes.type);
+                candidate = (reference!=null) ? reference.get() : null;
+                final boolean cache;
+                if (candidate == null) {
+                    candidate = codes;
+                    cache = true;
+                } else {
+                    // We will reuse the existing 'candidate' instead of the newly created 'codes'.
+                    assert candidate.sqlAll.equals(codes.sqlAll) : codes.type;
+                    cache = !(reference instanceof SoftReference);
+                }
+                if (cache) {
+                    reference = new SoftReference<AuthorityCodes>(candidate);
+                    authorityCodes.put(codes.type, reference);
+                }
+                /*
+                 * We now have the codes for a single type.  Append with the codes of previous
+                 * types, if any. This usually happen only if the user asked for the Object or
+                 * IdentifiedObject type.
+                 */
+                if (result.isEmpty()) {
+                    result = candidate;
+                } else {
+                    if (result instanceof AuthorityCodes) {
+                        result = new LinkedHashSet<String>(result);
+                    }
+                    result.addAll(candidate);
+                }
+            }
+        }
+        return result;
+    }
+

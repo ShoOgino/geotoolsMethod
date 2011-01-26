@@ -1,0 +1,246 @@
+    /**
+     * Reads the image from the given reader and writes it as a set of tiles.
+     * It is the caller responsability to dispose the reader when writing is done.
+     */
+    private boolean writeFromReader(final ImageReader reader, final int inputIndex,
+                                    final ImageWriteParam writeParam) throws IOException
+    {
+        clearAbortRequest();
+        final int outputIndex;
+        final TileWritingPolicy policy;
+        if (writeParam instanceof MosaicImageWriteParam) {
+            final MosaicImageWriteParam param = (MosaicImageWriteParam) writeParam;
+            outputIndex = param.getOutputIndex();
+            policy = param.getTileWritingPolicy();
+        } else {
+            outputIndex = 0;
+            policy = TileWritingPolicy.OVERWRITE;
+        }
+        processImageStarted(outputIndex);
+        /*
+         * Gets the reader first - especially before getOutput() - because the user may have
+         * overriden filter(ImageReader) and set the output accordingly. TileBuilder do that.
+         */
+        final TileManager[] managers = getOutput();
+        if (managers == null) {
+            throw new IllegalStateException(Errors.format(ErrorKeys.NO_IMAGE_OUTPUT));
+        }
+        final List<Tile> tiles;
+        final int bytesPerPixel;
+        if (policy.equals(TileWritingPolicy.NO_WRITE)) {
+            tiles = Collections.emptyList();
+            bytesPerPixel = 1;
+        } else {
+            tiles = new LinkedList<Tile>(managers[outputIndex].getTiles());
+            /*
+             * Computes an estimation of the amount of memory to be required for each pixel.
+             * This estimation may not be accurate especially for image packing many pixels
+             * per byte, but a value too high is probably better than a value too low.
+             */
+            final SampleModel model = reader.getRawImageType(inputIndex).getSampleModel();
+            bytesPerPixel = Math.max(1, model.getNumBands() *
+                    DataBuffer.getDataTypeSize(model.getDataType()) / Byte.SIZE);
+        }
+        final int initialTileCount = tiles.size();
+        /*
+         * If the user do not wants to overwrite existing tiles (for faster processing when this
+         * write process is started again after a previous failure), removes from the collection
+         * every tiles which already exist.
+         */
+        if (!policy.overwrite) {
+            for (final Iterator<Tile> it=tiles.iterator(); it.hasNext();) {
+                final Tile tile = it.next();
+                final Object input = tile.getInput();
+                if (input instanceof File) {
+                    final File file = (File) input;
+                    if (file.isFile()) {
+                        it.remove();
+                    }
+                }
+            }
+        }
+        /*
+         * Creates now the various other objects to be required in the loop. This include a
+         * RTree initialized with the tiles remaining after the removal in the previous block.
+         */
+        if (executor == null) {
+            executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+        }
+        final List<Future<?>> tasks     = new ArrayList<Future<?>>();
+        final TreeNode        tree      = new GridNode(tiles.toArray(new Tile[tiles.size()]));
+        final ImageReadParam  readParam = reader.getDefaultReadParam();
+        final Logger          logger    = Logging.getLogger(MosaicImageWriter.class);
+        final boolean         logWrites = logger.isLoggable(level);
+        final boolean         logReads  = !(reader instanceof MosaicImageReader);
+        if (!logReads) {
+            ((MosaicImageReader) reader).setLogLevel(level);
+        }
+        if (writeParam != null) {
+            if (writeParam.getSourceXSubsampling() != 1 || writeParam.getSubsamplingXOffset() != 0 ||
+                writeParam.getSourceYSubsampling() != 1 || writeParam.getSubsamplingYOffset() != 0 ||
+                writeParam.getSourceRegion() != null)
+            {
+                // TODO: Not yet supported. May be supported in a future version
+                // if we have time to implement such support.
+                throw new IllegalArgumentException(Errors.format(
+                        ErrorKeys.UNEXPECTED_ARGUMENT_FOR_INSTRUCTION_$1, "writeFromInput"));
+            }
+            readParam.setSourceBands(writeParam.getSourceBands());
+        }
+        final long maximumMemory = getMaximumMemoryAllocation();
+        int maximumPixelCount = (int) (maximumMemory / bytesPerPixel);
+        BufferedImage image = null;
+        while (!tiles.isEmpty()) {
+            if (abortRequested()) {
+                processWriteAborted();
+                return false;
+            }
+            processImageProgress((initialTileCount - tiles.size()) * 100f / initialTileCount);
+            /*
+             * Gets the source region for some initial tile from the list. We will write as many
+             * tiles as we can using a single image. The tiles successfully written will be removed
+             * from the list, so next iterations will process only the remaining tiles.
+             */
+            final Dimension imageSubsampling = new Dimension(); // Computed by next line.
+            final Tile imageTile = getEnclosingTile(tiles, tree, imageSubsampling,
+                    (image != null) ? new Dimension(image.getWidth(), image.getHeight()) : null,
+                    maximumPixelCount);
+            final Rectangle imageRegion = imageTile.getAbsoluteRegion();
+            awaitTermination(tasks); // Must be invoked before we touch to the image.
+            if (image != null) {
+                final int width  = imageRegion.width  / imageSubsampling.width;
+                final int height = imageRegion.height / imageSubsampling.height;
+                if (width == image.getWidth() && height == image.getHeight()) {
+                    ImageUtilities.fill(image, FILL_VALUE);
+                    assert isEmpty(image, new Rectangle(image.getWidth(), image.getHeight()));
+                } else {
+                    image = null;
+                }
+                /*
+                 * Next iteration may try to allocate bigger images. We do that inconditionnaly,
+                 * even if current image fit, because current image may be small due to memory
+                 * constaint during a previous iteration.
+                 */
+                maximumPixelCount = (int) (maximumMemory / bytesPerPixel);
+            }
+            readParam.setDestination(image);
+            readParam.setSourceRegion(imageRegion);
+            readParam.setSourceSubsampling(imageSubsampling.width, imageSubsampling.height, 0, 0);
+            if (readParam instanceof MosaicImageReadParam) {
+                ((MosaicImageReadParam) readParam).setNullForEmptyImage(true);
+            }
+            if (logReads) {
+                final LogRecord record = getLogRecord(false, VocabularyKeys.LOADING_$1, imageTile);
+                record.setLoggerName(logger.getName());
+                logger.log(record);
+            }
+            /*
+             * Before to attempt image loading, ask explicitly for a garbage collection cycle.
+             * In theory we should not do that, but experience suggests that it really prevent
+             * OutOfMemoryError when creating large images. If we still get OutOfMemoryError,
+             * we will try again with smaller value of 'maximumPixelCount'.
+             */
+            System.gc();
+            /*
+             * Now process to the image loading. If we fails with an OutOfMemoryError (which
+             * typically happen while creating the large BufferedImage), reduces the amount
+             * of memory that we are allowed to use and try again.
+             */
+            try {
+                image = reader.read(inputIndex, readParam);
+            } catch (OutOfMemoryError error) {
+                maximumPixelCount >>>= 1;
+                if (maximumPixelCount == 0) {
+                    throw error;
+                }
+                if (logWrites) {
+                    final LogRecord record = getLogRecord(true, LoggingKeys.RECOVERABLE_OUT_OF_MEMORY_$1,
+                            ((float) imageRegion.width * imageRegion.height) / (1024 * 1024f));
+                    record.setLoggerName(logger.getName());
+                    logger.log(record);
+                }
+                continue;
+            }
+            assert (image == null) || // Image can be null if MosaicImageReader found no tiles.
+                   (image.getWidth()  * imageSubsampling.width  == imageRegion.width &&
+                    image.getHeight() * imageSubsampling.height == imageRegion.height) : imageTile;
+            /*
+             * Searchs tiles inside the same region with a resolution which is equals or lower by
+             * an integer ratio. If such tiles are found we can write them using the image loaded
+             * above instead of loading subimages.  Giving that loading even a portion from a big
+             * file may be long, the performance enhancement of doing so is significant.
+             */
+            assert tiles.contains(imageTile) : imageTile;
+            for (final Iterator<Tile> it=tiles.iterator(); it.hasNext();) {
+                final Tile tile = it.next();
+                final Dimension subsampling = tile.getSubsampling();
+                if (!isDivisor(subsampling, imageSubsampling)) {
+                    continue;
+                }
+                final Rectangle sourceRegion = tile.getAbsoluteRegion();
+                if (!imageRegion.contains(sourceRegion)) {
+                    continue;
+                }
+                final int xSubsampling = subsampling.width  / imageSubsampling.width;
+                final int ySubsampling = subsampling.height / imageSubsampling.height;
+                sourceRegion.translate(-imageRegion.x, -imageRegion.y);
+                sourceRegion.x      /= imageSubsampling.width;
+                sourceRegion.y      /= imageSubsampling.height;
+                sourceRegion.width  /= imageSubsampling.width;
+                sourceRegion.height /= imageSubsampling.height;
+                if (image != null && (policy.includeEmpty || !isEmpty(image, sourceRegion))) {
+                    final ImageWriter writer = getImageWriter(tile, image);
+                    final ImageWriteParam wp = writer.getDefaultWriteParam();
+                    onTileWrite(tile, wp);
+                    wp.setSourceRegion(sourceRegion);
+                    wp.setSourceSubsampling(xSubsampling, ySubsampling, 0, 0);
+                    final IIOImage iioImage = new IIOImage(image, null, null);
+                    final Object tileInput = tile.getInput();
+                    tasks.add(executor.submit(new Callable<Object>() {
+                        public Object call() throws IOException {
+                            if (!abortRequested()) {
+                                if (logWrites) {
+                                    final LogRecord record =
+                                            getLogRecord(false, VocabularyKeys.SAVING_$1, tile);
+                                    record.setLoggerName(logger.getName());
+                                    logger.log(record);
+                                }
+                                boolean success = false;
+                                try {
+                                    writer.write(null, iioImage, wp);
+                                    close(writer.getOutput(), tileInput);
+                                    success = true;
+                                } finally {
+                                    if (success) {
+                                        writer.dispose();
+                                    } else {
+                                        final Object output = writer.getOutput();
+                                        writer.dispose();
+                                        close(output, null); // Unconditional close.
+                                        if (tileInput instanceof File) {
+                                            ((File) tileInput).delete();
+                                        }
+                                    }
+                                }
+                            }
+                            return null;
+                        }
+                    }));
+                }
+                it.remove();
+                if (!tree.remove(tile)) {
+                    throw new AssertionError(tile); // Should never happen.
+                }
+            }
+            assert !tiles.contains(imageTile) : imageTile;
+        }
+        awaitTermination(tasks);
+        if (abortRequested()) {
+            processWriteAborted();
+            return false;
+        } else {
+            processImageComplete();
+            return true;
+        }
+    }
+

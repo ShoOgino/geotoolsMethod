@@ -1,0 +1,48 @@
+    /**
+     * Extract the row addresses from the header information of the file.
+     * 
+     * <p>
+     * <b>INFO:</b> this is a reader method.
+     * </p>
+     * 
+     * @throws IOException
+     */
+    private void parseHeader() throws IOException {
+
+        /*
+         * the first byte defines the number of bytes are used to describe the
+         * row addresses in the header (once it was sizeof(long) in grass but
+         * then it was turned to an offset (that brought to reading problems in
+         * JGrass whenever the offset was != 4).
+         */
+        int first = imageIS.read();
+
+        int capacity = 1 + first * nativeRasterRegion.getRows() + first;
+        ByteBuffer fileHeader = ByteBuffer.allocate(capacity);
+
+        imageIS.seek(0L);
+        /* Read header */
+        byte[] array = fileHeader.array();
+        imageIS.read(array);
+
+        /*
+         * Jump over the no more needed first byte (used to define the header
+         * size)
+         */
+        byte firstbyte = fileHeader.get();
+        addressesOfRows = new long[nativeRasterRegion.getRows() + 1];
+        if (firstbyte == 4) {
+            for( int i = 0; i <= nativeRasterRegion.getRows(); i++ ) {
+                addressesOfRows[i] = fileHeader.getInt();
+            }
+        } else if (firstbyte == 8) {
+            for( int i = 0; i <= nativeRasterRegion.getRows(); i++ ) {
+                addressesOfRows[i] = fileHeader.getLong();
+            }
+        } else {
+            throw new IOException(
+                    "The first byte of the GRASS file header is not 4 and not 8. Unknown case for file: "
+                            + readerGrassEnv.getCELL().getAbsolutePath());
+        }
+    }
+

@@ -1,0 +1,31 @@
+    protected static void validate(final AttributeType type, final Object value, boolean isSuper) throws IllegalAttributeException {
+        if (!isSuper) {
+            // JD: This is an issue with how the xml simpel type hierarchy
+            // maps to our current Java Type hiearchy, the two are inconsitent.
+            // For instance, xs:integer, and xs:int, the later extend the
+            // former, but their associated java bindings, (BigDecimal, and
+            // Integer)
+            // dont.
+            Class clazz = value.getClass();
+            Class binding = type.getBinding();
+            if (binding != null && !binding.isAssignableFrom(clazz)) {
+                throw new IllegalAttributeException(clazz.getName()
+                        + " is not an acceptable class for " + type.getName()
+                        + " as it is not assignable from " + binding);
+            }
+        }
+
+        if (type.getRestrictions() != null && type.getRestrictions().size() > 0) {
+            for (Filter filter : type.getRestrictions()) {
+                if (!filter.evaluate(value)) {
+                    throw new IllegalAttributeException( type.getName() + " restriction "+ filter + " not met by: " + value);
+                }
+            }
+        }
+
+        // move up the chain,
+        if (type.getSuper() != null) {
+            validate(type.getSuper(), value, true );
+        }
+    }
+

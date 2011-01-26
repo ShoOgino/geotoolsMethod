@@ -1,0 +1,36 @@
+    /**
+     * Loads the image from the specified file, and {@linkplain #show display}
+     * it in a window. This method is mostly as a convenient way to test
+     * operation chains. This method can be invoked from the command line. If an
+     * optional {@code -operation} argument is provided, the Java method (one of
+     * the image operations provided in this class) immediately following it is
+     * executed. Example:
+     *
+     * <blockquote><pre>
+     * java org.geotools.image.ImageWorker -operation binarize &lt;var&gt;&lt;filename&gt;&lt;/var&gt;
+     * </pre></blockquote>
+     */
+    public static void main(String[] args) {
+        final Arguments arguments = new Arguments(args);
+        final String operation = arguments.getOptionalString("-operation");
+        args = arguments.getRemainingArguments(1);
+        if (args.length != 0) try {
+            final ImageWorker worker = new ImageWorker(new File(args[0]));
+            // Force usage of tile cache for every operations, including intermediate steps.
+            worker.setRenderingHint(JAI.KEY_TILE_CACHE, JAI.getDefaultInstance().getTileCache());
+            if (operation != null) {
+                worker.getClass().getMethod(operation, (Class[]) null).invoke(worker, (Object[]) null);
+            }
+            /*
+             * TIP: Tests operations here (before the call to 'show()'), if wanted.
+             */
+            worker.show();
+        } catch (FileNotFoundException e) {
+            arguments.printSummary(e);
+        } catch (NoSuchMethodException e) {
+            arguments.printSummary(e);
+        } catch (Exception e) {
+            e.printStackTrace(arguments.err);
+        }
+    }
+

@@ -1,0 +1,71 @@
+    /**
+     * Loads the DB2SpatialCatalog with the values from the DB2 Spatial
+     * Extender catalog views.
+     * 
+     * <p>
+     * The spatial columns are found in the view db2gse.ST_Geometry_Columns.
+     * </p>
+     * 
+     * <p>
+     * If the SRID value returned was null, attempt to get it from the actual
+     * data table with the method getSridFromTable.
+     * </p>
+     * 
+     * <p>
+     * If the coordinate system for the geometry column just returned does not
+     * already exist in the map of coordinate systems construct a new
+     * coordinate system.
+     * </p>
+     *
+     * @param conn an active database connection
+     * @param schemaName the schema to identify tables in this catalog
+     *
+     * @throws SQLException
+     */
+     void loadCatalog(Connection conn, String schemaName)
+        throws SQLException {
+        this.geometryColumns = new HashMap();
+
+        String tableSchema;
+        String tableName;
+        String columnName;
+        String typeName;
+        Integer srsId;
+
+        String queryGeom = "SELECT table_schema, table_name, column_name, "
+            + " type_name, srs_id" + " FROM db2gse.st_geometry_columns"
+            + " WHERE table_schema = '" + schemaName + "' ";
+        Statement stmt = conn.createStatement();
+        ResultSet rs = stmt.executeQuery(queryGeom);
+
+        while (rs.next()) {
+            tableSchema = rs.getString(1).trim();
+            tableName = rs.getString(2).trim();
+            columnName = rs.getString(3).trim();
+            typeName = rs.getString(4).trim();
+            srsId = new Integer(rs.getInt(5));
+
+            if (rs.wasNull()) {
+                srsId = getSridFromTable(conn, tableSchema, tableName,
+                        columnName);
+            }
+
+            // Try to get the coordinate system if it was already loaded.
+            DB2CoordinateSystem cs = (DB2CoordinateSystem) this.coordinateSystems
+                .get(srsId);
+
+            if (cs == null) {
+                cs = new DB2CoordinateSystem(conn, srsId.intValue());
+                this.coordinateSystems.put(srsId, cs);
+            }
+
+            DB2GeometryColumn gc = new DB2GeometryColumn(tableSchema,
+                    tableName, columnName, typeName, srsId, cs);
+            LOGGER.fine("Spatial column: " + gc + " " + cs);
+            this.geometryColumns.put(geomKey(gc), gc); // Save this geometry
+        }
+
+        rs.close();
+        stmt.close();
+    }
+

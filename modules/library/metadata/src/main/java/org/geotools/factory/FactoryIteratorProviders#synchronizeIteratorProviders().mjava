@@ -1,0 +1,56 @@
+    /**
+     * Synchronizes the content of the {@link #iteratorProviders} map with the {@linkplain #GLOBAL
+     * global} one. New providers are returned for later {@linkplain FactoryRegistry#register
+     * registration}. Note that this method is typically invoked in a different thread than
+     * {@link FactoryIteratorProviders} public static method calls.
+     *
+     * @return The new iterators providers {@linkplain #addFactoryIteratorProvider added} since
+     *         the last time this method was invoked, or {@code null} if none.
+     */
+    final FactoryIteratorProvider[] synchronizeIteratorProviders() {
+        FactoryIteratorProvider[] newProviders = null;
+        int count = 0;
+        synchronized (GLOBAL) {
+            if (modifications == GLOBAL.modifications) {
+                return null;
+            }
+            modifications = GLOBAL.modifications;
+            if (GLOBAL.iteratorProviders == null) {
+                /*
+                 * Should never happen. If GLOBAL.iteratorProviders was null, then every
+                 * 'modifications' count should be 0 and this method should have returned 'null'.
+                 */
+                throw new AssertionError(modifications);
+            }
+            /*
+             * If 'removeFactoryIteratorProvider(...)' has been invoked since the last time
+             * this method was run, then synchronize 'iteratorProviders' accordingly. Current
+             * implementation do not unregister the factories that were created by those iterators.
+             */
+            if (iteratorProviders != null) {
+                iteratorProviders.retainAll(GLOBAL.iteratorProviders);
+            } else if (!GLOBAL.iteratorProviders.isEmpty()) {
+                iteratorProviders = new LinkedHashSet<FactoryIteratorProvider>();
+            }
+            /*
+             * If 'addFactoryIteratorProvider(...)' has been invoked since the last time
+             * this method was run, then synchronize 'iteratorProviders' accordingly. We
+             * keep trace of new providers in order to allow 'FactoryRegistry' to use them
+             * for a immediate scanning.
+             */
+            int remaining = GLOBAL.iteratorProviders.size();
+            for (final Iterator it=GLOBAL.iteratorProviders.iterator(); it.hasNext();) {
+                final FactoryIteratorProvider candidate = (FactoryIteratorProvider) it.next();
+                if (iteratorProviders.add(candidate)) {
+                    if (newProviders == null) {
+                        newProviders = new FactoryIteratorProvider[remaining];
+                    }
+                    newProviders[count++] = candidate;
+                }
+                remaining--;
+            }
+        }
+        // Note: newProviders may be null.
+        return XArray.resize(newProviders, count);
+    }
+

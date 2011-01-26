@@ -1,0 +1,30 @@
+    /**
+     * Check insert/delete in the same transaction works
+     * 
+     * @throws Exception
+     * 
+     */
+    public void testInsertDelete() throws Exception {
+        VersionedPostgisDataStore ds = getDataStore();
+
+        // version enable trees
+        ds.setVersioned("tree", true, "gimbo", "What do you want, I'm undecided...");
+
+        // create a new feature
+        SimpleFeature tree = SimpleFeatureBuilder.build(treeType, new Object[] { gf.createPoint(new Coordinate(7, 7)),
+                "SmallPine" }, "tree.tr2");
+
+        // setup a transaction
+        Transaction t = createTransaction("gimbo", "double update");
+        SimpleFeatureStore store = (SimpleFeatureStore) ds.getFeatureSource("tree");
+        store.setTransaction(t);
+        List<FeatureId> ids = store.addFeatures(DataUtilities.collection(tree));
+        Filter filter = ff.id(new HashSet(ids));
+        store.removeFeatures(filter);
+        t.commit();
+
+        // check it's not there
+        assertEquals(0, store.getFeatures(filter).size());
+        t.close();
+    }
+

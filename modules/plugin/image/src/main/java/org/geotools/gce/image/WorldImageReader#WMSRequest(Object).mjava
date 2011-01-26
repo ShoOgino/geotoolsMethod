@@ -1,0 +1,81 @@
+	/**
+	 * This method is used to check if we are connecting directly to a WMS with
+	 * a getmap request. In such a case we skip reading all the parameters we
+	 * can read from this http string.
+	 * 
+	 * @param input
+	 * 
+	 * @return true if we are dealing with a WMS request, false otherwise.
+	 */
+	private boolean WMSRequest(Object input) {
+		// TODO do we need the requested envelope?
+		if (input instanceof URL
+				&& (((URL) input).getProtocol().equalsIgnoreCase("http"))) {
+			try {
+				// getting the query
+				final String query = java.net.URLDecoder.decode(((URL) input)
+						.getQuery().intern(), "UTF-8");
+
+				// should we proceed? Let's look for a getmap WMS request
+				if (query.intern().indexOf("GetMap") == -1) {
+					return false;
+				}
+
+				// tokenizer on $
+				final String[] pairs = query.split("&");
+
+				// parse each pair
+				final int numPairs = pairs.length;
+				String[] kvp = null;
+
+				for (int i = 0; i < numPairs; i++) {
+					// splitting the pairs
+					kvp = pairs[i].split("=");
+
+					// checking the fields
+					// BBOX
+					if (kvp[0].equalsIgnoreCase("BBOX")) {
+						// splitting fields
+						kvp = kvp[1].split(",");
+						originalEnvelope = new GeneralEnvelope(new double[] {
+								Double.parseDouble(kvp[0]),
+								Double.parseDouble(kvp[1]) }, new double[] {
+								Double.parseDouble(kvp[2]),
+								Double.parseDouble(kvp[3]) });
+					}
+
+					// SRS
+					if (kvp[0].equalsIgnoreCase("SRS")) {
+						crs = CRS.decode(kvp[1], true);
+					}
+
+					// layers
+					if (kvp[0].equalsIgnoreCase("layers")) {
+						this.coverageName = kvp[1].replaceAll(",", "_");
+					}
+				}
+
+			} catch (IOException e) {
+				// TODO how to handle this?
+				return false;
+
+			} catch (NoSuchAuthorityCodeException e) {
+				// TODO how to handle this?
+				return false;
+			} catch (MismatchedDimensionException e) {
+				// TODO how to handle this?
+				return false;
+			} catch (IndexOutOfBoundsException e) {
+				// TODO how to handle this?
+				return false;
+			} catch (FactoryException e) {
+				// TODO how to handle this?
+				return false;
+			}
+
+			return true;
+		}
+
+		return false;
+	}
+

@@ -1,0 +1,39 @@
+    /**
+     * try to be more robust dont bother returning points
+     * 
+     * This will try to solve robustness problems, but read code as to what it
+     * does. It might return the unclipped line if there's a problem!
+     * 
+     * @param line
+     * @param bbox
+     *            MUST BE A BOUNDING BOX
+     */
+    public MultiLineString clipLineString(LineString line) {
+
+        Geometry clip = line;
+        // djb -- jessie should do this during generalization
+        line.geometryChanged();
+        if (clipper.getBounds().contains(line.getEnvelopeInternal())) {
+            // shortcut -- entirely inside the display rectangle -- no clipping
+            // required!
+            LineString[] lns = new LineString[1];
+            lns[0] = (LineString) clip;
+            return line.getFactory().createMultiLineString(lns);
+        }
+        try {
+            Geometry g = clipper.clip(line, false);
+            if(g == null) {
+                return null;
+            } else if(g instanceof LineString){
+                return line.getFactory().createMultiLineString(new LineString[] { (LineString) g });
+            } else {
+                return (MultiLineString) g;
+            }
+        } catch (Exception e) {
+            // TODO: should try to expand the bounding box and re-do the
+            // intersection, but line-bounding box
+            // problems are quite rare.
+            return line.getFactory().createMultiLineString(new LineString[] { line });
+        }
+    }
+

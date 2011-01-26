@@ -1,0 +1,32 @@
+    /**
+     * This time we first delete, then rollback and update the same feature
+     * @throws Exception
+     */
+    public void testRollbackUpdate() throws Exception {
+        VersionedPostgisDataStore ds = getDataStore();
+
+        // version enable trees
+        ds.setVersioned("tree", true, "udig",
+                "First I remove, then rollback and update :-)");
+        
+        // build a filter to extract just tree 1
+        Filter filter = ff.id(Collections.singleton(ff.featureId("tree.1")));
+        VersioningFeatureStore store = (VersioningFeatureStore) ds.getFeatureSource("tree");
+        store.removeFeatures(filter);
+        
+        Transaction t = createTransaction("gimbo", "rollback and update");
+        store.setTransaction(t);
+        store.rollback("FIRST", filter, null);
+        SimpleFeatureType treeSchema = store.getSchema();
+        store.modifyFeatures(treeSchema.getDescriptor("name"), "update1", filter);
+        t.commit();
+        t.close();
+        store.setTransaction(Transaction.AUTO_COMMIT);
+        
+        SimpleFeatureIterator fi = store.getFeatures(filter).features();
+        assertTrue(fi.hasNext());
+        SimpleFeature f = fi.next();
+        assertEquals("update1", f.getAttribute("name"));
+        fi.close();
+    }
+

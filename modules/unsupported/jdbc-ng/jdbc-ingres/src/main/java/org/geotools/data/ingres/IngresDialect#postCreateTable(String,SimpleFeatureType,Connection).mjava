@@ -1,0 +1,65 @@
+    @Override
+    public void postCreateTable(String schemaName,
+            SimpleFeatureType featureType, Connection cx) throws SQLException {
+        String tableName = featureType.getName().getLocalPart();
+        String sql;
+        
+        Statement st = null;
+        try {
+            st = cx.createStatement();
+
+            // register all geometry columns in the database
+            for (AttributeDescriptor att : featureType
+                    .getAttributeDescriptors()) {
+                if (att instanceof GeometryDescriptor) {
+                    GeometryDescriptor gd = (GeometryDescriptor) att;
+                    
+                    //this class is already set right, continue
+                    if(gd.getType().getBinding() == Geometry.class) {
+                    	continue;
+                    }
+
+                    // lookup or reverse engineer the srid
+                    int srid = -1;
+                    if (gd.getUserData().get(JDBCDataStore.JDBC_NATIVE_SRID) != null) {
+                        srid = (Integer) gd.getUserData().get(
+                                JDBCDataStore.JDBC_NATIVE_SRID);
+                    } else if (gd.getCoordinateReferenceSystem() != null) {
+                        try {
+                            Integer result = CRS.lookupEpsgCode(gd
+                                    .getCoordinateReferenceSystem(), true);
+                            if (result != null)
+                                srid = result;
+                        } catch (Exception e) {
+                            LOGGER.log(Level.FINE, "Error looking up the "
+                                    + "epsg code for metadata "
+                                    + "insertion, assuming -1", e);
+                        }
+                    }
+
+                    // grab the geometry type
+                    String geomType = CLASS_TO_TYPE_MAP.get(gd.getType()
+                            .getBinding());
+                    if (geomType == null)
+                        geomType = "GEOMETRY";
+
+                    // alter the table to use the right type
+                    if(schemaName != null) {
+	                    sql = "ALTER TABLE \"" + schemaName + "\".\"" + tableName + "\" ALTER COLUMN \"" + gd.getLocalName() +
+	                    	"\" " + geomType;
+                    }
+                    else {
+	                    sql = "ALTER TABLE \"" + tableName + "\" ALTER COLUMN \"" + gd.getLocalName() +
+	                    	"\" " + geomType;	
+                    }
+                    if(srid != -1) {
+                    	sql += " SRID " + srid; 
+                    }
+                    st.execute( sql );
+                }
+            }
+        } finally {
+            dataStore.closeSafe(st);
+        }
+    }
+

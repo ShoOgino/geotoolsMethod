@@ -1,0 +1,64 @@
+    /**
+     * From a set of arbitrary affine transforms, computes pyramid levels that can be given to
+     * {@link Tile} constructors. This method tries to locate the affine transform with finest
+     * resolution. This is typically (but not always, depending on rotation or axis flip) the
+     * transform with smallest {@linkplain AffineTransform#getScaleX scale X} and {@linkplain
+     * AffineTransform#getScaleY scale Y} coefficients in absolute value. This transform is
+     * given a dimension of (1,1) and stored in an {@linkplain IdentityHashMap identity hash
+     * map}. Other transforms are stored in the same map with their dimension relative to the
+     * first one, or discarded if the scale ratio is not an integer. In the later case, the
+     * transforms that were discarded from the first pass will be put in a new map to be added
+     * as the second element in the returned list. A new pass is run, discarded transforms from
+     * the second pass are put in the third element of the list, <cite>etc</cite>.
+     *
+     * @param  gridToCRS The <cite>grid to CRS</cite> affine transforms computed from the
+     *         image to use in a pyramid. The collection and the transform elements are not
+     *         modified by this method (they may be modified by the caller however).
+     * @return A subset of the given transforms with their relative resolution. This method
+     *         typically returns one map, but more could be returned if the scale ratio is
+     *         not an integer for every transforms.
+     */
+    private static List<Map<AffineTransform,Dimension>> computePyramidLevels(
+            final Collection<AffineTransform> gridToCRS)
+    {
+        final List<Map<AffineTransform,Dimension>> results =
+                new ArrayList<Map<AffineTransform,Dimension>>(2);
+        /*
+         * First, computes the pyramid levels along the X axis. Transforms that we were unable
+         * to classify will be discarded from the first run and put in a subsequent run.
+         */
+        AffineTransform[] transforms = gridToCRS.toArray(new AffineTransform[gridToCRS.size()]);
+        Arrays.sort(transforms, X_COMPARATOR);
+        int length = transforms.length;
+        while (length != 0) {
+            final Map<AffineTransform,Dimension> result =
+                    new IdentityHashMap<AffineTransform,Dimension>();
+            if (length <= (length = computePyramidLevels(transforms, length, result, false))) {
+                throw new AssertionError(length); // Should always be decreasing.
+            }
+            results.add(result);
+        }
+        /*
+         * Next, computes the pyramid levels along the Y axis. If we fail to compute the
+         * pyramid level for some AffineTransform, they will be removed from the map. If
+         * a map became empty because of that, the whole map will be removed.
+         */
+        final Iterator<Map<AffineTransform,Dimension>> iterator = results.iterator();
+        while (iterator.hasNext()) {
+            final Map<AffineTransform,Dimension> result = iterator.next();
+            length = result.size();
+            transforms = result.keySet().toArray(transforms);
+            Arrays.sort(transforms, 0, length, Y_COMPARATOR);
+            length = computePyramidLevels(transforms, length, result, true);
+            while (--length >= 0) {
+                if (result.remove(transforms[length]) == null) {
+                    throw new AssertionError(length);
+                }
+            }
+            if (result.isEmpty()) {
+                iterator.remove();
+            }
+        }
+        return results;
+    }
+

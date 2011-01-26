@@ -1,0 +1,58 @@
+    /**
+     * Paints the label as a non curved one. The positioning and rotation are
+     * provided by the transformation
+     * 
+     * @param transform
+     * @throws Exception
+     */
+    public void paintStraightLabel(AffineTransform transform) throws Exception {
+        AffineTransform oldTransform = graphics.getTransform();
+        try {
+            AffineTransform newTransform = new AffineTransform(oldTransform);
+            newTransform.concatenate(transform);
+            graphics.setTransform(newTransform);
+
+            // draw the label shield first, underneath the halo
+            Style2D graphic = labelItem.getTextStyle().getGraphic();
+            if (graphic != null) {
+                // take into account the graphic margins, if any
+                double offsetY = 0;
+                double offsetX = 0;
+                final int[] margin = labelItem.getGraphicMargin();
+                if(margin != null) {
+                    offsetX = margin[1] - margin[3];
+                    offsetY = margin[2] - margin[0];
+                }
+                LiteShape2 tempShape = new LiteShape2(gf.createPoint(new Coordinate(labelBounds
+                        .getWidth() / 2.0 + offsetX, -1.0 * labelBounds.getHeight() / 2.0 + offsetY)), null, null,
+                        false, false);
+
+                graphic = resizeGraphic(graphic);
+                shapePainter.paint(graphics, tempShape, graphic, graphic.getMaxScale());
+            }
+            
+            // 0 is unfortunately an acceptable value if people only want to draw shields
+            // (to leverage conflict resolution, priority when placing symbols)
+            if(labelItem.getTextStyle().getFont().getSize() == 0)
+                return;
+
+            // draw the label
+            if (lines.size() == 1) {
+                drawGlyphVector(lines.get(0).gv);
+            } else {
+                // for multiline labels we have to go thru the lines and apply
+                // the proper transformation
+                // to position each row within the label bounds
+                AffineTransform lineTx = new AffineTransform(transform);
+                for (LineInfo line : lines) {
+                    lineTx.setTransform(transform);
+                    lineTx.translate(line.x, line.y);
+                    graphics.setTransform(lineTx);
+                    drawGlyphVector(line.gv);
+                }
+            }
+        } finally {
+            graphics.setTransform(oldTransform);
+        }
+    }
+

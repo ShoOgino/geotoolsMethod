@@ -1,0 +1,44 @@
+	@SuppressWarnings("unchecked")
+	private void testCoverage(final ImageMosaicReader reader,
+			GeneralParameterValue[] values, String title,
+			final GridCoverage2D coverage, final Rectangle rect) {
+	    final RenderedImage image = coverage.getRenderedImage(); 
+		if (interactive)
+			show(image, title);
+		else
+			PlanarImage.wrapRenderedImage(image).getTiles();
+		
+		if(values!=null)	
+			for(GeneralParameterValue pv:values){
+				if(pv.getDescriptor().getName().equals(AbstractGridFormat.READ_GRIDGEOMETRY2D.getName())){
+					
+					Parameter<GridGeometry2D> param= (Parameter<GridGeometry2D>) pv;
+					// check envelope if it has been requested
+					assertTrue(CRS.equalsIgnoreMetadata(
+							param.getValue().getEnvelope().getCoordinateReferenceSystem(), 
+							coverage.getCoordinateReferenceSystem()));
+					
+					// I check the envelope for this equality so that I can take into account CRS that differes only in metadata
+					// but that essentially are the same thing
+					assertTrue(
+							
+							XRectangle2D.equalsEpsilon(
+									((GeneralEnvelope)coverage.getEnvelope()).toRectangle2D(), 
+									((GeneralEnvelope)param.getValue().getEnvelope()).toRectangle2D()
+							)
+					);
+	
+				}
+			}
+		if (rect != null){
+		    assertEquals(image.getWidth(), rect.width); 
+		    assertEquals(image.getHeight(), rect.height);
+		}
+		
+		if (!interactive){
+			// dispose stuff
+			coverage.dispose(true);
+			reader.dispose();
+		}
+	}
+

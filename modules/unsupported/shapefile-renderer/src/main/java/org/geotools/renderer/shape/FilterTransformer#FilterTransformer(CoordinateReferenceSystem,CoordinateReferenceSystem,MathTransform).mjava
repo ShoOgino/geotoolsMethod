@@ -1,0 +1,34 @@
+    /**
+     * Alternate constructor, takes the source CRS, the destination CRS, and an affine transform to 
+     * be concatenated to the geographic transfromation. This contructor allows for accurate envelope
+     * transformations when the data set contains extreme points such as the poles or the Greenwitch
+     * antimeridian.
+     * @see ReferencedEnvelope#transform(CoordinateReferenceSystem, boolean)
+     * @param fromCRS
+     * @param toCRS
+     * @param affineTransform
+     * @throws FactoryException
+     */
+    public FilterTransformer(final CoordinateReferenceSystem fromCRS, final CoordinateReferenceSystem toCRS, final MathTransform affineTransform) throws FactoryException {
+        this.fromCRS = fromCRS;
+        this.toCRS = toCRS;
+        
+        try {
+            mt = CRS.findMathTransform(fromCRS, toCRS);
+        } catch (Exception e) {
+            mt = null;
+        }
+
+         if (mt == null) {
+            mt = affineTransform;
+        } else {
+            mt = ReferencingFactoryFinder.getMathTransformFactory(null).createConcatenatedTransform(
+                    mt, affineTransform);
+        }
+         
+        // if everything else failed, use the identity transform 
+        if(mt == null)
+            mt = ReferencingFactoryFinder.getMathTransformFactory(null).createAffineTransform(
+                    new Matrix2(1,0,0,1));
+    }
+

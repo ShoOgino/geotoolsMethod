@@ -1,0 +1,42 @@
+    /**
+     * Commits all modifications against this Transaction.
+     * 
+     * <p>
+     * This implementation will call commit() on all State managed by this Transaction. This allows
+     * DataStores to provide their own implementation of commit().
+     * </p>
+     * 
+     * @throws IOException
+     *             Encountered problem maintaining transaction state
+     * @throws DataSourceException
+     *             See IOException
+     * 
+     * @see org.geotools.data.Transaction#commit()
+     */
+    public void commit() throws IOException {
+        State state;
+        int problemCount = 0;
+        IOException io = null;
+
+        for (Iterator i = stateLookup.values().iterator(); i.hasNext();) {
+            state = (State) i.next();
+
+            try {
+                state.commit();
+            } catch (IOException e) {
+                problemCount++;
+                io = e;
+            }
+        }
+
+        if (io != null) {
+            if (problemCount == 1) {
+                throw io;
+            }
+
+            throw new DataSourceException("Commit encountered " + problemCount
+                    + " problems - the first was", io);
+        }
+        authorizations.clear();
+    }
+

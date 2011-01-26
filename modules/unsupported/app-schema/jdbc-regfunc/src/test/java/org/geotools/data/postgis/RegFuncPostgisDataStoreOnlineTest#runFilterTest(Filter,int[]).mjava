@@ -1,0 +1,53 @@
+    /**
+     * Test that a filter query issued.
+     * 
+     * @param filter
+     *                filter to be passed in the query to determine the subset of features to be
+     *                returned, or null for all features
+     * @param expectedFeatureIds
+     *                integer id for returned features, matching the expected row ids
+     * @throws Exception
+     */
+    private void runFilterTest(Filter filter, int[] expectedFeatureIds) throws Exception {
+        DataStore datastore = null;
+        try {
+            datastore = DataStoreFinder.getDataStore(getParams());
+            assertNotNull(datastore);
+            Query query = new DefaultQuery(TEST_TABLE_NAME, filter);
+            FeatureReader<SimpleFeatureType, SimpleFeature> reader = null;
+            try {
+                /*
+                 * List of all the integer feature ids seen in the features returned for this query.
+                 */
+                List<Integer> featureIds = new ArrayList<Integer>();
+                reader = datastore.getFeatureReader(query, Transaction.AUTO_COMMIT);
+                for (SimpleFeature feature = null; reader.hasNext();) {
+                    feature = reader.next();
+                    /*
+                     * Convert long feature id of the form test_table_name.1234 to the numeric id
+                     * used when creating the row. This relies on the behaviour of the postgis fid
+                     * mapper.
+                     */
+                    Integer id = Integer
+                            .valueOf(feature.getID().replace(TEST_TABLE_NAME + ".", ""));
+                    featureIds.add(id);
+                }
+                /*
+                 * The query succeeded as expected if and only if the sorted lists of returned and
+                 * expected ids are equal. The expected ids are converted to a List of Integers to
+                 * leverage Collections comparison.
+                 */
+                assertEquals(sortedList(expectedFeatureIds), sorted(featureIds));
+            } finally {
+                if (reader != null) {
+                    reader.close();
+                }
+            }
+        } finally {
+            if (datastore != null) {
+                datastore.dispose();
+            }
+        }
+
+    }
+

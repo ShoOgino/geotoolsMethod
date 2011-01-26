@@ -1,0 +1,60 @@
+    /**
+     * Compute this specific request settings all the parameters needed by a
+     * visiting {@link BaseCoverageResponse} object.
+     */
+    public void prepare() {
+        try {
+            // //
+            //
+            // Set envelope and source region
+            //
+            // //
+            sourceRasterRegion = new Rectangle();
+            adjustedRequestedEnvelope2D = evaluateRequestedParams(
+                    requestedEnvelope2D, sourceRasterRegion,
+                    requestedRasterDimension, requestedGridToWorld2D);
+
+            // //
+            //
+            // Set specific imageIO parameters: type of read operation,
+            // imageReadParams
+            //
+            // //
+            useJAI = requestUsesJaiImageread();
+            if (useMultithreading) {
+                imageReadParam = new DefaultCloneableImageReadParam();
+            } else {
+                imageReadParam = new ImageReadParam();
+            }
+            if (adjustedRequestedEnvelope2D != null) {
+                final GeneralEnvelope req = (adjustedRequestedEnvelope2D
+                        .isEmpty()) ? requestedEnvelope2D
+                        : adjustedRequestedEnvelope2D;
+                setReadParameters(overviewPolicy, imageReadParam, req,
+                        requestedRasterDimension);
+            }
+        } catch (IOException e) {
+            LOGGER.log(Level.SEVERE, e.getLocalizedMessage(), e);
+            adjustedRequestedEnvelope2D = null;
+        } catch (TransformException e) {
+            LOGGER.log(Level.SEVERE, e.getLocalizedMessage(), e);
+            adjustedRequestedEnvelope2D = null;
+        }
+        if (adjustedRequestedEnvelope2D != null && sourceRasterRegion != null
+                && !sourceRasterRegion.isEmpty()) {
+            imageReadParam.setSourceRegion(sourceRasterRegion);
+        }
+
+        // A transformation is requested in case the requested envelope has been
+        // adjusted
+        needTransformation = (adjustedRequestedEnvelope2D != null && !adjustedRequestedEnvelope2D
+                .isEmpty());
+
+        // In case the adjusted requested envelope is null, no intersection
+        // between requested envelope and base envelope have been found. Hence,
+        // no valid coverage will be loaded and the request should be considered
+        // as producing an empty result.
+        emptyRequest = adjustedRequestedEnvelope2D == null;
+
+    }
+

@@ -1,0 +1,40 @@
+    /**
+     * Returns a WKT for this object using the specified indentation and authority.
+     * If {@code strict} is true, then an exception is thrown if the WKT contains
+     * invalid keywords.
+     */
+    private String toWKT(final Citation authority, final int indentation, final boolean strict)
+             throws UnformattableObjectException
+    {
+        if (authority == null) {
+            throw new IllegalArgumentException(Errors.format(
+                      ErrorKeys.NULL_ARGUMENT_$1, "authority"));
+        }
+        Formatter formatter = FORMATTER.get();
+        if (formatter             == null        ||
+            formatter.indentation != indentation ||
+            formatter.authority   != authority)
+        {
+            formatter = new Formatter(Symbols.DEFAULT, indentation);
+            formatter.authority = authority;
+            FORMATTER.set(formatter);
+        }
+        try {
+            if (this instanceof GeneralParameterValue) {
+                // Special processing for parameter values, which is formatted
+                // directly in 'Formatter'. Note that in GeoAPI, this interface
+                // doesn't share the same parent interface than other interfaces.
+                formatter.append((GeneralParameterValue) this);
+            } else {
+                formatter.append(this);
+            }
+            if (strict && formatter.isInvalidWKT()) {
+                final Class unformattable = formatter.getUnformattableClass();
+                throw new UnformattableObjectException(formatter.warning, unformattable);
+            }
+            return formatter.toString();
+        } finally {
+            formatter.clear();
+        }
+    }
+

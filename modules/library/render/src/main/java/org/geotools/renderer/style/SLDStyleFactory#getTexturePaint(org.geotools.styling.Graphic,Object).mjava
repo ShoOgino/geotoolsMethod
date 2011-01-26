@@ -1,0 +1,104 @@
+	/**
+	 * DOCUMENT ME!
+	 * 
+	 * @param gr
+	 *            DOCUMENT ME!
+	 * @param feature
+	 *            DOCUMENT ME!
+	 * 
+	 * @return DOCUMENT ME!
+	 */
+	public TexturePaint getTexturePaint(org.geotools.styling.Graphic gr,
+			Object feature) {
+		// -1 to have the image use its natural size if none was provided by the
+		// user
+		double graphicSize = evalToDouble(gr.getSize(), feature, -1);
+		GraphicStyle2D gs = null;
+		for (ExternalGraphic eg : gr.getExternalGraphics()) {
+			gs = getGraphicStyle(eg, feature, graphicSize, 1);
+			if (gs != null) {
+				break;
+			}
+		}
+
+		int iSizeX;
+		int iSizeY;
+		BufferedImage image = null;
+		if (gs != null) {
+			image = gs.getImage();
+			iSizeX = image.getWidth() - gs.getBorder();
+			iSizeY = image.getHeight() - gs.getBorder();
+			if (LOGGER.isLoggable(Level.FINER)) {
+				LOGGER.finer("got an image in graphic fill");
+			}
+		} else {
+			if (LOGGER.isLoggable(Level.FINER)) {
+				LOGGER.finer("going for the mark from graphic fill");
+			}
+
+			org.geotools.styling.Mark mark = getMark(gr, feature);
+
+			if (mark == null) {
+				return null;
+			}
+
+			// we need the shape to get to the aspect ratio information, since
+			// this info isnt' on the mark.
+			Shape shape = getShape(mark, feature);
+			if (shape == null) {
+				return null;
+			}
+
+			Rectangle2D shapeBounds = shape.getBounds2D();
+
+			// The aspect ratio is the relation between the width and height of
+			// this mark (x width units per y height units or width/height). The
+			// aspect ratio is used to render non isometric sized marks (where
+			// width != height). To discover the <code>width</code> of a non
+			// isometric
+			// mark, simply calculate <code>height * aspectRatio</code>, where
+			// height is given by getSize().
+			double shapeAspectRatio = (shapeBounds.getHeight() > 0 && shapeBounds
+					.getWidth() > 0) ? shapeBounds.getWidth()
+					/ shapeBounds.getHeight() : 1.0;
+
+			int size = evalToInt(gr.getSize(), feature, 16);
+			final double sizeX = size * shapeAspectRatio; // apply the aspect
+															// ratio to fix the
+															// sample's width.
+			final double sizeY = size;
+			image = new BufferedImage((int) Math.ceil(sizeX * 3), (int) Math
+					.ceil(sizeY * 3), BufferedImage.TYPE_INT_ARGB);
+			Graphics2D g2d = image.createGraphics();
+			g2d.setRenderingHints(renderingHints);
+			double rotation = evalToDouble(gr.getRotation(), feature, 0.0);
+			for (int i = -1; i < 2; i++) {
+				for (int j = -1; j < 2; j++) {
+					double tx = sizeX * 1.5 + sizeX * i;
+					double ty = sizeY * 1.5 + sizeY * j;
+					fillDrawMark(g2d, tx, ty, mark, size, rotation, feature);
+				}
+			}
+			g2d.dispose();
+
+			iSizeX = (int) Math.floor(sizeX);
+			iSizeY = (int) Math.floor(sizeY);
+			image = image.getSubimage(iSizeX, iSizeY, iSizeX + 1, iSizeY + 1); // updated
+																				// to
+																				// use
+																				// the
+																				// new
+																				// sizes
+		}
+
+		Rectangle2D.Double rect = new Rectangle2D.Double(0.0, 0.0, iSizeX,
+				iSizeY);
+		TexturePaint imagePaint = new TexturePaint(image, rect);
+
+		if (LOGGER.isLoggable(Level.FINER)) {
+			LOGGER.finer("applied TexturePaint " + imagePaint);
+		}
+
+		return imagePaint;
+	}
+

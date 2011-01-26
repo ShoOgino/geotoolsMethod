@@ -1,0 +1,61 @@
+    /**
+     * Scans {@linkplain System#getProperties system properties} for any property keys
+     * defined in this class, and add their values to the specified map of hints. For
+     * example if the {@value #FORCE_LONGITUDE_FIRST_AXIS_ORDER} system property is
+     * defined, then the {@link Hints#FORCE_LONGITUDE_FIRST_AXIS_ORDER
+     * FORCE_LONGITUDE_FIRST_AXIS_ORDER} hint will be added to the set of hints.
+     *
+     * @return {@code true} if at least one hint changed as a result of this scan,
+     *         or {@code false} otherwise.
+     */
+    static boolean scanForSystemHints(final Hints hints) {
+        assert Thread.holdsLock(hints);
+        boolean changed = false;
+        synchronized (BINDINGS) {
+            for (final Map.Entry<String, RenderingHints.Key> entry : BINDINGS.entrySet()) {
+                final String propertyKey = entry.getKey();
+                final String property;
+                try {
+                    property = System.getProperty(propertyKey);
+                } catch (SecurityException e) {
+                    unexpectedException(e);
+                    continue;
+                }
+                if (property != null) {
+                    /*
+                     * Converts the system property value from String to Object (java.lang.Boolean
+                     * or java.lang.Number). We perform this conversion only if the key is exactly
+                     * of kind Hints.Key,  not a subclass like ClassKey, in order to avoid useless
+                     * class loading on  'getValueClass()'  method invocation (ClassKey don't make
+                     * sense for Boolean and Number, which are the only types that we convert here).
+                     */
+                    Object value = property;
+                    final RenderingHints.Key hintKey = entry.getValue();
+                    if (hintKey.getClass().equals(Hints.Key.class)) {
+                        final Class<?> type = ((Hints.Key) hintKey).getValueClass();
+                        if (type.equals(Boolean.class)) {
+                            value = Boolean.valueOf(property);
+                        } else if (Number.class.isAssignableFrom(type)) try {
+                            value = Classes.valueOf(type, property);
+                        } catch (NumberFormatException e) {
+                            unexpectedException(e);
+                            continue;
+                        }
+                    }
+                    final Object old;
+                    try {
+                        old = hints.put(hintKey, value);
+                    } catch (IllegalArgumentException e) {
+                        // The property value is illegal for this hint.
+                        unexpectedException(e);
+                        continue;
+                    }
+                    if (!changed && !Utilities.equals(old, value)) {
+                        changed = true;
+                    }
+                }
+            }
+        }
+        return changed;
+    }
+

@@ -1,0 +1,48 @@
+    protected void start(Element element) throws SAXException {
+        String uri = element.getNamespaceURI();
+        String local = element.getLocalName();
+
+        String qName = element.getLocalName();
+
+        NamespaceSupport namespaces = this.namespaces;
+
+        if (namespaceAware) {
+            uri = (uri != null) ? uri : namespaces.getURI("");
+            qName = namespaces.getPrefix(uri) + ":" + qName;
+        } else {
+            uri = "";
+            namespaces = null;
+        }
+
+        DOMAttributes atts = new DOMAttributes(element.getAttributes(), namespaces);
+        serializer.startElement(uri, local, qName, atts);
+
+        //write out any text
+        for (int i = 0; i < element.getChildNodes().getLength(); i++) {
+            Node node = (Node) element.getChildNodes().item(i);
+
+            if (node instanceof Text) {
+                char[] ch = ((Text) node).getData().toCharArray();
+                serializer.characters(ch, 0, ch.length);
+            }
+        }
+
+        //write out any child elements
+        for (int i = 0; i < element.getChildNodes().getLength(); i++) {
+            Node node = (Node) element.getChildNodes().item(i);
+
+            if (node instanceof Element) {
+                start((Element) node);
+                end((Element) node);
+            }
+        }
+
+        //push a new context for children, declaring the default prefix to be the one of this 
+        // element
+        this.namespaces.pushContext();
+
+        if (uri != null) {
+            this.namespaces.declarePrefix("", uri);
+        }
+    }
+

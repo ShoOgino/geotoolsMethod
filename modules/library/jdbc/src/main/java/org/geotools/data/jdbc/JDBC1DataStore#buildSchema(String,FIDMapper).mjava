@@ -1,0 +1,118 @@
+	/**
+	 * Builds the schema for a table in the database.
+	 *
+	 * <p>
+	 * This works by retrieving the column information for the table from the
+	 * DatabaseMetaData object. It then iterates over the information for each
+	 * column, calling buildAttributeType(ResultSet) to construct an
+	 * AttributeDescriptor for each column. The list of attribute types is then turned
+	 * into a FeatureType that defines the schema.
+	 * </p>
+	 *
+	 * <p>
+	 * It is not intended that this method is overriden. It should provide the
+	 * required functionality for most sub-classes. To add AttributeDescriptor
+	 * construction for vendor specific SQL types, such as geometries, override
+	 * the buildAttributeType(ResultSet) method.
+	 * </p>
+	 *
+	 * <p>
+	 * This may become final later. In fact Ill make it private because I don't
+	 * think It will need to be overriden.
+	 * </p>
+	 *
+	 * @param typeName
+	 *            The name of the table to construct a feature type for.
+	 * @param mapper
+	 *            The name of the column holding the fid.
+	 *
+	 * @return The FeatureType for the table.
+	 *
+	 * @throws IOException
+	 * @throws DataSourceException
+	 *             This can occur if there is an SQL error or an error
+	 *             constructing the FeatureType.
+	 *
+	 * @see JDBC1DataStore#buildAttributeType(ResultSet)
+	 */
+	protected SimpleFeatureType buildSchema(String typeName, FIDMapper mapper)
+			throws IOException {
+		final int NAME_COLUMN = 4;
+		final int TYPE_NAME = 6;
+		Connection conn = null;
+		ResultSet tableInfo = null;
+
+		try {
+			conn = getConnection(Transaction.AUTO_COMMIT);
+
+			DatabaseMetaData dbMetaData = conn.getMetaData();
+
+			List attributeTypes = new ArrayList();
+
+			tableInfo = dbMetaData.getColumns(null, config.getDatabaseSchemaName(), typeName, "%");
+
+			boolean tableInfoFound = false;
+
+			while (tableInfo.next()) {
+				tableInfoFound = true;
+
+				try {
+					String columnName = tableInfo.getString(NAME_COLUMN);
+
+					if (!mapper.returnFIDColumnsAsAttributes()) {
+						boolean isPresent = false;
+
+						for (int i = 0; i < mapper.getColumnCount(); i++) {
+							if (columnName.equalsIgnoreCase(mapper
+									.getColumnName(i))) {
+								isPresent = true;
+
+								break;
+							}
+						}
+
+						if (isPresent) {
+							continue;
+						}
+					}
+
+					AttributeDescriptor attributeType = buildAttributeType(tableInfo);
+
+					if (attributeType != null) {
+						attributeTypes.add(attributeType);
+					} else {
+						LOGGER.finest("Unknown SQL Type: "
+								+ tableInfo.getString(TYPE_NAME));
+					}
+				} catch (DataSourceException dse) {
+					String msg = "Error building attribute type. The column will be ignored";
+					LOGGER.log(Level.WARNING, msg, dse);
+				}
+			}
+
+			if (!tableInfoFound) {
+				throw new SchemaNotFoundException(typeName);
+			}
+
+			AttributeDescriptor[] types = (AttributeDescriptor[]) attributeTypes
+					.toArray(new AttributeDescriptor[0]);
+
+			SimpleFeatureTypeBuilder ftb = new SimpleFeatureTypeBuilder();
+			ftb.setName(typeName);
+			ftb.addAll(types);
+			ftb.setNamespaceURI(getNameSpace());
+			return ftb.buildFeatureType();
+		} catch (SQLException sqlException) {
+			JDBCUtils.close(conn, Transaction.AUTO_COMMIT, sqlException);
+			conn = null; // prevent finally block from reclosing
+			throw new DataSourceException("SQL Error building FeatureType for "
+					+ typeName + " " + sqlException.getMessage(), sqlException);
+		} catch (FactoryRegistryException e) {
+			throw new DataSourceException("Error creating FeatureType "
+					+ typeName, e);
+		} finally {
+			JDBCUtils.close(tableInfo);
+			JDBCUtils.close(conn, Transaction.AUTO_COMMIT, null);
+		}
+	}
+

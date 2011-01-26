@@ -1,0 +1,100 @@
+    /**
+     * Export the contents of a Literal Expresion
+     *
+     * @param expression the Literal to export
+     *
+     * @throws RuntimeException for io exception with writer
+     */
+    public void visit(LiteralExpression expression) throws RuntimeException {
+        LOGGER.finer("exporting LiteralExpression");
+
+        //type to convert the literal to
+        Class target = null;
+        
+        if ( context != null ) {
+            //first try to evaluate the expression in the context of a type
+        	target = (Class) context;
+        }
+        
+        if ( target == null ) {
+        	//next try and use the filter code
+        	short type = expression.getType();
+
+            switch (type) {
+            case Expression.LITERAL_DOUBLE:
+            	target = Double.class;
+            	break;
+            case Expression.LITERAL_INTEGER:
+            	target = Integer.class; 
+            	break;
+            case Expression.LITERAL_LONG:
+                target = Long.class;
+                break;
+            case Expression.LITERAL_STRING:
+            	target = String.class; 
+                break;
+            case Expression.LITERAL_GEOMETRY:
+            	target = Geometry.class;
+                break;
+            default:
+                throw new RuntimeException("type: " + type + "not supported");
+            }
+        }
+        
+        try {
+			if ( target == Geometry.class && expression.getLiteral() instanceof Geometry ) {
+				//call this method for backwards compatability with subclasses
+				visitLiteralGeometry( expression );
+				return;
+			}
+			else {
+				//convert the literal to the required type
+				//JD except for numerics, let the database do teh converstion
+				Object literal = null;
+				if ( Number.class.isAssignableFrom( target ) ) {
+					//dont convert
+				}
+				else {
+					//convert
+					literal = expression.evaluate( null, target );
+				}
+				
+				if ( literal == null ) {
+					//just use string
+					literal = expression.getLiteral().toString();
+				}
+				
+				//geometry hook
+				//if ( literal instanceof Geometry ) {
+				if ( Geometry.class.isAssignableFrom( target ) ) {
+					visitLiteralGeometry( expression );
+				}
+				//else if ( literal instanceof Number ) {
+				else if ( Number.class.isAssignableFrom( target ) ) {
+					out.write( literal.toString() );
+				}
+				//else if ( literal instanceof String ) {
+				else if ( String.class.isAssignableFrom( target ) ) {
+                    // sigle quotes must be escaped to have a valid sql string
+                    String escaped = literal.toString().replaceAll("'", "''");
+					out.write( "'" + escaped + "'" );
+					return;
+				}
+				else {
+					//convert back to a string
+					String encoding = (String)Converters.convert( literal, String.class , null );
+					if ( encoding == null ) {
+						//could not convert back to string, use original l value
+						encoding = expression.getLiteral().toString();
+					}
+					
+					// sigle quotes must be escaped to have a valid sql string
+					out.write( "'" + encoding.replaceAll("'", "''") + "'");
+				}
+			}
+		} catch (IOException e) {
+			 throw new RuntimeException("IO problems writing literal", e);
+		}
+        
+    }
+

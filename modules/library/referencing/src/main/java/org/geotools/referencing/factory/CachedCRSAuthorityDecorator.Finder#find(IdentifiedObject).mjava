@@ -1,0 +1,40 @@
+        /**
+         * Looks up an object from this authority factory which is equals, ignoring metadata,
+         * to the specified object. The default implementation performs the same lookup than
+         * the backing store and caches the result.
+         */
+        @Override
+        public IdentifiedObject find(final IdentifiedObject object) throws FactoryException {
+            /*
+             * Do not synchronize on 'BufferedAuthorityFactory.this'. This method may take a
+             * while to execute and we don't want to block other threads. The synchronizations
+             * in the 'create' methods and in the 'findPool' map should be suffisient.
+             *
+             * TODO: avoid to search for the same object twice. For now we consider that this
+             *       is not a big deal if the same object is searched twice; it is "just" a
+             *       waste of CPU.
+             */
+            IdentifiedObject candidate;
+            candidate = (IdentifiedObject) findCache.get(object);
+            
+            if (candidate == null) {
+                // Must delegates to 'finder' (not to 'super') in order to take
+                // advantage of the method overriden by AllAuthoritiesFactory.
+                IdentifiedObject found = finder.find(object);
+                if (found != null) {
+                    try {
+                        findCache.writeLock(object);
+                        candidate = (IdentifiedObject) findCache.peek(object);
+                        if( candidate == null ){
+                            findCache.put(object, found);
+                            return found;
+                        }
+
+                    } finally {
+                        findCache.writeLock(object);
+                    }
+                }
+            }
+            return candidate;
+        }
+

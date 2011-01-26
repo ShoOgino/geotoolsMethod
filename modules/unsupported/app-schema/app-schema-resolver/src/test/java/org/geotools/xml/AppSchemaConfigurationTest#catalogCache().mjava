@@ -1,0 +1,28 @@
+    /**
+     * Test we can {@link Schemas#findSchemas(Configuration)} with a catalog plus cache. This test
+     * verifies the fall-through behaviour of the catalog even when a schema is sought inside the
+     * scope of the catalog rewrite rules but is not contained in the catalog.
+     */
+    @Test
+    public void catalogCache() throws Exception {
+        File cacheDirectory = DataUtilities.urlToFile(AppSchemaCacheTest.class
+                .getResource("/test-data/cache"));
+        AppSchemaResolver resolver = new AppSchemaResolver(AppSchemaCatalog.build(getClass()
+                .getResource("/test-data/catalog.xml")), new AppSchemaCache(cacheDirectory, false));
+        Configuration configuration = new AppSchemaConfiguration(
+                "http://schemas.example.org/catalog-test",
+                "http://schemas.example.org/catalog-test/catalog-cache-test.xsd", resolver);
+        SchemaIndex schemaIndex = Schemas.findSchemas(configuration);
+        Assert.assertEquals(3, schemaIndex.getSchemas().length);
+        String schemaLocation = null;
+        for (XSDSchema schema : schemaIndex.getSchemas()) {
+            if (schema.getSchemaLocation().endsWith("catalog-cache-test.xsd")) {
+                schemaLocation = schema.getSchemaLocation();
+                break;
+            }
+        }
+        Assert.assertNotNull(schemaLocation);
+        Assert.assertTrue(schemaLocation.startsWith("file:"));
+        Assert.assertTrue(DataUtilities.urlToFile(new URL(schemaLocation)).exists());
+    }
+

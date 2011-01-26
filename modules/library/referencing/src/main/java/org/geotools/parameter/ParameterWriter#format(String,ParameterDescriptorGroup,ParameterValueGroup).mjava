@@ -1,0 +1,176 @@
+    /**
+     * Implementation of public {@code format} methods.
+     *
+     * @param  name The group name, usually {@code descriptor.getCode().getName()}.
+     * @param  descriptor The parameter descriptor. Should be equals to
+     *         {@code values.getDescriptor()} if {@code values} is non null.
+     * @param  values The parameter values, or {@code null} if none.
+     * @throws IOException if an error occured will writing to the stream.
+     */
+    private void format(final String                   name,
+                        final ParameterDescriptorGroup group,
+                        final ParameterValueGroup      values)
+            throws IOException
+    {
+        /*
+         * Write the operation name (including aliases) before the table.
+         */
+        final String lineSeparator = System.getProperty("line.separator", "\n");
+        out.write(' ');
+        out.write(name);
+        out.write(lineSeparator);
+        Collection<GenericName> alias = group.getAlias();
+        if (alias != null) {
+            boolean first = true;
+            for (final GenericName a : alias) {
+                out.write(first ? " alias " : "       ");
+                out.write(a.toInternationalString().toString(locale));
+                out.write(lineSeparator);
+                first = false;
+            }
+        }
+        /*
+         * Format the table header (i.e. column names).
+         */
+        final Vocabulary resources = Vocabulary.getResources(locale);
+        final TableWriter table = new TableWriter(out, TableWriter.SINGLE_VERTICAL_LINE);
+        table.setMultiLinesCells(true);
+        table.writeHorizontalSeparator();
+        table.write(resources.getString(VocabularyKeys.NAME));
+        table.nextColumn();
+        table.write(resources.getString(VocabularyKeys.CLASS));
+        table.nextColumn();
+        table.write("Minimum");  // TODO localize
+        table.nextColumn();
+        table.write("Maximum");  // TODO localize
+        table.nextColumn();
+        table.write(resources.getString((values==null) ? VocabularyKeys.DEFAULT_VALUE
+                                                       : VocabularyKeys.VALUE));
+        table.nextColumn();
+        table.write("Units");  // TODO localize
+        table.nextLine();
+        table.nextLine(TableWriter.DOUBLE_HORIZONTAL_LINE);
+        /*
+         * Format each element in the parameter group. If values were supplied, we will
+         * iterate through the values instead of the descriptor. We do it that way because
+         * the descriptor can't know which optional values are included and which one are
+         * omitted.
+         */
+        List<Object> deferredGroups = null;
+        final Object[] array1 = new Object[1];
+        final Collection<?> elements = (values!=null) ? values.values() : group.descriptors();
+        for (final Object element : elements) {
+            final GeneralParameterValue      generalValue;
+            final GeneralParameterDescriptor generalDescriptor;
+            if (values != null) {
+                generalValue = (GeneralParameterValue) element;
+                generalDescriptor = generalValue.getDescriptor();
+            } else {
+                generalValue = null;
+                generalDescriptor = (GeneralParameterDescriptor) element;
+            }
+            /*
+             * If the current element is a group, we will format it later (after
+             * all ordinary elements) in order avoid breaking the table layout.
+             */
+            if (generalDescriptor instanceof ParameterDescriptorGroup) {
+                if (deferredGroups == null) {
+                    deferredGroups = new ArrayList<Object>();
+                }
+                deferredGroups.add(element);
+                continue;
+            }
+            /*
+             * Format the element name, including all alias (if any).
+             * Each alias will be formatted on its own line.
+             */
+            final Identifier identifier = generalDescriptor.getName();
+            table.write(identifier.getCode());
+            alias = generalDescriptor.getAlias();
+            if (alias != null) {
+                for (final GenericName a : alias) {
+                    if (!identifier.equals(a)) {
+                        table.write(lineSeparator);
+                        table.write(a.tip().toInternationalString().toString(locale));
+                    }
+                }
+            }
+            table.nextColumn();
+            /*
+             * Format the current element as an ordinary descriptor. If we are iterating
+             * over the descriptors rather than values, then the "value" column will be
+             * filled with the default value specified in descriptors.
+             */
+            if (generalDescriptor instanceof ParameterDescriptor) {
+                final ParameterDescriptor descriptor = (ParameterDescriptor) generalDescriptor;
+                table.write(Classes.getShortName(descriptor.getValueClass()));
+                table.nextColumn();
+                table.setAlignment(TableWriter.ALIGN_RIGHT);
+                Object value = descriptor.getMinimumValue();
+                if (value != null) {
+                    table.write(formatValue(value));
+                }
+                table.nextColumn();
+                value = descriptor.getMaximumValue();
+                if (value != null) {
+                    table.write(formatValue(value));
+                }
+                table.nextColumn();
+                if (generalValue != null) {
+                    value = ((ParameterValue) generalValue).getValue();
+                } else {
+                    value = descriptor.getDefaultValue();
+                }
+                /*
+                 * Wraps the value in an array. Because it may be an array of primitive
+                 * type, we can't cast to Object[]. Then, each array's element will be
+                 * formatted on its own line.
+                 */
+                final Object array;
+                if (value!=null && value.getClass().isArray()) {
+                    array = value;
+                } else {
+                    array = array1;
+                    array1[0] = value;
+                }
+                final int length = Array.getLength(array);
+                for (int i=0; i<length; i++) {
+                    value = Array.get(array, i);
+                    if (value != null) {
+                        if (i != 0) {
+                            table.write(lineSeparator);
+                        }
+                        table.write(formatValue(value));
+                    }
+                }
+                table.nextColumn();
+                table.setAlignment(TableWriter.ALIGN_LEFT);
+                value = descriptor.getUnit();
+                if (value != null) {
+                    table.write(value.toString());
+                }
+            }
+            table.writeHorizontalSeparator();
+        }
+        table.flush();
+        /*
+         * Now format all groups deferred to the end of this table.
+         * Most of the time, there is no such group.
+         */
+        if (deferredGroups != null) {
+            for (final Object element : deferredGroups) {
+                final ParameterValueGroup value;
+                final ParameterDescriptorGroup descriptor;
+                if (element instanceof ParameterValueGroup) {
+                    value = (ParameterValueGroup) element;
+                    descriptor = value.getDescriptor();
+                } else {
+                    value = null;
+                    descriptor = (ParameterDescriptorGroup) element;
+                }
+                out.write(lineSeparator);
+                format(name + '/' + descriptor.getName().getCode(), descriptor, value);
+            }
+        }
+    }
+

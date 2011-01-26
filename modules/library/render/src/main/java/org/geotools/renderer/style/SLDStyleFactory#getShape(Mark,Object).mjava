@@ -1,0 +1,38 @@
+	/**
+	 * Given a mark and a feature, returns the Shape provided by the first
+	 * {@link MarkFactory} that was able to handle the Mark
+	 * 
+	 * @param mark
+	 * @param feature
+	 * @return
+	 */
+	private Shape getShape(Mark mark, Object feature) {
+		if (mark == null)
+			return null;
+
+		Expression name = mark.getWellKnownName();
+		// expand eventual cql expressions embedded in the name
+		if (name instanceof Literal) {
+			String expression = evalToString(name, null, null);
+			if (expression != null)
+				name = ExpressionExtractor.extractCqlExpressions(expression);
+		}
+
+		Iterator<MarkFactory> it = DynamicSymbolFactoryFinder
+				.getMarkFactories();
+		while (it.hasNext()) {
+			MarkFactory factory = it.next();
+			try {
+				Shape shape = factory.getShape(null, name, (Feature) feature);
+				if (shape != null)
+					return shape;
+			} catch (Exception e) {
+				LOGGER.log(Level.FINE, "Exception while scanning for "
+						+ "the appropriate mark factory", e);
+			}
+
+		}
+
+		return null;
+	}
+

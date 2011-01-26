@@ -1,0 +1,46 @@
+    /**
+     * Transforms a list of coordinate point ordinal values. Ordinates must be
+     * (<var>longitude</var>,<var>latitude</var>) pairs in decimal degrees.
+     *
+     * @throws ProjectionException if a point can't be transformed. This method tries to transform
+     *         every points even if some of them can't be transformed. Non-transformable points will
+     *         have value {@link Float#NaN}. If more than one point can't be transformed, then this
+     *         exception may be about an arbitrary point.
+     */
+    @Override
+    public final void transform(final float[] srcPts, int srcOff,
+                                final float[] dstPts, int dstOff, int numPts)
+            throws ProjectionException
+    {
+        final boolean reverse = (srcPts == dstPts && srcOff < dstOff &&
+                                 srcOff + (2*numPts) > dstOff);
+        if (reverse) {
+            srcOff += 2*numPts;
+            dstOff += 2*numPts;
+        }
+        final Point2D.Double point = new Point2D.Double();
+        ProjectionException firstException = null;
+        while (--numPts >= 0) {
+            try {
+                point.x = srcPts[srcOff++];
+                point.y = srcPts[srcOff++];
+                transform(point, point);
+                dstPts[dstOff++] = (float) point.x;
+                dstPts[dstOff++] = (float) point.y;
+            } catch (ProjectionException exception) {
+                dstPts[dstOff++] = Float.NaN;
+                dstPts[dstOff++] = Float.NaN;
+                if (firstException == null) {
+                    firstException = exception;
+                }
+            }
+            if (reverse) {
+                srcOff -= 4;
+                dstOff -= 4;
+            }
+        }
+        if (firstException != null) {
+            throw firstException;
+        }
+    }
+

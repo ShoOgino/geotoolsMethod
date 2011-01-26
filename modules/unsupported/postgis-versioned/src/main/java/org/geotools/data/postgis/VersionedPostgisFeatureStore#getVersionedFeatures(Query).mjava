@@ -1,0 +1,26 @@
+    public SimpleFeatureCollection getVersionedFeatures(Query query) throws IOException {
+        final SimpleFeatureType ft = getSchema();
+        
+        // check the feature type is the right one 
+        final String typeName = ft.getTypeName();
+        if(query.getTypeName() != null && !query.getTypeName().equals(typeName))
+            throw new IOException("Incompatible type, this class can access only " + typeName);
+        
+        // make sure the view is around
+        if(!Arrays.asList(store.wrapped.getTypeNames()).contains(store.getVFCViewName(typeName)))
+            store.createVersionedFeatureCollectionView(typeName);
+        
+        // we have to hit the view
+        DefaultQuery vq = new DefaultQuery(query);
+        vq.setTypeName(VersionedPostgisDataStore.getVFCViewName(typeName));
+        vq = store.buildVersionedQuery(vq);
+        SimpleFeatureCollection fc = store.wrapped.getFeatureSource(VersionedPostgisDataStore.getVFCViewName(typeName)).getFeatures(vq);
+        final SimpleFeatureType fcSchema = fc.getSchema();
+        // build a renamed feature type with the same attributes as the feature collection
+        SimpleFeatureTypeBuilder builder = new SimpleFeatureTypeBuilder();
+        builder.init(ft);
+        builder.setAttributes(fc.getSchema().getAttributeDescriptors());
+        SimpleFeatureType renamedFt = builder.buildFeatureType();
+        return new ReTypingFeatureCollection(fc, renamedFt);
+    }
+

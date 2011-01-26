@@ -1,0 +1,112 @@
+    /**
+     * Disables versioning for the specificed feature type, appeding a commit message to the
+     * changeset
+     * 
+     * @param typeName
+     * @param author
+     * @param message
+     * @throws IOException
+     */
+    private void disableVersioning(String typeName, String author, String message)
+            throws IOException {
+        // have a default message
+        if (message == null)
+            message = "Version disabling " + typeName;
+
+        // alter table structure in a transaction
+        Connection conn = null;
+        Statement st = null;
+        PostgisSQLBuilder sqlb = wrapped.createSQLBuilder();
+        Transaction t = new DefaultTransaction();
+        t.putProperty(VersioningDataStore.AUTHOR, author);
+        t.putProperty(VersioningDataStore.MESSAGE, message);
+        try {
+            // gather the transaction state and pick the version number, also
+            // update the dirty feature types
+            // --> if we do this among other alter tables a deadlock occurs,
+            // don't know why...
+            VersionedJdbcTransactionState state = wrapped.getVersionedJdbcTransactionState(t);
+            state.setTypeNameDirty(typeName);
+
+            // the following is funny, but if I don't gather the revision now, the transactio may
+            // lock... not sure why...
+            state.getRevision();
+
+            // gather bbox, we need it for the first commit msg
+            Envelope envelope = wrapped.getFeatureSource(typeName).getBounds();
+            if (envelope != null && wrapped.getSchema(typeName).getGeometryDescriptor() != null) {
+                CoordinateReferenceSystem crs = wrapped.getSchema(typeName).getGeometryDescriptor()
+                        .getCoordinateReferenceSystem();
+                if (crs != null)
+                    envelope = JTS.toGeographic(envelope, crs);
+                state.expandDirtyBounds(envelope);
+            }
+
+            // drop the versioning feature collection view
+            conn = state.getConnection();
+            st = conn.createStatement();
+            try {
+                st.execute("DROP VIEW " + typeName + "_vfc_view");
+            } catch(SQLException e) {
+                // if the view wasn't there no problem
+            }
+            st.execute("DELETE FROM geometry_columns WHERE f_table_schema = current_schema() " +
+            		"   AND f_table_name = '" + typeName + "_vfc_view'");
+            
+            // remove all non active rows
+            st.execute("DELETE FROM " + sqlb.encodeTableName(typeName) + " WHERE expired <> " + Long.MAX_VALUE);
+            
+            // build a comma separated list of old pk columns, just skip the
+            // first which we know is "revision"
+            PkDescriptor pk = getPrimaryKeyConstraintName(conn, typeName);
+            if (pk == null)
+                throw new DataSourceException("Cannot version tables without primary keys");
+            
+            String colList = "";
+            for (int i = 1; i < pk.columns.length; i++) {
+                colList += "," + pk.columns[i];
+            }
+            colList = colList.substring(1);
+
+            // drop the current primary key and the index
+            execute(st, "DROP INDEX " + sqlb.encodeTableName(typeName.toLowerCase() + "_revidx"));
+            execute(st, "ALTER TABLE " + sqlb.encodeTableName(typeName) + " DROP CONSTRAINT "
+                    + pk.name);
+
+            // drop versioning columns
+            execute(st, "ALTER TABLE " + sqlb.encodeTableName(typeName) + " DROP COLUMN REVISION");
+            execute(st, "ALTER TABLE " + sqlb.encodeTableName(typeName) + " DROP COLUMN EXPIRED");
+            execute(st, "ALTER TABLE " + sqlb.encodeTableName(typeName) + " DROP COLUMN CREATED");
+
+            // now recreate theold primary key with revision as first column
+            execute(st, "ALTER TABLE " + sqlb.encodeTableName(typeName) + " ADD CONSTRAINT "
+                    + pk.name + " PRIMARY KEY(" + colList + ")");
+
+            // mark the table as versioned
+            execute(st, "UPDATE " + sqlb.encodeTableName(TBL_VERSIONEDTABLES)
+                    + " SET VERSIONED = FALSE WHERE SCHEMA = '"
+                    + getConfig().getDatabaseSchemaName() + "' AND NAME = '" + typeName + "'");
+
+            // phew... done!
+            t.commit();
+
+            // and now wipe out the cached feature type, we just changed it, but
+            // do not change the fid mapper, it's still ok (or it isn't?)
+            // MIND, this needs to be done _after_ the transaction is committed,
+            // otherewise transaction writing will try to get metadata with
+            // alters still in progress and the whole thing will lock up
+            resetTypeInfo();
+        } catch (SQLException sql) {
+            throw new DataSourceException("Error occurred during version disabling", sql);
+        } catch (TransformException e) {
+            throw new DataSourceException(
+                    "Error occurred while trying to compute the lat/lon bounding box "
+                            + "affected by this operation", e);
+        } finally {
+            JDBCUtils.close(st);
+            JDBCUtils.close(conn, t, null);
+            t.close();
+        }
+
+    }
+

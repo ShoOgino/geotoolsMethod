@@ -1,0 +1,51 @@
+    /**
+     * Constructs a {@code NADCONTransform} from the specified grid shift files.
+     *
+     * @param latGridName path and name (or just name if {@link #GRID_LOCATION}
+     *        is set) to the latitude difference file. This will have a {@code .las} or
+     *        {@code .laa} file extention.
+     * @param longGridName path and name (or just name if {@link #GRID_LOCATION}
+     *        is set) to the longitude difference file. This will have a {@code .los}
+     *        or {@code .loa} file extention.
+     *
+     * @throws ParameterNotFoundException if a math transform parameter cannot be found.
+     * @throws FactoryException if there is a problem creating this math transform
+     *         (ie file extentions are unknown or there is an error reading the
+     *          grid files)
+     */
+    public NADCONTransform(final String latGridName, final String longGridName)
+            throws ParameterNotFoundException, FactoryException
+    {
+        this.latGridName  = latGridName;
+        this.longGridName = longGridName;
+
+        //decide if text or binary grid will be used
+        try {
+            final URL latGridURL  = makeURL(latGridName);
+            final URL longGridURL = makeURL(longGridName);
+
+            if ((latGridName.endsWith(".las") && longGridName.endsWith(".los"))
+                    || (latGridName.endsWith(".LAS") && longGridName.endsWith(".LOS"))) {
+                loadBinaryGrid(latGridURL, longGridURL);
+            } else if ((latGridName.endsWith(".laa") && longGridName.endsWith(".loa"))
+                    || (latGridName.endsWith(".LAA") && longGridName.endsWith(".LOA"))) {
+                loadTextGrid(latGridURL, longGridURL);
+            } else {
+                throw new FactoryException(Errors.format(ErrorKeys.UNSUPPORTED_FILE_TYPE_$2,
+                        latGridName.substring(latGridName.lastIndexOf('.') + 1),
+                        longGridName.substring(longGridName.lastIndexOf('.') + 1)));
+                // Note: the +1 above hide the dot, but also make sure that the code is
+                //       valid even if the path do not contains '.' at all (-1 + 1 == 0).
+            }
+
+            gridShiftTransform = gridShift.getMathTransform();
+        } catch (IOException exception) {
+            final Throwable cause = exception.getCause();
+            if (cause instanceof FactoryException) {
+                throw (FactoryException) cause;
+            }
+            throw new FactoryException(exception.getLocalizedMessage(),
+                exception);
+        }
+    }
+

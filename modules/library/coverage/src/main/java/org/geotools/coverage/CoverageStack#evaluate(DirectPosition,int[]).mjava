@@ -1,0 +1,36 @@
+    /**
+     * Returns a sequence of integer values for a given point in the coverage.
+     *
+     * @param  coord The coordinate point where to evaluate.
+     * @param  dest  An array in which to store values, or {@code null} to create a new array.
+     * @return The {@code dest} array, or a newly created array if {@code dest} was null.
+     * @throws PointOutsideCoverageException if {@code coord} is outside coverage.
+     * @throws CannotEvaluateException if the computation failed for some other reason.
+     */
+    @Override
+    public synchronized int[] evaluate(final DirectPosition coord, int[] dest)
+            throws CannotEvaluateException
+    {
+        final double z = coord.getOrdinate(zDimension);
+        if (!seek(z)) {
+            // Missing data
+            if (dest == null) {
+                dest = new int[numSampleDimensions];
+            } else {
+                Arrays.fill(dest, 0, numSampleDimensions, 0);
+            }
+            return dest;
+        }
+        if (lower == upper) {
+            return lower.evaluate(reduce(coord, lower), dest);
+        }
+        intBuffer = upper.evaluate(reduce(coord, upper), intBuffer);
+        dest      = lower.evaluate(reduce(coord, lower), dest);
+        assert !(z<lowerZ || z>upperZ) : z;   // Uses !(...) in order to accepts NaN.
+        final double ratio = (z-lowerZ) / (upperZ-lowerZ);
+        for (int i=0; i<intBuffer.length; i++) {
+            dest[i] = (int)Math.round(dest[i] + ratio*(intBuffer[i]-dest[i]));
+        }
+        return dest;
+    }
+

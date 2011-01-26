@@ -1,0 +1,45 @@
+    /**
+     * Writes the SQL for the Like Filter.  Assumes the current java
+     * implemented wildcards for the Like Filter: . for multi and .? for
+     * single. And replaces them with the SQL % and _, respectively. Currently
+     * does nothing, and should not be called, not included in the
+     * capabilities.
+     *
+     * @param filter the Like Filter to be visited.
+     *
+     * @throws UnsupportedOperationException always, as likes aren't
+     *         implemented yet.
+     *
+     * @task REVISIT: Need to think through the escape char, so it works  right
+     *       when Java uses one, and escapes correctly with an '_'.
+     */
+    public void visit(LikeFilter filter) throws UnsupportedOperationException 
+	{
+    	char esc = filter.getEscape().charAt(0);
+    	char multi = filter.getWildcardMulti().charAt(0);
+    	char single = filter.getWildcardSingle().charAt(0);
+        boolean matchCase = ((LikeFilterImpl)filter).isMatchingCase();
+    	String pattern = LikeFilterImpl.convertToSQL92(esc, multi, single, matchCase, 
+    	        filter.getPattern());
+    	
+    	DefaultExpression att = (DefaultExpression) filter.getValue();
+    	 
+    	try {
+            if (!matchCase){
+                out.write(" UPPER(");
+            }
+
+	    	att.accept(this);
+            if (!matchCase){
+                out.write(") LIKE '");
+            } else {
+                out.write(" LIKE '");
+            }
+
+	    	out.write(pattern);
+	    	out.write("' ");
+    	} catch (java.io.IOException ioe) {
+            throw new RuntimeException(IO_ERROR, ioe);
+        }    	
+    }
+

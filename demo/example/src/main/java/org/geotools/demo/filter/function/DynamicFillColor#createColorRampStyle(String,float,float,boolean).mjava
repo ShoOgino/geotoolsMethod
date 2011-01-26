@@ -1,0 +1,65 @@
+    /**
+     * Creates a new Style object for polygon features in which the fill
+     * and outline stroke colors will be based on the specified feature
+     * attribute (a numeric field).
+     *
+     * @param attrName the name of the feature attribute to use as the
+     *        value field
+     *
+     * @param minValue the minimum expected feature value
+     *
+     * @param maxValue the maximum expected feature value
+     *
+     * @param logValues if true, calculations will use the log of feature
+     *        value (in this case min and max value parameters should be on
+     *        the log scale); if false feature values are used directly
+     *
+     * @return a new Style object containing the dynamic color function
+     */
+    public Style createColorRampStyle(String attrName, float minValue, float maxValue, boolean logValues) {
+        Style style = styleFactory.createStyle();
+
+        Expression valueExpr = null;
+        if (logValues) {
+            /*
+             * Here we use one of GeoTools provided maths functions which
+             * will calculate log values
+             */
+            valueExpr = filterFactory.function("log", filterFactory.property(attrName));
+
+        } else {
+            /*
+             * Here we specify the feature attribute which will be used
+             * directly
+             */
+            valueExpr = filterFactory.property(attrName);
+        }
+
+        /*
+         * Create a new function object and set it as the basis for Fill 
+         * and Stroke colors
+         */
+        // ColorRampFunction fn = new ColorRampFunction(valueExpr, minValue, maxValue, 0.8f, 0.8f);
+        Function colorRampFn = filterFactory.function("colorramp",
+                valueExpr,
+                filterFactory.literal(minValue),
+                filterFactory.literal(maxValue),
+                filterFactory.literal(SATURATION),
+                filterFactory.literal(BRIGHTNESS));
+
+        Fill fill = styleFactory.createFill(colorRampFn);
+        Stroke stroke = styleFactory.createStroke(colorRampFn, filterFactory.literal(1.0));
+        PolygonSymbolizer symbolizer = styleFactory.createPolygonSymbolizer(stroke, fill, "the_geom");
+
+        /*
+         * Package up our dynamic symbolizer created above in the hierarchy
+         * of rule, feature type style, style
+         */
+        Rule rule = styleFactory.createRule();
+        rule.symbolizers().add(symbolizer);
+        FeatureTypeStyle fts = styleFactory.createFeatureTypeStyle(new Rule[]{rule});
+        style.featureTypeStyles().add(fts);
+
+        return style;
+    }
+

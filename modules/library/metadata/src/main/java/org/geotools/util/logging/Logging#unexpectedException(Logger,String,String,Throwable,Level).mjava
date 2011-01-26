@@ -1,0 +1,124 @@
+    /**
+     * Implementation of {@link #unexpectedException(Logger, Class, String, Throwable)}.
+     *
+     * @param logger  Where to log the error, or {@code null}.
+     * @param classe  The fully qualified class name where the error occurred, or {@code null}.
+     * @param method  The method where the error occurred, or {@code null}.
+     * @param error   The error.
+     * @param level   The logging level.
+     * @return {@code true} if the error has been logged, or {@code false} if the logger
+     *         doesn't log anything at the specified level.
+     */
+    private static boolean unexpectedException(Logger logger, String classe, String method,
+                                               final Throwable error, final Level level)
+    {
+        /*
+         * Checks if loggable, inferring the logger from the classe name if needed.
+         */
+        if (error == null) {
+            return false;
+        }
+        if (logger == null && classe != null) {
+            final int separator = classe.lastIndexOf('.');
+            final String paquet = (separator >= 1) ? classe.substring(0, separator-1) : "";
+            logger = getLogger(paquet);
+        }
+        if (logger != null && !logger.isLoggable(level)) {
+            return false;
+        }
+        /*
+         * Loggeable, so complete the null argument from the stack trace if we can.
+         */
+        if (logger==null || classe==null || method==null) {
+            String paquet = (logger != null) ? logger.getName() : null;
+            final StackTraceElement[] elements = error.getStackTrace();
+            for (int i=0; i<elements.length; i++) {
+                /*
+                 * Searchs for the first stack trace element with a classname matching the
+                 * expected one. We compare preferably against the name of the class given
+                 * in argument, or against the logger name (taken as the package name) otherwise.
+                 */
+                final StackTraceElement element = elements[i];
+                final String classname = element.getClassName();
+                if (classe != null) {
+                    if (!classname.equals(classe)) {
+                        continue;
+                    }
+                } else if (paquet != null) {
+                    if (!classname.startsWith(paquet)) {
+                        continue;
+                    }
+                    final int length = paquet.length();
+                    if (classname.length() > length) {
+                        // We expect '.' but we accept also '$' or end of string.
+                        final char separator = classname.charAt(length);
+                        if (Character.isJavaIdentifierPart(separator)) {
+                            continue;
+                        }
+                    }
+                }
+                /*
+                 * Now that we have a stack trace element from the expected class (or any
+                 * element if we don't know the class), make sure that we have the right method.
+                 */
+                final String methodName = element.getMethodName();
+                if (method != null && !methodName.equals(method)) {
+                    continue;
+                }
+                /*
+                 * Now computes every values that are null, and stop the loop.
+                 */
+                if (paquet == null) {
+                    final int separator = classname.lastIndexOf('.');
+                    paquet = (separator >= 1) ? classname.substring(0, separator-1) : "";
+                    logger = getLogger(paquet);
+                    if (!logger.isLoggable(level)) {
+                        return false;
+                    }
+                }
+                if (classe == null) {
+                    classe = classname;
+                }
+                if (method == null) {
+                    method = methodName;
+                }
+                break;
+            }
+            /*
+             * The logger may stay null if we have been unable to find a suitable
+             * stack trace. Fallback on the global logger.
+             *
+             * TODO: Use GLOBAL_LOGGER_NAME constant when we will be allowed to target Java 6.
+             */
+            if (logger == null) {
+                logger = getLogger("global");
+                if (!logger.isLoggable(level)) {
+                    return false;
+                }
+            }
+        }
+        /*
+         * Now prepare the log message. If we have been unable to figure out a source class and
+         * method name, we will fallback on Java logging default mechanism, which may returns a
+         * less relevant name than our attempt to use the logger name as the package name.
+         */
+        final StringBuilder buffer = new StringBuilder(Classes.getShortClassName(error));
+        final String message = error.getLocalizedMessage();
+        if (message != null) {
+            buffer.append(": ").append(message);
+        }
+        final LogRecord record = new LogRecord(level, buffer.toString());
+        if (classe != null) {
+            record.setSourceClassName(classe);
+        }
+        if (method != null) {
+            record.setSourceMethodName(method);
+        }
+        if (level.intValue() > 500) {
+            record.setThrown(error);
+        }
+        record.setLoggerName(logger.getName());
+        logger.log(record);
+        return true;
+    }
+

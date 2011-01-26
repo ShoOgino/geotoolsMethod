@@ -1,0 +1,95 @@
+    /**
+     * Generates a 'SELECT p1, p2, ... FROM ... WHERE ...' prepared statement.
+     * 
+     * @param featureType
+     *            the feature type that the query must return (may contain less
+     *            attributes than the native one)
+     * @param attributes
+     *            the properties queried, or {@link Query#ALL_NAMES} to gather
+     *            all of them
+     * @param query
+     *            the query to be run. The type name and property will be ignored, as they are
+     *            supposed to have been already embedded into the provided feature type
+     * @param cx
+     *            The database connection to be used to create the prepared
+     *            statement
+     */
+    protected PreparedStatement selectSQLPS( SimpleFeatureType featureType, Query query, Connection cx )
+        throws SQLException, IOException {
+        
+        StringBuffer sql = new StringBuffer();
+        sql.append("SELECT ");
+
+        // primary key
+        PrimaryKey key = null;
+
+        try {
+            key = getPrimaryKey(featureType);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        Set<String> pkColumnNames = getColumnNames(key);
+
+        for ( PrimaryKeyColumn col : key.getColumns() ) {
+            dialect.encodeColumnName(col.getName(), sql);
+            sql.append(",");
+        }
+        
+        //other columns
+        for (AttributeDescriptor att : featureType.getAttributeDescriptors()) {
+            // skip the eventually exposed pk column values
+            String columnName = att.getLocalName();
+            if(pkColumnNames.contains(columnName))
+                continue;
+            
+            if (att instanceof GeometryDescriptor) {
+                //encode as geometry
+            	encodeGeometryColumn((GeometryDescriptor) att, sql, query.getHints());
+
+                //alias it to be the name of the original geometry
+                dialect.encodeColumnAlias(columnName, sql);
+            } else {
+                dialect.encodeColumnName(columnName, sql);
+            }
+
+            sql.append(",");
+        }
+
+        sql.setLength(sql.length() - 1);
+
+        sql.append(" FROM ");
+        encodeTableName(featureType.getTypeName(), sql, query.getHints());
+
+        //filtering
+        PreparedFilterToSQL toSQL = null;
+        Filter filter = query.getFilter();
+        if (filter != null && !Filter.INCLUDE.equals(filter)) {
+            //encode filter
+            try {
+                // grab the full feature type, as we might be encoding a filter
+                // that uses attributes that aren't returned in the results
+                SimpleFeatureType fullSchema = getSchema(featureType.getTypeName());
+                toSQL = createPreparedFilterToSQL(fullSchema);
+                sql.append(" ").append(toSQL.encodeToString(filter));
+            } catch (FilterToSQLException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        //sorting
+        sort(featureType, query.getSortBy(), key, sql);
+        
+        // finally encode limit/offset, if necessary
+        applyLimitOffset(sql, query);
+
+        LOGGER.fine( sql.toString() );
+        PreparedStatement ps = cx.prepareStatement(sql.toString(), ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
+        ps.setFetchSize(fetchSize);
+        
+        if ( toSQL != null ) {
+            setPreparedFilterValues( ps, toSQL, 0, cx );
+        } 
+        
+        return ps;
+    }
+

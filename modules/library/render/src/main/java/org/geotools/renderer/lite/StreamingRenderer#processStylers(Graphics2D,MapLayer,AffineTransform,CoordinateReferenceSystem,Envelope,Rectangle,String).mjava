@@ -1,0 +1,115 @@
+    /**
+     * Applies each feature type styler in turn to all of the features. This
+     * perhaps needs some explanation to make it absolutely clear.
+     * featureStylers[0] is applied to all features before featureStylers[1] is
+     * applied. This can have important consequences as regards the painting
+     * order.
+     * <p>
+     * In most cases, this is the desired effect. For example, all line features
+     * may be rendered with a fat line and then a thin line. This produces a
+     * 'cased' effect without any strange overlaps.
+     * </p>
+     * <p>
+     * This method is internal and should only be called by render.
+     * </p>
+     * <p>
+     * </p>
+     * 
+     * @param graphics
+     *            DOCUMENT ME!
+     * @param features
+     *            An array of features to be rendered
+     * @param featureStylers
+     *            An array of feature stylers to be applied
+     * @param at
+     *            DOCUMENT ME!
+     * @param destinationCrs -
+     *            The destination CRS, or null if no reprojection is required
+     * @param screenSize
+     * @param layerId 
+     * @throws IOException
+     * @throws IllegalFilterException
+     */
+    final private void processStylers(final Graphics2D graphics,
+            MapLayer currLayer, AffineTransform at,
+            CoordinateReferenceSystem destinationCrs, Envelope mapArea,
+            Rectangle screenSize, String layerId) throws IllegalFilterException, IOException {
+
+        /*
+         * DJB: changed this a wee bit so that it now does the layer query AFTER
+         * it has evaluated the rules for scale inclusion. This makes it so that
+         * geometry columns (and other columns) will not be queried unless they
+         * are actually going to be required. see geos-469
+         */
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Preparing feature information and styles
+        //
+        // /////////////////////////////////////////////////////////////////////
+        final FeatureTypeStyle[] featureStylers = currLayer.getStyle().getFeatureTypeStyles();
+
+        final FeatureSource featureSource =  currLayer.getFeatureSource();
+
+        Collection collection = null;
+        FeatureCollection features = null;
+
+        final CoordinateReferenceSystem sourceCrs;
+        final NumberRange scaleRange = new NumberRange(scaleDenominator,scaleDenominator);
+        final ArrayList<LiteFeatureTypeStyle> lfts ;
+
+        if ( featureSource != null ) {
+            final FeatureType schema = featureSource.getSchema();
+
+            final GeometryDescriptor geometryAttribute = schema.getGeometryDescriptor();
+            sourceCrs = geometryAttribute.getType().getCoordinateReferenceSystem();
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine(new StringBuffer("processing ").append(
+                        featureStylers.length).append(" stylers for ").append(
+                                currLayer.getFeatureSource().getSchema().getName())
+                                .toString());
+            }
+            // transformMap = new HashMap();
+            lfts = createLiteFeatureTypeStyles(featureStylers,schema, graphics);
+            if(lfts.size() == 0)
+                return;
+            
+            applyUnitRescale(lfts);
+
+            LiteFeatureTypeStyle[] featureTypeStyleArray = (LiteFeatureTypeStyle[]) lfts.toArray(new LiteFeatureTypeStyle[lfts.size()]);
+            // /////////////////////////////////////////////////////////////////////
+            //
+            // DJB: get a featureresults (so you can get a feature reader) for the
+            // data
+            //
+            // /////////////////////////////////////////////////////////////////////
+
+            // ... assume we have to do the generalization, the query layer process will
+            // turn down the flag if we don't 
+            inMemoryGeneralization = true;
+            features = queryLayer(currLayer, featureSource, schema,
+                    featureTypeStyleArray,
+                    mapArea, destinationCrs, sourceCrs, screenSize,
+                    geometryAttribute, at);
+
+            features = prepFeatureCollection( features, sourceCrs );        	
+        } else {
+            CollectionSource source = currLayer.getSource();
+            collection = queryLayer( currLayer, currLayer.getSource() );
+
+            sourceCrs = null;
+            lfts = createLiteFeatureTypeStyles( featureStylers, source.describe(), graphics );
+            applyUnitRescale(lfts);
+        }
+
+        if (lfts.size() == 0) return; // nothing to do
+
+        // finally, perform rendering
+        if(isOptimizedFTSRenderingEnabled() && lfts.size() > 1) {
+            drawOptimized(graphics, currLayer, at, destinationCrs, layerId, collection, features,
+                    scaleRange, lfts);
+        } else {
+            drawPlain(graphics, currLayer, at, destinationCrs, layerId, collection, features,
+                    scaleRange, lfts);
+        }
+    }
+

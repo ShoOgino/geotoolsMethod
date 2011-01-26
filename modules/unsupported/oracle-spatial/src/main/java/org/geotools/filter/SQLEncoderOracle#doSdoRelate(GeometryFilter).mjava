@@ -1,0 +1,88 @@
+    /**
+     * Reverting back to just using anyinteract, as Thijs says this is a bad
+     * performance hit
+     * This is a special case for bbox and intersects filters, as the former
+     * using of 'anyinteract' does not seem to be exactly a not disjoint, 
+     * which is what is needed according to ogc specs.  
+     *
+     * @param geomFilter DOCUMENT ME!
+     *
+     * @throws IOException DOCUMENT ME!
+     */
+    /* private void doNotDisjointFilter(GeometryFilter geomFilter)
+        throws IOException {
+        //String mask = (String) SDO_RELATE_MASK_MAP.get(new Short(
+        //            geomFilter.getFilterType()));
+        Expression left = geomFilter.getLeftGeometry();
+        Expression right = geomFilter.getRightGeometry();
+
+        if (((left != null) || (currentGeomColumnName != null))
+                && (right != null)) {
+            inGeomFilter = true;
+            out.write("NOT SDO_RELATE(");
+
+            if (left != null) {
+                left.accept(this);
+            } else {
+                out.write(currentGeomColumnName);
+            }
+
+            out.write(",");
+            right.accept(this);
+            out.write(",'mask=disjoint querytype=WINDOW') = 'TRUE' ");
+            inGeomFilter = false;
+        } else {
+            LOGGER.warning("Invalid filter. Cannot have a Geometry filter "
+                + "with only one expression.");
+        }        
+	}*/
+
+    private void doSdoRelate(GeometryFilter geomFilter)
+        throws IOException {
+        String mask = (String) SDO_RELATE_MASK_MAP.get(new Short(
+                    geomFilter.getFilterType()));
+        AttributeExpression attExpr;
+        LiteralExpression geomExpr;
+        Expression left = geomFilter.getLeftGeometry();
+        Expression right = geomFilter.getRightGeometry();
+        if (left instanceof AttributeExpression &&
+            right instanceof LiteralExpression) {
+            attExpr = (AttributeExpression) left;
+            geomExpr = (LiteralExpression) right;
+        } else if (right instanceof AttributeExpression &&
+                   left instanceof LiteralExpression) {
+            attExpr = (AttributeExpression) right;
+            geomExpr = (LiteralExpression) left;
+        } else {
+            String err = "Oracle currently supports one geometry and one " +
+                "attribute expr.  You gave: " + left + ", " + right;
+            throw new DataSourceException(err);
+	}
+
+        if (((attExpr != null) || (currentGeomColumnName != null))
+                && (geomExpr != null) && (mask != null)) {
+            inGeomFilter = true;
+            out.write("SDO_RELATE(");
+
+            if (attExpr != null) {
+                attExpr.accept(this);
+            } else {
+                out.write("\"" + currentGeomColumnName + "\"");
+            }
+
+            out.write(",");
+            geomExpr.accept(this);
+            // for disjoint we ask for no interaction, anyinteract == false
+            if(geomFilter.getFilterType() == AbstractFilter.GEOMETRY_DISJOINT) {
+                out.write(",'mask=" + mask + " querytype=WINDOW') <> 'TRUE' ");
+            } else {
+                out.write(",'mask=" + mask + " querytype=WINDOW') = 'TRUE' ");
+            }
+            
+            inGeomFilter = false;
+        } else {
+            LOGGER.warning("Invalid filter. Cannot have a Geometry filter "
+                + "with only one expression.");
+        }
+    }
+

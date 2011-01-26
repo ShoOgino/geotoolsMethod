@@ -1,0 +1,68 @@
+	/**
+	 * Constructs a new {@code RasterClassifier}.
+	 * 
+	 * @param image
+	 *            The source image.
+	 * @param lic
+	 *            The DefaultPiecewiseTransform1D.
+	 * @param bandIndex
+	 * @param hints
+	 *            The rendering hints.
+	 */
+	private GenericPiecewise(final RenderedImage image,
+			final PiecewiseTransform1D<T> lic,
+			final RenderingHints hints) {
+		super(image, RIFUtil.getImageLayoutHint(hints), hints, false);
+		this.piecewise = lic;
+        // Ensure that the number of sets of breakpoints is either unity
+        // or equal to the number of bands.
+        final int numBands = sampleModel.getNumBands();
+
+
+        // Set the byte data flag.
+        isByteData = sampleModel.getTransferType() == DataBuffer.TYPE_BYTE;
+        
+        
+
+		// ////////////////////////////////////////////////////////////////////
+		//
+		// Check if we can make good use of a default piecewise element for filling gaps
+		// in the input range
+		//
+		// ////////////////////////////////////////////////////////////////////
+		if (this.piecewise.hasDefaultValue()) {
+			gapsValue=piecewise.getDefaultValue();
+			hasGapsValue = true;
+		}
+		
+		// ////////////////////////////////////////////////////////////////////
+		//
+		// Check if we can optimize this operation by reusing the last used
+		// piecewise element first. The speed up we get can be substantial since we avoid
+		// an explicit search in the piecewise element list for the fitting piecewise element given
+		// a certain sample value.
+		//
+		//
+		// ////////////////////////////////////////////////////////////////////
+		useLast = piecewise instanceof DefaultDomain1D;
+		
+
+        // Perform byte-specific initialization.
+        if(isByteData) {
+            // Initialize the lookup table.
+            try {
+				createLUT(numBands);
+			} catch (final TransformException e) {
+				final RuntimeException re= new RuntimeException(e);
+				throw re;
+			}
+
+        }
+
+        // Set flag to permit in-place operation.
+        permitInPlaceOperation();
+
+        // Initialize the colormap if necessary.
+        initializeColormapOperation();
+	}
+

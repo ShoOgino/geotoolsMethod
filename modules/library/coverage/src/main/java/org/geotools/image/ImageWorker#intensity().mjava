@@ -1,0 +1,66 @@
+    /**
+     * Creates an image which represents approximatively the intensity of
+     * {@linkplain #image}. The result is always a single-banded image. If the
+     * image uses an {@linkplain IHSColorSpace IHS color space}, then this
+     * method just {@linkplain #retainFirstBand retain the first band} without
+     * any further processing. Otherwise, this method performs a simple
+     * {@linkplain BandCombineDescriptor band combine} operation on the
+     * {@linkplain #image} in order to come up with a simple estimation of the
+     * intensity of the image based on the average value of the color
+     * components. It is worthwhile to note that the alpha band is stripped from
+     * the image.
+     *
+     * @return this {@link ImageWorker}.
+     *
+     * @see BandCombineDescriptor
+     */
+    public final ImageWorker intensity() {
+        /*
+         * If the color model already uses a IHS color space or a Gray color
+         * space, keep only the intensity band. Otherwise, we need a component
+         * color model to be sure to understand what we are doing.
+         */
+        ColorModel cm = image.getColorModel();
+        final ColorSpace cs = cm.getColorSpace();
+        if (cs.getType() == ColorSpace.TYPE_GRAY || cs instanceof IHSColorSpace) {
+            retainFirstBand();
+            return this;
+        }
+        if (cm instanceof IndexColorModel) {
+            forceComponentColorModel();
+            cm = image.getColorModel();
+        }
+
+        // Number of color componenents
+        final int numBands = cm.getNumComponents();
+        final int numColorBands = cm.getNumColorComponents();
+        final boolean hasAlpha = cm.hasAlpha();
+
+        // One band, nothing to combine.
+        if (numBands == 1) {
+            return this;
+        }
+        // One band plus alpha, let's remove alpha.
+        if (numColorBands == 1 && hasAlpha) {
+            retainFirstBand();
+            return this;
+		}
+		//remove the alpha band
+		if (numColorBands != numBands) {
+			this.retainBands(numBands);
+		}
+		/*
+         * We have more than one band. Note that there is no need to remove the
+         * alpha band before to apply the "bandCombine" operation - it is
+         * suffisient to let the coefficient for the alpha band to the 0 value.
+         */
+        final double[][] coeff = new double[1][numBands + 1];
+        Arrays.fill(coeff[0], 0, numColorBands, 1.0 / numColorBands);
+        image = BandCombineDescriptor.create(image, coeff, getRenderingHints());
+        invalidateStatistics();
+
+        // All post conditions for this method contract.
+        assert getNumBands() == 1;
+        return this;
+    }
+

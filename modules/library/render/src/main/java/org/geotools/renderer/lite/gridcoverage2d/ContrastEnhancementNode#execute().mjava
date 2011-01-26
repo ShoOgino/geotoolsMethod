@@ -1,0 +1,265 @@
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.geotools.renderer.lite.gridcoverage2d.StyleVisitorCoverageProcessingNodeAdapter#execute()
+	 */
+    @SuppressWarnings("unchecked")
+	protected GridCoverage2D execute() {
+		assert Thread.holdsLock(this);
+		final Hints hints = getHints();
+
+		// /////////////////////////////////////////////////////////////////////
+		//
+		// Get the sources and see what we got to do. Note that if we have more
+		// than once source we'll use only the first one but we'll
+		//
+		// /////////////////////////////////////////////////////////////////////
+		final List<CoverageProcessingNode> sources = this.getSources();
+		if (sources != null && !sources.isEmpty()) {
+			final GridCoverage2D source = (GridCoverage2D) getSource(0).getOutput();
+			ensureSourceNotNull(source, this.getName().toString());
+			GridCoverage2D output;
+			if ((!Double.isNaN(gammaValue) && 
+					!Double.isInfinite(gammaValue) && 
+					!(Math.abs(gammaValue -1)<1E-6))||
+					(type != null && type.length() > 0)) {
+
+				// /////////////////////////////////////////////////////////////////////
+				//
+				// We have a valid gamma value, let's go ahead.
+				//
+				// /////////////////////////////////////////////////////////////////////
+				final RenderedImage sourceImage = source.getRenderedImage();
+
+
+				// /////////////////////////////////////////////////////////////////////
+				//
+				// PREPARATION
+				//
+				// /////////////////////////////////////////////////////////////////////
+
+				// //
+				//
+				// Get the source image and if necessary convert it to use a
+				// ComponentColorModel. This way we are sure we will have a
+				// visible image most part of the time.
+				//
+				// //
+				////
+				//
+				// @todo TODO HACK we need to convert to byte the image when going to
+				// apply HISTOGRAM anyway
+				//
+				////
+				RenderedImage initialImage;
+				if(type!=null&&type.equalsIgnoreCase("HISTOGRAM"))
+				{
+					initialImage = 
+						new ImageWorker(sourceImage)
+							.setRenderingHints(hints)
+							.forceComponentColorModel()
+							.rescaleToBytes()
+							.getRenderedImage();
+				}
+				else
+				{
+					initialImage = 
+						new ImageWorker(sourceImage)
+							.setRenderingHints(hints)
+							.forceComponentColorModel()
+							.getRenderedImage();
+				}
+				final int numbands = initialImage.getSampleModel().getNumBands();
+
+
+				// //
+				//
+				// Save the alpha band if present, in order to put it back
+				// later in the loop. We are not going to use it anyway for
+				// the IHS conversion.
+				//
+				// //
+				RenderedImage alphaBand = null;
+				if (numbands % 2 == 0) {
+					// get the alpha band
+					alphaBand = new ImageWorker(initialImage)
+							.setRenderingHints(hints).retainLastBand()
+							.getRenderedImage();
+					// strip the alpha band from the original image
+					initialImage = new ImageWorker(initialImage)
+							.setRenderingHints(hints).retainBands(numbands - 1)
+							.getRenderedImage();
+				}
+
+				// //
+				//
+				// Get the single band to work on, which might be the
+				// intensity for RGB(A) or the GRAY channel for Gray(A)
+				//
+				// //
+				RenderedImage intensityImage = null;
+				RenderedImage hChannel = null;
+				RenderedImage sChannel = null;
+				final boolean intensity;
+				RenderedImage IHS = null;
+				if (numbands > 1) {
+					// convert the prepared image to IHS colorspace to work
+					// on I band
+					IHS = new ImageWorker(initialImage)
+							.setRenderingHints(hints).forceColorSpaceIHS()
+							.getRenderedImage();
+
+					// get the various singular bands
+					intensityImage = new ImageWorker(IHS).setRenderingHints(
+							hints).retainFirstBand().getRenderedImage();
+					sChannel = new ImageWorker(IHS).setRenderingHints(hints)
+							.retainLastBand().getRenderedImage();
+					hChannel = new ImageWorker(IHS).setRenderingHints(hints)
+							.retainBands(new int[] { 1 }).getRenderedImage();
+					intensity = true;
+				} else {
+					// //
+					//
+					// we have only one band we don't need to go to IHS
+					//
+					// //
+					intensityImage = initialImage;
+					intensity = false;
+				}
+
+				// /////////////////////////////////////////////////////////////////////
+				//
+				// HISTOGRAM ENHANCEMENT
+				//
+				// 
+				//
+				// /////////////////////////////////////////////////////////////////////
+				final RenderedImage heImage = performContrastEnhancement(intensityImage, hints);
+					
+
+				// /////////////////////////////////////////////////////////////////////
+				//
+				// GAMMA CORRECTION
+				//
+				// Lookup for building the actual lut that caches the gamma
+				// correction function's values.
+				//
+				// /////////////////////////////////////////////////////////////////////
+				RenderedImage finalImage = performGammaCorrection(heImage,hints);
+
+				// /////////////////////////////////////////////////////////////////////
+				//
+				// POSTPROCESSING
+				//
+				// Take care of the intermediated image we left back. This
+				// means, handle the fact that we might have gone to IHS and
+				// the alpha band.
+				//
+				// /////////////////////////////////////////////////////////////////////
+				if (intensity) {
+
+					// //
+					//
+					// IHS --> RGB
+					//
+					// Let's merge the modified IHS image. The message on
+					// the mailing list (see comments for this class)
+					// mentioned that it is required to pass a RenderingHing
+					// with a ImageLayout with the IHS color
+					// model.
+					//
+					// //
+					final ImageLayout imageLayout = new ImageLayout();
+					imageLayout.setColorModel(IHS.getColorModel());
+					imageLayout.setSampleModel(IHS.getSampleModel());
+					final RenderingHints rendHints = new RenderingHints(Collections.EMPTY_MAP);
+					rendHints.add(hints);
+					rendHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT,imageLayout));
+					
+					// merge and go to rgb again
+					final ParameterBlock pb = new ParameterBlock();
+					pb.addSource(finalImage);
+					pb.addSource(hChannel);
+					pb.addSource(sChannel);
+					finalImage = JAI.create("bandmerge", pb, rendHints);
+					finalImage = new ImageWorker(finalImage).setRenderingHints(hints).forceColorSpaceRGB().getRenderedImage();
+
+				}
+
+				// //
+				//
+				// ALPHA BAND
+				//
+				// Let's merge the alpha band with the image we have rebuilt.
+				//
+				// //
+				if (alphaBand != null) {
+					final ColorModel cm = new ComponentColorModel(
+							numbands >= 3 ? ColorSpace
+									.getInstance(ColorSpace.CS_sRGB)
+									: ColorSpace
+											.getInstance(ColorSpace.CS_GRAY),
+							numbands >= 3 ? new int[] { 8, 8, 8, 8 }
+									: new int[] { 8, 8 }, true, false,
+							Transparency.TRANSLUCENT, DataBuffer.TYPE_BYTE);
+					final ImageLayout imageLayout = new ImageLayout();
+					imageLayout.setColorModel(cm);
+					imageLayout.setSampleModel(cm.createCompatibleSampleModel(finalImage.getWidth(), finalImage.getHeight()));
+					// merge and go to rgb
+					finalImage = 
+						new ImageWorker(finalImage)
+							.setRenderingHints(hints)
+							.setRenderingHint(JAI.KEY_IMAGE_LAYOUT,imageLayout)
+							.addBand(alphaBand, false)
+							.getRenderedOperation();
+
+				}
+
+				// /////////////////////////////////////////////////////////////////////
+				//
+				// OUTPUT
+				//
+				// /////////////////////////////////////////////////////////////////////
+				final int numSourceBands=source.getNumSampleDimensions();
+				final int numActualBands= finalImage.getSampleModel().getNumBands();
+				if(numActualBands==numSourceBands)
+					output = getCoverageFactory().create(
+					        "ce_coverage"+source.getName().toString(), 
+					        finalImage,
+					        (GridGeometry2D)source.getGridGeometry(),
+					        source.getSampleDimensions(),
+					        new GridCoverage[]{source},
+					        new HashMap<Object,Object>(source.getProperties()));
+				else
+				{
+					//replicate input bands
+					final GridSampleDimension sd[]= new GridSampleDimension[numActualBands];
+					for(int i=0;i<numActualBands;i++)
+						sd[i]=(GridSampleDimension) source.getSampleDimension(0);
+					output = getCoverageFactory().create(
+					        "ce_coverage"+source.getName().toString(), 
+					        finalImage,
+					        (GridGeometry2D)source.getGridGeometry(),
+					        sd,
+					        new GridCoverage[]{source},
+					        new HashMap<Object,Object>(source.getProperties()));
+				}
+
+
+			} else
+				// /////////////////////////////////////////////////////////////////////
+				//
+				// We do not have a valid gamma value, let's try with a
+				// conservative approach that is, let's forward the source
+				// coverage intact.
+				//
+				// /////////////////////////////////////////////////////////////////////
+				output = source;
+			return output;
+
+		}
+		throw new IllegalStateException(Errors.format(
+				ErrorKeys.SOURCE_CANT_BE_NULL_$1, this.getName().toString()));
+
+	}
+

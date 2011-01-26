@@ -1,0 +1,65 @@
+    /**
+     * Convert gYearMonth text to Java date. Date values are expected to be in
+     * W3C XML Schema standard format as CCYY-MM, with optional leading sign.
+     *
+     * @param text text to be parsed
+     *
+     * @return start of month in year date as millisecond value
+     *
+     * @throws IllegalArgumentException on parse error
+     */
+    public static long parseYearMonth(String text)
+        throws IllegalArgumentException {
+        // start by validating the length and basic format
+        text = text.trim();
+
+        boolean valid = true;
+        int minc = 7;
+        char chr = text.charAt(0);
+
+        if (chr == '-') {
+            minc = 8;
+        } else if (chr == '+') {
+            valid = false;
+        }
+
+        int split = text.length() - 3;
+
+        if (text.length() < minc) {
+            valid = false;
+        } else {
+            if (text.charAt(split) != '-') {
+                valid = false;
+            }
+        }
+
+        if (!valid) {
+            throw new IllegalArgumentException("Invalid date format");
+        }
+
+        // handle year and month conversion
+        int year = parseInt(text.substring(0, split));
+
+        if (year == 0) {
+            throw new IllegalArgumentException("Year value 0 is not allowed");
+        }
+
+        int month = parseDigits(text, split + 1, 2) - 1;
+
+        if ((month < 0) || (month > 11)) {
+            throw new IllegalArgumentException("Month value out of range");
+        }
+
+        boolean leap = ((year % 4) == 0)
+            && !(((year % 100) == 0) && ((year % 400) != 0));
+
+        if (year > 0) {
+            year--;
+        }
+
+        long day = ((((long) year) * 365) + (year / 4)) - (year / 100)
+            + (year / 400) + (leap ? MONTHS_LEAP : MONTHS_NONLEAP)[month];
+
+        return (day * MSPERDAY) - TIME_BASE;
+    }
+

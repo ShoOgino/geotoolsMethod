@@ -1,0 +1,51 @@
+    /**
+     * Used to wrap up a StreamingParser as a Iterator<SimpleFeature>.
+     * <p>
+     * This iterator is actually forgiving; and willing to "morph" content into a SimpleFeature if
+     * needed.
+     * <ul>
+     * <li>SimpleFeature - is returned as is
+     * <li>
+     * 
+     * @param parser
+     * @return
+     */
+    protected SimpleFeatureIterator iterator(final StreamingParser parser) {
+        return new SimpleFeatureIterator() {
+            SimpleFeatureType schema;
+
+            Object next;
+
+            public boolean hasNext() {
+                if (next != null) {
+                    return true;
+                }
+                next = parser.parse();
+                return next != null;
+            }
+
+            public SimpleFeature next() {
+                if (next == null) {
+                    next = parser.parse();
+                }
+                if (next != null) {
+                    try {
+                        if (schema == null) {
+                            schema = simpleType(next);
+                        }
+                        SimpleFeature feature = simpleFeature(next, schema);
+                        return feature;
+                    } finally {
+                        next = null; // we have tried processing this one now
+                    }
+                } else {
+                    return null; // nothing left
+                }
+            }
+
+            public void close() {
+                schema = null;
+            }
+        };
+    }
+

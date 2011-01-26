@@ -1,0 +1,44 @@
+    /**
+     * Constructs a geophysics category. <strong>This constructor should never
+     * be invoked outside {@link GeophysicsCategory} constructor.</strong>
+     *
+     * @param  inverse The originating {@link Category}.
+     * @param  isQuantitative {@code true} if the originating category is quantitative.
+     * @throws TransformException if a transformation failed.
+     *
+     * @todo The algorithm for finding minimum and maximum values is very simple for
+     *       now and will not work if the transformation has local extremas. We would
+     *       need some more sophesticated algorithm for the most general cases. Such
+     *       a general algorithm would be usefull in {@link GeophysicsCategory#getRange}
+     *       as well.
+     */
+    Category(final Category inverse, final boolean isQuantitative) throws TransformException {
+        assert  (this    instanceof GeophysicsCategory);
+        assert !(inverse instanceof GeophysicsCategory);
+        this.inverse = inverse;
+        this.name    = inverse.name;
+        this.ARGB    = inverse.ARGB;
+        if (!isQuantitative) {
+            minimum = maximum = XMath.toNaN((int) Math.round((inverse.minimum + inverse.maximum)/2));
+            transform = createLinearTransform(0, inverse.minimum); // geophysics to sample
+            return;
+        }
+        /*
+         * Compute 'minimum' and 'maximum' (which must be real numbers) using the transformation
+         * from sample to geophysics values. To be strict, we should use some numerical algorithm
+         * for finding a function's minimum and maximum. For linear and logarithmic functions,
+         * minimum and maximum are always at the bounding input values, so we are using a very
+         * simple algorithm for now.
+         */
+        transform = inverse.transform.inverse();
+        final double min = inverse.transform.transform(inverse.minimum);
+        final double max = inverse.transform.transform(inverse.maximum);
+        if (min > max) {
+            minimum = max;
+            maximum = min;
+        } else {
+            minimum = min;
+            maximum = max;
+        }
+    }
+

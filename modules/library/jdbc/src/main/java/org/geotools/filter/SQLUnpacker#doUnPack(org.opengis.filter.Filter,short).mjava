@@ -1,0 +1,96 @@
+    /**
+     * Performs the actual recursive unpacking of the filter.  Can do the
+     * unpacking on either AND or OR filters.
+     *
+     * @param filter the filter to be split
+     * @param splitType the short representation of the logic filter to
+     *        recursively unpack.
+     *
+     * @return A filter of the unsupported parts of the unPacked filter.
+     */
+    private FilterPair doUnPack(org.opengis.filter.Filter filter, short splitType) {
+        /*
+         * Implementation notes: This is recursive, so it's worth explaining.
+         * The base cases are either the filter is fully supported, ie all of
+         * its subFilters are supported, and thus it can be totally encoded,
+         * or it is not supported.  The recursive cases are when the filter is
+         * not fully supported and it is an AND or a NOT filter. In these
+         * cases the filter can be split up, and each subfilter can return
+         * some supported filters and some unsupported filters.  If it is an
+         * OR filter and not fully supported we can descend no further, as
+         * each part of the OR needs to be tested, we can't put part in the
+         * SQL statement and part in the filter.  So if it is an AND filter,
+         * we get teh subFilters and call doUnPack on each subFilter,
+         * combining the Unsupported and Supported FilterPairs of each
+         * subFilter into a single filter pair, which is the pair we will
+         * return.  If a subfilter in turn is an AND with its own subfilters,
+         * they return their own unSupported and Supported filters, because it
+         * will eventually hit the base case.  The base cases return null for
+         * half of the filter pair, and return the filter for the other half,
+         * depending on if it's unsupported or supported.  For the NOT filter,
+         * it just descends further, unpacking the filter inside the NOT, and
+         * then tacking NOTs on the supported and unsupported sub filters.
+         * ---addition:  No longer just ANDs supported.  ORs can be split,
+         * same as previous paragraph, but switch ORs with ANDs, there are
+         * cases, such as the delete statement, where we have to split on ORs
+         * and can't on ANDs (opposite of get statement).  Should work the
+         * same, just a different logic filter.
+         */
+        FilterPair retPair;
+        FilterPair subPair;
+        Filter subSup = null; //for logic iteration
+        Filter subUnSup = null; //for logic iteration
+        Filter retSup = null; //for return pair
+        Filter retUnSup = null; //for return pair
+
+        if (filter == null) {
+            return new FilterPair(null, null);
+        }
+
+        if (capabilities.fullySupports(filter)) {
+            retSup = filter;
+        } else {
+            short type = Filters.getFilterType(filter);
+
+            if ((type == splitType) && capabilities.supports(splitType)) {
+                //REVISIT: one special case not covered, when capabilities 
+                //does not support AND and it perfectly splits the filter 
+                //into unsupported and supported
+                Iterator filters = ((LogicFilter) filter).getFilterIterator();
+
+                while (filters.hasNext()) {
+                    Filter next = (Filter) filters.next();
+                    
+                    subPair = doUnPack(next, splitType);
+                    
+                    subSup = subPair.getSupported();
+                    subUnSup = subPair.getUnSupported();
+                    retSup = combineFilters(retSup, subSup, splitType);
+                    retUnSup = combineFilters(retUnSup, subUnSup, splitType);
+                }
+            } else if ((type == AbstractFilter.LOGIC_NOT)
+                    && capabilities.supports(AbstractFilter.LOGIC_NOT)) {
+                Iterator filters = ((LogicFilter) filter).getFilterIterator();
+
+                //NOT only has one, so just get filters.next()
+                subPair = doUnPack((Filter) filters.next(), splitType);
+                subSup = subPair.getSupported();
+                subUnSup = subPair.getUnSupported();
+
+                if (subSup != null) {
+                    retSup = ff.not( subSup );
+                }
+
+                if (subUnSup != null) {
+                    retUnSup = ff.not( subUnSup );
+                }
+            } else { //it's not supported and has no logic subfilters to be split.
+                retUnSup = filter;
+            }
+        }
+
+        retPair = new FilterPair(retSup, retUnSup);
+
+        return retPair;
+    }
+

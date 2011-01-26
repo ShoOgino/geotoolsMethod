@@ -1,0 +1,383 @@
+    /**
+     * Returns an image type specifier indicating the {@link SampleModel} and {@link ColorModel}
+     * which most closely represents the "raw" internal format of the image. The default
+     * implementation applies the following rules:
+     *
+     * <ol>
+     *   <li><p>The {@linkplain Band#getValidRange range of expected values} and the
+     *       {@linkplain Band#getNoDataValues no-data values} are extracted from the
+     *       {@linkplain #getGeographicMetadata geographic metadata}, if any.</p></li>
+     *
+     *   <li><p>If the given {@code parameters} argument is an instance of {@link GeographicImageReadParam},
+     *       then the user-supplied {@linkplain GeographicImageReadParam#getPaletteName palette name}
+     *       is fetched. Otherwise or if no palette name was explicitly set, then this method default
+     *       to {@value org.geotools.image.io.GeographicImageReadParam#DEFAULT_PALETTE_NAME}. The
+     *       palette name will be used in order to {@linkplain PaletteFactory#getColors read a
+     *       predefined set of colors} (as RGB values) to be given to the
+     *       {@linkplain IndexColorModel index color model}.</p></li>
+     *
+     *   <li><p>If the {@linkplain #getRawDataType raw data type} is {@link DataBuffer#TYPE_FLOAT
+     *       TYPE_FLOAT} or {@link DataBuffer#TYPE_DOUBLE TYPE_DOUBLE}, then this method builds
+     *       a {@linkplain PaletteFactory#getContinuousPalette continuous palette} suitable for
+     *       the range fetched at step 1. The data are assumed <cite>geophysics</cite> values
+     *       rather than some packed values. Consequently, the {@linkplain SampleConverter sample
+     *       converters} will replace no-data values by {@linkplain Float#NaN NaN} with no other
+     *       changes.</p></li>
+     *
+     *   <li><p>Otherwise, if the {@linkplain #getRawDataType raw data type} is a unsigned integer type
+     *       like {@link DataBuffer#TYPE_BYTE TYPE_BYTE} or {@link DataBuffer#TYPE_USHORT TYPE_USHORT},
+     *       then this method builds an {@linkplain PaletteFactory#getPalette indexed palette} (i.e. a
+     *       palette backed by an {@linkplain IndexColorModel index color model}) with just the minimal
+     *       {@linkplain IndexColorModel#getMapSize size} needed for containing fully the range and the
+     *       no-data values fetched at step 1. The data are assumed <cite>packed</cite> values rather
+     *       than geophysics values. Consequently, the {@linkplain SampleConverter sample converters}
+     *       will be the {@linkplain SampleConverter#IDENTITY identity converter} except in the
+     *       following cases:
+     *       <ul>
+     *         <li>The {@linkplain Band#getValidRange range of valid values} is outside the range
+     *             allowed by the {@linkplain #getRawDataType raw data type} (e.g. the range of
+     *             valid values contains negative integers). In this case, the sample converter
+     *             will shift the values to a strictly positive range and replace no-data values
+     *             by 0.</li>
+     *         <li>At least one {@linkplain Band#getNoDataValues no-data value} is outside the range
+     *             of values allowed by the {@linkplain #getRawDataType raw data type}. In this case,
+     *             this method will try to only replace the no-data values by 0, without shifting
+     *             the valid values if this shift can be avoided.</li>
+     *         <li>At least one {@linkplain Band#getNoDataValues no-data value} is far away from the
+     *             {@linkplain Band#getValidRange range of valid values} (for example 9999 while
+     *             the range of valid values is [0..255]). The meaning of "far away" is determined
+     *             by the {@link #collapseNoDataValues collapseNoDataValues} method.</li>
+     *       </ul>
+     *       </p></li>
+     *
+     *   <li><p>Otherwise, if the {@linkplain #getRawDataType raw data type} is a signed integer
+     *       type like {@link DataBuffer#TYPE_SHORT TYPE_SHORT}, then this method builds an
+     *       {@linkplain PaletteFactory#getPalette indexed palette} with the maximal {@linkplain
+     *       IndexColorModel#getMapSize size} supported by the raw data type (note that this is
+     *       memory expensive - typically 256 kilobytes). Negative values will be stored in their
+     *       two's complement binary form in order to fit in the range of positive integers
+     *       supported by the {@linkplain IndexColorModel index color model}.</p></li>
+     * </ol>
+     *
+     * <h3>Overriding this method</h3>
+     * Subclasses may override this method when a constant color {@linkplain Palette palette} is
+     * wanted for all images in a series, for example for all <cite>Sea Surface Temperature</cite>
+     * (SST) from the same provider. A constant color palette facilitates the visual comparaison
+     * of different images at different time. The example below creates hard-coded objects:
+     *
+     * <blockquote><code>
+     * int minimum    = -2000; // </code>minimal expected value<code><br>
+     * int maximum    = +2300; // </code>maximal expected value<code><br>
+     * int fillValue  = -9999; // </code>Value for missing data<code><br>
+     * String palette = "SST-Nasa";// </code>Named set of RGB colors<code><br>
+     * converters[0] = {@linkplain SampleConverter#createOffset(double,double)
+     * SampleConverter.createOffset}(1 - minimum, fillValue);<br>
+     * return {@linkplain PaletteFactory#getDefault()}.{@linkplain PaletteFactory#getPalettePadValueFirst
+     * getPalettePadValueFirst}(paletteName, maximum - minimum).{@linkplain Palette#getImageTypeSpecifier
+     * getImageTypeSpecifier}();
+     * </code></blockquote>
+     *
+     * @param imageIndex
+     *              The index of the image to be queried.
+     * @param parameters
+     *              The user-supplied parameters, or {@code null}. Note: we recommand to supply
+     *              {@link #getDefaultReadParam} instead of {@code null} since subclasses may
+     *              override the later with default values suitable to a particular format.
+     * @param  converters
+     *              If non-null, an array where to store the converters created by this method.
+     *              Those converters should be used by <code>{@linkplain #read(int,ImageReadParam)
+     *              read}(imageIndex, parameters)</code> implementations for converting the values
+     *              read in the datafile to values acceptable for the underling {@linkplain
+     *              ColorModel color model}.
+     * @return
+     *              The image type (never {@code null}).
+     * @throws IOException
+     *              If an error occurs while reading the format information from the input source.
+     *
+     * @see #getRawDataType
+     * @see #collapseNoDataValues
+     * @see #getDestination(int, ImageReadParam, int, int, SampleConverter[])
+     */
+    protected ImageTypeSpecifier getRawImageType(final int               imageIndex,
+                                                 final ImageReadParam    parameters,
+                                                 final SampleConverter[] converters)
+            throws IOException
+    {
+        /*
+         * Gets the minimal and maximal values allowed for the target image type.
+         * Note that this is meanless for floating point types, so the values in
+         * that case are arbitrary.
+         *
+         * The only integer types that are signed are SHORT (not to be confused with
+         * USHORT) and INT. Other types like BYTE and USHORT are treated as unsigned.
+         */
+        final boolean isFloat;
+        final long floor, ceil;
+        final int dataType = getRawDataType(imageIndex);
+        switch (dataType) {
+            case DataBuffer.TYPE_UNDEFINED: // Actually we don't really know what to do for this case...
+            case DataBuffer.TYPE_DOUBLE:    // Fall through since we can treat this case as float.
+            case DataBuffer.TYPE_FLOAT: {
+                isFloat = true;
+                floor   = Long.MIN_VALUE;
+                ceil    = Long.MAX_VALUE;
+                break;
+            }
+            case DataBuffer.TYPE_INT: {
+                isFloat = false;
+                floor   = Integer.MIN_VALUE;
+                ceil    = Integer.MAX_VALUE;
+                break;
+            }
+            case DataBuffer.TYPE_SHORT: {
+                isFloat = false;
+                floor   = Short.MIN_VALUE;
+                ceil    = Short.MAX_VALUE;
+                break;
+            }
+            default: {
+                isFloat = false;
+                floor   = 0;
+                ceil    = (1L << DataBuffer.getDataTypeSize(dataType)) - 1;
+                break;
+            }
+        }
+        /*
+         * Extracts all informations we will need from the user-supplied parameters, if any.
+         */
+        final String paletteName;
+        final int[]  sourceBands;
+        final int[]  targetBands;
+        final int    visibleBand;
+        if (parameters != null) {
+            sourceBands = parameters.getSourceBands();
+            targetBands = parameters.getDestinationBands();
+        } else {
+            sourceBands = null;
+            targetBands = null;
+        }
+        if (parameters instanceof GeographicImageReadParam) {
+            final GeographicImageReadParam geoparam = (GeographicImageReadParam) parameters;
+            paletteName = geoparam.getNonNullPaletteName();
+            visibleBand = geoparam.getVisibleBand();
+        } else {
+            paletteName = GeographicImageReadParam.DEFAULT_PALETTE_NAME;
+            visibleBand = 0;
+        }
+        final int numBands;
+        if (sourceBands != null) {
+            numBands = sourceBands.length;
+        } else if (targetBands != null) {
+            numBands = targetBands.length;
+        } else {
+            numBands = getNumBands(imageIndex);
+        }
+        /*
+         * Computes a range of values for all bands, as the union in order to make sure that
+         * we can stores every sample values. Also creates SampleConverters in the process.
+         * The later is an opportunist action since we gather most of the needed information
+         * during the loop.
+         */
+        NumberRange     allRanges        = null;
+        NumberRange     visibleRange     = null;
+        SampleConverter visibleConverter = SampleConverter.IDENTITY;
+        double          maximumFillValue = 0; // Only in the visible band, and must be positive.
+        final GeographicMetadata metadata = getGeographicMetadata(imageIndex);
+        if (metadata != null) {
+            final int numMetadataBands = metadata.getNumBands();
+            for (int i=0; i<numBands; i++) {
+                final int sourceBand = (sourceBands != null) ? sourceBands[i] : i;
+                if (sourceBand < 0 || sourceBand >= numMetadataBands) {
+                    if (numMetadataBands != 1) {
+                        /*
+                         * If the metadata declares excactly one band, we assume that it is aimed
+                         * to applied for all ImageReader band. We need to apply this patch for
+                         * now because of an inconsistency between Metadata and ImageReader in
+                         * NetCDF files: the former associates NetCDF variables to bands, while
+                         * the later associates NetCDF variables to image index.
+                         *
+                         * TODO: We need to fix this inconcistency after we reviewed
+                         * GeographicMetadata.
+                         */
+                        warningOccurred("getRawImageType", indexOutOfBounds(sourceBand, 0, numMetadataBands));
+                    }
+                    if (numMetadataBands == 0) {
+                        break; // We are sure that next bands will not be better.
+                    }
+                }
+                final Band band = metadata.getBand(Math.min(sourceBand, numMetadataBands-1));
+                final double[] nodataValues = band.getNoDataValues();
+                final NumberRange range = band.getValidRange();
+                double minimum, maximum;
+                if (range != null) {
+                    minimum = range.getMinimum();
+                    maximum = range.getMaximum();
+                    if (!isFloat) {
+                        // If the metadata do not contain any information about the range,
+                        // treat as if we use the maximal range allowed by the data type.
+                        if (minimum == Double.NEGATIVE_INFINITY) minimum = floor;
+                        if (maximum == Double.POSITIVE_INFINITY) maximum = ceil;
+                    }
+                    final double extent = maximum - minimum;
+                    if (extent >= 0 && (isFloat || extent <= (ceil - floor))) {
+                        allRanges = (allRanges != null) ? allRanges.union(range) : range;
+                    } else {
+                        // Use range.getMin/MaxValue() because they may be integers rather than doubles.
+                        warningOccurred("getRawImageType", Errors.format(ErrorKeys.BAD_RANGE_$2,
+                                range.getMinValue(), range.getMaxValue()));
+                        continue;
+                    }
+                } else {
+                    minimum = Double.NaN;
+                    maximum = Double.NaN;
+                }
+                final int targetBand = (targetBands != null) ? targetBands[i] : i;
+                /*
+                 * For floating point types, replaces no-data values by NaN because the floating
+                 * point numbers are typically used for geophysics data, so the raster is likely
+                 * to be a "geophysics" view for GridCoverage2D. All other values are stored "as
+                 * is" without any offset.
+                 *
+                 * For integer types, if the range of values from the source data file fits into
+                 * the range of values allowed by the destination raster, we will use an identity
+                 * converter. If the only required conversion is a shift from negative to positive
+                 * values, creates an offset converter with no-data values collapsed to 0.
+                 */
+                final SampleConverter converter;
+                if (isFloat) {
+                    converter = SampleConverter.createPadValuesMask(nodataValues);
+                } else {
+                    final boolean isZeroValid = (minimum <= 0 && maximum >= 0);
+                    boolean collapsePadValues = false;
+                    if (nodataValues != null && nodataValues.length != 0) {
+                        final double[] sorted = nodataValues.clone();
+                        Arrays.sort(sorted);
+                        double minFill = sorted[0];
+                        double maxFill = minFill;
+                        int indexMax = sorted.length;
+                        while (--indexMax!=0 && Double.isNaN(maxFill = sorted[indexMax]));
+                        assert minFill <= maxFill || Double.isNaN(minFill) : maxFill;
+                        if (targetBand == visibleBand && maxFill > maximumFillValue) {
+                            maximumFillValue = maxFill;
+                        }
+                        if (minFill < floor || maxFill > ceil) {
+                            // At least one fill value is outside the range of acceptable values.
+                            collapsePadValues = true;
+                        } else if (minimum >= 0) {
+                            /*
+                             * Arbitrary optimization of memory usage:  if there is a "large" empty
+                             * space between the range of valid values and a no-data value, then we
+                             * may (at subclass implementors choice) collapse the no-data values to
+                             * zero in order to avoid wasting the empty space.  Note that we do not
+                             * perform this collapse if the valid range contains negative values
+                             * because it would not save any memory. We do not check the no-data
+                             * values between 0 and 'minimum' for the same reason.
+                             */
+                            int k = Arrays.binarySearch(sorted, maximum);
+                            if (k >= 0) k++; // We want the first element greater than maximum.
+                            else k = ~k; // Really ~ operator, not -
+                            if (k <= indexMax) {
+                                double unusedSpace = Math.max(sorted[k] - maximum - 1, 0);
+                                while (++k <= indexMax) {
+                                    final double delta = sorted[k] - sorted[k-1] - 1;
+                                    if (delta > 0) {
+                                        unusedSpace += delta;
+                                    }
+                                }
+                                final int unused = (int) Math.min(Math.round(unusedSpace), Integer.MAX_VALUE);
+                                collapsePadValues = collapseNoDataValues(isZeroValid, sorted, unused);
+                                // We invoked 'collapseNoDataValues' inconditionnaly even if
+                                // 'unused' is zero because the user may decide on the basis
+                                // of other criterions, like 'isZeroValid'.
+                            }
+                        }
+                    }
+                    if (minimum < floor || maximum > ceil) {
+                        // The range of valid values is outside the range allowed by raw data type.
+                        converter = SampleConverter.createOffset(1 - minimum, nodataValues);
+                    } else if (collapsePadValues) {
+                        if (isZeroValid) {
+                            // We need to collapse the no-data values to 0, but it causes a clash
+                            // with the range of valid values. So we also shift the later.
+                            converter = SampleConverter.createOffset(1 - minimum, nodataValues);
+                        } else {
+                            // We need to collapse the no-data values and there is no clash.
+                            converter = SampleConverter.createPadValuesMask(nodataValues);
+                        }
+                    } else {
+                        /*
+                         * Do NOT take 'nodataValues' in account if there is no need to collapse
+                         * them. This is not the converter's job to transform "packed" values to
+                         * "geophysics" values. We just want them to fit in the IndexColorModel,
+                         * and they already fit. So the identity converter is appropriate even
+                         * in presence of pad values.
+                         */
+                        converter = SampleConverter.IDENTITY;
+                    }
+                }
+                if (converters!=null && targetBand>=0 && targetBand<converters.length) {
+                    converters[targetBand] = converter;
+                }
+                if (targetBand == visibleBand) {
+                    visibleConverter = converter;
+                    visibleRange = range;
+                }
+            }
+        }
+        /*
+         * Creates a color palette suitable for the range of values in the visible band.
+         * The case for floating points is the simpliest: we should not have any offset,
+         * at most a replacement of no-data values. In the case of integer values, we
+         * must make sure that the indexed color map is large enough for containing both
+         * the highest data value and the highest no-data value.
+         */
+        if (visibleRange == null) {
+            visibleRange = (allRanges != null) ? allRanges : new NumberRange(floor, ceil);
+        }
+        final PaletteFactory factory = PaletteFactory.getDefault();
+        factory.setWarningLocale(locale);
+        final Palette palette;
+        if (isFloat) {
+            assert visibleConverter.getOffset() == 0 : visibleConverter;
+            palette = factory.getContinuousPalette(paletteName, (float) visibleRange.getMinimum(),
+                    (float) visibleRange.getMaximum(), dataType, numBands, visibleBand);
+        } else {
+            final double offset  = visibleConverter.getOffset();
+            final double minimum = visibleRange.getMinimum();
+            final double maximum = visibleRange.getMaximum();
+            long lower, upper;
+            if (minimum == Double.NEGATIVE_INFINITY) {
+                lower = floor;
+            } else {
+                lower = Math.round(minimum + offset);
+                if (!visibleRange.isMinIncluded()) {
+                    lower++; // Must be inclusive
+                }
+            }
+            if (maximum == Double.POSITIVE_INFINITY) {
+                upper = ceil;
+            } else {
+                upper = Math.round(maximum + offset);
+                if (visibleRange.isMaxIncluded()) {
+                    upper++; // Must be exclusive
+                }
+            }
+            final long size = Math.max(upper, Math.round(maximumFillValue) + 1);
+            /*
+             * The target lower, upper and size parameters are usually in the range of SHORT
+             * or USHORT data type. The Palette class will performs the necessary checks and
+             * throws an exception if those variables are out of range.  However, because we
+             * need to cast to int before passing the parameter values,  we restrict them to
+             * the 'int' range as a safety in order to avoid results that accidently fall in
+             * the SHORT or USHORT range.  Because Integer.MIN_VALUE or MAX_VALUE are out of
+             * range,  it doesn't matter if those values are inaccurate since we will get an
+             * exception anyway.
+             */
+            palette = factory.getPalette(paletteName,
+                    (int) Math.max(lower, Integer.MIN_VALUE),
+                    (int) Math.min(upper, Integer.MAX_VALUE),
+                    (int) Math.min(size,  Integer.MAX_VALUE), numBands, visibleBand);
+        }
+        return palette.getImageTypeSpecifier();
+    }
+

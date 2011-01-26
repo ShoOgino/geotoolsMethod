@@ -1,0 +1,30 @@
+    protected Object getValues(boolean isMultiValued, Expression expression,
+            Object sourceFeatureInput) {
+        if (isMultiValued && sourceFeatureInput instanceof FeatureImpl
+                && expression instanceof AttributeExpressionImpl) {
+            // RA: Feature Chaining
+            // complex features can have multiple nodes of the same attribute.. and if they are used
+            // as input to an app-schema data access to be nested inside another feature type of a
+            // different XML type, it has to be mapped like this:
+            // <AttributeMapping>
+            // <targetAttribute>
+            // gsml:composition
+            // </targetAttribute>
+            // <sourceExpression>
+            // <inputAttribute>mo:composition</inputAttribute>
+            // <linkElement>gsml:CompositionPart</linkElement>
+            // <linkField>gml:name</linkField>
+            // </sourceExpression>
+            // <isMultiple>true</isMultiple>
+            // </AttributeMapping>
+            // As there can be multiple nodes of mo:composition in this case, we need to retrieve
+            // all of them
+            AttributeExpressionImpl attribExpression = ((AttributeExpressionImpl) expression);
+            String xpath = attribExpression.getPropertyName();
+            ComplexAttribute sourceFeature = (ComplexAttribute) sourceFeatureInput;
+            StepList xpathSteps = XPath.steps(sourceFeature.getDescriptor(), xpath, namespaces);
+            return getProperties(sourceFeature, xpathSteps);
+        }
+        return expression.evaluate(sourceFeatureInput);
+    }
+

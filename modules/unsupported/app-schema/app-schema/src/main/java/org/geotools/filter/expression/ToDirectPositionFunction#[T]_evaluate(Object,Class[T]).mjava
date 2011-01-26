@@ -1,0 +1,54 @@
+    public <T> T evaluate(Object object, Class<T> context) {
+        Expression param1 = parameters.get(0);
+        CoordinateReferenceSystem crs = null;
+
+        DirectPosition geom;
+        if (param1.equals(SRS_NAME)) {
+            // must be followed by srsName expression, and at least 1 point
+            if (parameters.size() < 3 || parameters.size() > 4) {
+                throw new IllegalArgumentException(
+                        "Wrong number of parameters toDirectPosition function: "
+                                + parameters.toString()
+                                + ". Usage: toDirectPosition('SRS_NAME'(optional), srsName(optional), point 1, point 2(optional))");
+            }
+            String srsName = parameters.get(1).evaluate(object, String.class);
+            try {
+                crs = CRS.decode((String) srsName);
+            } catch (NoSuchAuthorityCodeException e) {
+                throw new IllegalArgumentException(
+                        "Invalid or unsupported SRS name detected for toDirectPosition function: "
+                                + srsName + ". Cause: " + e.getMessage());
+            } catch (FactoryException e) {
+                throw new RuntimeException("Unable to decode SRS name. Cause: " + e.getMessage());
+            }
+            if (parameters.size() == 3) {
+                // 1D
+                geom = new DirectPosition1D(crs);
+            } else {
+                // 2D
+                geom = new DirectPosition2D(crs);
+                geom.setOrdinate(1, parameters.get(3).evaluate(object, Double.class));
+            }
+            geom.setOrdinate(0, parameters.get(2).evaluate(object, Double.class));
+        } else {
+            // should only have points, 1 for 1D, 2 for 2D
+            if (parameters.size() > 2) {
+                throw new IllegalArgumentException(
+                        "Too many parameters for toDirectPosition function: "
+                                + parameters.toString()
+                                + ". Usage: toDirectPosition('SRS_NAME'(optional), srsName(optional), point 1, point 2(optional))");
+            }
+            if (parameters.size() == 1) {
+                // 1D
+                geom = new DirectPosition1D();
+            } else {
+                // 2D
+                geom = new DirectPosition2D();
+                geom.setOrdinate(1, parameters.get(1).evaluate(object, Double.class));
+            }
+            geom.setOrdinate(0, param1.evaluate(object, Double.class));
+        }
+
+        return (T) geom;
+    }
+

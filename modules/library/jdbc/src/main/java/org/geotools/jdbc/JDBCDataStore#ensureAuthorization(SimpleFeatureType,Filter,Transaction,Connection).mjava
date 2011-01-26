@@ -1,0 +1,47 @@
+    /**
+     * Ensures that that the specified transaction has access to features specified by a filter.
+     * <p>
+     * If any features matching the filter are locked, and the transaction does not have authorization
+     * with respect to the lock, an exception is thrown.
+     * </p>
+     * @param featureType The feature type / table.
+     * @param filter The filters.
+     * @param tx The transaction.
+     * @param cx The database connection.
+     */
+    protected void ensureAuthorization(SimpleFeatureType featureType, Filter filter, Transaction tx, Connection cx) 
+        throws IOException, SQLException {
+        
+        Query query = new DefaultQuery(featureType.getTypeName(), filter, Query.NO_NAMES);
+
+        Statement st = null;
+        try {
+            ResultSet rs = null;
+            if ( getSQLDialect() instanceof PreparedStatementSQLDialect ) {
+                st = selectSQLPS(featureType, query, cx);
+                rs = ((PreparedStatement)st).executeQuery();
+            }
+            else {
+                String sql = selectSQL(featureType, query);
+                LOGGER.fine( sql );
+                st = cx.createStatement();
+                rs = st.executeQuery( sql );
+            }
+            
+            try {
+                PrimaryKey key = getPrimaryKey( featureType );
+                InProcessLockingManager lm = (InProcessLockingManager) getLockingManager();
+                while( rs.next() ) {
+                    String fid = featureType.getTypeName() + "." + encodeFID( key, rs );
+                    lm.assertAccess(featureType.getTypeName(), fid, tx );
+                }
+            }
+            finally {
+                closeSafe( rs );
+            }
+        }
+        finally {
+            closeSafe( st );
+        }
+    }
+

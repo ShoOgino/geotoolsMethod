@@ -1,0 +1,44 @@
+    @Override
+    public boolean hasNext() {
+        setHasNextCalled(true);
+
+        boolean exists = false;
+
+        if (featureCounter < maxFeatures) {
+            if (isNextFeatureSet()) {
+                flagNextFeature(false);
+                return curSrcFeature != null;
+            }
+
+            if (getSourceFeatureIterator() != null && getSourceFeatureIterator().hasNext()) {
+                this.curSrcFeature = getSourceFeatureIterator().next();
+                exists = true;
+            }
+            if (exists && filteredFeatures != null) {
+                // get the next one if this row has already been added to the target
+                // feature from setNextFilteredFeature
+                while (exists && filteredFeatures.contains(extractIdForFeature(this.curSrcFeature))) {
+                    if (getSourceFeatureIterator() != null && getSourceFeatureIterator().hasNext()) {
+                        this.curSrcFeature = getSourceFeatureIterator().next();
+                        exists = true;
+                    } else {
+                        exists = false;
+                    }
+                }
+                if (!exists) {
+                    curSrcFeature = null;
+                }
+            }
+        }
+
+        if (!exists) {
+            LOGGER.finest("no more features, produced " + featureCounter);
+            close();
+            curSrcFeature = null;
+        }
+
+        flagNextFeature(false);
+
+        return exists;
+    }
+

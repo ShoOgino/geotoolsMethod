@@ -1,0 +1,54 @@
+    /**
+     * Reads the colors declared in the specified input stream. Colors must be encoded on 3 or 4
+     * columns. If 3 columns, it is assumed RGB values. If 4 columns, it is assumed RGBA values.
+     * Values must be in the 0-255 ranges. Empty lines and lines starting by {@code '#'} are
+     * ignored.
+     *
+     * @param  input The stream to read.
+     * @param  name  The palette name to read. Used for formatting error message only.
+     * @return The colors.
+     * @throws IOException if an I/O error occured.
+     * @throws IIOException if a syntax error occured.
+     */
+    @SuppressWarnings("fallthrough")
+    private Color[] getColors(final LineNumberReader input, final String name) throws IOException {
+        int values[] = null;
+        final LineFormat reader = (locale!=null) ? new LineFormat(locale) : new LineFormat();
+        final List<Color> colors = new ArrayList<Color>();
+        String line; while ((line=input.readLine()) != null) try {
+            line = line.trim();
+            if (line.length() == 0)        continue;
+            if (line.charAt(0) == '#')     continue;
+            if (reader.setLine(line) == 0) continue;
+            values = reader.getValues(values);
+            int A=255,R,G,B;
+            switch (values.length) {
+                case 4: A = byteValue(values[3]); // fall through
+                case 3: B = byteValue(values[2]);
+                        G = byteValue(values[1]);
+                        R = byteValue(values[0]);
+                        break;
+                default: {
+                    throw syntaxError(input, name, null);
+                }
+            }
+            final Color color;
+            try {
+                color = new Color(R, G, B, A);
+            } catch (IllegalArgumentException exception) {
+                /*
+                 * Color constructor checks the RGBA value and throws an IllegalArgumentException
+                 * if they are not in the 0-255 range. Intercept this exception and rethrows as a
+                 * checked IIOException, since we want to notify the user that the palette file is
+                 * badly formatted. (additional note: it is somewhat redundant with byteValue(int)
+                 * work. Lets keep it as a safety).
+                 */
+                throw syntaxError(input, name, exception);
+            }
+            colors.add(color);
+        } catch (ParseException exception) {
+            throw syntaxError(input, name, exception);
+        }
+        return colors.toArray(new Color[colors.size()]);
+    }
+

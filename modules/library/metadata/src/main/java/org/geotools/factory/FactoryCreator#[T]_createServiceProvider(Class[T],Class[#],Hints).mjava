@@ -1,0 +1,50 @@
+    /**
+     * Creates a new instance of the specified factory using the specified hints.
+     * The default implementation tries to instantiate the given implementation class
+     * using the first of the following constructor found:
+     * <p>
+     * <ul>
+     *   <li>Constructor with a single {@link Hints} argument.</li>
+     *   <li>No-argument constructor.</li>
+     * </ul>
+     *
+     * @param  category The category to instantiate.
+     * @param  implementation The factory class to instantiate.
+     * @param  hints The implementation hints.
+     * @return The factory.
+     * @throws FactoryRegistryException if the factory creation failed.
+     */
+    protected <T> T createServiceProvider(final Class<T> category,
+                                          final Class<?> implementation,
+                                          final Hints hints)
+            throws FactoryRegistryException
+    {
+        Throwable cause;
+        try {
+            try {
+                return category.cast(implementation.getConstructor(HINTS_ARGUMENT)
+                        .newInstance(new Object[] {hints}));
+            } catch (NoSuchMethodException exception) {
+                // Constructor do not exists or is not public. We will fallback on the no-arg one.
+                cause = exception;
+            }
+            try {
+                return category.cast(implementation.getConstructor((Class[]) null)
+                        .newInstance((Object[]) null));
+            } catch (NoSuchMethodException exception) {
+                // No constructor accessible. Do not store the cause (we keep the one above).
+            }
+        } catch (IllegalAccessException exception) {
+            cause = exception; // constructor is not public (should not happen)
+        } catch (InstantiationException exception) {
+            cause = exception; // The class is abstract
+        } catch (InvocationTargetException exception) {
+            cause = exception.getCause(); // Exception in constructor
+            if (cause instanceof FactoryRegistryException) {
+                throw (FactoryRegistryException) cause;
+            }
+        }
+        throw new FactoryRegistryException(Errors.format(
+                ErrorKeys.CANT_CREATE_FACTORY_$1, implementation), cause);
+    }
+

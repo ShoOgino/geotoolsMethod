@@ -1,0 +1,43 @@
+    /**
+     * <p>
+     * Creates a filter with each value explicitly defined.
+     * </p>
+     * <p>
+     * Examples:<br>
+     * "LIB" --> [PARTY = LIB]<br>
+     * "LIB, NDP" --> [[PARTY = LIB] OR [PARTY = NDP]]
+     * </p>
+     *
+     * @param styleExpression
+     *            the list of attribute values, separated by commas (and
+     *            optional spaces)
+     * @param attributeTypeName
+     *            A Sting with the attributeTypeName whose values correspond to
+     * @return a filter
+     * @throws IllegalFilterException
+     */
+    public static Filter toExplicitFilter(String styleExpression, SimpleFeatureType featureType,
+        String attributeTypeName) throws IllegalFilterException {
+        // eliminate spaces after commas
+        String expr = styleExpression.replaceAll(",\\s+", ","); //$NON-NLS-1$//$NON-NLS-2$
+        String[] attribValue = expr.split(","); //$NON-NLS-1$
+
+        // create the first filter
+        PropertyName attribExpr = ff.property(attributeTypeName);
+        PropertyIsEqualTo cFilter = ff.equals(attribExpr, ff.literal(attribValue[0]));
+
+        if (attribValue.length == 1) {
+            return cFilter;
+        }
+
+        // more than one value exists, so wrap them inside a logical OR
+        List<Filter> filters = new ArrayList<Filter>();
+        filters.add(cFilter);
+        for (int i = 1; i < attribValue.length; i++) {
+            cFilter = ff.equals(attribExpr, ff.literal(attribValue[i]));
+            filters.add(cFilter);
+        }
+
+        return ff.or(filters);
+    }
+

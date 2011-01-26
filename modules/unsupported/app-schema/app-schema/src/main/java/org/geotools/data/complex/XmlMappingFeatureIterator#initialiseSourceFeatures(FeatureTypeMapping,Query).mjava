@@ -1,0 +1,25 @@
+    protected void initialiseSourceFeatures(FeatureTypeMapping mapping, Query query)
+            throws IOException {
+        mappedSource = mapping.getSource();
+
+        // check if the previous query was the same as this one. If not retrieve the new data.
+        // Otherwise use the same data. We want to do this once only--Geoserver does a count
+        // operation, before getting the data. This results in two identical queries. We are simply
+        // trying to save on the second query here. We don't want to cache beyond this.
+        if (cachedQuery == null || !cachedQuery.equals(query)) {
+            sourceFeatures = (SimpleFeatureCollection) mappedSource.getFeatures(query);
+
+            XmlFeatureSource xmlFeatureSource = (XmlFeatureSource) mappedSource;
+            xmlFeatureSource.setNamespaces(mapping.getNamespaces());
+            xmlFeatureSource.setItemXpath(mapping.getItemXpath());
+
+            this.xmlResponse = ((XmlFeatureCollection) sourceFeatures).xmlResponse();
+            XmlMappingFeatureIterator.cachedQuery = query;
+            XmlMappingFeatureIterator.cachedXmlResponse = xmlResponse;
+        } else {
+            this.xmlResponse = cachedXmlResponse;
+            XmlMappingFeatureIterator.cachedXmlResponse = null;
+            XmlMappingFeatureIterator.cachedQuery = null;
+        }
+    }
+

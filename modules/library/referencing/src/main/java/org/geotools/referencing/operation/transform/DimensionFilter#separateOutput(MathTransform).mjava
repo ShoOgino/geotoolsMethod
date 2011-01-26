@@ -1,0 +1,74 @@
+    /**
+     * Creates a transform which retains only a subset of an other transform's outputs. The number
+     * and nature of inputs stay unchanged. For example if the supplied {@code transform} has
+     * (<var>longitude</var>, <var>latitude</var>, <var>height</var>) outputs, then a sub-transform
+     * may be used to keep only the (<var>longitude</var>, <var>latitude</var>) part. In most cases,
+     * the created sub-transform is non-invertible since it loose informations.
+     * <p>
+     * This transform may be see as a non-square matrix transform with less rows
+     * than columns, concatenated with {@code transform}. However, invoking
+     * {@code createFilterTransfom(...)} allows the optimization of some common cases.
+     *
+     * @param  transform The transform to reduces.
+     * @return The {@code transform} keeping only the output dimensions.
+     * @throws FactoryException if the transform can't be created.
+     */
+    private MathTransform separateOutput(MathTransform transform) throws FactoryException {
+        final int dimSource = transform.getSourceDimensions();
+        final int dimTarget = transform.getTargetDimensions();
+        final int dimOutput = targetDimensions.length;
+        final int lower     = targetDimensions[0];
+        final int upper     = targetDimensions[dimOutput-1];
+        assert XArray.isStrictlySorted(targetDimensions);
+        if (upper > dimTarget) {
+            throw new IllegalArgumentException(Errors.format(
+                    ErrorKeys.ILLEGAL_ARGUMENT_$2, "targetDimensions", upper));
+        }
+        if (dimOutput == dimTarget) {
+            assert lower==0 && upper==dimTarget;
+            return transform;
+        }
+        /*
+         * If the transform is an instance of "pass through" transform but no dimension from its
+         * subtransform is requested, then ignore the subtransform (i.e. treat the whole transform
+         * as identity, except for the number of output dimension which may be different from the
+         * number of input dimension).
+         */
+        int dimPass = 0;
+        int dimDiff = 0;
+        int dimStep = dimTarget;
+        if (transform instanceof PassThroughTransform) {
+            final PassThroughTransform passThrough = (PassThroughTransform) transform;
+            final int subLower = passThrough.firstAffectedOrdinate;
+            final int subUpper = subLower + passThrough.subTransform.getTargetDimensions();
+            if (!containsAny(targetDimensions, subLower, subUpper)) {
+                transform = null;
+                dimStep = dimSource;
+                dimPass = subLower;
+                dimDiff = (subLower + passThrough.subTransform.getSourceDimensions()) - subUpper;
+            }
+        }
+        /*
+         * Creates the matrix to be used as a filter,       [x']     [1  0  0  0] [x]
+         * and concatenates it to the transform. The        [z']  =  [0  0  1  0] [y]
+         * matrix will contains only a 1 for the output     [1 ]     [0  0  0  1] [z]
+         * dimension to keep, as in the following example:                        [1]
+         */
+        final XMatrix matrix = MatrixFactory.create(dimOutput+1, dimStep+1);
+        matrix.setZero();
+        for (int j=0; j<dimOutput; j++) {
+            int i = targetDimensions[j];
+            if (i >= dimPass) {
+                i += dimDiff;
+            }
+            matrix.setElement(j, i, 1);
+        }
+        // Affine transform has one more row/column than dimension.
+        matrix.setElement(dimOutput, dimStep, 1);
+        MathTransform filtered = factory.createAffineTransform(matrix);
+        if (transform != null) {
+            filtered = factory.createConcatenatedTransform(transform, filtered);
+        }
+        return filtered;
+    }
+

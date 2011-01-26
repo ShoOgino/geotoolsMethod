@@ -1,0 +1,56 @@
+    /**
+     * Returns the {@linkplain #input input} as an {@linkplain InputStream input stream} object.
+     * If the input is already an input stream, it is returned unchanged. Otherwise this method
+     * creates a new {@linkplain InputStream input stream} (usually <strong>not</strong>
+     * {@linkplain BufferedInputStream buffered}) from {@link File}, {@link URL},
+     * {@link URLConnection} or {@link ImageInputStream} inputs.
+     * <p>
+     * This method creates a new {@linkplain InputStream input stream} only when first invoked.
+     * All subsequent calls will returns the same instance. Consequently, the returned stream
+     * should never be closed by the caller. It may be {@linkplain #close closed} automatically
+     * when {@link #setInput setInput(...)}, {@link #reset()} or {@link #dispose()} methods are
+     * invoked.
+     *
+     * @return {@link #getInput} as an {@link InputStream}. This input stream is usually
+     *         not {@linkplain BufferedInputStream buffered}.
+     * @throws IllegalStateException if the {@linkplain #input input} is not set.
+     * @throws IOException If the input stream can't be created for an other reason.
+     *
+     * @see #getInput
+     * @see org.geotools.image.io.text.TextImageReader#getReader
+     */
+    protected InputStream getInputStream() throws IllegalStateException, IOException {
+        if (stream == null) {
+            final Object input = getInput();
+            if (input == null) {
+                throw new IllegalStateException(getErrorResources().getString(ErrorKeys.NO_IMAGE_INPUT));
+            }
+            if (input instanceof InputStream) {
+                stream = (InputStream) input;
+                closeOnReset = null; // We don't own the stream, so don't close it.
+            } else if (input instanceof ImageInputStream) {
+                stream = new InputStreamAdapter((ImageInputStream) input);
+                closeOnReset = null; // We don't own the ImageInputStream, so don't close it.
+            } else if (input instanceof String) {
+                stream = new FileInputStream((String) input);
+                closeOnReset = stream;
+            } else if (input instanceof File) {
+                stream = new FileInputStream((File) input);
+                closeOnReset = stream;
+            } else if (input instanceof URI) {
+                stream = ((URI) input).toURL().openStream();
+                closeOnReset = stream;
+            } else if (input instanceof URL) {
+                stream = ((URL) input).openStream();
+                closeOnReset = stream;
+            } else if (input instanceof URLConnection) {
+                stream = ((URLConnection) input).getInputStream();
+                closeOnReset = stream;
+            } else {
+                throw new IllegalStateException(getErrorResources().getString(
+                        ErrorKeys.ILLEGAL_CLASS_$2, Classes.getClass(input), InputStream.class));
+            }
+        }
+        return stream;
+    }
+

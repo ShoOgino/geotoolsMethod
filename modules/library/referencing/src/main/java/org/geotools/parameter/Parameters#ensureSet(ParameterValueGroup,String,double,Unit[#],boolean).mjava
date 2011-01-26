@@ -1,0 +1,69 @@
+    /**
+     * Ensures that the specified parameter is set. The {@code value} is set if and only if
+     * no value were already set by the user for the given {@code name}.
+     * <p>
+     * The {@code force} argument said what to do if the named parameter is already set. If the
+     * value matches, nothing is done in all case. If there is a mismatch and {@code force} is
+     * {@code true}, then the parameter is overridden with the specified {@code value}. Otherwise,
+     * the parameter is left unchanged but a warning is logged with the {@link Level#FINE FINE}
+     * level.
+     *
+     * @param parameters The set of projection parameters.
+     * @param name       The parameter name to set.
+     * @param value      The value to set, or to expect if the parameter is already set.
+     * @param unit       The value unit.
+     * @param force      {@code true} for forcing the parameter to the specified {@code value}
+     *                   is case of mismatch.
+     * @return {@code true} if the were a mismatch, or {@code false} if the parameters can be
+     *         used with no change.
+     */
+    public static boolean ensureSet(final ParameterValueGroup parameters,
+                                    final String name, final double value, final Unit<?> unit,
+                                    final boolean force)
+    {
+        final ParameterValue<?> parameter;
+        try {
+            parameter = parameters.parameter(name);
+        } catch (ParameterNotFoundException ignore) {
+            /*
+             * Parameter not found. This exception should not occurs most of the time.
+             * If it occurs, we will not try to set the parameter here, but the same
+             * exception is likely to occurs at MathTransform creation time. The later
+             * is the expected place for this exception, so we will let it happen there.
+             */
+            return false;
+        }
+        try {
+            if (Math.abs(parameter.doubleValue(unit) / value - 1) <= EPS) {
+                return false;
+            }
+        } catch (InvalidParameterTypeException exception) {
+            /*
+             * The parameter is not a floating point value. Don't try to set it. An exception is
+             * likely to be thrown at MathTransform creation time, which is the expected place.
+             */
+            return false;
+        } catch (IllegalStateException exception) {
+            /*
+             * No value were set for this parameter, and there is no default value.
+             */
+            parameter.setValue(value, unit);
+            return true;
+        }
+        /*
+         * A value was set, but is different from the expected value.
+         */
+        if (force) {
+            parameter.setValue(value, unit);
+        } else {
+            // TODO: localize
+            final LogRecord record = new LogRecord(Level.FINE, "Axis length mismatch.");
+            record.setSourceClassName(Parameters.class.getName());
+            record.setSourceMethodName("ensureSet");
+            final Logger logger = Logging.getLogger(Parameters.class);
+            record.setLoggerName(logger.getName());
+            logger.log(record);
+        }
+        return true;
+    }
+

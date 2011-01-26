@@ -1,0 +1,45 @@
+    /**
+     * Find the expression of a client property if the step is one.
+     * 
+     * @param nextRootStep
+     *            the step
+     * @param fMapping
+     *            feature type mapping to get namespaces from
+     * @param mapping
+     *            attribute mapping
+     * @param targetXPath
+     *            the full target xpath
+     * @return
+     */
+    private Expression getClientPropertyExpression(Step nextRootStep, AttributeMapping mapping,
+            String targetXPath) {
+        if (nextRootStep.isXmlAttribute()) {
+            Map<Name, Expression> clientProperties = mapping.getClientProperties();
+            QName lastStepName = nextRootStep.getName();
+            Name lastStep;
+            if (lastStepName.getPrefix() != null
+                    && lastStepName.getPrefix().length() > 0
+                    && (lastStepName.getNamespaceURI() == null || lastStepName.getNamespaceURI()
+                            .length() == 0)) {
+                String prefix = lastStepName.getPrefix();
+                String uri = namespaces.getURI(prefix);
+                lastStep = Types.typeName(uri, lastStepName.getLocalPart());
+            } else {
+                lastStep = Types.toTypeName(lastStepName);
+            }
+            // NC -added
+            // Fix Me - Id Checking should be done in a better way
+            if (lastStep.getLocalPart().equals("id")) {
+                if (mapping.getIdentifierExpression() == Expression.NIL) {
+                    return CommonFactoryFinder.getFilterFactory(null).property("@id");
+                } else {
+                    return mapping.getIdentifierExpression();
+                }
+            } else // end NC - added
+            if (clientProperties.containsKey(lastStep)) {
+                return (Expression) clientProperties.get(lastStep);
+            }
+        }
+        return null;
+    }
+

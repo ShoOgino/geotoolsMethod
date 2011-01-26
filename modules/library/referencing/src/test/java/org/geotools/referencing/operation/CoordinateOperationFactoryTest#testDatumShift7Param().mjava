@@ -1,0 +1,40 @@
+    /**
+     * Tests a transformation that requires a datum shift with 7 parameters.
+     */
+    @Test
+    public void testDatumShift7Param() throws Exception {
+        final CoordinateReferenceSystem sourceCRS = DefaultGeographicCRS.WGS84;
+        final CoordinateReferenceSystem targetCRS = crsFactory.createFromWKT(WKT.UTM_58S);
+        CoordinateOperation operation = opFactory.createOperation(sourceCRS, targetCRS);
+        if (usingDefaultFactory) {
+            assertSame(sourceCRS, operation.getSourceCRS());
+            assertSame(targetCRS, operation.getTargetCRS());
+            assertTrue (operation.getCoordinateOperationAccuracy().contains(PositionalAccuracyImpl.DATUM_SHIFT_APPLIED));
+            assertFalse(operation.getCoordinateOperationAccuracy().contains(PositionalAccuracyImpl.DATUM_SHIFT_OMITTED));
+        }
+        MathTransform transform = operation.getMathTransform();
+        assertInterfaced(transform);
+        assertTransformEquals2_2(transform, 168.1075, -21.597283333333, 822023.338884308, 7608648.67486555);
+        // Note: Expected values above were computed with Geotools (not an external library).
+
+        /*
+         * Try again using lenient factory. The result should be identical, since we do have
+         * Bursa-Wolf parameters. This test failed before GEOT-661 fix.
+         */
+        final Hints hints = new Hints(Hints.LENIENT_DATUM_SHIFT, Boolean.TRUE);
+        final CoordinateOperationFactory lenientFactory =
+                ReferencingFactoryFinder.getCoordinateOperationFactory(hints);
+        assertNotSame(opFactory, lenientFactory);
+        operation = lenientFactory.createOperation(sourceCRS, targetCRS);
+        if (usingDefaultFactory) {
+            assertSame(sourceCRS, operation.getSourceCRS());
+            assertSame(targetCRS, operation.getTargetCRS());
+            assertTrue (operation.getCoordinateOperationAccuracy().contains(PositionalAccuracyImpl.DATUM_SHIFT_APPLIED));
+            assertFalse(operation.getCoordinateOperationAccuracy().contains(PositionalAccuracyImpl.DATUM_SHIFT_OMITTED));
+        }
+        transform = operation.getMathTransform();
+        assertInterfaced(transform);
+        assertTransformEquals2_2(transform, 168.1075, -21.597283333333, 822023.338884308, 7608648.67486555);
+        // Note: Expected values above were computed with Geotools (not an external library).
+    }
+

@@ -1,0 +1,31 @@
+    /**
+     * Creates an instance from the specified hints. This method recognizes the
+     * {@link Hints#CRS_FACTORY CRS}, {@link Hints#CS_FACTORY CS}, {@link Hints#DATUM_FACTORY DATUM}
+     * and {@link Hints#MATH_TRANSFORM_FACTORY MATH_TRANSFORM} {@code FACTORY} hints.
+     *
+     * @param  hints The hints, or {@code null} if none.
+     * @return A factory group created from the specified set of hints.
+     */
+    public static ReferencingFactoryContainer instance(final Hints hints) {
+        final Hints completed = GeoTools.getDefaultHints();
+        if (hints != null) {
+            completed.add(hints);
+        }
+        /*
+         * Use the same synchronization lock than ReferencingFactoryFinder (instead of this class)
+         * in order to reduce the risk of dead lock. This is because ReferencingFactoryContainer
+         * creation may queries ReferencingFactoryFinder, and some implementations managed by
+         * ReferencingFactoryFinder may ask for a ReferencingFactoryContainer in turn.
+         */
+        synchronized (ReferencingFactoryFinder.class) {
+            if (cache == null) {
+                cache = new FactoryCreator(Arrays.asList(new Class<?>[] {
+                        ReferencingFactoryContainer.class
+                }));
+                cache.registerServiceProvider(new ReferencingFactoryContainer(null),
+                        ReferencingFactoryContainer.class);
+            }
+            return cache.getServiceProvider(ReferencingFactoryContainer.class, null, completed, null);
+        }
+    }
+

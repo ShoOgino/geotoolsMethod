@@ -1,0 +1,70 @@
+    /**
+     * Export features to a new shapefile using the map projection in which they are currently
+     * displayed
+     */
+    // docs start export
+    private void exportToShapefile() throws Exception {
+        SimpleFeatureType schema = featureSource.getSchema();
+        JFileDataStoreChooser chooser = new JFileDataStoreChooser("shp");
+        chooser.setDialogTitle("Save reprojected shapefile");
+        chooser.setSaveFile(sourceFile);
+        int returnVal = chooser.showSaveDialog(null);
+        if (returnVal != JFileDataStoreChooser.APPROVE_OPTION) {
+            return;
+        }
+        File file = chooser.getSelectedFile();
+        if (file.equals(sourceFile)) {
+            JOptionPane.showMessageDialog(null, "Cannot replace " + file);
+            return;
+        }
+
+        // set up the math transform used to process the data
+        CoordinateReferenceSystem dataCRS = schema.getCoordinateReferenceSystem();
+        CoordinateReferenceSystem worldCRS = map.getCoordinateReferenceSystem();
+        boolean lenient = true; // allow for some error due to different datums
+        MathTransform transform = CRS.findMathTransform(dataCRS, worldCRS, lenient);
+
+        // grab all features
+        SimpleFeatureCollection featureCollection = featureSource.getFeatures();
+
+        // And create a new Shapefile with a slight modified schema
+        DataStoreFactorySpi factory = new ShapefileDataStoreFactory();
+        Map<String, Serializable> create = new HashMap<String, Serializable>();
+        create.put("url", file.toURI().toURL());
+        create.put("create spatial index", Boolean.TRUE);
+        DataStore dataStore = factory.createNewDataStore(create);
+        SimpleFeatureType featureType = SimpleFeatureTypeBuilder.retype(schema, worldCRS);
+        dataStore.createSchema(featureType);
+
+        // carefully open an iterator and writer to process the results
+        Transaction transaction = new DefaultTransaction("Reproject");
+        FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
+                        dataStore.getFeatureWriterAppend(featureType.getTypeName(), transaction);
+        SimpleFeatureIterator iterator = featureCollection.features();
+        try {
+            while (iterator.hasNext()) {
+                // copy the contents of each feature and transform the geometry
+                SimpleFeature feature = iterator.next();
+                SimpleFeature copy = writer.next();
+                copy.setAttributes(feature.getAttributes());
+
+                Geometry geometry = (Geometry) feature.getDefaultGeometry();
+                Geometry geometry2 = JTS.transform(geometry, transform);
+
+                copy.setDefaultGeometry(geometry2);
+                writer.write();
+            }
+            transaction.commit();
+            JOptionPane.showMessageDialog(null, "Export to shapefile complete");
+        } catch (Exception problem) {
+            problem.printStackTrace();
+            transaction.rollback();
+            JOptionPane.showMessageDialog(null, "Export to shapefile failed");
+        } finally {
+            writer.close();
+            iterator.close();
+            transaction.close();
+        }
+    }
+    // docs end export
+

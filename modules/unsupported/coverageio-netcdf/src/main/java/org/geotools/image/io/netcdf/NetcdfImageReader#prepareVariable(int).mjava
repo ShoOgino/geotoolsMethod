@@ -1,0 +1,40 @@
+    /**
+     * Ensures that data are loaded in the NetCDF {@linkplain #variable}. If data are already
+     * loaded, then this method do nothing.
+     * <p>
+     * This method is invoked automatically before any operation that require the NetCDF
+     * variable, including (but not limited to):
+     * <ul>
+     *   <li>{@link #getWidth}</li>
+     *   <li>{@link #getHeight}</li>
+     *   <li>{@link #getStatistics}</li>
+     *   <li>{@link #getImageMetadata}</li>
+     *   <li>{@link #getRawDataType}</li>
+     *   <li>{@link #read(int,ImageReadParam)}</li>
+     * </ul>
+     *
+     * @param  imageIndex The image index.
+     * @return {@code true} if the {@linkplain #variable} changed as a result of this call,
+     *         or {@code false} if the current value is already appropriate.
+     * @throws IndexOutOfBoundsException if the specified index is outside the expected range.
+     * @throws IllegalStateException If {@link #input} is not set.
+     * @throws IOException If an error occured while reading the NetCDF file.
+     */
+    protected boolean prepareVariable(final int imageIndex) throws IOException {
+        checkImageIndex(imageIndex);
+        if (variable == null || variableIndex != imageIndex) {
+            ensureFileOpen();
+            final String name = variableNames[imageIndex];
+            final Variable candidate = findVariable(name);
+            final int rank = candidate.getRank();
+            if (rank < Math.max(X_DIMENSION, Y_DIMENSION)) {
+                throw new IIOException(Errors.format(ErrorKeys.NOT_TWO_DIMENSIONAL_$1, rank));
+            }
+            variable      = candidate;
+            variableIndex = imageIndex;
+            imageMetadata = null;
+            return true;
+        }
+        return false;
+    }
+

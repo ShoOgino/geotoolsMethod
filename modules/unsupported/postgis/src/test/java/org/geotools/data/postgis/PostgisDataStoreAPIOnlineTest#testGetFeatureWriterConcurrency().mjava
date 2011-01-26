@@ -1,0 +1,50 @@
+    /**
+     * Tests that if 2 transactions attempt to modify the same feature without committing, that the
+     * second transaction does not lock up waiting to obtain the lock.
+     * 
+     * @author chorner
+     * @throws IOException
+     * @throws IllegalAttributeException
+     * @throws SQLException
+     */
+    public void testGetFeatureWriterConcurrency() throws Exception {
+        // if we don't have postgres >= 8.1, don't bother testing (it WILL block)
+        Connection conn = null;
+        try {
+            conn = pool.getConnection();
+            int major = conn.getMetaData().getDatabaseMajorVersion();
+            int minor = conn.getMetaData().getDatabaseMinorVersion();
+            if (!((major > 8) || ((major == 8) && minor >= 1))) {
+                return; // concurrency support is weak
+            }
+        } finally {
+            if (conn != null)
+                conn.close();
+        }
+        Transaction t1 = new DefaultTransaction();
+        FeatureWriter<SimpleFeatureType, SimpleFeature> writer1 = data.getFeatureWriter("road", rd1Filter, t1);
+        SimpleFeature f1 = (SimpleFeature) writer1.next();
+        f1.setAttribute("name", new String("r1_"));
+        writer1.write();
+
+        Transaction t2 = new DefaultTransaction();
+        FeatureWriter<SimpleFeatureType, SimpleFeature> writer2 = data.getFeatureWriter("road", rd1Filter, t2);
+        SimpleFeature f2 = (SimpleFeature) writer2.next();
+        f2.setAttribute("name", new String("r1__"));
+        try {
+            writer2.write(); // this will either lock up or toss chunks
+            fail("Feature lock should have failed");
+        } catch (FeatureLockException e) {
+            // success (test-wise... our write failed quite well too)
+            assertEquals("road.rd1", e.getFeatureID());
+        }
+
+        t1.rollback(); // don't save
+        writer1.close();
+        t1.close();
+
+        t2.rollback();
+        writer2.close();
+        t2.close();
+    }
+

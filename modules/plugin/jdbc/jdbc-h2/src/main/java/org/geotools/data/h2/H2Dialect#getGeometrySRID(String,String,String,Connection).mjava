@@ -1,0 +1,47 @@
+    public Integer getGeometrySRID(String schemaName, String tableName, String columnName,
+        Connection cx) throws SQLException {
+        
+        //first try getting from table metadata
+        int srid = GeoDB.GetSRID(cx, schemaName, tableName);
+        if (srid > -1) {
+            return srid;
+        }
+        
+        //try grabbing directly from a geometry
+        StringBuffer sql = new StringBuffer();
+        sql.append("SELECT ST_SRID(");
+        encodeColumnName(columnName, sql);
+        sql.append(") ");
+        sql.append("FROM ");
+
+        if (schemaName != null) {
+            encodeTableName(schemaName, sql);
+            sql.append(".");
+        }
+
+        encodeSchemaName(tableName, sql);
+        sql.append(" WHERE ");
+        encodeColumnName(columnName, sql);
+        sql.append(" is not null LIMIT 1");
+
+        dataStore.getLogger().fine(sql.toString());
+        Statement st = cx.createStatement();
+
+        try {
+            ResultSet rs = st.executeQuery(sql.toString());
+
+            try {
+                if (rs.next()) {
+                    return new Integer(rs.getInt(1));
+                } else {
+                    //could not find o
+           return null;
+                }
+            } finally {
+                dataStore.closeSafe(rs);
+            }
+        } finally {
+            dataStore.closeSafe(st);
+        }
+    }
+

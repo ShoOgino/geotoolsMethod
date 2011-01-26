@@ -1,0 +1,86 @@
+    /**
+     * Formats the given log record and return the formatted string.
+     *
+     * @param  record the log record to be formatted.
+     * @return a formatted log record
+     */
+    @SuppressWarnings("fallthrough")
+    public synchronized String format(final LogRecord record) {
+        buffer.setLength(PREFIX.length());
+        /*
+         * Formats the time (e.g. "00:00:12.365").  The time pattern can be set
+         * either programmatically with a call to setTimeFormat(String), or in
+         * the logging.properties file with the
+         * "org.geotools.util.logging.MonolineFormatter.time" property.
+         */
+        if (timeFormat != null) {
+            Date time = new Date(Math.max(0, record.getMillis() - startMillis));
+            timeFormat.format(time, buffer, new FieldPosition(0));
+            buffer.append(' ');
+        }
+        /*
+         * Formats the level (e.g. "FINE"). We do not provide
+         * the option to turn level off for now.
+         */
+        if (true) {
+            int offset = buffer.length();
+            buffer.append(record.getLevel().getLocalizedName());
+            offset = buffer.length() - offset;
+            buffer.append(Utilities.spaces(margin-offset));
+        }
+        /*
+         * Adds the source. It may be either the source logger or the source class name.
+         */
+        String logger    = record.getLoggerName();
+        String classname = record.getSourceClassName();
+        switch (sourceFormat) {
+            case LOGGER_SHORT: {
+                int pos = logger.lastIndexOf('.');
+                if (pos >= 0) {
+                    logger = logger.substring(pos);
+                }
+                // fall through
+            }
+            case LOGGER_LONG: {
+                buffer.append(' ');
+                buffer.append(logger);
+                break;
+            }
+            case CLASS_SHORT: {
+                int dot = classname.lastIndexOf('.');
+                if (dot >= 0) {
+                    classname = classname.substring(dot+1);
+                }
+                classname = classname.replace('$','.');
+                // fall through
+            }
+            case CLASS_LONG: {
+                buffer.append(' ');
+                buffer.append(classname);
+                break;
+            }
+        }
+        buffer.append(SUFFIX);
+        /*
+         * Now format the message. We will use a line separator made of the
+         * usual EOL ("\r", "\n", or "\r\n", which is plateform specific)
+         * following by some amout of space in order to align message body.
+         */
+        final int margin  = buffer.length();
+        assert margin >= this.margin;
+        if (bodyLineSeparator.length() != lineSeparator.length()+margin) {
+            bodyLineSeparator = lineSeparator + Utilities.spaces(margin);
+        }
+        try {
+            writer.setLineSeparator(bodyLineSeparator);
+            writer.write(String.valueOf(formatMessage(record)));
+            writer.setLineSeparator(lineSeparator);
+            writer.write('\n');
+            writer.flush();
+        } catch (IOException exception) {
+            // Should never happen, since we are writting into a StringBuffer.
+            throw new AssertionError(exception);
+        }
+        return buffer.toString();
+    }
+

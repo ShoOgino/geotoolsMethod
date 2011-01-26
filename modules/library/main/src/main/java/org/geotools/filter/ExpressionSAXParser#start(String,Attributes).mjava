@@ -1,0 +1,51 @@
+    /**
+     * Initializes the factory to create a new expression.  Called when the
+     * filter handler reaches a new expression.
+     *
+     * @param declaredType The string representation of the expression type.
+     *
+     * @throws IllegalFilterException If there are problems creating
+     *         expressions.
+     */
+    public void start(String declaredType,Attributes atts) throws IllegalFilterException {
+        LOGGER.finer("incoming type: " + declaredType);
+        LOGGER.finer("declared type: " + this.declaredType);
+        LOGGER.finer("current state: " + currentState);
+
+        if (expFactory == null) 
+        {
+            this.declaredType = declaredType;
+            
+            if (DefaultExpression.isFunctionExpression(convertType(declaredType)))
+            {
+            	 expFactory = new ExpressionSAXParser(schema);
+                 curExprssn = ff.createFunctionExpression( getFunctionName(atts) );
+                 LOGGER.finer("is <function> expression");
+            }
+
+            // if the expression is math, then create a factory for its
+            // sub expressions, otherwise just instantiate the main expression
+            if (DefaultExpression.isMathExpression(convertType(declaredType))) {
+                expFactory = new ExpressionSAXParser(schema);
+                curExprssn = ff.createMathExpression(convertType(
+                            declaredType));
+                LOGGER.finer("is math expression");
+            } else if (DefaultExpression.isLiteralExpression(convertType(
+                            declaredType))) {
+                curExprssn = ff.createLiteralExpression();
+                readChars = true;
+                LOGGER.finer("is literal expression");
+            } else if (DefaultExpression.isAttributeExpression(convertType(
+                            declaredType))) {
+                curExprssn = ff.createAttributeExpression(schema);
+                readChars = true;
+                LOGGER.finer("is attribute expression");
+            }
+
+            currentState = setInitialState(curExprssn);
+            readyFlag = false;
+        } else {
+            expFactory.start(declaredType,atts);
+        }
+    }
+

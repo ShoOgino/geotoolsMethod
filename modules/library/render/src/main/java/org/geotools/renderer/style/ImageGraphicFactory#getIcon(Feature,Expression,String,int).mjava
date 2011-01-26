@@ -1,0 +1,33 @@
+    public Icon getIcon(Feature feature, Expression url, String format, int size) throws Exception {
+        // check we do support the format
+        if (!supportedGraphicFormats.contains(format.toLowerCase()))
+            return null;
+
+        // evaluate the location as a URL
+        URL location = url.evaluate(feature, URL.class);
+        if (location == null)
+            throw new IllegalArgumentException(
+                    "The provided expression cannot be evaluated to a URL");
+
+        // get the image from the cache, or load it
+        BufferedImage image = imageCache.get(location);
+        if(image == null) {
+            image = ImageIO.read(location);
+            imageCache.put(location, image);
+        }
+        
+        // if scaling is needed, perform it
+        if(size > 0 && image.getHeight() != size) {
+            double dsize = (double) size;
+
+            double scaleY = dsize / image.getHeight(); // >1 if you're magnifying
+            double scaleX =  scaleY; // keep aspect ratio!
+
+            AffineTransform scaleTx = AffineTransform.getScaleInstance(scaleX,scaleY);  
+            AffineTransformOp ato = new AffineTransformOp(scaleTx, AffineTransformOp.TYPE_BILINEAR);
+            image = ato.filter(image, null);
+        }
+        
+        return new ImageIcon(image);
+    }
+

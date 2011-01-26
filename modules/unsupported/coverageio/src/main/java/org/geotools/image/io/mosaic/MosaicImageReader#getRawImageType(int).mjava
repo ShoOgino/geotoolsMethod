@@ -1,0 +1,50 @@
+    /**
+     * Returns an image type which most closely represents the "raw" internal format of the image.
+     * The default implementation depends on the {@linkplain #getDefaultImageTypePolicy default
+     * image type policy}:
+     * <ul>
+     *   <li>For {@link ImageTypePolicy#SUPPORTED_BY_ONE SUPPORTED_BY_ONE}, this method delegates
+     *       directly to the reader of an arbitrary tile (typically the first one).</li>
+     *   <li>For {@link ImageTypePolicy#SUPPORTED_BY_ALL SUPPORTED_BY_ALL}, this method invokes
+     *       {@code getRawImageType} for every tile readers, ommits the types that are not declared
+     *       in <code>{@linkplain ImageReader#getImageTypes getImageTypes}(imageIndex)</code> for
+     *       every tile readers, and returns the most common remainding value. If none is found,
+     *       then some {@linkplain ImageReader#getRawImageType default specifier} is returned.</li>
+     * </ul>
+     *
+     * @param  imageIndex The image index, from 0 inclusive to {@link #getNumImages} exclusive.
+     * @return A raw image type specifier.
+     * @throws IOException If an error occurs reading the information from the input source.
+     */
+    @Override
+    public ImageTypeSpecifier getRawImageType(final int imageIndex) throws IOException {
+        ImageTypeSpecifier type;
+        final ImageTypePolicy policy = getDefaultImageTypePolicy();
+        switch (policy) {
+            default: {
+                type = getPredefinedImageType(policy);
+                break;
+            }
+            case SUPPORTED_BY_ONE: {
+                final Collection<Tile> tiles = getTileManager(imageIndex).getTiles();
+                final Tile tile = getSpecificTile(tiles);
+                if (tile != null) {
+                    type = tile.getImageReader(this, true, true).getRawImageType(imageIndex);
+                    assert type.equals(getRawImageType(tiles)) : incompatibleImageType(tile);
+                } else {
+                    type = super.getRawImageType(imageIndex);
+                }
+                break;
+            }
+            case SUPPORTED_BY_ALL: {
+                final Collection<Tile> tiles = getTileManager(imageIndex).getTiles();
+                type = getRawImageType(tiles);
+                if (type == null) {
+                    type = super.getRawImageType(imageIndex);
+                }
+                break;
+            }
+        }
+        return type;
+    }
+

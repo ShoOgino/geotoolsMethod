@@ -1,0 +1,65 @@
+    /**
+     * Checks if the parameter in the two specified list contains the same values.
+     * The order parameter order is irrelevant. The common parameters are removed
+     * from both lists.
+     */
+    private static boolean parameterValuesEqual(final List<GeneralParameterValue> source,
+                                                final List<GeneralParameterValue> target,
+                                                final double errorTolerance)
+    {
+search: for (final Iterator<GeneralParameterValue> targetIter=target.iterator(); targetIter.hasNext();) {
+            final GeneralParameterValue targetPrm = targetIter.next();
+            for (final Iterator<GeneralParameterValue> sourceIter=source.iterator(); sourceIter.hasNext();) {
+                final GeneralParameterValue sourcePrm = sourceIter.next();
+                if (!nameMatches(sourcePrm.getDescriptor(), targetPrm.getDescriptor())) {
+                    continue;
+                }
+                if (sourcePrm instanceof ParameterValue && targetPrm instanceof ParameterValue) {
+                    final ParameterValue<?> sourceValue = (ParameterValue) sourcePrm;
+                    final ParameterValue<?> targetValue = (ParameterValue) targetPrm;
+                    if (Number.class.isAssignableFrom(targetValue.getDescriptor().getValueClass())) {
+                        final double sourceNum, targetNum;
+                        final Unit<?> unit = targetValue.getUnit();
+                        if (unit != null) {
+                            sourceNum = sourceValue.doubleValue(unit);
+                            targetNum = targetValue.doubleValue(unit);
+                        } else {
+                            sourceNum = sourceValue.doubleValue();
+                            targetNum = targetValue.doubleValue();
+                        }
+                        double error = (targetNum - sourceNum);
+                        if (targetNum != 0) error /= targetNum;
+                        if (!(Math.abs(error) <= errorTolerance)) { // '!' for trapping NaN
+                            return false;
+                        }
+                    } else {
+                        // The parameter do not hold a numerical value. It may be a
+                        // String, etc. Use the generic Object.equals(Object) method.
+                        if (!Utilities.equals(sourceValue.getValue(), targetValue.getValue())) {
+                            return false;
+                        }
+                    }
+                } else {
+                    // The GeneralParameter is not a ParameterValue instance. It is probably a
+                    // ParameterValueGroup. Compare all child elements without processing them.
+                    if (!Utilities.equals(targetPrm, sourcePrm)) {
+                        return false;
+                    }
+                }
+                // End of processing a pair of matching parameters. The values are equal or
+                // were one of the special cases processed above. Continue with a new pair.
+                sourceIter.remove();
+                targetIter.remove();
+                continue search;
+            }
+            // End of iteration in the 'source' parameters. If we reach this point, then we
+            // have found a target parameter without matching source parameter. We consider
+            // the two projections as different kind.
+            return false;
+        }
+        // End of iteration in the 'target' parameters, which should now be empty.
+        // Check if there is any unmatched parameter left in the supplied list.
+        assert target.isEmpty();
+        return source.isEmpty();
+    }
+

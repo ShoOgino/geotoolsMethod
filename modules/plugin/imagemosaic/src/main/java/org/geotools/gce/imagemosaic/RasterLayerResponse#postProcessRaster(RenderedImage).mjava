@@ -1,0 +1,36 @@
+	private RenderedImage postProcessRaster(RenderedImage mosaic) {
+		// alpha on the final mosaic
+		if (finalTransparentColor != null) {
+			if (LOGGER.isLoggable(Level.FINE))
+				LOGGER.fine("Support for alpha on final mosaic");
+			return Utils.makeColorTransparent(finalTransparentColor,mosaic);
+
+		}
+		if (oversampledRequest){
+		    try {
+		        // creating source grid to world corrected to the pixel corner
+		        final AffineTransform sourceGridToWorld = new AffineTransform((AffineTransform) baseGridToWorld);
+		        sourceGridToWorld.concatenate(CoverageUtilities.CENTER_TO_CORNER);
+		        
+		        // creating target grid to world corrected to the pixel corner
+		        final AffineTransform targetGridToWorld = new AffineTransform(request.getRequestedGridToWorld());
+		        targetGridToWorld.concatenate(CoverageUtilities.CENTER_TO_CORNER);
+		        
+		        // target world to grid at the corner
+		        final AffineTransform targetWorldToGrid=targetGridToWorld.createInverse();
+		        
+		        // final complete transformation
+		        targetWorldToGrid.concatenate(sourceGridToWorld);
+		        
+		        // create final image
+		        // TODO this one could be optimized further depending on how the affine is created
+                        mosaic = AffineDescriptor.create(mosaic, targetWorldToGrid , interpolation, backgroundValues, hints);
+                    } catch (NoninvertibleTransformException e) {
+                        if (LOGGER.isLoggable(Level.SEVERE)){
+                            LOGGER.log(Level.SEVERE, "Unable to create the requested mosaic ", e );
+                        }
+                    }
+		}
+		return mosaic;
+	}
+

@@ -1,0 +1,45 @@
+    /**
+     * Returns the default directory for the EPSG database. If the
+     * {@value #DIRECTORY_KEY}
+     * {@linkplain System#getProperty(String) system property} is defined and
+     * contains the name of a directory with a valid
+     * {@linkplain File#getParent parent}, then the {@value #DATABASE_NAME}
+     * database will be saved in that directory. Otherwise, a temporary
+     * directory will be used.
+     * 
+     * @throws SQLException
+     */
+    static File getDirectory() throws SQLException {
+        try {
+            final String property = System.getProperty(HsqlEpsgDatabase.DIRECTORY_KEY);
+            if (property != null) {
+                final File directory = new File(property);
+                /*
+                 * Creates the directory if needed (mkdir), but NOT the parent
+                 * directories (mkdirs) because a missing parent directory may
+                 * be a symptom of an installation problem. For example if
+                 * 'directory' is a subdirectory in the temporary directory
+                 * (~/tmp/), this temporary directory should already exists. If
+                 * it doesn't, an administrator should probably looks at this
+                 * problem.
+                 */
+                if (directory.isDirectory() || directory.mkdir()) {
+                    return directory;
+                }
+            }
+        } catch (SecurityException e) {
+            /*
+             * Can't fetch the base directory from system properties. Fallback
+             * on the default temporary directory.
+             */
+        }
+        File directory = new File(System.getProperty("java.io.tmpdir", "."), "Geotools");
+        if (directory.isDirectory() || directory.mkdir()) {
+            directory = new File(directory, "Databases/HSQL");
+            if (directory.isDirectory() || directory.mkdirs()) {
+                return directory;
+            }
+        }
+        throw new SQLException("Can't write to the database directory.");
+    }
+

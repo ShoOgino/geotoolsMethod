@@ -1,0 +1,81 @@
+    /**
+     * Creates the prepared statement for feature inserts
+     * 
+     * @param conn
+     * @param featureType
+     * @throws SQLException
+     */
+    protected PreparedStatement createInsertStatement(Connection conn, SimpleFeatureType featureType)
+            throws SQLException {
+        final List<AttributeDescriptor> attributeTypes = featureType.getAttributeDescriptors();
+        final String tableName = featureType.getTypeName();
+
+        final StringBuffer statementSQL = new StringBuffer("INSERT INTO ");
+        statementSQL.append(encodeName(tableName)).append("(");
+
+        final int pkColumnCount = mapper.getColumnCount();
+
+        // append primary key column names, if any
+        if (!mapper.returnFIDColumnsAsAttributes()) {
+            for (int i = 0; i < pkColumnCount; i++) {
+                if (!mapper.isAutoIncrement(i)) {
+                    statementSQL.append(mapper.getColumnName(i)).append(",");
+                }
+            }
+        }
+
+        // append attribute column names
+        for (int i = 0; i < attributeTypes.size(); i++) {
+            AttributeDescriptor attributeDescriptor = attributeTypes.get(i);
+            String localName = attributeDescriptor.getLocalName();
+            statementSQL.append(localName).append(",");
+        }
+
+        statementSQL.setCharAt(statementSQL.length() - 1, ')');
+        statementSQL.append(" VALUES (");
+
+        // append primary key placeholders, if any
+        if (!mapper.returnFIDColumnsAsAttributes() && !mapper.hasAutoIncrementColumns()) {
+            for (int i = 0; i < pkColumnCount; i++) {
+                statementSQL.append("?,");
+            }
+        }
+
+        // append attribute columns placeholders
+        for (int i = 0; i < attributeTypes.size(); i++) {
+            AttributeDescriptor attributeDescriptor = attributeTypes.get(i);
+            if (attributeDescriptor instanceof GeometryDescriptor) {
+                String geometryPlaceHolder = getGeometryPlaceHolder(attributeDescriptor);
+                statementSQL.append(geometryPlaceHolder);
+            } else {
+                statementSQL.append("?");
+            }
+
+            statementSQL.append(",");
+        }
+
+        statementSQL.setCharAt(statementSQL.length() - 1, ')');
+
+        return prepareInsertStatement(conn, statementSQL, featureType);
+        
+        //REVISIT: this is an unsupported feature in postgis jdbc3 driver
+        // array of autoincrement column indices the prep statement should return
+//        int[] pkColIndices = {};
+//        if (mapper.hasAutoIncrementColumns()) {
+//            final int colCount = mapper.getColumnCount();
+//            for (int i = 1; i <= colCount; i++) {
+//                if (mapper.isAutoIncrement(i)) {
+//                    if (pkColIndices.length == 0) {
+//                        pkColIndices = new int[] { i };
+//                    } else {
+//                        int[] previous = pkColIndices;
+//                        pkColIndices = new int[previous.length + 1];
+//                        System.arraycopy(previous, 0, pkColIndices, 0, previous.length);
+//                        pkColIndices[pkColIndices.length - 1] = i;
+//                    }
+//                }
+//            }
+//        }
+//        return conn.prepareStatement(sql, pkColIndices);
+    }
+

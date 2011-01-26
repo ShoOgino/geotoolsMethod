@@ -1,0 +1,84 @@
+    /**
+     * Do some more local process tests, such as union
+     * 
+     * @throws ServiceException
+     * @throws IOException
+     * @throws ParseException
+     */
+    public void testExecuteLocalUnion() throws ServiceException, IOException,
+            ParseException, ProcessException {
+        if (fixture == null)
+            return;
+
+        String processIdenLocal = "Union";
+
+        WPSCapabilitiesType capabilities = wps.getCapabilities();
+
+        // get the first process and execute it
+        ProcessOfferingsType processOfferings = capabilities
+                .getProcessOfferings();
+        EList processes = processOfferings.getProcess();
+        // ProcessBriefType process = (ProcessBriefType) processes.get(0);
+
+        // does the server contain the specific process I want
+        boolean found = false;
+        Iterator iterator = processes.iterator();
+        while (iterator.hasNext()) {
+            ProcessBriefType process = (ProcessBriefType) iterator.next();
+            if (process.getIdentifier().getValue()
+                    .equalsIgnoreCase(processIdenLocal)) {
+                found = true;
+                break;
+            }
+        }
+
+        // exit test if my process doesn't exist on server
+        if (!found) {
+            return;
+        }
+
+        // do a full describeprocess on my process
+        DescribeProcessRequest descRequest = wps.createDescribeProcessRequest();
+        descRequest.setIdentifier(processIdenLocal);
+        DescribeProcessResponse descResponse = wps.issueRequest(descRequest);
+
+        // based on the describeprocess, setup the execute
+        ProcessDescriptionsType processDesc = descResponse.getProcessDesc();
+        ProcessDescriptionType pdt = (ProcessDescriptionType) processDesc
+                .getProcessDescription().get(0);
+        WPSFactory wpsfactory = new WPSFactory(pdt, this.url);
+        Process process = wpsfactory.create();
+
+        // setup the inputs
+        Map<String, Object> map = new TreeMap<String, Object>();
+        WKTReader reader = new WKTReader(new GeometryFactory());
+        List<Geometry> list = new ArrayList<Geometry>();
+        Geometry geom1 = (Polygon) reader
+                .read("POLYGON((20 10, 30 0, 40 10, 30 20, 20 10))");
+        Geometry geom2 = (Polygon) reader
+                .read("POLYGON((20 30, 30 0, 20 20, 80 20, 20 30))");
+        Geometry geom3 = (Polygon) reader
+                .read("POLYGON((177 10, 30 88, 40 70, 46 20, 177 10))");
+        Geometry geom4 = (Polygon) reader
+                .read("POLYGON((5 10, 5 0, 13 10, 5 20, 5 10))");
+        list.add(geom1);
+        list.add(geom2);
+        list.add(geom3);
+        list.add(geom4);
+        map.put("geom", list);
+
+        // execute/send-request for the process
+        Map<String, Object> results = process.execute(map, null);
+
+        // check that the result is expected
+        assertNotNull(results);
+        // Geometry expected = geom1.union(geom2);
+        // expected = expected.union(geom3);
+        // expected = expected.union(geom4);
+        Geometry result = (Geometry) results.get("result");
+        assertNotNull(result);
+        // System.out.println(expected);
+        // System.out.println(result);
+
+    }
+

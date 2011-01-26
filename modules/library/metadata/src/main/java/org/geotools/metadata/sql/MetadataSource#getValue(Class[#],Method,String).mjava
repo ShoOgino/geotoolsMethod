@@ -1,0 +1,66 @@
+    /**
+     * Returns an attribute from a table.
+     *
+     * @param  type       The interface class. This is mapped to the table name in the database.
+     * @param  method     The method invoked. This is mapped to the column name in the database.
+     * @param  identifier The primary key of the record to search for.
+     * @return The value of the requested attribute.
+     * @throws SQLException if the SQL query failed.
+     */
+    final synchronized Object getValue(final Class<?> type, final Method method, final String identifier)
+            throws SQLException
+    {
+        final String className = getClassName(type);
+        MetadataResult  result = statements.get(type);
+        if (result == null) {
+            result = new MetadataResult(connection, query, getTableName(className));
+            statements.put(type, result);
+        }
+        final String  columnName = getColumnName(className, method);
+        final Class<?> valueType = method.getReturnType();
+        /*
+         * Process the ResultSet value according the expected return type. If a collection
+         * is expected, then assumes that the ResultSet contains an array and invokes the
+         * 'getValue' method for each element.
+         */
+        if (Collection.class.isAssignableFrom(valueType)) {
+            final Collection<Object> collection;
+            if (List.class.isAssignableFrom(valueType)) {
+                collection = new ArrayList<Object>();
+            } else if (SortedSet.class.isAssignableFrom(valueType)) {
+                collection = new TreeSet<Object>();
+            } else {
+                collection = new LinkedHashSet<Object>();
+            }
+            assert valueType.isAssignableFrom(collection.getClass());
+            final Object elements = result.getArray(identifier, columnName);
+            if (elements != null) {
+                final Class  elementType = getElementType(className, method);
+                final boolean isMetadata = isMetadata(elementType);
+                final int         length = Array.getLength(elements);
+                for (int i=0; i<length; i++) {
+                    collection.add(isMetadata ? getEntry(elementType, Array.get(elements, i).toString())
+                                              : convert (elementType, Array.get(elements, i)));
+                }
+            }
+            return collection;
+        }
+        /*
+         * If a GeoAPI interface or a code list is expected, then assumes that the ResultSet
+         * value is a foreigner key. Queries again the database in the foreigner table.
+         */
+        if (valueType.isInterface() && isMetadata(valueType)) {
+            final String foreigner = result.getString(identifier, columnName);
+            return result.wasNull() ? null : getEntry(valueType, foreigner);
+        }
+        if (CodeList.class.isAssignableFrom(valueType)) {
+            final String foreigner = result.getString(identifier, columnName);
+            return result.wasNull() ? null : getCodeList(valueType, foreigner);
+        }
+        /*
+         * Not a foreigner key. Get the value and transform it to the
+         * espected type, if needed.
+         */
+        return convert(valueType, result.getObject(identifier, columnName));
+    }
+

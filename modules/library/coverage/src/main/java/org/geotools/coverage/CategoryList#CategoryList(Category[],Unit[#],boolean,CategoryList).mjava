@@ -1,0 +1,142 @@
+    /**
+     * Constructs a category list using the specified array of categories.
+     *
+     *         <STRONG>This constructor is for internal use only</STRONG>
+     *
+     * It is not private only because {@link GeophysicsCategoryList} needs this constructor.
+     *
+     * @param  categories The list of categories.
+     * @param  units The geophysics unit, or {@code null} if none.
+     * @param  searchNearest The policy when {@link #getCategory} doesn't find an exact match
+     *         for a sample value. {@code true} means that it should search for the nearest
+     *         category, while {@code false} means that it should returns {@code null}.
+     * @param  inverse The inverse transform, or {@code null} to build it automatically.
+     *         <STRONG>This argument can be non-null only if invoked from
+     *         {@link GeophysicsCategoryList} constructor</STRONG>.
+     * @throws IllegalArgumentException if two or more categories have overlapping sample value
+     *         range.
+     */
+    CategoryList(Category[] categories, Unit<?> units, boolean searchNearest, CategoryList inverse)
+            throws IllegalArgumentException
+    {
+        /*
+         * Checks if we are constructing a geophysics category list, then rescale all cagegories
+         * according. We may loose the user intend by doing so (he may have specified explicitly
+         * a list of GeophysicsCategory), but this is the SampleDimension's job to keep trace of
+         * it.
+         */
+        final boolean geophysics = (inverse != null);
+        assert geophysics == (this instanceof GeophysicsCategoryList) : geophysics;
+        this.categories = categories = categories.clone();
+        for (int i=0; i<categories.length; i++) {
+            categories[i] = categories[i].geophysics(geophysics);
+        }
+        Arrays.sort(categories, this);
+        assert isSorted(categories);
+        assert isGeophysics(geophysics);
+        /*
+         * Constructs the array of Category.minimum values. During
+         * the loop, we make sure there is no overlapping ranges.
+         */
+        boolean hasGaps = false;
+        minimums = new double[categories.length];
+        for (int i=0; i<categories.length; i++) {
+            final double minimum = minimums[i] = categories[i].minimum;
+            if (i != 0) {
+                assert !(minimum < minimums[i-1]) : minimum; // Use '!' to accept NaN.
+                final Category previous = categories[i-1];
+                if (compare(minimum, previous.maximum) <= 0) {
+                    // Two categories have overlapping range;
+                    // Formats an error message.
+                    final NumberRange range1 = categories[i-1].getRange();
+                    final NumberRange range2 = categories[i-0].getRange();
+                    final Comparable[] args = new Comparable[] {
+                        range1.getMinValue(), range1.getMaxValue(),
+                        range2.getMinValue(), range2.getMaxValue()
+                    };
+                    for (int j=0; j<args.length; j++) {
+                        if (args[j] instanceof Number) {
+                            final float value = ((Number) args[j]).floatValue();
+                            if (Float.isNaN(value)) {
+                                String hex = Integer.toHexString(Float.floatToRawIntBits(value));
+                                args[j] = "NaN(" + hex + ')';
+                            }
+                        }
+                    }
+                    throw new IllegalArgumentException(Errors.format(ErrorKeys.RANGE_OVERLAP_$4, args));
+                }
+                // Checks if there is a gap between this category and the previous one.
+                if (!Double.isNaN(minimum) && minimum!=previous.getRange().getMaximum(false)) {
+                    hasGaps = true;
+                }
+            }
+        }
+        this.hasGaps = hasGaps;
+        /*
+         * Search for the "nodata" category. This loop looks
+         * for a qualitative category with the NaN value.
+         */
+        Category nodata = Category.NODATA;
+        final long nodataBits = Double.doubleToRawLongBits(Double.NaN);
+        for (int i=categories.length; --i>=0;) {
+            final Category candidate = categories[i];
+            final double value = candidate.geophysics(true).minimum;
+            if (Double.isNaN(value)) {
+                nodata = candidate;
+                if (Double.doubleToRawLongBits(value) == nodataBits) {
+                    // Give a preference for the standard Double.NaN.
+                    // We should have only one such value, since the
+                    // range check above prevents range overlapping.
+                    break;
+                }
+            }
+        }
+        this.nodata = nodata;
+        /*
+         * Search for what seems to be the "main" category. This loop looks for the
+         * quantitative category (if there is one) with the widest range of sample values.
+         */
+        double range = 0;
+        Category main = null;
+        for (int i=categories.length; --i>=0;) {
+            final Category candidate = categories[i];
+            if (candidate.isQuantitative()) {
+                final Category candidatePeer = candidate.geophysics(false);
+                final double candidateRange = candidatePeer.maximum - candidatePeer.minimum;
+                if (candidateRange >= range) {
+                    range = candidateRange;
+                    main = candidate;
+                }
+            }
+        }
+        this.main = main;
+        this.last = (main != null || categories.length == 0) ? main : categories[0];
+        /*
+         * Search for the fallback if {@link #getCategory(double)} is invoked with a sample
+         * value greater than all ranges of sample values. This is the last category to have
+         * a range of real numbers.
+         */
+        Category overflowFallback = null;
+        if (searchNearest) {
+            for (int i=categories.length; --i>=0;) {
+                final Category category = categories[i];
+                if (!Double.isNaN(category.maximum)) {
+                    overflowFallback = category;
+                    break;
+                }
+            }
+        }
+        this.overflowFallback = overflowFallback;
+        /*
+         * Set the inverse transform. If no inverse transform has been explicitly specified, then
+         * this is the "normal" construction call (i.e. not the special construction performed by
+         * GeophysicsCategoryList) and we create our internal inverse object.
+         */
+        if (inverse == null) {
+            inverse = new GeophysicsCategoryList(categories, units, this);
+        }
+        this.inverse = inverse;
+        assert (this instanceof GeophysicsCategoryList) !=
+            (inverse instanceof GeophysicsCategoryList);
+    }
+

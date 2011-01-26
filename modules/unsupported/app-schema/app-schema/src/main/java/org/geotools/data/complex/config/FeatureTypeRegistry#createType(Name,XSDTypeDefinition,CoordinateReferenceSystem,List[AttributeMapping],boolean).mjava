@@ -1,0 +1,97 @@
+    /**
+     * Creates an {@link AttributeType} that matches the xsd type definition as much as possible.
+     * <p>
+     * The original type definition given by the {@link XSDTypeDefinition} is kept as
+     * AttributeType's metadata stored as a "user data" property using
+     * <code>XSDTypeDefinition.class</code> as key.
+     * </p>
+     * <p>
+     * If it is a complex attribute, it will contain all the properties declared in the
+     * <code>typeDefinition</code>, as well as all the properties declared in its super types.
+     * </p>
+     * TODO: handle the case where the extension mechanism is restriction.
+     * 
+     * @param assignedName
+     * @param typeDefinition
+     * @return
+     */
+    private AttributeType createType(final Name assignedName,
+            final XSDTypeDefinition typeDefinition, CoordinateReferenceSystem crs,
+            List<AttributeMapping> attMappings, boolean anonymous) {
+
+        AttributeType attType;
+        // /////////
+        if (processingTypes.contains(assignedName)) {
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine("Recursion found for type " + assignedName + ". Proxying it.");
+            }
+            attType = createProxiedType(assignedName, typeDefinition, anonymous ? anonTypeRegistry
+                    : typeRegistry);
+            return attType;
+        }
+        processingTypes.push(assignedName);
+        // //////////
+
+        final XSDTypeDefinition baseType = typeDefinition.getBaseType();
+
+        AttributeType superType = null;
+        if (baseType != null) {
+            String targetNamespace = baseType.getTargetNamespace();
+            String name = baseType.getName();
+            superType = getType(targetNamespace, name);
+            if (superType == null) {
+                superType = createType(baseType, crs, attMappings);
+            }
+        } else {
+            LOGGER.warning(assignedName + " has no super type");
+        }
+
+        if (typeDefinition instanceof XSDComplexTypeDefinition) {
+            XSDComplexTypeDefinition complexTypeDef;
+            complexTypeDef = (XSDComplexTypeDefinition) typeDefinition;
+            boolean includeParents = true;
+            List children = Schemas.getChildElementDeclarations(typeDefinition, includeParents);
+
+            final Collection<PropertyDescriptor> schema = new ArrayList<PropertyDescriptor>(
+                    children.size());
+
+            XSDElementDeclaration childDecl;
+            AttributeDescriptor descriptor;
+            for (Iterator it = children.iterator(); it.hasNext();) {
+                childDecl = (XSDElementDeclaration) it.next();
+                try {
+                    descriptor = createAttributeDescriptor(complexTypeDef, childDecl, crs,
+                            attMappings);
+                    schema.add(descriptor);
+                } catch (NoSuchElementException e) {
+                    LOGGER.log(Level.WARNING, e.getMessage());
+                    throw e;
+                }
+            }
+
+            attType = createComplexAttributeType(assignedName, schema, complexTypeDef, superType);
+        } else {
+            Class<?> binding = String.class;
+            boolean isIdentifiable = false;
+            boolean isAbstract = false;
+            List<Filter> restrictions = Collections.emptyList();
+            InternationalString description = null;
+            attType = typeFactory.createAttributeType(assignedName, binding, isIdentifiable,
+                    isAbstract, restrictions, superType, description);
+        }
+
+        attType.getUserData().put(XSDTypeDefinition.class, typeDefinition);
+
+        processingTypes.pop();
+
+        // even if the type is anonymous, it still has to be registered somewhere because
+        // it's needed for the proxied types to find them. That's why we have 2 registries,
+        // typeRegistry
+        // and anonTypeRegistry. TypeRegistry is the global one, since anonymous types are meant to
+        // be
+        // local and shouldn't be searchable.
+        register(attType, anonymous);
+
+        return attType;
+    }
+

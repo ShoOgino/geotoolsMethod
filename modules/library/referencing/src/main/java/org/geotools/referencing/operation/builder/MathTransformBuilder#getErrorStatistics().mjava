@@ -1,0 +1,34 @@
+    /**
+     * Returns statistics about the errors. The errors are computed as the distance between
+     * {@linkplain #getSourcePoints source points} transformed by the math transform computed
+     * by this {@code MathTransformBuilder}, and the {@linkplain #getTargetPoints target points}.
+     * Use {@link Statistics#rms} for the <cite>Root Mean Squared error</cite>.
+     *
+     * @throws FactoryException If the math transform can't be created or used.
+     */
+    public Statistics getErrorStatistics() throws FactoryException {
+        final MathTransform  mt     = getMathTransform();
+        final Statistics     stats  = new Statistics();
+        final DirectPosition buffer = new GeneralDirectPosition(getDimension());
+        for (final Iterator <MappedPosition> it=getMappedPositions().iterator(); it.hasNext();) {
+            final MappedPosition mp = (MappedPosition) it.next();
+            /*
+             * Transforms the source point using the math transform calculated by this class.
+             * If the transform can't be applied, then we consider this failure as if it was
+             * a factory error rather than a transformation error. This simplify the exception
+             * declaration, but also has some sense on a conceptual point of view. We are
+             * transforming the exact same points than the one used for creating the math
+             * transform. If one of those points can't be transformed, then there is probably
+             * something wrong with the transform we just created.
+             */
+            final double error;
+            try {
+                error = mp.getError(mt, buffer);
+            } catch (TransformException e) {
+                throw new FactoryException(Errors.format(ErrorKeys.CANT_TRANSFORM_VALID_POINTS), e);
+            }
+            stats.add(error);
+        }
+        return stats;
+    }
+

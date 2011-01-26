@@ -1,0 +1,38 @@
+    /**
+     * Returns every tiles that intersect the given region.
+     *
+     * @throws IOException If it was necessary to fetch an image dimension from its
+     *         {@linkplain Tile#getImageReader reader} and this operation failed.
+     */
+    public Collection<Tile> getTiles(final Rectangle region, final Dimension subsampling,
+                                     final boolean subsamplingChangeAllowed) throws IOException
+    {
+        for (OverviewLevel level=root; level!=null; level=level.getFinerLevel()) {
+            final Tile sample = level.getSampleTile();
+            final Dimension doable = sample.getSubsamplingFloor(subsampling);
+            if (doable == null) {
+                // The current level can not handle the given subsampling or any finer one.
+                continue;
+            }
+            if (doable != subsampling) {
+                if (!subsamplingChangeAllowed) {
+                    // The current level can not handle the given subsampling
+                    // and we are not allowed to use a finer one.
+                    continue;
+                }
+            }
+            /*
+             * Gets the tiles at current level and checks if the cost of reading them is lower
+             * than the cost of reading the tiles at the previous (coarser) level. They could
+             * be lower if the region to read is small enough so that reading smaller tiles
+             * compensate the cost of applying a higher subsampling.
+             */
+            final ArrayList<Tile> tiles = new ArrayList<Tile>();
+            level.getTiles(tiles, region, subsampling, Long.MAX_VALUE);
+            // TODO: The search in finer levels is not yet implemented.
+            subsampling.setSize(doable);
+            return tiles;
+        }
+        return null;
+    }
+

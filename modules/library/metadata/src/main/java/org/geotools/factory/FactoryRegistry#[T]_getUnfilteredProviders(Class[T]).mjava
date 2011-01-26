@@ -1,0 +1,34 @@
+    /**
+     * Implementation of {@link #getServiceProviders(Class, Filter, Hints)} without the filtering
+     * applied by the {@link #isAcceptable(Object, Class, Hints, Filter)} method. If this filtering
+     * is not already presents in the filter given to this method, then it must be applied on the
+     * elements returned by the iterator. The later is preferrable when:
+     * <p>
+     * <ul>
+     *   <li>There is some cheaper tests to perform before {@code isAcceptable}.</li>
+     *   <li>We don't want a restrictive filter in order to avoid trigging a classpath
+     *       scan if this method doesn't found any element to iterate.</li>
+     * </ul>
+     * <p>
+     * <b>Note:</b>
+     * {@link #synchronizeIteratorProviders} should also be invoked once before this method.
+     *
+     * @todo Use Hints to match Constructor.
+     */
+    final <T> Iterator<T> getUnfilteredProviders(final Class<T> category) {
+        /*
+         * If the map is not empty, then this mean that a scanning is under progress, i.e.
+         * 'scanForPlugins' is currently being executed. This is okay as long as the user
+         * is not asking for one of the categories under scanning. Otherwise, the answer
+         * returned by 'getServiceProviders' would be incomplete because not all plugins
+         * have been found yet. This can lead to some bugs hard to spot because this methoud
+         * could complete normally but return the wrong plugin. It is safer to thrown an
+         * exception so the user is advised that something is wrong.
+         */
+        if (scanningCategories.contains(category)) {
+            throw new RecursiveSearchException(category);
+        }
+        scanForPluginsIfNeeded(category);
+        return getServiceProviders(category, true);
+    }
+

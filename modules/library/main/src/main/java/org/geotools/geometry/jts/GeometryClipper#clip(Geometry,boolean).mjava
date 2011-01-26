@@ -1,0 +1,44 @@
+    /**
+     * Clips the geometry on the specified bounds. 
+     * 
+     * @param g
+     *            The geometry to be clipped
+     * @param ensureValid
+     *            If false there is no guarantee the polygons returned will be valid according to
+     *            JTS rules (but should still be good enough to be used for pure rendering)
+     * @return
+     */
+    public Geometry clip(Geometry g, boolean ensureValid) {
+        // basic pre-flight checks
+        if (g == null) {
+            return null;
+        }
+        Envelope geomEnvelope = g.getEnvelopeInternal();
+        if (geomEnvelope.isNull()) {
+            return null;
+        }
+        if (bounds.contains(geomEnvelope)) {
+            return g;
+        } else if (!bounds.intersects(geomEnvelope)) {
+            return null;
+        }
+
+        // clip for good
+        if (g instanceof LineString) {
+            return clipLineString((LineString) g);
+        } else if (g instanceof Polygon) {
+            if(ensureValid) {
+                GeometryFactory gf = g.getFactory();
+                CoordinateSequenceFactory csf = gf.getCoordinateSequenceFactory();
+                return g.intersection(gf.createPolygon(buildBoundsString(gf, csf), null));
+            } else {
+                return clipPolygon((Polygon) g);
+            }
+        } else if (g instanceof GeometryCollection) {
+            return clipCollection((GeometryCollection) g, ensureValid);
+        } else {
+            // still don't know how to clip this
+            return g;
+        }
+    }
+

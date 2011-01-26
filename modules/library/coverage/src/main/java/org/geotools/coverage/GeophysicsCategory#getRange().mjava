@@ -1,0 +1,40 @@
+    /**
+     * Returns the range of geophysics value.
+     *
+     * @return The range of geophysics values.
+     * @throws IllegalStateException if sample values can't be transformed into geophysics values.
+     *
+     * @todo The algorithm for finding minimum and maximum values is very simple for
+     *       now and will not work if the transformation has local extremas. We would
+     *       need some more sophesticated algorithm for the most general cases. Such
+     *       a general algorithm would be usefull in the super-class constructor as well.
+     */
+    @Override
+    public NumberRange<? extends Number> getRange() throws IllegalStateException {
+        if (range == null) try {
+            final MathTransform1D tr = inverse.transform;
+            final NumberRange<? extends Number> r = inverse.range;
+            boolean minIncluded = r.isMinIncluded();
+            boolean maxIncluded = r.isMaxIncluded();
+            double min  = tr.transform(r.getMinimum());
+            double max  = tr.transform(r.getMaximum());
+            double min2 = tr.transform(r.getMinimum(!minIncluded));
+            double max2 = tr.transform(r.getMaximum(!maxIncluded));
+            if ((minIncluded ? min2 : min) > (maxIncluded ? max2 : max)) {
+                final double  tmp, tmp2;
+                final boolean tmpIncluded;
+                tmp=min;   tmp2=min2;  tmpIncluded=minIncluded;
+                min=max;   min2=max2;  minIncluded=maxIncluded;
+                max=tmp;   max2=tmp2;  maxIncluded=tmpIncluded;
+            }
+            assert Double.doubleToLongBits(minimum) == Double.doubleToLongBits(minIncluded ? min : min2);
+            assert Double.doubleToLongBits(maximum) == Double.doubleToLongBits(maxIncluded ? max : max2);
+            range = new Range(min, minIncluded, max, maxIncluded, min2, max2);
+
+        } catch (TransformException cause) {
+            throw new IllegalStateException(Errors.format(ErrorKeys.BAD_TRANSFORM_$1,
+                    Classes.getClass(inverse.transform)), cause);
+        }
+        return range;
+    }
+

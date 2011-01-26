@@ -1,0 +1,54 @@
+    public boolean hasNext() throws IOException {
+        if (this.goodRecs != null) {
+            while (!featureAvailable && this.goodRecs.hasNext()) {
+                next = (Data) goodRecs.next();
+                
+                Long l = (Long) next.getValue(1);
+                shp.goTo((int) l.longValue());
+                
+                record = shp.nextRecord();
+                
+                // read the geometry, so that we can decide if this row is to be skipped or not
+                Envelope envelope = record.envelope();
+                // ... if geometry is out of the target bbox, skip both geom and row
+                if (targetBBox != null && !targetBBox.isNull() && !targetBBox.intersects(envelope)) {
+                    geometry = null;
+                    continue;
+                // ... if the geometry is awfully small avoid reading it (unless it's a point)
+                } else if (simplificationDistance > 0 && envelope.getWidth() < simplificationDistance
+                        && envelope.getHeight() < simplificationDistance) {
+                    try {
+                        if(screenMap != null && screenMap.checkAndSet(envelope)) {
+                            geometry = null;
+                            continue;
+                        } else {
+                            // if we are using the screenmap better provide a slightly modified
+                            // version of the geometry bounds or we'll end up with many holes
+                            // in the rendering
+                            geometry = record.getSimplifiedShape(screenMap);
+                        }
+                    } catch(Exception e) {
+                        geometry = record.getSimplifiedShape();
+                    }
+                // ... otherwise business as usual
+                } else {
+                    geometry = record.shape();
+                }
+
+                // read the dbf only if the geometry was not skipped
+                if (dbf != null) {
+                    ((IndexedDbaseFileReader) dbf).goTo(record.number);
+                    row = dbf.readRow();
+                } else {
+                    row = null;
+                }
+                
+                featureAvailable = true;
+            }
+            
+            return featureAvailable;
+        } else {
+            return super.hasNext();
+        }
+    }
+

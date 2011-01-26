@@ -1,0 +1,73 @@
+    void paintLabels(Graphics2D graphics, Rectangle displayArea) {
+        if (!activeLayers.isEmpty()) {
+            throw new IllegalStateException(activeLayers
+                    + " are layers that started rendering but have not completed,"
+                    + " stop() or endLayer() must be called before end() is called");
+        }
+        LabelIndex glyphs = new LabelIndex();
+        glyphs.reserveArea( reserved );
+
+        // Hack: let's reduce the display area width and height by one pixel.
+        // If the rendered image is 256x256, proper rendering of polygons and
+        // lines occurr only if the display area is [0,0; 256,256], yet if you
+        // try to render anything at [x,256] or [256,y] it won't show.
+        // So, to avoid labels that happen to touch the border being cut
+        // by one pixel, we reduce the display area.
+        // Feels hackish, don't have a better solution at the moment thought
+        displayArea = new Rectangle(displayArea);
+        displayArea.width -= 1;
+        displayArea.height -= 1;
+        
+        // prepare the geometry clipper
+        clipper = new GeometryClipper(new Envelope(displayArea.getMinX(), displayArea.getMaxX(), displayArea.getMinY(), displayArea.getMaxY()));
+
+        List<LabelCacheItem> items; // both grouped and non-grouped
+        if (needsOrdering) {
+            items = orderedLabels();
+        } else {
+            items = getActiveLabels();
+        }
+        LabelPainter painter = new LabelPainter(graphics, labelRenderingMode);
+        for (LabelCacheItem labelItem : items) {
+            if (stop)
+                return;
+            
+            painter.setLabel(labelItem);
+            try {
+                // LabelCacheItem labelItem = (LabelCacheItem)
+                // labelCache.get(labelIter.next());
+
+                // DJB: simplified this. Just send off to the point,line,or
+                // polygon routine
+                // NOTE: labelItem.getGeometry() returns the FIRST geometry, so
+                // we're assuming that lines & points arent mixed
+                // If they are, then the FIRST geometry determines how its
+                // rendered (which is probably bad since it should be in
+                // area,line,point order
+                // TOD: as in NOTE above
+
+                /*
+                 * Just use identity for tempTransform because display area is
+                 * 0,0,width,height and oldTransform may have a different
+                 * origin. OldTransform will be used later for drawing. -rg & je
+                 */
+                AffineTransform tempTransform = new AffineTransform();
+
+                Geometry geom = labelItem.getGeometry();
+                if ((geom instanceof Point) || (geom instanceof MultiPoint))
+                    paintPointLabel(painter, tempTransform, displayArea, glyphs);
+                else if (((geom instanceof LineString) && !(geom instanceof LinearRing))
+                        || (geom instanceof MultiLineString))
+                    paintLineLabels(painter, tempTransform, displayArea, glyphs);
+                else if (geom instanceof Polygon || geom instanceof MultiPolygon
+                        || geom instanceof LinearRing)
+                    paintPolygonLabel(painter, tempTransform, displayArea, glyphs);
+            } catch (Exception e) {
+                System.out.println("Issues painting " + labelItem.getLabel());
+                // the decimation can cause problems - we try to minimize it
+                // do nothing
+                e.printStackTrace();
+            }
+        }
+    }
+

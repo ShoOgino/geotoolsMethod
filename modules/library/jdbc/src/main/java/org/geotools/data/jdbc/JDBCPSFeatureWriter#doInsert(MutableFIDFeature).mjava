@@ -1,0 +1,35 @@
+    /**
+     * Override that uses prepared statements to perform the operation.
+     * 
+     * @see org.geotools.data.jdbc.JDBCFeatureWriter#doInsert(org.geotools.data.jdbc.MutableFIDFeature)
+     */
+    protected void doInsert(MutableFIDFeature current) throws IOException, SQLException {
+        LOGGER.fine("inserting into database feature " + current);
+
+        // lazily create the insert statement
+        final Connection connection = queryData.getConnection();
+        if (insertStatement == null) {
+            final SimpleFeatureType featureType = queryData.getFeatureType();
+            insertStatement = createInsertStatement(connection, featureType);
+        }
+
+        try {
+            fillInsertParameters(insertStatement, current);
+        } catch (SQLException sqle) {
+            String msg = "SQL Exception writing column values";
+            LOGGER.log(Level.SEVERE, msg, sqle);
+            queryData.close(sqle);
+            throw new DataSourceException(msg, sqle);
+        }
+
+        executeInsert(insertStatement);
+
+        // should the ID be generated during an insert, we need to read it back
+        // and set it into the feature
+        //final int pkColumnCount = mapper.getColumnCount();
+        //if (((pkColumnCount > 0) && mapper.hasAutoIncrementColumns())) {
+            final String fid = mapper.createID(connection, current, insertStatement);
+            current.setID(fid);
+        //}
+    }
+

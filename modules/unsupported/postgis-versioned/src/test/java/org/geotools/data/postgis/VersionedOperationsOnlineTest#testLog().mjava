@@ -1,0 +1,71 @@
+    public void testLog() throws IOException, IllegalAttributeException {
+        VersionedPostgisDataStore ds = getDataStore();
+        String newId = buildRiverHistory();
+        VersionedPostgisFeatureStore fs = (VersionedPostgisFeatureStore) ds
+                .getFeatureSource("river");
+
+        // get log only for newly created features
+        Filter newIdFilter = ff.id(Collections.singleton(ff.featureId(newId)));
+        SimpleFeatureCollection fc = fs.getLog("1", "5", newIdFilter, null, -1);
+        assertEquals(1, fc.size());
+        SimpleFeatureIterator it = fc.features();
+        SimpleFeature f = it.next();
+        assertEquals("changesets.4", f.getID());
+        assertEquals("lamb", f.getAttribute("author"));
+        assertEquals("third change", f.getAttribute("message"));
+        it.close();
+
+        // get log for rv2 (most modified)
+        Filter rv2IdFilter = ff.id(Collections.singleton(ff.featureId("river.rv2")));
+        fc = fs.getLog("1", "5", rv2IdFilter, null, -1);
+        assertEquals(3, fc.size());
+        it = fc.features();
+        f = it.next();
+        assertEquals(new Long(5), f.getAttribute("revision"));
+        assertEquals("trout", f.getAttribute("author"));
+        assertEquals("fourth change", f.getAttribute("message"));
+        f = it.next();
+        assertEquals(new Long(3), f.getAttribute("revision"));
+        assertEquals("trout", f.getAttribute("author"));
+        assertEquals("second change", f.getAttribute("message"));
+        f = it.next();
+        assertEquals(new Long(2), f.getAttribute("revision"));
+        assertEquals("lamb", f.getAttribute("author"));
+        assertEquals("first change", f.getAttribute("message"));
+        it.close();
+
+        // get log for rv1
+        Filter rv1IdFilter = ff.id(Collections.singleton(ff.featureId("river.rv1")));
+        fc = fs.getLog("1", "5", rv1IdFilter, null, -1);
+        assertEquals(1, fc.size());
+        it = fc.features();
+        f = it.next();
+        assertEquals("changesets.2", f.getID());
+        assertEquals("lamb", f.getAttribute("author"));
+        assertEquals("first change", f.getAttribute("message"));
+        it.close();
+        
+        // make sure the symbolic names for feature versions do work
+        fc = fs.getLog("FIRST", "LAST", Filter.INCLUDE, null, -1);
+        assertEquals(4, fc.size());
+        
+        // make sure the old way to specify the current version works too
+        fc = fs.getLog("FIRST", "CURRENT", Filter.INCLUDE, null, -1);
+        assertEquals(4, fc.size());
+        
+        // make sure maxRows works
+        fc = fs.getLog("FIRST", "LAST", Filter.INCLUDE, null, 1);
+        assertEquals(1, fc.size());
+        
+        // try out with an inverted sequence and see if we get an inverted log order
+        fc = fs.getLog("LAST", "FIRST", Filter.INCLUDE, null, -1);
+        assertEquals(4, fc.size());
+        it = fc.features();
+        f = it.next();
+        long r1 = ((Long) f.getAttribute("revision")).longValue();
+        f = it.next();
+        long r2 = ((Long) f.getAttribute("revision")).longValue();
+        assertTrue(r1 < r2);
+        it.close();
+    }
+

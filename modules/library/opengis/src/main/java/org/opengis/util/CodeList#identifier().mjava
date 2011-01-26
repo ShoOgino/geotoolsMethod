@@ -1,0 +1,46 @@
+    /**
+     * Returns the identifier declared in the {@link UML} annotation, or {@code null} if none.
+     * The UML identifier shall be the ISO or OGC name for this code constant.
+     *
+     * @return The ISO/OGC identifier for this code constant, or {@code null} if none.
+     *
+     * @since GeoAPI 2.2
+     */
+    public String identifier() {
+        // Save the field in a local variable for protection against concurrent change (this
+        // operation is garanteed atomic according Java specification). We don't synchronize
+        // since it is not a problem if this method is executed twice in concurrent threads.
+        String identifier = this.identifier;
+        if (identifier == null) {
+            final Class<? extends CodeList> codeType = getClass();
+            Field field;
+            try {
+                field = codeType.getField(name);
+            } catch (NoSuchFieldException e) {
+                // There is no field for a code of this name. It may be normal, since the user
+                // may have created a custom CodeList without declaring it as a constant.
+                field = null;
+            }
+            if (field != null && Modifier.isStatic(field.getModifiers())) {
+                final Object value;
+                try {
+                    value = field.get(null);
+                } catch (IllegalAccessException e) {
+                    // Should never happen since getField(String) returns only public fields.
+                    throw new AssertionError(e);
+                }
+                if (equals(value)) {
+                    final UML annotation = field.getAnnotation(UML.class);
+                    if (annotation != null) {
+                        identifier = annotation.identifier();
+                    }
+                }
+            }
+            if (identifier == null) {
+                identifier = "";
+            }
+            this.identifier = identifier;
+        }
+        return identifier.length() != 0 ? identifier : null;
+    }
+

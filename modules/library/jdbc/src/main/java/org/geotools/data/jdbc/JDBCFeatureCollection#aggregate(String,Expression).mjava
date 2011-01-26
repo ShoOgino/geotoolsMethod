@@ -1,0 +1,94 @@
+    Object aggregate(String aggregate, Expression expression) throws IOException {
+        org.opengis.filter.Filter filter = (org.opengis.filter.Filter) query.getFilter();
+        
+        if (org.opengis.filter.Filter.EXCLUDE.equals(filter)) {
+            return null;
+        }
+
+        
+        JDBC1DataStore jdbc = getDataStore();
+        SQLBuilder sqlBuilder = jdbc.getSqlBuilder(this.getSchema().getTypeName());
+
+        org.opengis.filter.Filter postFilter = (org.opengis.filter.Filter) sqlBuilder.getPostQueryFilter(query.getFilter()); 
+        if (postFilter != null && !org.opengis.filter.Filter.INCLUDE.equals(postFilter)) {
+            // this would require postprocessing the filter
+            // so we cannot optimize
+            return null;
+        }
+
+        Connection conn = null;
+        ResultSet results = null;
+        Statement statement = null;
+        try {
+            conn = jdbc.getConnection(getFeatureSource().getTransaction());
+
+            String typeName = getSchema().getTypeName();
+            //Filter preFilter = sqlBuilder.getPreQueryFilter(query.getFilter());
+            StringBuffer sql = new StringBuffer();
+            sql.append("SELECT ");
+            sql.append( aggregate );
+            sql.append( "(" );
+
+            if (expression == null) {
+            	sql.append("*"); //for things like COUNT(*), where a column isn't neccesary.
+            } else {
+            	//FIXME: add proper handling of expressions
+            
+	            //extract the column names from the expression
+	            //(if we see "featureMembers/*/ATTRIBUTE" change to "ATTRIBUTE")
+            	expression = (Expression)expression.accept(new ExpressionSimplifier(), null);
+            
+            	//            if (sqlBuilder instanceof DefaultSQLBuilder) {
+            	//            	DefaultSQLBuilder builder = (DefaultSQLBuilder) sqlBuilder;
+            	//                	builder.encoder.encode(expression);
+            	//                	//builder.sqlColumns(sql,)
+            	//                sql.append(builder.toString());
+            	//            } else {
+            	sqlBuilder.encode(sql, expression);
+            	//            }
+            }
+            
+            sql.append(") AS rslt");
+            sqlBuilder.sqlFrom(sql, typeName);
+            sqlBuilder.sqlWhere(sql, filter);
+
+            //LOGGER.finer("SQL: " + sql);
+            //System.out.println("SQL: " + sql);
+
+            statement = conn.createStatement();
+            results = statement.executeQuery(sql.toString());
+            if (results == null) return null; //SQL statement failed to execute
+            results.next();
+
+            Object answer = results.getObject("rslt");
+            results.next();
+            if( results.isAfterLast() ){
+            	return answer;	
+            }
+            List list = new ArrayList();
+            list.add( answer );
+            while( !results.isAfterLast() ){
+            	list.add( results.getObject("rslt") );
+            	results.next();	
+            }
+            return list;
+        } catch (SQLException sqlException) {
+            JDBCUtils.close(conn, getFeatureSource().getTransaction(), sqlException);
+            conn = null;
+            throw new DataSourceException("Could not calculate " + aggregate + " with "
+                + query.getHandle(), sqlException);
+        } catch (SQLEncoderException e) {
+            // could not encode count
+            // but at least we did not break the connection
+            return null;
+        } finally {
+        	try {
+	        	if( results != null ) results.close();
+	            if( statement != null ) statement.close();
+        	}
+        	catch (SQLException ignore ){        		
+        	}
+            JDBCUtils.close(conn, getFeatureSource().getTransaction(), null);
+        }
+    }
+

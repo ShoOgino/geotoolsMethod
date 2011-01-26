@@ -1,0 +1,56 @@
+    /**
+     * Builds an UPDATE sql statement suitable to be used to create a
+     * PreparedStatement.
+     * <p>
+     * The form of the returned statement is like
+     * <code>UPDATE tableName SET att = ?, att2 = ?</code>. Note the use of
+     * the
+     * <code>?<code> value placeholder. The number of <code>?<code> value place holders
+     * in the returned statement will be equal to the number of <code>types</code> and <code>values</code>
+     * passed as arguments.
+     * </p>
+     * 
+     * @param types
+     *            the attributes to be changed.
+     * @param values
+     *            the values to change them to, forming a one to one mapping with <code>types</code>.
+     * @param whereStmt
+     *            the feature to update.
+     * 
+     * @return an update sql statement to be used in a PreparedStatement.
+     * 
+     * @throws IOException
+     *             if the lengths of types and values don't match.
+     * @see #setModifyPreparedStatementValues
+     */
+    private String makeModifySqlStatement(AttributeDescriptor[] types, Object[] values, String whereStmt)
+            throws IOException {
+        final int arrLength = types.length;
+        if (arrLength != values.length) {
+            throw new IllegalArgumentException("length of value array is not " + "same length as type array");
+        }
+        StringBuffer sqlStatement = new StringBuffer("UPDATE ");
+        sqlStatement.append(sqlBuilder.encodeTableName(tableName) + " SET ");
+
+        for (int i = 0; i < arrLength; i++) {
+            AttributeDescriptor curType = types[i];
+            sqlStatement.append(sqlBuilder.encodeColumnName(curType.getLocalName()));
+            sqlStatement.append(" = ");
+
+            if (curType instanceof GeometryDescriptor) {
+                //create a placeholder where to set the geometry as WKT
+                int srid = getSRID(curType.getLocalName());
+                sqlStatement.append("GeometryFromText( ?, ").append(srid).append(")");
+            } else {
+                sqlStatement.append("?");
+            }
+
+            sqlStatement.append((i < (arrLength - 1)) ? ", " : " ");
+        }
+
+        sqlStatement.append(whereStmt);
+        sqlStatement.append(";");
+
+        return sqlStatement.toString();        
+    }
+

@@ -1,0 +1,79 @@
+    /**
+     * Returns a list of the types in the generated schema sorted
+     * as follows:
+     * <p>
+     *         <ul>
+     *         <li>If A is a super type of B, then A appears in list before B.
+     *         <li>If B is complex and A is referenced from the type definition
+     * of B, then A appears in the list before B.
+     *         </ul>
+     *  </p>
+     */
+
+	public List sort() {
+		//build a directed graph representing dependencies among types
+		GraphGenerator gg = new BasicDirectedGraphGenerator();
+		
+		for (Iterator itr = types.values().iterator(); itr.hasNext();) {
+			AttributeType type = (AttributeType) itr.next();
+			AttributeType superType =  type.getSuper();
+			
+			if (superType != null) {
+				//add edge type -> parent
+				gg.add(new Object[]{type,superType});
+			}
+			
+			if (type instanceof ComplexType) {
+				ComplexType cType = (ComplexType) type;
+				
+				//add an edge for each descriptor
+				Collection atts = cType.getDescriptors();
+				for (Iterator aitr = atts.iterator(); aitr.hasNext();) {
+					PropertyDescriptor ad = (PropertyDescriptor) aitr.next();
+					gg.add(new Object[]{type,ad.getType()});
+				}
+			}
+		}
+		
+		Graph graph = gg.getGraph();
+		
+		//test the graph for cycles
+		CycleDetector cycleDetector = new DirectedCycleDetector(graph);
+		if (cycleDetector.containsCycle()) {
+			logger.info("Cycle found");
+			return null;
+		}
+			 
+		
+		//no cycles, perform a topological sorting of the graph
+		DirectedDepthFirstTopologicalIterator iterator = 
+			new DirectedDepthFirstTopologicalIterator();
+		
+		final ArrayList sorted = new ArrayList();
+		GraphWalker walker = new GraphWalker() {
+			
+			public int visit(Graphable element, GraphTraversal traversal) {
+				AttributeType type = (AttributeType) element.getObject();
+				
+				//only add if in this schema
+				if (type.getName().getNamespaceURI().equals(schema.getTargetNamespace())) {
+					sorted.add(element.getObject());	
+				}
+				
+				return GraphTraversal.CONTINUE;
+			}
+			
+			public void finish() { }
+		};
+		
+		GraphTraversal traversal = 
+			new BasicGraphTraversal(graph,walker,iterator);
+		traversal.init();
+		traversal.traverse();
+		
+		assert sorted.size() == types.size();
+		Collections.reverse(sorted);
+		
+		return sorted;
+	}
+

@@ -1,0 +1,155 @@
+    /**
+     * For each raster: crop->scale->translate->add to mosaic
+     * 
+     * @param queries
+     * @param mosaicGeometry
+     * @return
+     * @throws IOException
+     */
+    private RenderedImage createMosaic(final List<RasterQueryInfo> queries,
+            final GridEnvelope mosaicGeometry, final LoggingHelper log) throws IOException {
+
+        List<RenderedImage> transformed = new ArrayList<RenderedImage>(queries.size());
+
+        /*
+         * Do we need to expand to RGB color space and then create a new colormapped image with the
+         * whole mosaic?
+         */
+        boolean expandCM = queries.size() > 1 && rasterInfo.isColorMapped();
+        if (expandCM) {
+            LOGGER.fine("Creating mosaic out of " + queries.size()
+                    + " colormapped rasters. The mosaic tiles will be expanded to "
+                    + "\nRGB space and the resulting mosaic reduced to a new IndexColorModel");
+        }
+
+        for (RasterQueryInfo query : queries) {
+            RenderedImage image = query.getResultImage();
+            log.log(image, query.getRasterId(), "01_original");
+            if (expandCM) {
+                if (LOGGER.isLoggable(Level.FINER)) {
+                    LOGGER.finer("Creating color expanded version of tile for raster #"
+                            + query.getRasterId());
+                }
+
+                /*
+                 * reformat the image as a 4 band rgba backed by byte data
+                 */
+                image = FormatDescriptor.create(image, Integer.valueOf(DataBuffer.TYPE_BYTE), null);
+
+                log.log(image, query.getRasterId(), "04_1_colorExpanded");
+            }
+
+            image = cropToRequiredDimension(image, query.getResultGridRange());
+            log.log(image, query.getRasterId(), "02_crop");
+
+            // Raster data = image.getData();
+            // image = new BufferedImage(image.getColorModel(), (WritableRaster) data, false, null);
+            if (queries.size() == 1) {
+                return image;
+            }
+            final GridEnvelope mosaicLocation = query.getMosaicLocation();
+            // scale
+            Float scaleX = Float.valueOf(((float) mosaicLocation.getSpan(0) / image.getWidth()));
+            Float scaleY = Float.valueOf(((float) mosaicLocation.getSpan(1) / image.getHeight()));
+            Float translateX = Float.valueOf(0);
+            Float translateY = Float.valueOf(0);
+
+            if (!(Float.valueOf(1.0F).equals(scaleX) && Float.valueOf(1.0F).equals(scaleY))) {
+                ParameterBlock pb = new ParameterBlock();
+                pb.addSource(image);
+                pb.add(scaleX);
+                pb.add(scaleY);
+                pb.add(translateX);
+                pb.add(translateY);
+                pb.add(new InterpolationNearest());
+
+                image = JAI.create("scale", pb);
+                log.log(image, query.getRasterId(), "03_scale");
+
+                int width = image.getWidth();
+                int height = image.getHeight();
+
+                assert mosaicLocation.getSpan(0) == width;
+                assert mosaicLocation.getSpan(1) == height;
+            }
+
+            if (image.getMinX() != mosaicLocation.getLow(0)
+                    || image.getMinY() != mosaicLocation.getLow(1)) {
+                // translate
+                ParameterBlock pb = new ParameterBlock();
+                pb.addSource(image);
+                pb.add(Float.valueOf(mosaicLocation.getLow(0) - image.getMinX()));
+                pb.add(Float.valueOf(mosaicLocation.getLow(1) - image.getMinY()));
+                pb.add(null);
+
+                image = JAI.create("translate", pb);
+                log.log(image, query.getRasterId(), "04_translate");
+
+                assert image.getMinX() == mosaicLocation.getLow(0) : image.getMinX() + " != "
+                        + mosaicLocation.getLow(0);
+                assert image.getMinY() == mosaicLocation.getLow(1) : image.getMinY() + " != "
+                        + mosaicLocation.getLow(1);
+                assert image.getWidth() == mosaicLocation.getSpan(0) : image.getWidth() + " != "
+                        + mosaicLocation.getSpan(0);
+                assert image.getHeight() == mosaicLocation.getSpan(1) : image.getHeight() + " != "
+                        + mosaicLocation.getSpan(1);
+            }
+
+            transformed.add(image);
+        }
+
+        final RenderedImage mosaic;
+        if (queries.size() == 1) {
+            /*
+             * This is besides a very slight perf improvement needed because the JAI mosaic
+             * operation truncates floating point raster values to 0 and 1. REVISIT: If there's no
+             * workaround for that we should prevent raster catalogs made of floating point rasters
+             * and throw an exception as we could not really support that.
+             */
+            mosaic = transformed.get(0);
+        } else {
+            /*
+             * adapted from RasterLayerResponse.java in the imagemosaic module
+             */
+            ParameterBlockJAI mosaicParams = new ParameterBlockJAI("Mosaic");
+            mosaicParams.setParameter("mosaicType", MosaicDescriptor.MOSAIC_TYPE_OVERLAY);
+
+            // set background values to raster's no-data
+            double[] backgroundValues;
+            if (expandCM) {
+                backgroundValues = new double[] { 0, 0, 0, 0 };
+            } else {
+                final int numBands = rasterInfo.getNumBands();
+                backgroundValues = new double[numBands];
+                final int rasterIndex = 0;
+                Number noDataValue;
+                for (int bn = 0; bn < numBands; bn++) {
+                    noDataValue = rasterInfo.getNoDataValue(rasterIndex, bn);
+                    backgroundValues[bn] = noDataValue.doubleValue();
+                }
+            }
+            mosaicParams.setParameter("backgroundValues", backgroundValues);
+
+            final ImageLayout layout = new ImageLayout(mosaicGeometry.getLow(0),
+                    mosaicGeometry.getLow(1), mosaicGeometry.getSpan(0), mosaicGeometry.getSpan(1));
+            final int tileWidth = rasterInfo.getTileDimension(0).width;
+            final int tileHeight = rasterInfo.getTileDimension(0).height;
+            layout.setTileWidth(tileWidth);
+            layout.setTileHeight(tileHeight);
+
+            final RenderingHints hints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout);
+
+            for (RenderedImage img : transformed) {
+                mosaicParams.addSource(img);
+                log.appendLoggingGeometries(LoggingHelper.MOSAIC_RESULT, img);
+            }
+            log.log(LoggingHelper.MOSAIC_RESULT);
+
+            LOGGER.fine("Creating mosaic out of " + queries.size() + " raster tiles");
+            mosaic = JAI.create("Mosaic", mosaicParams, hints);
+
+            log.log(mosaic, 0L, "05_mosaic_result");
+        }
+        return mosaic;
+    }
+

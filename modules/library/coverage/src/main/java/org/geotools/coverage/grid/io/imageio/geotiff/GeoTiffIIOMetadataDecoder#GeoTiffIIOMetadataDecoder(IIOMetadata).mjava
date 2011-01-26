@@ -1,0 +1,51 @@
+	/**
+	 * The constructor builds a metadata adapter for the image metadata root
+	 * IIOMetadataNode.
+	 * 
+	 * @param imageMetadata
+	 *            The image metadata
+	 */
+	public GeoTiffIIOMetadataDecoder(final IIOMetadata imageMetadata) {
+	    if(imageMetadata==null)
+	        throw new NullPointerException(Errors.format(ErrorKeys.NULL_ARGUMENT_$1,"imageMetadata"));
+	    
+		// getting the image metadata root node.
+		rootNode = (IIOMetadataNode) imageMetadata.getAsTree(imageMetadata.getNativeMetadataFormatName());
+		if (rootNode == null) {
+			throw new IllegalArgumentException(
+					"Unable to retrieve metadata");
+		}
+		tiffTagsEntries = (IIOMetadataNode) rootNode.getFirstChild().getChildNodes();
+		if (tiffTagsEntries == null) {
+			throw new IllegalArgumentException(
+					"Unable to retrieve metadata");
+		}
+		numTiffTasEntries = tiffTagsEntries.getLength();
+		// getting the geokey ddirectory
+		geoKeyDir = getTiffField(GeoTIFFTagSet.TAG_GEO_KEY_DIRECTORY);
+		if (geoKeyDir != null) {
+
+        		// getting all the entries and its nunber
+        		geoKeyDirEntries = geoKeyDir.getFirstChild().getChildNodes();
+        		// GeoKeyDirVersion and the other parameters
+        		geoKeyDirVersion = getTiffShort(geoKeyDir,GeoTiffGCSCodes.GEO_KEY_DIRECTORY_VERSION_INDEX);
+        		geoKeyRevision = getTiffShort(geoKeyDir,GeoTiffGCSCodes.GEO_KEY_REVISION_INDEX);
+        		if (geoKeyRevision != 1) {
+        			geoKeyRevision = 1;
+        			// I had to remove this because I did not want to have wrong
+        			// revision numbers blocking us.
+        			// throw new UnsupportedOperationException("Unsupported revision");
+        		}
+        		geoKeyMinorRevision = getTiffShort(geoKeyDir,
+        				GeoTiffGCSCodes.GEO_KEY_MINOR_REVISION_INDEX);
+        		// loading the number of geokeys inside the geokeydirectory
+        		geoKeyDirTagsNum = getTiffShort(geoKeyDir,
+        				GeoTiffGCSCodes.GEO_KEY_NUM_KEYS_INDEX);
+        		// each geokey has 4 entries
+        		geoKeyDirEntriesNum = geoKeyDirEntries.getLength();
+		}
+		geoKeyDoubleParams = getTiffField(GeoTIFFTagSet.TAG_GEO_DOUBLE_PARAMS);
+		geoKeyAsciiParams = getTiffField(GeoTIFFTagSet.TAG_GEO_ASCII_PARAMS);
+
+	}
+

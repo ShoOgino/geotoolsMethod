@@ -1,0 +1,89 @@
+	/**
+	 * Constructor for an {@link ImagePyramidReader}.
+	 * 
+	 * @param source
+	 *            The source object.
+	 * @param uHints
+	 *            {@link Hints} to control the behaviour of this reader.
+	 * @throws IOException
+	 * @throws UnsupportedEncodingException
+	 * 
+	 */
+	public ImagePyramidReader(Object source, Hints uHints) throws IOException {
+		// //
+		//
+		// managing hints
+		//
+		// //
+		if (this.hints == null)
+			this.hints = new Hints();
+		if (uHints != null) {
+			this.hints.add(uHints);
+		}
+		this.coverageFactory = CoverageFactoryFinder.getGridCoverageFactory(this.hints);
+
+		// //
+		//
+		// Check source
+		//
+		// //
+		if (source == null) {
+
+			final NullPointerException ex = new NullPointerException("ImagePyramidReader:No source set to read this coverage.");
+			throw new DataSourceException(ex);
+		}
+		this.source = source;
+		this.sourceURL = Utils.checkSource(source, uHints);
+		if(sourceURL == null) {
+		    throw new IllegalArgumentException(
+                "This plugin accepts only File, URL and String pointing to a file");
+		} 
+		
+		// //
+		//
+		// Load tiles informations, especially the bounds, which will be
+		// reused
+		//
+		// //
+		// //
+		//
+		// get the crs if able to
+		//
+		// //		
+		final URL prjURL = DataUtilities.changeUrlExt(sourceURL, "prj"); 
+		PrjFileReader crsReader=null;
+		try {
+			crsReader = new PrjFileReader(Channels.newChannel(prjURL.openStream()));
+		} catch (FactoryException e) {
+			throw new DataSourceException(e);
+		}finally{
+			try{
+				crsReader.close();
+			}
+			catch (Throwable e) {
+				if(LOGGER.isLoggable(Level.FINE))
+					LOGGER.log(Level.FINE,e.getLocalizedMessage(),e);
+			}
+		}
+		final Object tempCRS = hints.get(Hints.DEFAULT_COORDINATE_REFERENCE_SYSTEM);
+		if (tempCRS != null) {
+			this.crs = (CoordinateReferenceSystem) tempCRS;
+			LOGGER.log(Level.WARNING, "Using forced coordinate reference system "+crs.toWKT());
+		} else {
+			final CoordinateReferenceSystem tempcrs = crsReader.getCoordinateReferenceSystem();
+			if (tempcrs == null) {
+				// use the default crs
+				crs = AbstractGridFormat.getDefaultCRS();
+				LOGGER.log(Level.WARNING,"Unable to find a CRS for this coverage, using a default one: "+crs.toWKT());
+			} else
+				crs = tempcrs;
+		}
+		
+		//
+		// Load properties file with information about levels and envelope
+		//
+		
+		// property file
+		parseMainFile(sourceURL);
+	}
+

@@ -1,0 +1,154 @@
+    /**
+     * Creates a {@link GridCoverage} for the provided {@link PlanarImage} using
+     * the {@link #raster2Model} that was provided for this coverage.
+     * 
+     * <p>
+     * This method is vital when working with coverages that have a raster to
+     * model transformation that is not a simple scale and translate.
+     * 
+     * @param image
+     *                contains the data for the coverage to create.
+     * @param raster2Model
+     *                is the {@link MathTransform} that maps from the raster
+     *                space to the model space.
+     * @return a {@link GridCoverage}
+     * @throws IOException
+     */
+    protected GridCoverage createCoverageFromImage(PlanarImage image,
+            MathTransform raster2Model) throws IOException {
+        // creating bands
+        final int numBands = image.getSampleModel().getNumBands();
+        final GridSampleDimension[] bands = new GridSampleDimension[numBands];
+
+        // checking the names
+        final ColorModel cm = image.getColorModel();
+        final String[] names = new String[numBands];
+
+        // in case of index color model we are already done.
+        if (cm instanceof IndexColorModel) {
+            names[0] = "index band";
+        } else {
+            // in case of multiband image we are not done yet.
+            final ColorSpace cs = cm.getColorSpace();
+
+            if (cs instanceof IHSColorSpace) {
+                names[0] = "Intensity band";
+                names[1] = "Hue band";
+                names[2] = "Saturation band";
+            } else {
+                // not IHS, let's take the type
+                final int type = cs.getType();
+
+                switch (type) {
+                case ColorSpace.CS_GRAY:
+                case ColorSpace.TYPE_GRAY:
+                    names[0] = "GRAY";
+
+                    break;
+
+                case ColorSpace.CS_sRGB:
+                case ColorSpace.CS_LINEAR_RGB:
+                case ColorSpace.TYPE_RGB:
+                    names[0] = "RED";
+                    names[1] = "GREEN";
+                    names[2] = "BLUE";
+
+                    break;
+
+                case ColorSpace.TYPE_CMY:
+                    names[0] = "CYAN";
+                    names[1] = "MAGENTA";
+                    names[2] = "YELLOW";
+
+                    break;
+
+                case ColorSpace.TYPE_CMYK:
+                    names[0] = "CYAN";
+                    names[1] = "MAGENTA";
+                    names[2] = "YELLOW";
+                    names[3] = "K";
+
+                    break;
+                }
+            }
+        }
+
+        Unit unit = null;
+        if (this.unit != null)
+            unit = this.unit;
+
+        // setting bands names.
+        for (int i = 0; i < numBands; i++) {
+            Category[] categories = null;
+            Category values = null;
+            Category nan = null;
+            int cat = 0;
+
+//            // TODO
+//            // Actually, the underlying readers use fillValue as noData
+//            // Is this correct?
+//            if (noDataValues != null) {
+//                final int size = noDataValues.length;
+//                if (size == 1) {
+//                    final double noData = noDataValues[0];
+//                    if (!Double.isNaN(noData)) {
+//                        nan = new Category(Vocabulary
+//                                .formatInternational(VocabularyKeys.NODATA),
+//                                new Color[] { new Color(0, 0, 0, 0) },
+//                                NumberRange.create(0, 0), NumberRange.create(
+//                                        noData, noData));
+//                    }
+//                }
+//                // TODO: Handle more nodatavalues
+//                cat++;
+//            }
+            if (validRange != null) {
+                double min = validRange[0];
+                double max = validRange[1];
+
+                // TODO: Workaround to handle fillValue = valid min
+                if (nan != null) {
+                    if (noDataValues[0] == validRange[0])
+                        min += Double.MIN_VALUE;
+                }
+
+                values = new Category("values", null, NumberRange.create(min,
+                        max), scalingParameters[0], scalingParameters[1]);
+                cat++;
+
+            }
+            if (cat > 0) {
+                categories = new Category[cat];
+                if (cat == 2) {
+                    categories[0] = nan;
+                    categories[1] = values;
+                } else
+                    categories[0] = nan == null ? values :nan ;
+            }
+
+            // categories[0] = values;
+            // if (nan != null)
+            // categories[1] = nan;
+            //
+            // final GridSampleDimension band = new
+            // GridSampleDimension(longName,
+            // categories, unit);
+//            final GridSampleDimension band = new GridSampleDimension(longName,
+//                    categories, unit);
+            final GridSampleDimension band = new GridSampleDimension(names[i],
+                    categories, unit);
+            
+            bands[i] = band;
+
+        }
+
+        // creating coverage
+        if (raster2Model != null) {
+            return coverageFactory.create(coverageName, image, coverageCRS,
+                    raster2Model, bands, null, null);
+        }
+
+        return coverageFactory.create(coverageName, image, new GeneralEnvelope(
+                coverageEnvelope), bands, null, null);
+    }
+

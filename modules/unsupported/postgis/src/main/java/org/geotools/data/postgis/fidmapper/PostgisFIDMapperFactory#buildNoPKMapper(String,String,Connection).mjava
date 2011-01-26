@@ -1,0 +1,32 @@
+    protected FIDMapper buildNoPKMapper(String schema, String tableName,
+        Connection connection) {
+        //oid's supported before version 7
+        if (getDatabaseMajorVersion(connection) <= 7) {
+            return new OIDFidMapper();
+        }
+
+        //table could also have been created with OID flag on
+        PostgisSQLBuilder sqlb = new PostgisSQLBuilder(new SQLEncoderPostgis(),
+                config);
+        String sql = "SELECT " + sqlb.encodeColumnName("oid") + " FROM "
+            + sqlb.encodeTableName(tableName) + " LIMIT 1";
+        Statement st = null;
+
+        try {
+            st = connection.createStatement();
+            st.execute(sql);
+
+            //if we get here oid is supported
+            return new OIDFidMapper();
+        } catch (SQLException e) {
+            //ignore, fall back to parent
+        } finally {
+            try {
+                st.close();
+            } catch (SQLException ignore) {
+            }
+        }
+
+        return super.buildNoPKMapper(schema, tableName, connection);
+    }
+

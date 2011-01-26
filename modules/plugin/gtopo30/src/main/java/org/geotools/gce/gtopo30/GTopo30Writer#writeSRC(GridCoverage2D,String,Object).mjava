@@ -1,0 +1,75 @@
+	/**
+	 * Writes the source file (.SRC). The default byte order is BIG_ENDIAN.
+	 * 
+	 * @param gc
+	 *            The GridCoverage to write
+	 * @param file
+	 *            The destination object (can be a File or ZipOutputStream)
+	 * @param dest
+	 * 
+	 * @throws FileNotFoundException
+	 *             If the destination file could not be found
+	 * @throws IOException
+	 *             If the file could not be written
+	 */
+	private void writeSRC(GridCoverage2D gc, final String name, Object dest)
+			throws FileNotFoundException, IOException {
+
+		// /////////////////////////////////////////////////////////////////////
+		// TODO @task @todo
+		// Here I am making the assumption that the non geophysiscs view is 8
+		// bit but it can also be 16. I should do something more general like a
+		// clamp plus a format but for the moment this is enough.
+		//
+		// We need also to get the one visible band
+		//
+		// /////////////////////////////////////////////////////////////////////
+		gc = gc.geophysics(false);
+		ImageOutputStream out = null;
+
+		if (dest instanceof File) {
+			out = ImageIO.createImageOutputStream(new File((File) dest,
+					new StringBuffer(name).append(".SRC").toString()));
+		} else {
+			final ZipOutputStream outZ = (ZipOutputStream) dest;
+			final ZipEntry e = new ZipEntry(gc.getName().toString() + ".SRC");
+			outZ.putNextEntry(e);
+
+			out = ImageIO.createImageOutputStream(outZ);
+		}
+
+		// setting byte order
+		out.setByteOrder(java.nio.ByteOrder.BIG_ENDIAN);
+
+		// /////////////////////////////////////////////////////////////////////
+		//
+		// Prepare to write
+		//
+		// /////////////////////////////////////////////////////////////////////
+		RenderedImage image = gc.getRenderedImage();
+		image = untileImage(image);
+
+		final ParameterBlockJAI pbj = new ParameterBlockJAI("imagewrite");
+		pbj.addSource(image);
+		pbj.setParameter("Format", "raw");
+		pbj.setParameter("Output", out);
+		final RenderedOp wOp = JAI.create("ImageWrite", pbj);
+
+		// /////////////////////////////////////////////////////////////////////
+		//
+		// Dispose things
+		//
+		// /////////////////////////////////////////////////////////////////////
+		final Object o = wOp
+				.getProperty(ImageWriteDescriptor.PROPERTY_NAME_IMAGE_WRITER);
+		if (o instanceof ImageWriter)
+			((ImageWriter) o).dispose();
+
+		if (!(dest instanceof File)) {
+			((ZipOutputStream) dest).closeEntry();
+		}
+		out.flush();
+		out.close();
+
+	}
+

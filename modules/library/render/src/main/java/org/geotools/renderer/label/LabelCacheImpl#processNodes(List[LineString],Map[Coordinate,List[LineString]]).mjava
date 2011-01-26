@@ -1,0 +1,61 @@
+    /**
+     * pull a line from the list, and: 1. if nothing connects to it (its
+     * issolated), add it to "result" 2. otherwise, merge it at the start/end
+     * with the LONGEST line there. 3. remove the original line, and the lines
+     * it merged with from the hashtables 4. go again, with the merged line
+     * 
+     * @param edges
+     * @param nodes
+     * @param result
+     * 
+     */
+    public List<LineString> processNodes(List<LineString> edges,
+            Map<Coordinate, List<LineString>> nodes) {
+        List<LineString> result = new ArrayList<LineString>();
+        int index = 0; // index into edges
+        while (index < edges.size()) // still more to do
+        {
+            // 1. get a line and remove it from the graph
+            LineString ls = (LineString) edges.get(index);
+            Coordinate key = ls.getCoordinateN(0);
+            List<LineString> nodeList = nodes.get(key);
+            if (nodeList == null) { // this was removed in an earlier iteration
+                index++;
+                continue;
+            } else if (!nodeList.contains(ls)) {
+                index++;
+                continue; // already processed
+            }
+            removeFromHash(nodes, ls); // we're removing this from the network
+
+            Coordinate key2 = ls.getCoordinateN(ls.getNumPoints() - 1);
+            List<LineString> nodeList2 = nodes.get(key2);
+
+            // case 1 -- this line is independent
+            if ((nodeList.size() == 0) && (nodeList2.size() == 0)) {
+                result.add(ls);
+                index++; // move to next line
+                continue;
+            }
+
+            if (nodeList.size() > 0) // touches something at the start
+            {
+                LineString ls2 = getLongest(nodeList); // merge with this one
+                ls = merge(ls, ls2);
+                removeFromHash(nodes, ls2);
+            }
+            if (nodeList2.size() > 0) // touches something at the start
+            {
+                LineString ls2 = getLongest(nodeList2); // merge with this one
+                ls = merge(ls, ls2);
+                removeFromHash(nodes, ls2);
+            }
+            // need for further processing
+            edges.set(index, ls); // redo this one.
+            putInNodeHash(ls.getCoordinateN(0), ls, nodes);
+            putInNodeHash(ls.getCoordinateN(ls.getNumPoints() - 1), ls, nodes);
+        }
+
+        return result;
+    }
+

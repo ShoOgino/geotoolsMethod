@@ -1,0 +1,105 @@
+    /**
+     * Creates a list of {@link org.geotools.data.complex.AttributeMapping} from the attribute
+     * mapping configurations in the provided list of {@link AttributeMapping}
+     * 
+     * @param root
+     * @param attDtos
+     * 
+     * @return
+     */
+    private List getAttributeMappings(final AttributeDescriptor root, final List attDtos,
+            String itemXpath) throws IOException {
+        List attMappings = new LinkedList();
+
+        for (Iterator it = attDtos.iterator(); it.hasNext();) {
+
+            org.geotools.data.complex.config.AttributeMapping attDto;
+            attDto = (org.geotools.data.complex.config.AttributeMapping) it.next();
+
+            String idExpr = attDto.getIdentifierExpression();            
+            String idXpath = null;
+            if (idExpr == null) {
+             // this might be because it's an XPath expression
+                idXpath = attDto.getIdentifierPath();
+                if (idXpath != null) {
+                    //validate without indexed elements
+                    final StepList inputXPathSteps = XPath.steps(root, itemXpath + "/"+ idXpath, namespaces);
+                    validateConfiguredNamespaces(inputXPathSteps);
+                }                         
+            }
+                        
+            String sourceExpr = attDto.getSourceExpression();
+            String inputXPath = null;
+            if (sourceExpr == null) {
+                // this might be because it's an XPath expression
+                inputXPath = attDto.getInputAttributePath();
+                if (inputXPath != null) {
+                    final StepList inputXPathSteps = XPath.steps(root, itemXpath + "/" + inputXPath, namespaces);
+                    validateConfiguredNamespaces(inputXPathSteps);
+                }
+            }
+            String expectedInstanceTypeName = attDto.getTargetAttributeSchemaElement();
+
+            final String targetXPath = attDto.getTargetAttributePath();
+            final StepList targetXPathSteps = XPath.steps(root, targetXPath, namespaces);
+            validateConfiguredNamespaces(targetXPathSteps);
+
+            final boolean isMultiValued = attDto.isMultiple();
+
+            final Expression idExpression = (idXpath == null) ? parseOgcCqlExpression(idExpr)
+                    : new AttributeExpressionImpl(idXpath, new Hints(
+                            FeaturePropertyAccessorFactory.NAMESPACE_CONTEXT, this.namespaces));
+            // if the data source is a data access, the input XPath expression is the source
+            // expression
+            final Expression sourceExpression; 
+
+            sourceExpression = (inputXPath == null) ? parseOgcCqlExpression(sourceExpr) : new AttributeExpressionImpl(inputXPath, new Hints(
+                  FeaturePropertyAccessorFactory.NAMESPACE_CONTEXT, this.namespaces));
+
+            final AttributeType expectedInstanceOf;
+
+            final Map clientProperties = getClientProperties(attDto, itemXpath);
+
+            if (expectedInstanceTypeName != null) {
+                Name expectedNodeTypeName = Types.degloseName(expectedInstanceTypeName, namespaces);
+                expectedInstanceOf = typeRegistry
+                        .getAttributeType(expectedNodeTypeName, null, null);
+                if (expectedInstanceOf == null) {
+                    String msg = "mapping expects and instance of " + expectedNodeTypeName
+                            + " for attribute " + targetXPath
+                            + " but the attribute descriptor was not found";
+                    throw new DataSourceException(msg);
+                }
+            } else {
+                expectedInstanceOf = null;
+            }
+            AttributeMapping attMapping;
+            String sourceElement = attDto.getLinkElement();
+            if(attDto.getLabel() != null || attDto.getParentLabel() != null) {
+                attMapping = new TreeAttributeMapping(idExpression, sourceExpression, targetXPathSteps,
+                        expectedInstanceOf, isMultiValued, clientProperties, attDto.getLabel(), 
+                        attDto.getParentLabel(), attDto.getTargetQueryString(), attDto.getInstancePath());
+            } else
+            if (sourceElement != null) {
+                // nested complex attributes, this could be a function expression for polymorphic types
+                Expression elementExpr = parseOgcCqlExpression(sourceElement);
+                String sourceField = attDto.getLinkField();
+                StepList sourceFieldSteps = null;
+                if (sourceField != null) {
+                    // it could be null for polymorphism mapping, 
+                    // i.e. when the linked element maps to the same table as the container mapping
+                    sourceFieldSteps = XPath.steps(root, sourceField, namespaces);
+                }
+                // a nested feature
+                attMapping = new NestedAttributeMapping(idExpression, sourceExpression,
+                        targetXPathSteps, isMultiValued, clientProperties,
+                        elementExpr, sourceFieldSteps, namespaces);
+            } else {
+                attMapping = new AttributeMapping(idExpression, sourceExpression, targetXPathSteps,
+                        expectedInstanceOf, isMultiValued, clientProperties);
+            }
+            attMappings.add(attMapping);
+        }
+        return attMappings;
+    }
+

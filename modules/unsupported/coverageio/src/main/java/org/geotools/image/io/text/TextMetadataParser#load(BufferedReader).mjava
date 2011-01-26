@@ -1,0 +1,41 @@
+    /**
+     * Reads all metadata from a stream. The default implementation invokes
+     * {@link #parseLine} for each non-empty line found in the stream. Notes:
+     * <p>
+     * <ul>
+     *   <li>This method is not public because it has no way to know how
+     *       to set the {@link #getSource source} metadata.</li>
+     *   <li>This method is not synchronized. Synchronization, if wanted,
+             must be done from the public frontend.</li>
+     *   <li>This method do not invokes {@link #clear} prior the loading.</li>
+     * </ul>
+     *
+     * @param in The stream to read until EOF. The stream will not be closed.
+     * @throws IOException if an error occurs during loading.
+     *
+     * @see #clear()
+     * @see #load(File)
+     * @see #load(URL)
+     * @see #parseLine
+     */
+    protected void load(final BufferedReader in) throws IOException {
+        assert Thread.holdsLock(this);
+        final Set<String> previousComments = new HashSet<String>();
+        final StringBuilder comments = new StringBuilder();
+        final String lineSeparator = System.getProperty("line.separator", "\n");
+        String line; while ((line=in.readLine())!=null) {
+            if (line.trim().length()!=0) {
+                if (!parseLine(line)) {
+                    if (previousComments.add(line)) {
+                        comments.append(line);
+                        comments.append(lineSeparator);
+                    }
+                }
+            }
+        }
+        if (comments.length() != 0) {
+            add((String) null, comments.toString());
+        }
+        putDone();
+    }
+

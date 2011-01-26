@@ -1,0 +1,37 @@
+    /**
+     * The only supported constructor for a DB2DataStore. This constructor is
+     * mainly intended to be called from DB2DataStoreFactory.
+     *
+     * @param connectionPool the initialized DB2 connection pool
+     * @param config the JDBCDataStoreConfiguration
+     * @param dbURL the database URL of the form
+     *        <code>jdbc:db2://hostname:hostport/dbname </code>
+     *
+     * @throws IOException
+     */
+    public DB2DataStore(DataSource dataSource,
+        JDBCDataStoreConfig config, String dbURL) throws IOException {
+        super(dataSource, config);
+
+        if (dataSource == null) {
+            throw new IOException("DataSource pool is null");
+        }
+
+        this.dbURL = dbURL;
+
+        // Get an instance of the DB2 spatial catalog for this database.
+        // We need to provide a database connection in case the spatial catalog instance
+        // does not already exist and we need to issue SQL against the database.
+        Connection conn = this.getConnection(Transaction.AUTO_COMMIT);
+
+        try {
+            this.catalog = DB2SpatialCatalog.getInstance(dbURL,
+                    config.getDatabaseSchemaName(), conn);
+            JDBCUtils.close(conn, Transaction.AUTO_COMMIT, null);
+        } catch (SQLException e) {
+            LOGGER.info("DB2SpatialCatalog create failed: " + e);
+            JDBCUtils.close(conn, Transaction.AUTO_COMMIT, e);
+            throw new IOException("DB2SpatialCatalog create failed");
+        }
+    }
+

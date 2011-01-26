@@ -1,0 +1,30 @@
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        protected Point2D transformNormalized(double x, double y, Point2D ptDst)
+                throws ProjectionException
+        {
+            // Compute using ellipsoidal formulas, for comparaison later.
+            final double normalizedLongitude = x;
+            assert (ptDst = super.transformNormalized(x, y, ptDst)) != null;
+
+            double cosphi = cos(y);
+            double b = cosphi * sin(x);
+            if (abs(abs(b) - 1.0) <= EPSILON) {
+                throw new ProjectionException(ErrorKeys.VALUE_TEND_TOWARD_INFINITY);
+            }
+
+            //Using Snyder's equation for calculating y, instead of the one used in Proj4
+            //poential problems when y and x = 90 degrees, but behaves ok in tests
+            y = atan2(tan(y), cos(x)) - latitudeOfOrigin;   /* Snyder 8-3 */
+            x = 0.5 * log((1.0+b) / (1.0-b));               /* Snyder 8-1 */
+
+            assert checkTransform(x, y, ptDst, getToleranceForSphereAssertions(normalizedLongitude));
+            if (ptDst != null) {
+                ptDst.setLocation(x,y);
+                return ptDst;
+            }
+            return new Point2D.Double(x,y);
+        }
+

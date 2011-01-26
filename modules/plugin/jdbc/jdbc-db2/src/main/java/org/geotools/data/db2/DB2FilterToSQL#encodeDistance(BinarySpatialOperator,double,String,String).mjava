@@ -1,0 +1,42 @@
+	    /**
+	     * Encode BEYOND and DWITHIN filters using ST_Distance function.
+	     *
+	     * @param filter a BinarySpatialOperator (should be DWithin or Beyond subclass)
+	     * @param distance the distance value
+	     * @param distanceUnits the units for the distance operation or blank/null if not used
+	     * @param op the distance operator, either &lt. or &gt.
+	     * @param filter the GeometryDistanceFilter
+	     *
+	     * @throws RuntimeException
+	     */
+	    private void encodeDistance(BinarySpatialOperator filter, double distance, String distanceUnits, String op)
+	        throws RuntimeException {
+	    	DefaultExpression left = (DefaultExpression) filter.getExpression1();
+	    	DefaultExpression right = (DefaultExpression) filter.getExpression2();
+	        try {
+	            int leftType = left.getType();
+	            int rightType = right.getType();
+
+	            // The test below should use ATTRIBUTE_GEOMETRY but only the value ATTRIBUTE
+	            if ((DefaultExpression.ATTRIBUTE == leftType)
+	                    && (DefaultExpression.LITERAL_GEOMETRY == rightType)) {
+	                this.out.write("db2gse.ST_Distance(");
+	                left.accept(this,null);
+	                this.out.write(", ");
+	                right.accept(this,Geometry.class);
+	                if (!(distanceUnits == null || distanceUnits.length() == 0)) {  // if units were specified
+	                	this.out.write(", \"" + distanceUnits + "\"");
+	                }
+	                this.out.write(") " + op + " " + distance);
+	                addSelectivity();  // add selectivity clause if needed
+	            } else {
+	                String msg = "Unsupported left and right types: " + leftType
+	                    + ":" + rightType;
+	                LOGGER.warning(msg);
+	                throw new RuntimeException(msg);
+	            }
+	        } catch (java.io.IOException e) {
+	            LOGGER.warning("Filter not generated; I/O problem of some sort" + e);
+	        }
+	    }
+

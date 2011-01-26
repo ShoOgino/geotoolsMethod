@@ -1,0 +1,32 @@
+    /**
+     * Returns a coefficient of the linear transform from sample to geophysics values.
+     *
+     * @param  order The coefficient order (0 for the offset, or 1 for the scale factor,
+     *         2 if we were going to implement quadratic relation, 3 for cubic, etc.).
+     * @return The coefficient.
+     * @throws IllegalStateException if the transform from sample to geophysics values
+     *         is not a linear relation.
+     */
+    private double getCoefficient(final int order) throws IllegalStateException {
+        if (!hasQuantitative) {
+            // Default value for "offset" is 0; default value for "scale" is 1.
+            // This is equal to the order if 0 <= order <= 1.
+            return order;
+        }
+        Exception cause = null;
+        if (sampleToGeophysics != null) try {
+            final double value;
+            switch (order) {
+                case 0:  value = sampleToGeophysics.transform(0); break;
+                case 1:  value = sampleToGeophysics.derivative(Double.NaN); break;
+                default: throw new AssertionError(order); // Should not happen
+            }
+            if (!Double.isNaN(value)) {
+                return value;
+            }
+        } catch (TransformException exception) {
+            cause = exception;
+        }
+        throw new IllegalStateException(Errors.format(ErrorKeys.NON_LINEAR_RELATION), cause);
+    }
+

@@ -1,0 +1,140 @@
+    /**
+     * Apply the inverse transform to a set of points. More specifically, this method transform
+     * "real world" coordinates to grid coordinates. This method use an iterative algorithm for
+     * that purpose. A {@link TransformException} is thrown in the computation do not converge.
+     * The algorithm applied by this method and its callers is:
+     *
+     * <ul>
+     *   <li>Transform the first point using a "global" affine transform (i.e. the affine
+     *       transformed computed using the "least squares" method in LocalizationGrid).
+     *       Other points will be transformed using the last successful affine transform,
+     *       since we assume that the points to transform are close to each other.</li>
+     *
+     *   <li>Next, compute a local affine transform and use if for transforming the point
+     *       again. Recompute again the local affine transform and continue until the cell
+     *       (x0,y0) doesn't change.</li>
+     * </ul>
+     *
+     * @param source The "real world" coordinate to transform.
+     * @param target A pre-allocated destination point. <strong>This point
+     *               can't be the same than {@code source}!<strong>
+     * @param tr In input, the affine transform to use for the first step.
+     *        In output, the last affine transform used for the transformation.
+     *
+     */
+    final void inverseTransform(final Point2D        source,
+                                final Point2D.Double target,
+                                final AffineTransform tr) throws TransformException
+    {
+        if (CONSERVATIVE) {
+            // In an optimal approach, we should reuse the same affine transform than the one used
+            // in the last transformation, since it is likely to converge faster for a point close
+            // to the previous one. However, it may lead to strange and hard to predict
+            // discontinuity in transformations.
+            tr.setTransform(global);
+        }
+        try {
+            tr.inverseTransform(source, target);
+            int previousX = (int)target.x;
+            int previousY = (int)target.y;
+            for (int iter=0; iter<MAX_ITER; iter++) {
+                getAffineTransform(target.x, target.y, tr);
+                tr.inverseTransform(source, target);
+                final int ix = (int)target.x;
+                final int iy = (int)target.y;
+                if (previousX==ix && previousY==iy) {
+                    // Computation converged.
+                    if (target.x>=0 && target.x<width &&
+                        target.y>=0 && target.y<height)
+                    {
+                        // Point is inside the grid. Check the precision.
+                        assert transform(target, null).distanceSq(source) < 1E-3 : target;
+                    } else {
+                        // Point is outside the grid. Use the global transform for uniformity.
+                        inverseTransform(source, target);
+                    }
+                    return;
+                }
+                previousX = ix;
+                previousY = iy;
+            }
+            /*
+             * No convergence found in the "ordinary" loop. The following code checks if
+             * we are stuck in a never-ending loop. If yes, then it will try to minimize
+             * the following function:
+             *
+             *     {@code transform(target).distance(source)}.
+             */
+            final int x0 = previousX;
+            final int y0 = previousY;
+            global.inverseTransform(source, target);
+            double x,y;
+            double bestX = x = target.x;
+            double bestY = y = target.y;
+            double minSq = Double.POSITIVE_INFINITY;
+            for (int iter=1-MAX_ITER; iter<MAX_ITER; iter++) {
+                previousX = (int)x;
+                previousY = (int)y;
+                getAffineTransform(x, y, tr);
+                tr.inverseTransform(source, target);
+                x = target.x;
+                y = target.y;
+                final int ix = (int)x;
+                final int iy = (int)y;
+                if (previousX==ix && previousY==iy) {
+                    // Computation converged.
+                    assert iter >= 0;
+                    if (x>=0 && x<width && y>=0 && y<height) {
+                        // Point is inside the grid. Check the precision.
+                        assert transform(target, null).distanceSq(source) < 1E-3 : target;
+                    } else {
+                        // Point is outside the grid. Use the global transform for uniformity.
+                        inverseTransform(source, target);
+                    }
+                    return;
+                }
+                if (iter == 0) {
+                    assert x0==ix && y0==iy;
+                } else if (x0==ix && y0==iy) {
+                    // Loop detected.
+                    if (bestX>=0 && bestX<width && bestY>=0 && bestY<height) {
+                        target.x = bestX;
+                        target.y = bestY;
+                    } else {
+                        inverseTransform(source, target);
+                    }
+                    return;
+                }
+                transform(target, target);
+                final double distanceSq = target.distanceSq(source);
+                if (distanceSq < minSq) {
+                    minSq = distanceSq;
+                    bestX = x;
+                    bestY = y;
+                }
+            }
+            /*
+             * The transformation didn't converge, and no loop has been found.
+             * If the following block is enabled (true), then the best point
+             * will be returned. It may not be the best approach since we don't
+             * know if this point is valid. Otherwise, an exception is thrown.
+             */
+            if (MASK_NON_CONVERGENCE) {
+                Logging.getLogger(LocalizationGridTransform2D.class).fine("No convergence");
+                if (bestX>=0 && bestX<width && bestY>=0 && bestY<height) {
+                    target.x = bestX;
+                    target.y = bestY;
+                } else {
+                    inverseTransform(source, target);
+                }
+                return;
+            }
+        } catch (NoninvertibleTransformException exception) {
+            final TransformException e;
+            e = new TransformException(Errors.format(ErrorKeys.NONINVERTIBLE_TRANSFORM));
+            e.initCause(exception);
+            throw e;
+        }
+        throw new TransformException(Errors.format(ErrorKeys.NO_CONVERGENCE));
+    }
+

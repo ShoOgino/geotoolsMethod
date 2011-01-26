@@ -1,0 +1,51 @@
+    /**
+     * Sets the values corresponding to the PreparedStatement placeholders.
+     * <p>
+     * The number of <code>"?"</code> placeholders in the statement, the number of attributes
+     * in <code>types</code> and the numbers of <code>values</code> shall be the same.
+     * </p>
+     * <p>
+     * This method is intended to be used after creating a prepared statement through
+     * {@link #makeModifySqlStatement} in order to set the statement values.
+     * </p>
+     * 
+     * @param types
+     *            the attribute to be changed.
+     * @param values
+     *            the value to change it to.
+     * @param whereStmt
+     *            the feature to update.
+     * 
+     * @return an update sql statement.
+     * 
+     * @throws IOException
+     *             if the lengths of types and values don't match.
+     * @throws SQLException 
+     */
+    private void setModifyPreparedStatementValues(PreparedStatement statement,
+            AttributeDescriptor[] types, Object[] values) throws IOException, SQLException {
+        final int arrLength = types.length;
+        if (arrLength != values.length) {
+            throw new IllegalArgumentException("length of value array is not "
+                    + "same length as type array");
+        }
+
+        final PostgisDataStore dataStore = getPostgisDataStore();
+        for (int i = 0; i < arrLength; i++) {
+            Object newValue = values[i];
+
+            AttributeDescriptor curType = types[i];
+            if (curType instanceof GeometryDescriptor) {
+                newValue = geometryWriter.write((Geometry) newValue);
+                // prepStatement indexing starts at 1...
+                statement.setObject(1 + i, newValue);
+            }else{
+                //Get the jdbc column type
+                final Class target = curType.getType().getBinding();
+                final int jdbcType = dataStore.getJdbcType(target).intValue();
+                // prepStatement indexing starts at 1...
+                statement.setObject(1 + i, newValue, jdbcType);
+            }
+        }
+    }
+

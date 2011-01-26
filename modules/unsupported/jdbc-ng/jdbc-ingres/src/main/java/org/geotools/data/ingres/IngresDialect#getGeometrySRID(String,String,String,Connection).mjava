@@ -1,0 +1,57 @@
+    @Override
+    public Integer getGeometrySRID(String schemaName, String tableName, String columnName,
+        Connection cx) throws SQLException {
+    	
+        // first attempt, try with the geometry metadata
+        Statement statement = null;
+        ResultSet result = null;
+        Integer srid = null;
+        try {
+            
+            String sqlStatement = "SELECT SRID FROM GEOMETRY_COLUMNS WHERE ";
+            if(schemaName == null) {
+                sqlStatement += "F_TABLE_NAME = '" + tableName + "' ";            	
+            }
+            else {
+                sqlStatement += "F_TABLE_SCHEMA = '" + schemaName + "' "
+                	+ "AND F_TABLE_NAME = '" + tableName + "' ";
+            }
+            sqlStatement += "AND F_GEOMETRY_COLUMN = '" + columnName + "'";
+
+            LOGGER.log(Level.FINE, "Geometry type check; {0} ", sqlStatement);
+            statement = cx.createStatement();
+            result = statement.executeQuery(sqlStatement);
+
+            if (result.next()) {
+                srid = result.getInt(1);
+            }
+/*            dataStore.closeSafe(result);
+            
+            // if srid is null  then the srid is undefined in the GEOMETRY_COLUMNS table
+            // This might not ever be necessary, since if the column is a geometry col, it will
+            // exist in GEOMETRY_COLUMNS. Additionally will only work if there is at least one
+            // non-null entry in the column
+            if(srid == null) {
+            	
+            	if(schemaName == null) {
+                    sqlStatement = "SELECT FIRST 1 SRID(" + columnName + ") " +
+                    "FROM " + tableName;
+            	}
+            	else {
+                    sqlStatement = "SELECT FIRST 1 SRID(" + columnName + ") " +
+                    "FROM " + schemaName + "." + tableName;
+            	}
+                result = statement.executeQuery(sqlStatement);
+                
+                if (result.next()) {
+                    srid = result.getInt(1);
+                }
+            }*/
+        } finally {
+            dataStore.closeSafe(result);
+            dataStore.closeSafe(statement);
+        }
+
+        return srid;
+    }
+

@@ -1,0 +1,122 @@
+    /**
+     * Searchs the tiles starting from the given node. This method invokes
+     * itself recursively for scanning the child nodes down the tree.
+     * <p>
+     * If this method <em>added</em> some tiles to the reading process, their region (identical to
+     * the keys in the {@link #distinctBounds} hash map) are {@linkplain SelectedNode#addChild added
+     * as child} of the returned object. The children does not include tiles that <em>replaced</em>
+     * existing ones rather than adding a new ones.
+     *
+     * @param  node The root of the subtree to examine.
+     * @param  costLimit Stop the children searchs if the cost exceed this amount.
+     * @param  candidates The tiles that are under consideration during a search.
+     * @return The tile to be read, or {@code null} if it doesn't intersect the area of interest.
+     */
+    private SelectedNode addTileCandidate(final TreeNode node, long costLimit) throws IOException {
+        if (!node.intersects(regionOfInterest)) {
+            return null;
+        }
+        SelectedNode selected = null;
+        final Tile tile = node.tile;
+        if (tile != null) {
+            assert node.equals(tile.getAbsoluteRegion()) : tile;
+            final Dimension floor = tile.getSubsamplingFloor(subsamplingCandidate);
+            if (floor == null) {
+                /*
+                 * The tile in the given node is unable to read its image at the given subsampling
+                 * or any smaller subsampling. Skip this tile. However we may try its children at
+                 * the end of this method, since they typically have a finer subsampling.
+                 */
+            } else if (floor != subsamplingCandidate) {
+                /*
+                 * The tile in the given node is unable to read its image at the given subsampling,
+                 * but would be capable if the subsampling was smaller. If we are allowed to change
+                 * the setting, add this item to the queue of subsamplings to try later.
+                 */
+                if (subsamplingChangeAllowed) {
+                    if (subsamplingDone.add(floor)) {
+                        subsamplingToTry.add(floor);
+                    }
+                }
+            } else {
+                /*
+                 * The tile is capable to read its image at the given subsampling.
+                 * Computes the cost that reading this tile would have.
+                 */
+                final Rectangle readRegion = node.intersection(regionOfInterest);
+                selected = new SelectedNode(readRegion);
+                selected.tile = tile;
+                selected.cost = tile.countUnwantedPixelsFromAbsolute(readRegion, subsampling);
+            }
+        }
+        /*
+         * At this point, we have processed the node given in argument. If the tile was not selected
+         * (typically because its resolution is not suitable), we will create a node without tile to
+         * be used as a container for allowing the search to continue with children.
+         */
+        if (node.isLeaf()) {
+            return selected;
+        }
+        final long cost;
+        if (selected == null) {
+            selected = new SelectedNode(node.intersection(regionOfInterest));
+            cost = selected.cost; // Should be 0.
+        } else {
+            /*
+             * If the region to read encompass entirely this node (otherwise reading a few childs
+             * may be cheaper) and if the children subsampling are not higher than the tile's one
+             * (they are usually not), then there is no need to continue down the tree since the
+             * childs can not do better than this node.
+             *
+             * TODO: Checks if the children fill completly the bounds (i.e. are "dense").
+             */
+            cost = selected.cost;
+            if (cost == 0 || (selected.equals(node) && !tile.isFinerThan(subsamplingCandidate))) {
+                return selected;
+            }
+            if (cost < costLimit) {
+                costLimit = cost;
+            }
+        }
+        /*
+         * If there is any children, invokes this method recursively for each of them. The later
+         * search will be canceled before completion (in order to save CPU time) if the children
+         * cost exceed the given maximum cost, usually the cost of the parent tile.
+         */
+        for (final TreeNode child : node) {
+            selected.addChild(addTileCandidate(child, costLimit));
+            if (selected.cost - cost >= costLimit) {
+                /*
+                 * Children are going to be too costly, so stop the search immediately. If the
+                 * selected node has a tile,  remove the children in order to get the selected
+                 * tile used instead. If the selected node has no tile, then keep the children
+                 * even if they are incomplete in order to let the invoker known that we reached
+                 * the cost limit.
+                 */
+                if (selected.tile != null) {
+                    selected.removeChildren();
+                }
+                return selected;
+            }
+        }
+        /*
+         * At this point, we decided to keep the children in replacement of the selected
+         * tile. Clears the tile, adjust the cost and remove an indirection level if we can.
+         */
+        selected.tile = null;
+        selected.cost -= cost;
+        if (selected.isLeaf()) {
+            // The 'selected' node was just a container and we found no children,
+            // so it is not worth to returns it.
+            return null;
+        }
+        final TreeNode child = selected.getChild();
+        if (child != null && child.equals(selected)) {
+            // Founds exactly one child and this child has the same bounding box than
+            // the selected node. Returns the child directly for saving one indirection.
+            selected.removeChildren();
+            selected = (SelectedNode) child;
+        }
+        return selected;
+    }
+

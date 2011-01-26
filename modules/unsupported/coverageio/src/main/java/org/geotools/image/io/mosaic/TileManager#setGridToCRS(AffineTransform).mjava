@@ -1,0 +1,38 @@
+    /**
+     * Sets the {@linkplain Tile#getGridTocRS grid to CRS} transform for every tiles. A copy of
+     * the supplied affine transform is {@linkplain AffineTransform#scale scaled} according the
+     * {@linkplain Tile#getSubsampling subsampling} of each tile. Tiles having the same
+     * subsampling will share the same immutable instance of affine transform.
+     * <p>
+     * The <cite>grid to CRS</cite> transform is not necessary for proper working of {@linkplain
+     * MosaicImageReader mosaic image reader}, but is provided as a convenience for users.
+     * <p>
+     * This method can be invoked only once.
+     *
+     * @param gridToCRS The "grid to CRS" transform.
+     * @throws IllegalStateException if a transform was already assigned to at least one tile.
+     * @throws IOException If an I/O operation was required and failed.
+     */
+    public synchronized void setGridToCRS(final AffineTransform gridToCRS)
+            throws IllegalStateException, IOException
+    {
+        if (geometry != null) {
+            throw new IllegalStateException();
+        }
+        final Map<Dimension,AffineTransform> shared = new HashMap<Dimension,AffineTransform>();
+        AffineTransform at = new XAffineTransform(gridToCRS);
+        shared.put(new Dimension(1,1), at);
+        geometry = new ImageGeometry(getRegion(), at);
+        for (final Tile tile : getInternalTiles()) {
+            final Dimension subsampling = tile.getSubsampling();
+            at = shared.get(subsampling);
+            if (at == null) {
+                at = new AffineTransform(gridToCRS);
+                at.scale(subsampling.width, subsampling.height);
+                at = new XAffineTransform(at);
+                shared.put(subsampling, at);
+            }
+            tile.setGridToCRS(at);
+        }
+    }
+

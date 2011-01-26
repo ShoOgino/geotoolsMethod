@@ -1,0 +1,449 @@
+	/**
+	 * Main thread for the mosaic index builder.
+	 */
+	public void run() {
+
+		// /////////////////////////////////////////////////////////////////////
+		//
+		// CREATING INDEX FILE
+		//
+		// /////////////////////////////////////////////////////////////////////
+
+		// /////////////////////////////////////////////////////////////////////
+		//
+		// Create a file handler that write log record to a file called
+		// my.log
+		//
+		// /////////////////////////////////////////////////////////////////////
+		FileHandler handler=null;
+		try {
+			boolean append = true;
+			handler = new FileHandler(new StringBuffer(locationPath).append(
+					"/error.txt").toString(), append);
+			handler.setLevel(Level.SEVERE);
+			// Add to the desired logger
+			LOGGER.addHandler(handler);
+			
+
+		// /////////////////////////////////////////////////////////////////////
+		//
+		// Create a set of file names that have to be skipped since these are
+		// our metadata files
+		//
+		// /////////////////////////////////////////////////////////////////////
+		final Set<String> skipFiles = new HashSet<String>(Arrays
+				.asList(new String[] { indexName + ".shp", indexName + ".dbf",
+						indexName + ".shx", indexName + ".prj", "error.txt",
+						"error.txt.lck", indexName + ".properties" }));
+
+		// /////////////////////////////////////////////////////////////////////
+		//
+		// Creating temp vars
+		//
+		// /////////////////////////////////////////////////////////////////////
+		ShapefileDataStore index = null;
+		Transaction t = new DefaultTransaction();
+		// declaring a preciosion model to adhere the java double type
+		// precision
+		PrecisionModel precMod = new PrecisionModel(PrecisionModel.FLOATING);
+		GeometryFactory geomFactory = new GeometryFactory(precMod);
+		try {
+				index = new ShapefileDataStore(new File(locationPath + File.separator
+					+ indexName + ".shp").toURI().toURL());
+		} catch (MalformedURLException ex) {
+			if (LOGGER.isLoggable(Level.SEVERE))
+				LOGGER.log(Level.SEVERE, ex.getLocalizedMessage(), ex);
+			fireException(ex);
+			return;
+		}
+
+		final List<File> files = new ArrayList<File>();
+		recurse(files, locationPath);
+
+		// /////////////////////////////////////////////////////////////////////
+		//
+		// Cycling over the files that have filtered out
+		//
+		// /////////////////////////////////////////////////////////////////////
+		numFiles = files.size();
+		String validFileName = null;
+		final Iterator<File> filesIt = files.iterator();
+		FeatureWriter<SimpleFeatureType, SimpleFeature> fw = null;
+		boolean doneSomething = false;
+		for (int i = 0; i < numFiles; i++) {
+
+			
+			StringBuffer message;
+			// //
+			//
+			// Check that this file is actually good to go
+			//
+			// //			
+			final File fileBeingProcessed = ((File) filesIt.next());
+			if(!fileBeingProcessed.exists()||!fileBeingProcessed.canRead()||!fileBeingProcessed.isFile())
+			{
+				// send a message
+				message = new StringBuffer("Skipped file ").append(
+						files.get(i)).append(
+						" snce it seems invalid.");
+				if (LOGGER.isLoggable(Level.INFO))
+					LOGGER.info(message.toString());
+				fireEvent(message.toString(), ((i * 99.0) / numFiles));
+				continue;
+			}
+
+			// //
+			//
+			// Anyone has asked us to stop?
+			//
+			// //
+			if (getStopThread()) {
+				message = new StringBuffer("Stopping requested at file  ")
+						.append(i).append(" of ").append(numFiles).append(
+								" files");
+				if (LOGGER.isLoggable(Level.FINE)) {
+					LOGGER.fine(message.toString());
+				}
+				fireEvent(message.toString(), ((i * 100.0) / numFiles));
+				return;
+			} // replacing chars on input path
+			try {
+				validFileName = fileBeingProcessed.getCanonicalPath();
+			} catch (IOException e1) {
+				fireException(e1);
+				return;
+			}
+			validFileName = validFileName.replace('\\', '/');
+			validFileName = validFileName.substring(locationPath.length() + 1,
+					fileBeingProcessed.getAbsolutePath().length());
+			if (skipFiles.contains(validFileName))
+				continue;
+			message = new StringBuffer("Now indexing file ")
+					.append(validFileName);
+
+			if (LOGGER.isLoggable(Level.FINE)) {
+				LOGGER.fine(message.toString());
+			}
+			fireEvent(message.toString(), ((i * 100.0) / numFiles));
+			try {
+				// ////////////////////////////////////////////////////////
+				//
+				//
+				// STEP 1
+				// Getting an ImageIO reader for this coverage.
+				//
+				//
+				// ////////////////////////////////////////////////////////
+				ImageInputStream inStream = ImageIO
+						.createImageInputStream(fileBeingProcessed);
+				if(inStream==null)
+				{
+					if(LOGGER.isLoggable(Level.SEVERE))
+						LOGGER.severe(fileBeingProcessed+" has been skipped since we could not get a stream for it");
+					continue;
+				}
+				inStream.mark();
+				final Iterator<ImageReader> it = ImageIO.getImageReaders(inStream);
+				ImageReader r = null;
+				if (it.hasNext()) {
+					r = (ImageReader) it.next();
+					r.setInput(inStream);
+				} else {
+					// release resources
+					try {
+						inStream.close();
+					} catch (Exception e) {
+						// ignore exception
+					}
+//					try {
+//						r.dispose();
+//					} catch (Exception e) {
+//						// ignore exception
+//					}
+
+					// send a message
+					message = new StringBuffer("Skipped file ").append(
+							files.get(i)).append(
+							":No ImageIO readeres avalaible.");
+					if (LOGGER.isLoggable(Level.INFO))
+						LOGGER.info(message.toString());
+					fireEvent(message.toString(), ((i * 99.0) / numFiles));
+					continue;
+				}
+
+				// ////////////////////////////////////////////////////////
+				//
+				// STEP 2
+				// Getting a coverage reader for this coverage.
+				//
+				// ////////////////////////////////////////////////////////
+				if (LOGGER.isLoggable(Level.FINE))
+					LOGGER
+							.fine(new StringBuffer("Getting a reader")
+									.toString());
+				final AbstractGridFormat format = (AbstractGridFormat) GridFormatFinder
+						.findFormat(files.get(i));
+				if (format == null||!format.accepts(files.get(i))) {
+					// release resources
+					try {
+						inStream.close();
+					} catch (Exception e) {
+						// ignore exception
+					}
+					try {
+						r.dispose();
+					} catch (Exception e) {
+						// ignore exception
+					}
+
+					message = new StringBuffer("Skipped file ").append(
+							files.get(i)).append(
+							": File format is not supported.");
+					if (LOGGER.isLoggable(Level.INFO))
+						LOGGER.info(message.toString());
+					fireEvent(message.toString(), ((i * 99.0) / numFiles));
+					continue;
+				}
+				final AbstractGridCoverage2DReader reader = (AbstractGridCoverage2DReader) format
+						.getReader(files.get(i));
+				envelope = (GeneralEnvelope) reader.getOriginalEnvelope();
+				actualCRS = reader.getCrs();
+
+				// /////////////////////////////////////////////////////////////////////
+				//
+				// STEP 3
+				// Get the type specifier for this image and the check that the
+				// image has the correct sample model and color model.
+				// If this is the first cycle of the loop we initialize
+				// eveything.
+				//
+				// /////////////////////////////////////////////////////////////////////
+				final ImageTypeSpecifier its = ((ImageTypeSpecifier) r.getImageTypes(0).next());
+				boolean skipFeature = false;
+				if (globEnvelope == null) {
+					// /////////////////////////////////////////////////////////////////////
+					//
+					// at the first step we initialize everything that we will
+					// reuse afterwards starting with color models, sample
+					// models, crs, etc....
+					//
+					// /////////////////////////////////////////////////////////////////////
+					defaultCM = its.getColorModel();
+					if (defaultCM instanceof IndexColorModel) {
+						IndexColorModel icm = (IndexColorModel) defaultCM;
+						int numBands = defaultCM.getNumColorComponents();
+						defaultPalette = new byte[3][icm.getMapSize()];
+						icm.getReds(defaultPalette[0]);
+						icm.getGreens(defaultPalette[0]);
+						icm.getBlues(defaultPalette[0]);
+						if (numBands == 4)
+							icm.getAlphas(defaultPalette[0]);
+
+					}
+					defaultSM = its.getSampleModel();
+					defaultCRS = actualCRS;
+					globEnvelope = new GeneralEnvelope(envelope);
+
+					// /////////////////////////////////////////////////////////////////////
+					//
+					// getting information about resolution
+					//
+					// /////////////////////////////////////////////////////////////////////
+
+					// //
+					//
+					// get the dimension of the hr image and build the model
+					// as well as
+					// computing the resolution
+					// //
+					// resetting reader and recreating stream, turnaround for a
+					// strange imageio bug
+					r.reset();
+					try{
+						inStream.reset();
+					}catch (IOException e) {
+						inStream= ImageIO.createImageInputStream(fileBeingProcessed);
+					}
+					//let's check if we got something now
+					if(inStream==null)
+					{
+						//skip file
+						if(LOGGER.isLoggable(Level.WARNING))
+							LOGGER.warning("Skipping file "+fileBeingProcessed.toString());
+						continue;
+					}
+					r.setInput(inStream);
+					numberOfLevels = r.getNumImages(true);
+					resolutionLevels = new double[2][numberOfLevels];
+					double[] res = getResolution(envelope, new Rectangle(r
+							.getWidth(0), r.getHeight(0)), defaultCRS);
+					resolutionLevels[0][0] = res[0];
+					resolutionLevels[1][0] = res[1];
+
+					// resolutions levels
+					if (numberOfLevels > 1) {
+
+						for (int k = 0; k < numberOfLevels; k++) {
+							res = getResolution(envelope, new Rectangle(r
+									.getWidth(k), r.getHeight(k)), defaultCRS);
+							resolutionLevels[0][k] = res[0];
+							resolutionLevels[1][k] = res[1];
+						}
+					}
+
+					// /////////////////////////////////////////////////////////////////////
+					//
+					// creating the schema
+					//
+					// /////////////////////////////////////////////////////////////////////
+					final SimpleFeatureTypeBuilder featureBuilder = new SimpleFeatureTypeBuilder();
+					featureBuilder.setName("Flag");
+					featureBuilder.setNamespaceURI("http://www.geo-solutions.it/");
+					featureBuilder.add("location", String.class);
+					featureBuilder.add("the_geom", Polygon.class,this.actualCRS);
+					featureBuilder.setDefaultGeometry("the_geom");
+					final SimpleFeatureType simpleFeatureType = featureBuilder.buildFeatureType();
+					// create the schema for the new shape file
+					index.createSchema(simpleFeatureType);
+
+					// get a feature writer
+					fw = index.getFeatureWriter( t);
+				} else {
+					// ////////////////////////////////////////////////////////
+					// 
+					// comparing ColorModel
+					// comparing SampeModel
+					// comparing CRSs
+					// ////////////////////////////////////////////////////////
+					globEnvelope.add(envelope);
+					actualCM = its.getColorModel();
+					actualSM = its.getSampleModel();
+					skipFeature = (i > 0 ? !(CRS.equalsIgnoreMetadata(
+							defaultCRS, actualCRS)) : false);
+					if (skipFeature)
+						LOGGER.warning(new StringBuffer("Skipping image ")
+								.append(files.get(i)).append(
+										" because CRSs do not match.")
+								.toString());
+					skipFeature = checkColorModels(defaultCM, defaultPalette,
+							actualCM);
+					if (skipFeature)
+						LOGGER.warning(new StringBuffer("Skipping image ")
+								.append(files.get(i)).append(
+										" because color models do not match.")
+								.toString());
+					// defaultCM.getNumComponents()==actualCM.getNumComponents()&&
+					// defaultCM.getClass().equals(actualCM.getClass())
+					// && defaultSM.getNumBands() == actualSM
+					// .getNumBands()
+					// && defaultSM.getDataType() == actualSM
+					// .getDataType() &&
+					//
+					// if (skipFeature)
+					// LOGGER
+					// .warning(new StringBuffer("Skipping image ")
+					// .append(files.get(i))
+					// .append(
+					// " because cm or sm does not match.")
+					// .toString());
+					// res = getResolution(envelope, new
+					// Rectangle(r.getWidth(0),
+					// r.getHeight(0)), defaultCRS);
+					// if (Math.abs((resX - res[0]) / resX) > EPS
+					// || Math.abs(resY - res[1]) > EPS) {
+					// LOGGER.warning(new StringBuffer("Skipping image
+					// ").append(
+					// files.get(i)).append(
+					// " because resolutions does not match.")
+					// .toString());
+					// skipFeature = true;
+					// }
+				}
+
+				// ////////////////////////////////////////////////////////
+				//
+				// STEP 4
+				//
+				// create and store features
+				//
+				// ////////////////////////////////////////////////////////
+				if (!skipFeature) {
+
+					final SimpleFeature feature = fw.next();
+					feature.setAttribute(1, geomFactory
+							.toGeometry(new ReferencedEnvelope(
+									(Envelope) envelope)));
+					feature.setAttribute(0, absolute ? new StringBuilder(
+							this.locationPath).append(File.separatorChar)
+							.append(validFileName).toString() : validFileName);
+					fw.write();
+
+					message = new StringBuffer("Done with file ").append(files
+							.get(i));
+					if (LOGGER.isLoggable(Level.FINE)) {
+						LOGGER.fine(message.toString());
+					}
+					message.append('\n');
+					fireEvent(message.toString(), (((i + 1) * 99.0) / numFiles));
+					doneSomething = true;
+				} else
+					skipFeature = false;
+
+				// ////////////////////////////////////////////////////////
+				//
+				// STEP 5
+				//
+				// release resources
+				//
+				// ////////////////////////////////////////////////////////
+				try {
+					inStream.close();
+				} catch (Exception e) {
+					// ignore exception
+				}
+				try {
+					r.dispose();
+				} catch (Exception e) {
+					// ignore exception
+				}
+				// release resources
+				reader.dispose();
+
+			} catch (IOException e) {
+				fireException(e);
+				break;
+			} catch (ArrayIndexOutOfBoundsException e) {
+				fireException(e);
+				break;
+			}
+
+		}
+		try {
+			if (fw != null)
+				fw.close();
+			t.commit();
+			t.close();
+			index.dispose();
+		} catch (IOException e) {
+			LOGGER.log(Level.SEVERE, e.getLocalizedMessage(), e);
+		}
+		createPropertiesFiles(globEnvelope, doneSomething);
+		} catch (SecurityException el) {
+			fireException(el);
+			return;
+		} catch (IOException el) {
+			fireException(el);
+			return;
+		}
+		finally{
+			try{
+				if(handler!=null)
+					handler.close();
+			}catch (Throwable e) {
+				// ignore
+			}	
+			
+		}
+
+	}
+

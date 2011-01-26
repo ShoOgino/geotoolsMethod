@@ -1,0 +1,66 @@
+    /**
+     * Iterates the parameters..
+     *
+     * @param tolerance for iteration steps (the max difference between last
+     *        two steps)
+     * @param maxSteps highest number of iteations.
+     *
+     * @return GeneralMatrix of calculated parameters.
+     */
+    private GeneralMatrix getDxMatrix(double tolerance, int maxSteps) {
+        // Matriix of new calculated coefficeients
+        GeneralMatrix xNew = new GeneralMatrix(7, 1);
+
+        // Matrix of coefficients claculated in previous iteration
+        GeneralMatrix xOld = new GeneralMatrix(7, 1);
+
+        // diference between each steps of old iteration
+        GeneralMatrix dxMatrix = new GeneralMatrix(7, 1);
+
+        GeneralMatrix zero = new GeneralMatrix(7, 1);
+        zero.setZero();
+
+        // i is a number of iterations
+        int i = 0;
+
+        // cicle for iteration
+        do {
+            xOld.set(new double[] { dx, dy, dz, alfa, beta, gamma, q });
+
+            GeneralMatrix A = getA();
+            GeneralMatrix l = getl();
+
+            GeneralMatrix AT = A.clone();
+            AT.transpose();
+
+            GeneralMatrix ATA = new GeneralMatrix(7, 7);
+            GeneralMatrix ATl = new GeneralMatrix(7, 1);
+
+            // dx = A^T * A  * A^T * l
+            ATA.mul(AT, A);
+            ATA.invert();
+            ATl.mul(AT, l);
+
+            dxMatrix.mul(ATA, ATl);
+
+            // New values of x = dx + previous values
+            xOld.negate();
+            xNew.sub(dxMatrix, xOld);
+
+            // New values are setup for another iteration
+            dx = xNew.getElement(0, 0);
+            dy = xNew.getElement(1, 0);
+            dz = xNew.getElement(2, 0);
+            alfa = xNew.getElement(3, 0);
+            beta = xNew.getElement(4, 0);
+            gamma = xNew.getElement(5, 0);
+            q = xNew.getElement(6, 0);
+
+            i++;
+        } while ((!dxMatrix.equals(zero, tolerance) & (i < maxSteps)));
+
+        xNew.transpose();
+
+        return xNew;
+    }
+

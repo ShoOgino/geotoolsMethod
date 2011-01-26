@@ -1,0 +1,64 @@
+    /**
+     * Handles DB2-specific geometry types.  If it isn't one, just let the
+     * parent method handle it.
+     *
+     * @param rs The ResultSet containing the result of a
+     *        DatabaseMetaData.getColumns call.
+     *
+     * @return The AttributeType built from the ResultSet.
+     *
+     * @throws IOException If an error occurs processing the ResultSet.
+     */
+    protected AttributeDescriptor buildAttributeType(ResultSet rs)
+        throws IOException {
+        try {
+        	String spatialTypePrefix = "\"DB2GSE\".\"ST_";
+
+        	int dataType = rs.getInt("DATA_TYPE");
+            String typeName = rs.getString("TYPE_NAME");
+            String tableSchema = rs.getString("TABLE_SCHEM");
+            String tableName = rs.getString("TABLE_NAME");
+            String columnName = rs.getString("COLUMN_NAME");
+            if (!typeName.startsWith(spatialTypePrefix)) {
+                return super.buildAttributeType(rs);
+            }
+            
+            String geomTypeName = this.catalog.getDB2GeometryTypeName(tableSchema,
+                    tableName, columnName);
+
+            // Look up the geometry type we just got back and create the
+            // corresponding attribute type for the geometry class, if it was found.
+            Class geomClass = (Class) DB2_GEOM_TYPE_MAPPING.get(geomTypeName);
+
+            if (geomClass != null) {
+                CoordinateReferenceSystem crs;
+
+                try {
+                    crs = this.catalog.getCRS(tableSchema, tableName, columnName);
+                } catch (Exception e) {
+                    throw new IOException("Exception: " + e.getMessage());
+                }
+
+                AttributeTypeBuilder atb = new AttributeTypeBuilder();
+                atb.setName(columnName);
+                atb.setBinding(geomClass);
+                atb.setNillable(true);
+                atb.setLength(0);
+                atb.setDefaultValue(null);
+                atb.setCRS(crs);
+                
+                GeometryDescriptor geometryAttribute = (GeometryDescriptor) atb
+						.buildDescriptor(columnName);
+
+                return geometryAttribute;
+            }
+
+            // It is some other unrecognized structured type - log what we found and return null
+            LOGGER.fine("Type '" + geomTypeName + "' is not recognized");
+
+            return null;
+        } catch (SQLException e) {
+            throw new IOException("SQL exception occurred: " + e.getMessage());
+        }
+    }
+

@@ -1,0 +1,70 @@
+    /**
+     * Search for a Styled Layer Descriptor (SLD) file associated with the
+     * specified shapefile. If the SLD file exists it will be in the same
+     * directory as the shapefile, have the same root name, and have
+     * .sld as its extension.
+     *
+     * @param shapefileURL the shapefile for which an SLD file is being sought
+     *
+     * @return the URL of the SLD file; or null if not found or not accessible
+     */
+    public URL getShapefileSLD(URL shapefileURL) {
+        URL sldURL = null;
+        
+        File shapefile;
+		try {			
+			shapefile = new File( shapefileURL.toURI() );
+		} catch (URISyntaxException e) {
+			shapefile = new File( shapefileURL.getPath() );
+		}
+        String fileName = shapefile.getName();
+
+        int lastDot = fileName.lastIndexOf('.');
+        if (lastDot > 0) {
+            File directory = shapefile.getParentFile();
+            String sldname1 = fileName.substring(0, lastDot) + ".sld";
+            String sldname2 = fileName.substring(0, lastDot) + ".SLD";
+            InputStream input=null;
+            try {
+            	File sldFile1 = new File( directory, sldname1 );
+            	File sldFile2 = new File( directory, sldname2 );
+            	if( sldFile1.exists() && sldFile1.canRead() ){
+            		sldURL = sldFile1.toURL();	
+            	}
+            	else if( sldFile1.exists() && sldFile1.canRead() ){
+            		sldURL = sldFile2.toURL();	
+            	}
+            	else {
+            		/*
+                     * The SLD file can't be opened so we return null
+                     */
+                    return null;
+            	}
+                /*
+                 * Now we check to see if the url that we have created
+                 * corresponds to an existing and accessible SLD file.
+                 * If it doesn't, this call to openStream() will provoke
+                 * an IOException
+                 */
+                input = sldURL.openStream();
+            } catch (MalformedURLException urlEx) {
+                throw new RuntimeException(urlEx);
+            } catch (IOException ioEx) {
+                /*
+                 * The SLD file can't be opened so we return null
+                 */
+                return null;
+            }
+            finally {
+            	if( input != null) {
+            		try {
+						input.close();
+					} catch (IOException e) {
+					}
+            	}
+            }
+        }
+
+        return sldURL;
+    }
+

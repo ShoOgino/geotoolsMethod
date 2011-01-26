@@ -1,0 +1,49 @@
+    /**
+     * <p>
+     * Converts a filter into a styleExpression with explicitly defined values.
+     * </p>
+     * <p>
+     * Example:<br>
+     * <code>[[attr = 49] OR [attr = 92]] --> "49, 92"</code>
+     * </p>
+     *
+     * @param filter
+     */
+    private static String toExplicitStyleExpression(Filter filter) {
+        String styleExpression = "";
+
+        if (filter instanceof PropertyIsEqualTo) {
+            // figure out which side is the attributeExpression, and which side
+            // is the LiteralExpression
+            PropertyIsEqualTo compareFilter = (PropertyIsEqualTo) filter;
+            Expression leftExpression = compareFilter.getExpression1();
+            Expression rightExpression = compareFilter.getExpression2();
+
+            if ((leftExpression instanceof PropertyName)
+                    && (rightExpression instanceof Literal)) {
+                styleExpression = rightExpression.toString();
+            } else if ((leftExpression instanceof Literal)
+                    && (rightExpression instanceof PropertyName)) {
+                styleExpression = leftExpression.toString();
+            } else {
+                throw new IllegalArgumentException(
+                    "Could not extract an Explicit Style Expression from the CompareFilter");
+            }
+        } else if (filter instanceof Or) {
+            // descend into the child elements of this filter
+            Or parentFilter = (Or) filter;
+            Iterator iterator = parentFilter.getChildren().iterator();
+
+            while (iterator.hasNext()) {
+                // recursive call
+                styleExpression += toExplicitStyleExpression((Filter) iterator.next());
+
+                if (iterator.hasNext()) {
+                    styleExpression += ", ";
+                }
+            }
+        }
+
+        return styleExpression;
+    }
+

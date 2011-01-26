@@ -1,0 +1,105 @@
+    /**
+     * Set the coordinate reference system for points to be formatted. The number
+     * of dimensions must matched the dimension of points to be formatted.
+     *
+     * @param crs The new coordinate system.
+     */
+    public void setCoordinateReferenceSystem(final CoordinateReferenceSystem crs) {
+        if (CRS.equalsIgnoreMetadata(this.crs, (this.crs = crs))) {
+            return;
+        }
+        Format numberFormat = null;
+        Format  angleFormat = null;
+        Format   dateFormat = null;
+        /*
+         * Reuses existing formats. It is necessary in order to avoid
+         * overwritting any setting done with 'setNumberPattern(...)'
+         * or 'setAnglePattern(...)'
+         */
+        if (formats != null) {
+            for (int i=formats.length; --i>=0;) {
+                final Format format = formats[i];
+                if (format instanceof NumberFormat) {
+                    numberFormat = format;
+                } else if (format instanceof AngleFormat) {
+                    angleFormat = format;
+                } else if (format instanceof DateFormat) {
+                    dateFormat = format;
+                }
+            }
+        }
+        /*
+         * If no CRS were specified, formats everything as numbers. Working with null CRS is
+         * sometime useful because null CRS are allowed in DirectPosition according ISO 19107.
+         */
+        if (crs == null) {
+            if (numberFormat == null) {
+                numberFormat = NumberFormat.getNumberInstance(locale);
+            }
+            types   = new byte[1];
+            formats = new Format[] {numberFormat};
+            return;
+        }
+        /*
+         * Creates a new array of 'Format' objects, one for each dimension.
+         * The format subclasses are infered from coordinate system axis.
+         */
+        final CoordinateSystem cs = crs.getCoordinateSystem();
+        epochs   = null;
+        toMillis = null;
+        formats  = new Format[cs.getDimension()];
+        types    = new byte[formats.length];
+        for (int i=0; i<formats.length; i++) {
+            final Unit<?> unit = cs.getAxis(i).getUnit();
+            /////////////////
+            ////  Angle  ////
+            /////////////////
+            if (NonSI.DEGREE_ANGLE.equals(unit)) {
+                if (angleFormat == null) {
+                    angleFormat = new AngleFormat("DD°MM.m'", locale);
+                }
+                formats[i] = angleFormat;
+                final AxisDirection axis = cs.getAxis(i).getDirection().absolute();
+                if (AxisDirection.EAST.equals(axis)) {
+                    types[i] = LONGITUDE;
+                } else if (AxisDirection.NORTH.equals(axis)) {
+                    types[i] = LATITUDE;
+                } else {
+                    types[i] = ANGLE;
+                }
+                continue;
+            }
+            ////////////////
+            ////  Date  ////
+            ////////////////
+            if (SI.SECOND.isCompatible(unit)) {
+                final Datum datum = CRSUtilities.getDatum(CRSUtilities.getSubCRS(crs, i, i+1));
+                if (datum instanceof TemporalDatum) {
+                    if (toMillis == null) {
+                        toMillis = new UnitConverter[formats.length];
+                        epochs   = new long[formats.length];
+                    }
+                    toMillis[i] = unit.getConverterTo(DefaultTemporalCRS.MILLISECOND);
+                    epochs  [i] = ((TemporalDatum) datum).getOrigin().getTime();
+                    if (dateFormat == null) {
+                        dateFormat = DateFormat.getDateInstance(DateFormat.DEFAULT, locale);
+                    }
+                    formats[i] = dateFormat;
+                    types  [i] = DATE;
+                    continue;
+                }
+                types[i] = TIME;
+                // Fallthrough: formatted as number for now.
+                // TODO: Provide ellapsed time formatting later.
+            }
+            //////////////////
+            ////  Number  ////
+            //////////////////
+            if (numberFormat == null) {
+                numberFormat = NumberFormat.getNumberInstance(locale);
+            }
+            formats[i] = numberFormat;
+            // types[i] default to 0.
+        }
+    }
+

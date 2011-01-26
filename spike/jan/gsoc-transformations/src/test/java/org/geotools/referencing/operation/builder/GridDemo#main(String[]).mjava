@@ -1,0 +1,107 @@
+    public static void main(String[] args) {
+        CoordinateReferenceSystem realCRS = null;
+
+        try {
+            //  MathTransform2D realToGrid = gridShift.getMathTransform();
+            realCRS = DefaultGeographicCRS.WGS84;
+
+            URL url = null;
+
+            url = new File("/home/jezekjan/tmp/testgeodata/rasters/p1010099.tif").toURI().toURL();
+
+            // url = new File("/media/sda5/Dokumenty/geodata/rasters/Mane_3_1_4.tif").toURI().toURL();
+
+            /* Open the file with Image */
+            WorldImageReader reader = new WorldImageReader(url);
+            Operations operations = new Operations(null);
+            GridCoverage2D coverage = (GridCoverage2D) reader.read(null);
+            Envelope env = coverage.getEnvelope();
+
+            //coverage = GridCoverageExamples.getExample(0);
+
+            //   List vectors = generateMappedPositions(env,15, 0.58, DefaultEngineeringCRS.CARTESIAN_2D);
+            List vectors = generateMappedPositions(env, 15, 0.158,
+                    env.getCoordinateReferenceSystem());
+
+            //  System.out.println(env.getCoordinateReferenceSystem().getCoordinateSystem().getClass());
+            //  WarpGridBuilder gridBuilder = new TPSGridBuilder(vectors, 0.01,0.01, env, coverage.getGridGeometry().getGridToCRS().inverse());
+
+            // System.out.println(DefaultEngineeringCRS.CARTESIAN_2D.getCoordinateSystem().getClass().isAssignableFrom(DefaultCartesianCS.class));            
+
+            //    MathTransformBuilder gridBuilder = new AffineTransformBuilder(vectors);//, env);
+
+            /*
+             * Construct WarpGrod Builder - assuming we are having some known vectors (MappedPositions)
+             * that should deffine the source and target points
+             * We also have to set the column size of controlling grid that is going to be generated
+             * Within this grid there will be just approximative billiner interpalation used.
+             */
+            WarpGridBuilder gridBuilder = new TPSGridBuilder(vectors, 2, 2, env,
+                    coverage.getGridGeometry().getGridToCRS().inverse());
+
+            SimilarTransformBuilder builder =  new SimilarTransformBuilder(vectors);
+            
+            /* Get new transformation from builder */
+            //  (new GridCoverageFactory()).create("DX", gridBuilder.getDxGrid(), coverage.getEnvelope())
+            // .show();
+           // (new GridCoverageFactory()).create("DY", gridBuilder.getDyGrid(), coverage.getEnvelope())
+            // .show();
+
+            /* Get new transformation from builder */
+            MathTransform trans =  gridBuilder.getMathTransform();//gridBuilder.getMathTransform();
+
+            System.out.println(trans.getSourceDimensions());
+            System.out.println(trans.getTargetDimensions());
+
+            /* Make New reference System */
+            CoordinateReferenceSystem gridCRS = new DefaultDerivedCRS("gridCRS",
+                    new DefaultOperationMethod(trans), coverage.getCoordinateReferenceSystem(),
+                    trans, DefaultCartesianCS.GENERIC_2D);
+
+            //////******************Show Source***************************///////
+
+            // coverage.show();
+            /* Reproject the image */
+            AbstractProcessor processor = AbstractProcessor.getInstance();
+            coverage = coverage.geophysics(false);
+
+            final ParameterValueGroup param = processor.getOperation("Resample").getParameters();
+
+            param.parameter("Source").setValue(coverage);
+            param.parameter("CoordinateReferenceSystem").setValue(gridCRS);
+            param.parameter("InterpolationType").setValue("bilinear");
+
+            GridCoverage2D projected = (GridCoverage2D) processor.doOperation(param);
+            final RenderedImage image = projected.getRenderedImage();
+            projected = projected.geophysics(false);
+                        
+            
+            WorldImageWriter writer = new WorldImageWriter((Object) (new File(
+                                "/home/jezekjan/tmp/pp.png")));
+                    writer.write(projected, null);
+            
+                    url = new File("/home/jezekjan/tmp/pp.png").toURI().toURL();
+
+                    // url = new File("/media/sda5/Dokumenty/geodata/rasters/Mane_3_1_4.tif").toURI().toURL();
+
+                    /* Open the file with Image */
+                    WorldImageReader preader = new WorldImageReader(url);
+                    GridCoverage2D pcoverage = (GridCoverage2D) preader.read(null);
+            
+          
+
+           /* 
+               Envelope envelope = CRS.transform(coverage.getGridGeometry().getGridToCRS().inverse(),
+                       coverage.getEnvelope());
+               GridCoverage2D target1 = projectTo((GridCoverage2D) coverage, gridCRS,
+                       (GridGeometry2D) coverage.getGridGeometry(), null, false);
+               target1.show();*/
+             //  WorldImageWriter writer = new WorldImageWriter((Object) (new File(
+               //            "/home/jezekjan/gsoc/geodata/p.tif")));
+              // writer.write(projected, null);
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+    }
+

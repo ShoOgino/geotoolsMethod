@@ -1,0 +1,49 @@
+    /**
+     * When drawing in optimized mode a 32bit surface is created for each FeatureTypeStyle
+     * other than the first in order to draw features in parallel while respecting the
+     * feature draw ordering multiple FTS impose. This method allows to estimate how many
+     * megabytes will be needed, in terms of back buffers, to draw the current {@link MapContext},
+     * assuming the feature type style optimizations are turned on (in the case they are off,
+     * no extra memory will be used).
+     * @param width the image width
+     * @param height the image height
+     */
+    public int getMaxBackBufferMemory(int width, int height) {
+        int maxBuffers = 0;
+        for (MapLayer layer : context.getLayers()) {
+            if (!layer.isVisible()) {
+                // Only render layer when layer is visible
+                continue;
+            }
+
+            // skip layers that do have only one fts
+            if(layer.getStyle().getFeatureTypeStyles().length < 2)
+                continue;
+
+            // count how many lite feature type styles are active
+            int currCount = 0;
+            FeatureType ftype = layer.getFeatureSource().getSchema();
+            for (FeatureTypeStyle fts : layer.getStyle().getFeatureTypeStyles()) {
+                if (isFeatureTypeStyleActive(ftype, fts)) {
+                    // get applicable rules at the current scale
+                    List[] splittedRules = splitRules(fts);
+                    List ruleList = splittedRules[0];
+                    List elseRuleList = splittedRules[1];
+
+                    // if none, skip this fts
+                    if ((ruleList.size() == 0) && (elseRuleList.size() == 0))
+                        continue; 
+
+                    currCount++;
+                }
+            }
+            // consider the first fts does not allocate a buffer
+            currCount--;
+
+            if(currCount > maxBuffers)
+                maxBuffers = currCount;
+        }
+
+        return maxBuffers * width * height * 4;
+    }
+

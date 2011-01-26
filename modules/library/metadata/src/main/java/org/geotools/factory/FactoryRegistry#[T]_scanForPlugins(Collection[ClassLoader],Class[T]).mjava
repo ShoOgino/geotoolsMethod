@@ -1,0 +1,44 @@
+    /**
+     * Scans for factory plug-ins of the given category, with guard against recursivities.
+     * The recursivity check make debugging easier than inspecting a {@link StackOverflowError}.
+     *
+     * @param loader The class loader to use.
+     * @param category The category to scan for plug-ins.
+     */
+    private <T> void scanForPlugins(final Collection<ClassLoader> loaders, final Class<T> category) {
+        if (!scanningCategories.add(category)) {
+            throw new RecursiveSearchException(category);
+        }
+        try {
+            final StringBuilder message = getLogHeader(category);
+            boolean newServices = false;
+            /*
+             * First, scan META-INF/services directories (the default mechanism).
+             */
+            for (final ClassLoader loader : loaders) {
+                newServices |= register(lookupProviders(category, loader), category, message);
+                newServices |= registerFromSystemProperty(loader, category, message);
+            }
+            /*
+             * Next, query the user-provider iterators, if any.
+             */
+            final FactoryIteratorProvider[] fip = FactoryIteratorProviders.getIteratorProviders();
+            for (int i=0; i<fip.length; i++) {
+                final Iterator<T> it = fip[i].iterator(category);
+                if (it != null) {
+                    newServices |= register(it, category, message);
+                }
+            }
+            /*
+             * Finally, log the list of registered factories.
+             */
+            if (newServices) {
+                log("scanForPlugins", message);
+            }
+        } finally {
+            if (!scanningCategories.remove(category)) {
+                throw new AssertionError(category);
+            }
+        }
+    }
+

@@ -1,0 +1,80 @@
+    /**
+     * Appends or prepends the specified math transforms to the
+     * {@linkplain CoordinateOperation#getMathTransform operation math transform}.
+     * The new coordinate operation (if any) will share the same metadata
+     * than the original operation, including the authority code.
+     * <p>
+     * This method is used in order to change axis order when the user-specified CRS
+     * disagree with the authority-supplied CRS.
+     *
+     * @param sourceCRS The source CRS to give to the new operation.
+     * @param prepend   The transform to prepend to the operation math transform.
+     * @param operation The operation in which to prepend the math transforms.
+     * @param append    The transform to append to the operation math transform.
+     * @param targetCRS The target CRS to give to the new operation.
+     * @return A new operation, or {@code operation} if {@code prepend} and {@code append} were
+     *         nulls or identity transforms.
+     * @throws FactoryException if the operation can't be constructed.
+     */
+    private CoordinateOperation transform(final CoordinateReferenceSystem sourceCRS,
+                                          final MathTransform             prepend,
+                                          final CoordinateOperation       operation,
+                                          final MathTransform             append,
+                                          final CoordinateReferenceSystem targetCRS)
+            throws FactoryException
+    {
+        if ((prepend == null || prepend.isIdentity()) && (append == null || append.isIdentity())) {
+            return operation;
+        }
+        final Map<String,?> properties = AbstractIdentifiedObject.getProperties(operation);
+        /*
+         * In the particular case of concatenated operations, we can not prepend or append a math
+         * transform to the operation as a whole (the math transform for a concatenated operation
+         * is computed automatically as the concatenation of the math transform from every single
+         * operations, and we need to stay consistent with that). Instead, we prepend to the first
+         * single operation and append to the last single operation.
+         */
+        if (operation instanceof ConcatenatedOperation) {
+            final List<SingleOperation> c = ((ConcatenatedOperation) operation).getOperations();
+            final CoordinateOperation[] op = c.toArray(new CoordinateOperation[c.size()]);
+            if (op.length != 0) {
+                final CoordinateOperation first = op[0];
+                if (op.length == 1) {
+                    op[0] = transform(sourceCRS, prepend, first, append, targetCRS);
+                } else {
+                    final CoordinateOperation last = op[op.length-1];
+                    op[0]           = transform(sourceCRS, prepend, first, null, first.getTargetCRS());
+                    op[op.length-1] = transform(last.getSourceCRS(), null, last, append, targetCRS);
+                }
+                return createConcatenatedOperation(properties, op);
+            }
+        }
+        /*
+         * Single operation case.
+         */
+        MathTransform transform = operation.getMathTransform();
+        final MathTransformFactory mtFactory = getMathTransformFactory();
+        if (prepend != null) {
+            transform = mtFactory.createConcatenatedTransform(prepend, transform);
+        }
+        if (append != null) {
+            transform = mtFactory.createConcatenatedTransform(transform, append);
+        }
+        assert !transform.equals(operation.getMathTransform()) : transform;
+        final Class<? extends CoordinateOperation> type = AbstractCoordinateOperation.getType(operation);
+        OperationMethod method = null;
+        if (operation instanceof Operation) {
+            method = ((Operation) operation).getMethod();
+            if (method != null) {
+                final int sourceDimensions = transform.getSourceDimensions();
+                final int targetDimensions = transform.getTargetDimensions();
+                if (sourceDimensions != method.getSourceDimensions() ||
+                    targetDimensions != method.getTargetDimensions())
+                {
+                    method = new DefaultOperationMethod(method, sourceDimensions, targetDimensions);
+                }
+            }
+        }
+        return createFromMathTransform(properties, sourceCRS, targetCRS, transform, method, type);
+    }
+

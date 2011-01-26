@@ -1,0 +1,69 @@
+    /**
+     * 1. make a list of all the polygons clipped to the displayGeometry NOTE:
+     * reject any points or lines 2. choose the largest of the clipped
+     * geometries
+     * 
+     * @param geoms
+     * @param displayGeometry
+     */
+    Polygon getPolySetRepresentativeLocation(List<Geometry> geoms, Rectangle displayArea) {
+        List<Polygon> polys = new ArrayList<Polygon>(); // points that are
+                                                        // inside the
+        Geometry displayGeometry = gf.toGeometry(toEnvelope(displayArea));
+
+        // go through each geometry in the input set
+        // if its not a polygon or multipolygon ignore it
+        // if its a polygon, add it to "polys"
+        // if its a multipolgon, add each component to "polys"
+        for (Geometry g : geoms) {
+            if (!((g instanceof Polygon) || (g instanceof MultiPolygon)))
+                continue;
+
+            if (g instanceof Polygon) {
+                polys.add((Polygon) g);
+            } else {
+                // multipoly
+                for (int t = 0; t < g.getNumGeometries(); t++) {
+                    Polygon gg = (Polygon) g.getGeometryN(t);
+                    polys.add(gg);
+                }
+            }
+        }
+        if (polys.size() == 0)
+            return null;
+
+        // at this point "polys" is a list of polygons. Clip them
+        List<Polygon> clippedPolys = new ArrayList<Polygon>();
+        Envelope displayGeomEnv = displayGeometry.getEnvelopeInternal();
+        for (Polygon p : polys) {
+            MultiPolygon pp = clipPolygon(p, (Polygon) displayGeometry, displayGeomEnv);
+            if ((pp != null) && (!(pp.isEmpty()))) {
+                for (int t = 0; t < pp.getNumGeometries(); t++)
+                    clippedPolys.add((Polygon) pp.getGeometryN(t)); 
+            }
+        }
+        
+        // clippedPolys is a list of Polygon, all cliped (hopefully) to the
+        // display geometry. we choose largest one
+        if (clippedPolys.size() == 0) {
+            return null;
+        }
+        double maxSize = -1;
+        Polygon maxPoly = null;
+        Polygon cpoly;
+        for (int t = 0; t < clippedPolys.size(); t++) {
+            cpoly = (Polygon) clippedPolys.get(t);
+            final double area = cpoly.getArea();
+            if (area > maxSize) {
+                maxPoly = cpoly;
+                maxSize = area;
+            }
+        }
+        // fast clipping may result in polygons with 0 area
+        if(maxSize > 0) {
+            return maxPoly;
+        } else {
+            return null;
+        }
+    }
+

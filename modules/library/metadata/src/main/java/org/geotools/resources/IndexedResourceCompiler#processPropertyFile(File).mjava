@@ -1,0 +1,78 @@
+    /**
+     * Loads all properties from a {@code .properties} file. Resource keys are checked for naming
+     * conventions (i.e. resources expecting some arguments must have a key name ending with
+     * {@code "_$n"} where {@code "n"} is the number of arguments). This method transforms resource
+     * values into legal {@link MessageFormat} patterns when necessary.
+     *
+     * @param  file The properties file to read.
+     * @throws IOException if an input/output operation failed.
+     */
+    private void processPropertyFile(final File file) throws IOException {
+        final Properties properties = loadPropertyFile(file);
+        resources.clear();
+        for (final Map.Entry<Object,Object> entry : properties.entrySet()) {
+            final String key   = (String) entry.getKey();
+            final String value = (String) entry.getValue();
+            /*
+             * Checks key and value validity.
+             */
+            if (key.trim().length() == 0) {
+                warning(file, key, "Empty key.", null);
+                continue;
+            }
+            if (value.trim().length() == 0) {
+                warning(file, key, "Empty value.", null);
+                continue;
+            }
+            /*
+             * Checks if the resource value is a legal MessageFormat pattern.
+             */
+            final MessageFormat message;
+            try {
+                message = new MessageFormat(toMessageFormatString(value));
+            } catch (IllegalArgumentException exception) {
+                warning(file, key, "Bad resource value", exception);
+                continue;
+            }
+            /*
+             * Checks if the expected arguments count (according to naming conventions)
+             * matches the arguments count found in the MessageFormat pattern.
+             */
+            final int argumentCount;
+            final int index = key.lastIndexOf(ARGUMENT_COUNT_PREFIX);
+            if (index < 0) {
+                argumentCount = 0;
+                resources.put(key, value); // Text will not be formatted using MessageFormat.
+            } else try {
+                String suffix = key.substring(index + ARGUMENT_COUNT_PREFIX.length());
+                argumentCount = Integer.parseInt(suffix);
+                resources.put(key, message.toPattern());
+            } catch (NumberFormatException exception) {
+                warning(file, key, "Bad number in resource key", exception);
+                continue;
+            }
+            final int expected = message.getFormats().length;
+            if (argumentCount != expected) {
+                final String suffix = ARGUMENT_COUNT_PREFIX + expected;
+                warning(file, key, "Key name should ends with \""+suffix+"\".", null);
+                continue;
+            }
+        }
+        /*
+         * Allocates an ID for each new key.
+         */
+        final String[] keys = resources.keySet().toArray(new String[resources.size()]);
+        Arrays.sort(keys, this);
+        int freeID = 0;
+        for (int i=0; i<keys.length; i++) {
+            final String key = keys[i];
+            if (!allocatedIDs.containsValue(key)) {
+                Integer ID;
+                do {
+                    ID = freeID++;
+                } while (allocatedIDs.containsKey(ID));
+                allocatedIDs.put(ID, key);
+            }
+        }
+    }
+

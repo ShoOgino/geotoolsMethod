@@ -1,0 +1,65 @@
+    /**
+     * Constructs a new coverage. The coordinate reference system will be the same than the
+     * wrapped coverage, which must be three dimensional. This CRS must have a
+     * {@linkplain DefaultTemporalCRS temporal} component.
+     *
+     * @param name The name for this coverage, or {@code null} for the same than {@code coverage}.
+     * @param coverage The source coverage.
+     * @throws IllegalArgumentException if the coverage CRS doesn't have a temporal component.
+     */
+    public SpatioTemporalCoverage3D(final CharSequence name, final Coverage coverage)
+            throws IllegalArgumentException
+    {
+        super(name, coverage);
+        final CoordinateSystem cs = crs.getCoordinateSystem();
+        final int dimension = cs.getDimension();
+        if (dimension != 3) {
+            throw new MismatchedDimensionException(Errors.format(
+                    ErrorKeys.MISMATCHED_DIMENSION_$2, 3, dimension));
+        }
+        if (coverage instanceof SpatioTemporalCoverage3D) {
+            final SpatioTemporalCoverage3D source = (SpatioTemporalCoverage3D) coverage;
+            this.coverage          = source.coverage;
+            this.temporalCRS       = source.temporalCRS;
+            this.temporalDimension = source.temporalDimension;
+            this.xDimension        = source.xDimension;
+            this.yDimension        = source.yDimension;
+            this.boundingBox       = source.boundingBox;
+        } else {
+            this.coverage = coverage;
+            temporalCRS = DefaultTemporalCRS.wrap(CRS.getTemporalCRS(crs));
+            if (temporalCRS == null) {
+                throw new IllegalArgumentException(
+                        Errors.format(ErrorKeys.ILLEGAL_COORDINATE_REFERENCE_SYSTEM));
+            }
+            temporalDimension = CRSUtilities.getDimensionOf(crs, temporalCRS.getClass());
+            final int  xDimension = (temporalDimension!=0) ? 0 : 1;
+            final int  yDimension = (temporalDimension!=2) ? 2 : 1;
+            Boolean swap = null; // 'null' if unknown, otherwise TRUE or FALSE.
+control:    for (int p=0; p<=1; p++) {
+                final AxisDirection direction;
+                direction = cs.getAxis(p==0 ? xDimension : yDimension).getDirection().absolute();
+                for (int i=0; i<DIRECTIONS.length; i++) {
+                    if (direction.equals(DIRECTIONS[i])) {
+                        final boolean needSwap = (i & 1) != p;
+                        if (swap == null) {
+                            swap = Boolean.valueOf(needSwap);
+                        } else if (swap.booleanValue() != needSwap) {
+                            swap = null; // Found an ambiguity; stop the search.
+                            break control;
+                        }
+                    }
+                }
+            }
+            if (swap!=null && swap.booleanValue()) {
+                this.xDimension = yDimension;
+                this.yDimension = xDimension;
+            } else {
+                this.xDimension = xDimension;
+                this.yDimension = yDimension;
+            }
+        }
+        assert temporalDimension>=0 && temporalDimension<dimension : temporalDimension;
+        coordinate = new GeneralDirectPosition(dimension); // Each instance must have its own.
+    }
+

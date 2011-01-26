@@ -1,0 +1,27 @@
+    public void testRollbackDeleted() throws IOException, IllegalAttributeException {
+        VersionedPostgisDataStore ds = getDataStore();
+        buildRiverHistory();
+
+        Filter rv2Filter = ff.id(Collections.singleton(ff.featureId("river.rv2")));
+         FeatureReader<SimpleFeatureType, SimpleFeature> fr = ds.getFeatureReader(new DefaultQuery("river", rv2Filter),
+                Transaction.AUTO_COMMIT);
+        assertFalse(fr.hasNext());
+        fr.close();
+
+        // try to rollback to revision 4, that is, rollback last deletion
+        Transaction t = createTransaction("Mambo", "Gimbo, what did you do? "
+                + "Now I have to rollback your changes!");
+        VersionedPostgisFeatureStore fs = (VersionedPostgisFeatureStore) ds
+                .getFeatureSource("river");
+        fs.setTransaction(t);
+        fs.rollback("4", Filter.INCLUDE, null);
+        t.commit();
+
+        // now check rv2 is again there
+        fr = ds.getFeatureReader(new DefaultQuery("river", rv2Filter), Transaction.AUTO_COMMIT);
+        assertTrue(fr.hasNext());
+        fr.close();
+        assertEquals(3, fs.getFeatures(Filter.INCLUDE).size());
+        t.close();
+    }
+

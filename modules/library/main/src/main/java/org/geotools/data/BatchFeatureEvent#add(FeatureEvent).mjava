@@ -1,0 +1,47 @@
+    /**
+     * Indicate a change being batched.
+     * <p>
+     * Will be use to update internal state of bounds and filter; in 
+     * the special case of Features being added we will record
+     * the FeatureIds in case we need to update them later (this
+     * is only required for a *commit* event).
+     */
+    public void add( FeatureEvent change ){    	
+    	if (change.getType() == Type.ADDED) {
+            if (change.getFilter() instanceof Id) {
+                // store these feature Ids for later
+                Id newFeatureIds = (Id) change.getFilter();
+                fids.addAll(newFeatureIds.getIdentifiers());
+            } else {
+                // warning? how can you add features and not know
+                // what you are adding?
+            }
+        }
+    	
+    	if (filter == Filter.INCLUDE || bounds == ReferencedEnvelope.EVERYTHING) {
+            // someone already gave as "generic" something has changed event
+            // so we are never going to be able to be more specific
+            return;
+        }
+        if (change.getFilter() == Filter.INCLUDE
+                || change.getBounds() == ReferencedEnvelope.EVERYTHING) {
+            // something has changed but we are not sure what...
+            filter = Filter.INCLUDE;
+            bounds = ReferencedEnvelope.EVERYTHING;
+            return;
+        }
+        bounds.expandToInclude(change.getBounds());
+
+        if (filter == Filter.EXCLUDE) {
+            // we are just starting out
+            filter = change.getFilter();
+        } else if (filter instanceof And) {
+            And and = (And) filter;
+            List<Filter> children = and.getChildren();
+            children.add(change.getFilter());
+        } else {
+            FilterFactory ff = CommonFactoryFinder.getFilterFactory(null);
+            filter = ff.and(filter, change.getFilter());
+        }
+    }
+

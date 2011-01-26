@@ -1,0 +1,37 @@
+    /**
+     * Tests the serialization of the packed and geophysics views of a grid coverage.
+     *
+     * @param  coverage The coverage to serialize.
+     * @return The deserialized grid coverage as packed view.
+     * @throws IOException if an I/O operation was needed and failed.
+     * @throws ClassNotFoundException Should never happen.
+     */
+    protected static GridCoverage2D serialize(GridCoverage2D coverage)
+            throws IOException, ClassNotFoundException
+    {
+        coverage.tileEncoding = null;
+        /*
+         * The previous line is not something that we should do.
+         * But we want to test the default GridCoverage2D encoding.
+         */
+        final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        final ObjectOutputStream out = new ObjectOutputStream(buffer);
+        try {
+            out.writeObject(coverage.view(ViewType.PACKED));
+            out.writeObject(coverage.view(ViewType.GEOPHYSICS));
+        } finally {
+            out.close();
+        }
+        final ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(buffer.toByteArray()));
+        GridCoverage2D read;
+        try {
+            read = (GridCoverage2D) in.readObject(); assertSame(read, read.view(ViewType.PACKED));
+            read = (GridCoverage2D) in.readObject(); assertSame(read, read.view(ViewType.GEOPHYSICS));
+        } finally {
+            in.close();
+        }
+        coverage = read.view(ViewType.PACKED);
+        assertNotSame(read, coverage);
+        return coverage;
+    }
+

@@ -1,0 +1,114 @@
+	protected GridCoverage execute() {
+		assert Thread.holdsLock(this);
+		assert getSources().size() <= 3;
+
+		// /////////////////////////////////////////////////////////////////////
+		//
+		// Get the sources and see what we got to do. Note that if we have more
+		// than once source we'll use only the first one but we'll
+		//
+		// /////////////////////////////////////////////////////////////////////
+		final List<CoverageProcessingNode> sources = this.getSources();
+		if (sources != null && !sources.isEmpty()) {
+			// //
+			//
+			// only one source, let's forward it, nothing to do.
+			//
+			// //
+			final int size = sources.size();
+			if (size == 1) {
+				return getSource(0).getOutput();
+			}
+			// //
+			//
+			// We can accept only 3 sources at this step
+			//
+			// //
+			if (size != 3) {
+				throw new IllegalArgumentException(Errors.format(
+						ErrorKeys.INVALID_NUMBER_OF_SOURCES_$1, Integer.valueOf(size)));
+			}
+
+			// /////////////////////////////////////////////////////////////////////
+			//
+			// we have at least two sources, let's merge them
+			//
+			// /////////////////////////////////////////////////////////////////////
+			final Iterator<CoverageProcessingNode> it = sources.iterator();
+			RenderedImage op = null;
+			GridGeometry2D gridGeometry = null;
+			ImageLayout layout = null;
+			final Hints hints = getHints();
+			final List<GridCoverage2D> sourceGridCoverages= new ArrayList<GridCoverage2D>();
+			do {
+				// //
+				//
+				// Get the source image and do the merge
+				//
+				// //
+				final CoverageProcessingNode currentSourceNode = (CoverageProcessingNode) it.next();
+				final GridCoverage2D currentSourceCoverage = (GridCoverage2D) currentSourceNode.getOutput();
+				sourceGridCoverages.add(currentSourceCoverage);
+				final GridGeometry2D gg = (GridGeometry2D) currentSourceCoverage.getGridGeometry();
+				if (gridGeometry == null) {
+					// get the envelope for the first source.
+					gridGeometry = gg;
+
+					// color model
+					final ComponentColorModel cm = new ComponentColorModel(
+							ColorSpace.getInstance(ColorSpace.CS_LINEAR_RGB),
+							false, false, Transparency.OPAQUE,
+							currentSourceCoverage.getRenderedImage()
+									.getSampleModel().getDataType());
+					layout = new ImageLayout();
+					layout.setColorModel(cm);
+				} else if (!gg.equals(gridGeometry))
+					throw new IllegalArgumentException(Errors.format(
+							ErrorKeys.MUST_SHARE_GRIDGEOMETRY_$1, "BandMerge"));
+
+				// //
+				//
+				// Merge the current source with the results of the others
+				// merges
+				//
+				// //
+				if (op == null)
+					op = currentSourceCoverage.getRenderedImage();
+				else {
+					op = BandMergeDescriptor.create(op, currentSourceCoverage.getRenderedImage(), hints);
+					// //
+					//
+					// Save the intermediate image
+					//
+					// //
+					intermediateOps.add(op);
+				}
+
+			} while (it.hasNext());
+
+			// /////////////////////////////////////////////////////////////////////
+			//
+			// let's now create the output coverage and
+			//
+			// /////////////////////////////////////////////////////////////////////
+			if (layout != null)
+				hints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
+			op = FormatDescriptor.create(op, Integer.valueOf(op.getSampleModel().getDataType()), hints);
+			final GridSampleDimension [] sd= new GridSampleDimension[op.getSampleModel().getNumBands()];
+			for(int i=0;i<sd.length;i++)
+			    sd[i]= new GridSampleDimension(TypeMap.getColorInterpretation(op.getColorModel(), i).name());
+		                
+			return getCoverageFactory().create(
+			        "BandMerge",
+			        op,
+			        gridGeometry,
+			        null, 
+			        sourceGridCoverages.toArray(new GridCoverage[sourceGridCoverages.size()]),
+			        null);
+
+		}
+		throw new IllegalStateException(Errors.format(
+				ErrorKeys.SOURCE_CANT_BE_NULL_$1, "BandMergeNode"));
+
+	}
+

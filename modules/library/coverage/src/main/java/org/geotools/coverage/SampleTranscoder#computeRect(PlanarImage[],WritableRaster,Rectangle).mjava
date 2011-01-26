@@ -1,0 +1,46 @@
+    /**
+     * Computes one of the destination image tile.
+     *
+     * @todo There is two optimisations we could do here:
+     *       <ul>
+     *         <li>If source and destination are the same raster, then a single
+     *             {@link WritableRectIter} object would be more efficient (the
+     *             hard work is to detect if source and destination are the same).</li>
+     *         <li>If the destination image is a single-banded, non-interleaved
+     *             sample model, we could apply the transform directly in the
+     *             {@link java.awt.image.DataBuffer}. We can even avoid to copy
+     *             sample value if source and destination raster are the same.</li>
+     *       </ul>
+     *
+     * @param sources  An array of length 1 with source image.
+     * @param dest     The destination tile.
+     * @param destRect the rectangle within the destination to be written.
+     */
+    @Override
+    protected void computeRect(final PlanarImage[] sources,
+                               final WritableRaster   dest,
+                               final Rectangle    destRect)
+    {
+        final PlanarImage source = sources[0];
+        final Rectangle bounds = destRect.intersection(source.getBounds());
+        if (!destRect.equals(bounds)) {
+            // TODO: Check if this case occurs sometime, and fill pixel values if it does.
+            //       If it happen to occurs, we will need to fix other GeoTools operations
+            //       as well.
+            Logging.getLogger(SampleTranscoder.class).warning(
+                    "Bounds mismatch: " + destRect + " and " + bounds);
+        }
+        WritableRectIter iterator = RectIterFactory.createWritable(dest, bounds);
+        if (true) {
+            // TODO: Detect if source and destination rasters are the same. If they are
+            //       the same, we should skip this block. Iteration will then be faster.
+            iterator = TransfertRectIter.create(RectIterFactory.create(source, bounds), iterator);
+        }
+        int band = 0;
+        if (!iterator.finishedBands()) do {
+            categories[band++].transform(iterator);
+        }
+        while (!iterator.nextBandDone());
+        assert band == categories.length : band;
+    }
+

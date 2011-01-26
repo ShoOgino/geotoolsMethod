@@ -1,0 +1,79 @@
+    /**
+     * {@linkplain #registerServiceProvider Registers} all factories given by the
+     * supplied iterator.
+     *
+     * @param factories The factories (or "service providers") to register.
+     * @param category  the category under which to register the providers.
+     * @param message   A buffer where to write the logging message.
+     * @return {@code true} if at least one factory has been registered.
+     */
+    private <T> boolean register(final Iterator<T> factories, final Class<T> category,
+                                 final StringBuilder message)
+    {
+        boolean newServices = false;
+        final String lineSeparator = System.getProperty("line.separator", "\n");
+        while (factories.hasNext()) {
+            T factory;
+            try {
+                factory = factories.next();
+            } catch (OutOfMemoryError error) {
+                // Makes sure that we don't try to handle this error.
+                throw error;
+            } catch (NoClassDefFoundError error) {
+                /*
+                 * A provider can't be registered because of some missing dependencies.
+                 * This occurs for example when trying to register the WarpTransform2D
+                 * math transform on a machine without JAI installation. Since the factory
+                 * may not be essential (this is the case of WarpTransform2D), just skip it.
+                 */
+                loadingFailure(category, error, false);
+                continue;
+            } catch (ExceptionInInitializerError error) {
+                /*
+                 * If an exception occured during class initialization, log the cause.
+                 * The ExceptionInInitializerError alone doesn't help enough.
+                 */
+                final Throwable cause = error.getCause();
+                if (cause != null) {
+                    loadingFailure(category, cause, true);
+                }
+                throw error;
+            } catch (Error error) {
+                if (!Classes.getShortClassName(error).equals("ServiceConfigurationError")) {
+                    // We want to handle sun.misc.ServiceConfigurationError only. Unfortunatly, we
+                    // need to rely on reflection because this error class is not a commited API.
+                    // TODO: Check if the error is catchable with JSE 6.
+                    throw error;
+                }
+                /*
+                 * Failed to register a factory for a reason probably related to the plugin
+                 * initialisation. It may be some factory-dependent missing resources.
+                 */
+                loadingFailure(category, error, true);
+                continue;
+            }
+            final Class<? extends T> factoryClass = factory.getClass().asSubclass(category);
+            /*
+             * If the factory implements more than one interface and an instance were
+             * already registered, reuse the same instance instead of duplicating it.
+             */
+            final T replacement = getServiceProviderByClass(factoryClass);
+            if (replacement != null) {
+                factory = replacement;
+                // Need to register anyway, because the category may not be the same.
+            }
+            if (registerServiceProvider(factory, category)) {
+                /*
+                 * The factory is now registered. Add it to the message to be logged. We will log
+                 * all factories together in a single log event because some registration (e.g.
+                 * MathTransformProviders) would be otherwise quite verbose.
+                 */
+                message.append(lineSeparator);
+                message.append("  ");
+                message.append(factoryClass.getName());
+                newServices = true;
+            }
+        }
+        return newServices;
+    }
+

@@ -1,0 +1,38 @@
+    /**
+     * Activates the mosaic controller. This method is not invoked automatically,
+     * but only when {@link IIOParam#activateController()} is invoked explicitly.
+     * <p>
+     * When reading, the default implementation {@linkplain MosaicImageReadParam#getTileParameters
+     * creates parameters for tile readers} if not already done, then delegates the activation to
+     * their controllers. It returns {@code true} only if activation succeed for every tile readers.
+     * <p>
+     * When writting, the default implementation {@linkplain MosaicImageWriteParam#getTileParameters
+     * creates parameters for tile writers} if not already done, then delegates the activation to
+     * their controllers. It returns {@code true} only if activation succeed for every tile writers.
+     *
+     * @param parameters
+     *          The parameters to be modified. It should be an instance of
+     *          {@link MosaicImageReadParam} or {@link MosaicImageWriteParam},
+     *          but this is not mandatory.
+     * @return {@code true} if the parameters are ready for use, or
+     *         {@code false} if the user canceled the operation.
+     *
+     * @todo Handle the {@link MosaicImageWriteParam} case.
+     */
+    public boolean activate(final IIOParam parameters) {
+        if (parameters instanceof MosaicImageReadParam) {
+            final MosaicImageReadParam params = (MosaicImageReadParam) parameters;
+            for (final Map.Entry<ImageReader,ImageReadParam> entry : params.readers.entrySet()) {
+                ImageReadParam p = entry.getValue();
+                if (p == null) {
+                    p = params.getTileParameters(entry.getKey());
+                    entry.setValue(p);
+                }
+                if (!activateForTile(p)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+

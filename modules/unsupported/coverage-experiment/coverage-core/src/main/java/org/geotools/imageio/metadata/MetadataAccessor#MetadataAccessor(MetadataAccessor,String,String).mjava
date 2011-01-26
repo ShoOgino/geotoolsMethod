@@ -1,0 +1,56 @@
+    protected MetadataAccessor(final MetadataAccessor parentNode,
+            final String parentPath, final String childPath) {
+        this.metadata = parentNode.metadata;
+        final Node root = metadata.getRootNode();
+        /*
+         * Fetches the parent node and ensure that we got a singleton. If there
+         * is more nodes than expected, log a warning and pickup the first one.
+         * If there is no node, create a new one.
+         */
+        final List<Node> childs = new ArrayList<Node>(4);
+        if (parentPath != null) {
+            listChilds(root, parentPath, 0, childs, true);
+            final int count = childs.size();
+            switch (count) {
+            default: {
+                // warning("<init>", ErrorKeys.TOO_MANY_OCCURENCES_$2,
+                // new Object[] {parentPath, count});
+                // Fall through for picking the first node.
+            }
+            case 1: {
+                parent = childs.get(0);
+                childs.clear();
+                break;
+            }
+            case 0: {
+                parent = appendChild(parentNode.current, parentPath);
+                break;
+            }
+            }
+        } else {
+            parent = root;
+        }
+        /*
+         * Computes a full path to children. Searching from 'metadata' root node
+         * using 'path' should be identical to searching from 'parent' node
+         * using 'childPath', except in case of badly formed metadata where the
+         * parent node appears more than once.
+         */
+        this.childPath = childPath;
+        if (childPath != null) {
+            final String path;
+            if (parentPath != null) {
+                path = parentPath + SEPARATOR + childPath;
+            } else {
+                path = childPath;
+            }
+            listChilds(root, path, 0, childs, false);
+            this.childs = childs;
+        } else {
+            this.childs = Collections.emptyList();
+        }
+        if (parent instanceof Element) {
+            current = (Element) parent;
+        }
+    }
+

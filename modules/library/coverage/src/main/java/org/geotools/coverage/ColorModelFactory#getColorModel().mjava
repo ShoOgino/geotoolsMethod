@@ -1,0 +1,74 @@
+    /**
+     * Constructs the color model.
+     */
+    private ColorModel getColorModel() {
+        double minimum = 0;
+        double maximum = 1;
+        final int categoryCount = categories.length;
+        if (categoryCount != 0) {
+            minimum = categories[0].minimum;
+            for (int i=categoryCount; --i >= 0;) {
+                final double value = categories[i].maximum;
+                if (!Double.isNaN(value)) {
+                    maximum = value;
+                    break;
+                }
+            }
+        }
+        if (type != DataBuffer.TYPE_BYTE && type != DataBuffer.TYPE_USHORT) {
+            // If the requested type is any type not supported by IndexColorModel,
+            // fallback on a generic (but very slow!) color model.
+            final int  transparency = Transparency.OPAQUE;
+            final ColorSpace colors = new ScaledColorSpace(visibleBand, numBands, minimum, maximum);
+            if (true) {
+                // This is the J2SE implementation of color model. It should be our preferred one.
+                // In JAI 1.1 we had to use JAI implementation instead of J2SE's one because
+                // javax.media.jai.iterator.RectIter didn't work with J2SE's DataBuffer
+                // when the data type is float or double.
+                return new ComponentColorModel(colors, false, false, transparency, type);
+            }
+            if (false) {
+                // This is the JAI implementation of color model. This implementation work with
+                // JAI's RectIter and should in theory support float and double data buffer.
+                // Unfortunatly, it seems to completly ignore our custom ColorSpace. We end
+                // up basically with all-black or all-white images.
+                return new FloatDoubleColorModel(colors, false, false, transparency, type);
+            }
+            if (false) {
+                // Our patched color model extends J2SE's ComponentColorModel (which work correctly
+                // with our custom ColorSpace), but create JAI's SampleModel instead of J2SE's one.
+                // It make RectIter happy and display colors correctly.
+                return new ComponentColorModelJAI(colors, false, false, transparency, type);
+            }
+            // This factory is not really different from a direct construction of
+            // FloatDoubleColorModel. We provide it here just because we must end
+            // with something.
+            return RasterFactory.createComponentColorModel(type, colors, false, false, transparency);
+        }
+        if (numBands == 1 && categoryCount == 0) {
+            // Construct a gray scale palette.
+            final ColorSpace cs = ColorSpace.getInstance(ColorSpace.CS_GRAY);
+            final int[] nBits = {
+                DataBuffer.getDataTypeSize(type)
+            };
+            return new ComponentColorModel(cs, nBits, false, true, Transparency.OPAQUE, type);
+        }
+        /*
+         * Computes the number of entries required for the color palette.
+         * We take the upper range value of the last non-NaN category.
+         */
+        final int mapSize = ((int) Math.round(maximum)) + 1;
+        final int[]  ARGB = new int[mapSize];
+        /*
+         * Interpolates the colors in the color palette. Colors that do not fall
+         * in the range of a category will be set to a transparent color.
+         */
+        for (int i=0; i<categoryCount; i++) {
+            final Category category = categories[i];
+            ColorUtilities.expand(category.getColors(), ARGB,
+                                  (int) Math.round(category.minimum),
+                                  (int) Math.round(category.maximum) + 1);
+        }
+        return ColorUtilities.getIndexColorModel(ARGB, numBands, visibleBand);
+    }
+

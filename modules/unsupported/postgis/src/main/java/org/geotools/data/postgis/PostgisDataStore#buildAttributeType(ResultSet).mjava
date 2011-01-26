@@ -1,0 +1,87 @@
+    //    protected String determineFidColumnName(String typeName)
+    //        throws IOException {
+    //        String fidColumn = super.determineFidColumnName(typeName);
+    //
+    //        if(fidColumn == null)
+    //        	fidColumn = DEFAULT_FID_COLUMN;
+    //
+    //        return fidColumn;
+    //    }
+    /*
+    private static boolean isPresent(String[] array, String value) {
+        if (array != null) {
+            for (int i = 0; i < array.length; i++) {
+                if ((array[i] != null) && (array[i].equals(value))) {
+                    return (true);
+                }
+            }
+        }
+
+        return (false);
+    }
+    */
+    /**
+     * Constructs an AttributeDescriptor from a row in a ResultSet. The ResultSet
+     * contains the information retrieved by a call to getColumns() on the
+     * DatabaseMetaData object. This information can be used to construct an
+     * Attribute Type.
+     *
+     * <p>
+     * This implementation construct an AttributeDescriptor using the default JDBC
+     * type mappings defined in JDBCDataStore. These type mappings only handle
+     * native Java classes and SQL standard column types. If a geometry type
+     * is found then getGeometryAttribute is called.
+     * </p>
+     *
+     * <p>
+     * Note: Overriding methods must never move the current row pointer in the
+     * result set.
+     * </p>
+     *
+     * @param metadataRs The ResultSet containing the result of a
+     *        DatabaseMetaData.getColumns call.
+     *
+     * @return The AttributeDescriptor built from the ResultSet.
+     *
+     * @throws IOException If an error occurs processing the ResultSet.
+     */
+    protected AttributeDescriptor buildAttributeType(ResultSet metadataRs)
+        throws IOException {
+        try {
+            final int TABLE_NAME = 3;
+            final int COLUMN_NAME = 4;
+            final int TYPE_NAME = 6;
+            final int NULLABLE = 11;
+            String typeName = metadataRs.getString(TYPE_NAME);
+
+            if (typeName.equals("geometry")) {
+                String tableName = metadataRs.getString(TABLE_NAME);
+                String columnName = metadataRs.getString(COLUMN_NAME);
+
+                // check for nullability
+                int nullCode = metadataRs.getInt( NULLABLE );
+                boolean nillable = isNullable(nullCode);
+
+                return getGeometryAttribute(tableName, columnName, nillable);
+            } else if("uuid".equals(typeName)) {
+                String tableName = metadataRs.getString(TABLE_NAME);
+                String columnName = metadataRs.getString(COLUMN_NAME);
+
+                // check for nullability
+                int nullCode = metadataRs.getInt( NULLABLE );
+                boolean nillable = isNullable(nullCode);
+
+                AttributeTypeBuilder atb = new AttributeTypeBuilder();
+                atb.setName(columnName);
+                atb.setBinding(String.class);
+                atb.setMinOccurs(nillable ? 0 : 1);
+                atb.setMaxOccurs(1);
+                return atb.buildDescriptor(columnName);
+            } else {
+                return super.buildAttributeType(metadataRs);
+            }
+        } catch (SQLException e) {
+            throw new IOException("Sql error occurred: " + e.getMessage());
+        }
+    }
+

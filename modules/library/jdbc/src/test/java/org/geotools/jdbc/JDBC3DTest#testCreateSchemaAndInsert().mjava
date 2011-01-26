@@ -1,0 +1,43 @@
+    /**
+     * Creates the polygon schema and then inserts a 3D geometry into the
+     * datastore and retrieves it back to make sure 3d data is really handled as
+     * such
+     * 
+     * @throws Exception
+     */
+    public void testCreateSchemaAndInsert() throws Exception {
+        dataStore.createSchema(poly3DType);
+        SimpleFeatureType actualSchema = dataStore.getSchema(tname(POLY3D));
+        assertFeatureTypesEqual(poly3DType, actualSchema);
+        assertEquals(getNativeSRID(), actualSchema.getGeometryDescriptor().getUserData().get(
+                JDBCDataStore.JDBC_NATIVE_SRID));
+
+        // build a 3d polygon (ordinates in ccw order)
+        GeometryFactory gf = new GeometryFactory();
+        LinearRing shell = gf.createLinearRing(new Coordinate[] { new Coordinate(0, 0, 0),
+                new Coordinate(1, 1, 1), new Coordinate(1, 0, 1), new Coordinate(0, 0, 0) });
+        Polygon poly = gf.createPolygon(shell, null);
+
+        // insert it
+        FeatureWriter<SimpleFeatureType, SimpleFeature> fw = dataStore.getFeatureWriterAppend(
+                tname(POLY3D), Transaction.AUTO_COMMIT);
+        SimpleFeature f = fw.next();
+        f.setAttribute(aname(ID), 0);
+        f.setAttribute(aname(GEOM), poly);
+        f.setAttribute(aname(NAME), "3dpolygon!");
+        fw.write();
+        fw.close();
+
+        // read id back and compare
+        FeatureReader<SimpleFeatureType, SimpleFeature> fr = dataStore.getFeatureReader(
+                new DefaultQuery(tname(POLY3D)), Transaction.AUTO_COMMIT);
+        assertTrue(fr.hasNext());
+        f = fr.next();
+        // this unfortunately checks only the first 2d, but at the same time
+        // a coordinate by coordinate check is not possible since the ring orientation
+        // can be modified by the store
+        assertTrue(poly.equals((Geometry) f.getDefaultGeometry()));
+        
+        fr.close();
+    }
+

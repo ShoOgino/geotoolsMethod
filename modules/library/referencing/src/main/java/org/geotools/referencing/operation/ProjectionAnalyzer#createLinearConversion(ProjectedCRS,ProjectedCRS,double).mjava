@@ -1,0 +1,89 @@
+    /**
+     * Returns a conversion from a source to target projected CRS, if this conversion
+     * is representable as an affine transform. If no linear conversion has been found
+     * between the two CRS, then this method returns {@code null}.
+     *
+     * @param  sourceCRS The source coordinate reference system.
+     * @param  targetCRS The target coordinate reference system.
+     * @param  errorTolerance Relative error tolerance for considering two parameter values as
+     *         equal. This is usually a small number like {@code 1E-10}.
+     * @return The conversion from {@code sourceCRS} to {@code targetCRS} as an
+     *         affine transform, or {@code null} if no linear transform has been found.
+     */
+    public static Matrix createLinearConversion(final ProjectedCRS sourceCRS,
+                                                final ProjectedCRS targetCRS,
+                                                final double errorTolerance)
+    {
+        /*
+         * Checks if the datum are the same. To be stricter, we could compare the 'baseCRS'
+         * instead. But this is not always needed. For example we don't really care if the
+         * underlying geographic CRS use different axis order or units. What matter are the
+         * axis order and units of the projected CRS.
+         *
+         * Actually, checking for 'baseCRS' causes an infinite loop (until StackOverflowError)
+         * in CoordinateOperationFactory, because it prevents this method to recognize that the
+         * transform between two projected CRS is the identity transform even if their underlying
+         * geographic CRS use different axis order.
+         */
+        if (!CRS.equalsIgnoreMetadata(sourceCRS.getDatum(), targetCRS.getDatum())) {
+            return null;
+        }
+        final ProjectionAnalyzer source = new ProjectionAnalyzer(sourceCRS);
+        final ProjectionAnalyzer target = new ProjectionAnalyzer(targetCRS);
+        if (!nameMatches(source.projection.getMethod(), target.projection.getMethod())) {
+            /*
+             * In theory, we can not find a linear conversion if the operation method is
+             * not the same. In practice, it still hapen in some occasions.  For example
+             * "Transverse Mercator" and "Transverse Mercator (South Oriented)"  are two
+             * distinct operation methods in EPSG point of view, but in Geotools the South
+             * Oriented case is implemented as a "Transverse Mercator" concatenated with
+             * an affine transform performing the axis flip, which is a linear conversion.
+             *
+             * We may be tempted to compare the 'source.transform' and 'target.transform'
+             * implementation classes, but this is not robust enough.  For example it is
+             * possible to implement the "Oblique Mercator" and "Hotine Oblique Mercator"
+             * projections with a single class. But both cases can have identical user-
+             * supplied parameters and still be different projections (they differ in the
+             * origin of their grid coordinates).
+             *
+             * As a compromise, we compare the method name declared by the math transform,
+             * in addition of the method name declared by the conversion (the check above).
+             */
+            final ParameterDescriptorGroup sourceDsc = source.getTransformDescriptor();
+            final ParameterDescriptorGroup targetDsc = source.getTransformDescriptor();
+            if (sourceDsc==null || targetDsc==null || !nameMatches(sourceDsc, targetDsc)) {
+                return null;
+            }
+        }
+        /*
+         * Extracts the "scale_factor", "false_easting" and "false_northing" parameters
+         * as affine transforms. All remaining parameters must be identical.
+         */
+        if (source.parameters == null || target.parameters == null) {
+            return null;
+        }
+        XMatrix sourceScale = source.normalizedToProjection();
+        XMatrix targetScale = target.normalizedToProjection();
+        if (!parameterValuesEqual(source.parameters, target.parameters, errorTolerance)) {
+            return null;
+        }
+        /*
+         * Creates the matrix (including axis order changes and unit conversions),
+         * and apply the scale and translation inferred from the  "false_easting"
+         * parameter and its friends. We perform the conversion in three conceptual
+         * steps (in the end, everything is bundle in a single matrix):
+         *
+         *   1) remove the old false northing/easting
+         *   2) apply the scales
+         *   3) add the new false northing/easting
+         */
+        targetScale = target.applyProjectedScale(targetScale);
+        sourceScale = source.applyProjectedScale(sourceScale);
+        sourceScale.invert();
+        targetScale.multiply(sourceScale);
+        if (targetScale.isIdentity(errorTolerance)) {
+            targetScale.setIdentity();
+        }
+        return targetScale;
+    }
+

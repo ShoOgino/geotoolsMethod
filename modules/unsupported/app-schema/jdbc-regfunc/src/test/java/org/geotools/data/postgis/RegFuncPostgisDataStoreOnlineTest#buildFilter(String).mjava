@@ -1,0 +1,40 @@
+    /**
+     * Create a {@link Filter} that selects features from the test table whose description contains
+     * the text specified in the argument (case-insensitive).
+     * 
+     * @param descriptionContainsText
+     *                text that description column must contain
+     * @return filter to select features containing text in their description
+     */
+    private Filter buildFilter(String descriptionContainsText) {
+        FilterFactory filterFactory = new RegfuncFilterFactoryImpl();
+        // Programmatically build a filter like this fragment from an OGC WFS 1.1.0 Query:
+        //
+        // <ogc:Filter>
+        // <ogc:PropertyIsEqualTo>
+        // <ogc:Function name="contains_text">
+        // <ogc:PropertyName>
+        // gsml:specification/gsml:GeologicUnit/gml:description
+        // </ogc:PropertyName>
+        // <ogc:Literal>basalt</ogc:Literal>
+        // </ogc:Function>
+        // <ogc:Literal>1</ogc:Literal>
+        // </ogc:PropertyIsEqualTo>
+        // </ogc:Filter>
+        //
+        // Now step by step:
+        //
+        // Build <ogc:PropertyName>
+        Expression property = filterFactory.property(DESCRIPTION_COLUMN_NAME);
+        // Build <ogc:Literal>basalt</ogc:Literal> equivalent
+        Expression string = filterFactory.createLiteralExpression(descriptionContainsText);
+        // Build <ogc:Function name="contains_text"> equivalent and set its arguments
+        Expression function = filterFactory.function(TEST_FUNCTION_NAME, property, string);
+        // Sanity check
+        assertEquals(RegisteredFunction.class, function.getClass());
+        // Build <ogc:Literal>1</ogc:Literal>
+        Expression one = filterFactory.createLiteralExpression(TEST_FUNCTION_RETURN_TRUE);
+        // Build <ogc:PropertyIsEqualTo>, set its arguments, and return it
+        return filterFactory.equals(function, one);
+    }
+

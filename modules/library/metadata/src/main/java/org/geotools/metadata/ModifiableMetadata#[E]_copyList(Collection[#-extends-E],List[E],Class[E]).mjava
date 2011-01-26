@@ -1,0 +1,53 @@
+    /**
+     * Copies the content of one list ({@code source}) into an other ({@code target}).
+     * If the target list is {@code null}, a new target list is created.
+     * <p>
+     * A call to {@link #checkWritePermission} is implicit before the copy is performed.
+     *
+     * @param  <E>         The type of elements in the list.
+     * @param  source      The source list. {@code null} is synonymous to empty.
+     * @param  target      The target list, or {@code null} if not yet created.
+     * @param  elementType The base type of elements to put in the list.
+     * @return {@code target}, or a newly created list.
+     * @throws UnmodifiableMetadataException if this metadata is unmodifiable.
+     *
+     * @since 2.5
+     */
+    protected final <E> List<E> copyList(final Collection<? extends E> source,
+            List<E> target, final Class<E> elementType)
+            throws UnmodifiableMetadataException
+    {
+        if (unmodifiable == FREEZING) {
+            /*
+             * freeze() method is under progress. The source list is already
+             * an unmodifiable instance created by unmodifiable(Object).
+             */
+            assert !isModifiable(source);
+            @SuppressWarnings("unchecked")
+            final List<E> unmodifiable = (List<E>) source;
+            return unmodifiable;
+        }
+        checkWritePermission();
+        /*
+         * It is not worth to copy the content if the current and the new instance are the
+         * same. This is safe only using the != operator, not the equals(Object) method.
+         * This optimization is required for efficient working of PropertyAccessor.set(...).
+         */
+        if (source != target) {
+            if (source == null) {
+                if (target != null) {
+                    target.clear();
+                }
+            } else {
+                if (target != null) {
+                    target.clear();
+                } else {
+                    int capacity = source.size();
+                    target = new MutableList<E>(elementType, capacity);
+                }
+                target.addAll(source);
+            }
+        }
+        return target;
+    }
+

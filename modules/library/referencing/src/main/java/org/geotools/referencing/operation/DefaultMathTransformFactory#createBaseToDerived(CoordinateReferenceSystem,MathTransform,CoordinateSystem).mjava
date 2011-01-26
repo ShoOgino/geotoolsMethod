@@ -1,0 +1,71 @@
+    /**
+     * Creates a transform from a base CRS to a derived CS. This method expects a "raw"
+     * transform without unit conversion or axis switch, typically a map projection
+     * working on (<cite>longitude</cite>, <cite>latitude</cite>) axes in degrees and
+     * (<cite>x</cite>, <cite>y</cite>) axes in metres. This method inspects the coordinate
+     * systems and prepend or append the unit conversions and axis switchs automatically.
+     *
+     * @param  baseCRS The source coordinate reference system.
+     * @param  projection The "raw" <cite>base to derived</cite> transform.
+     * @param  derivedCS the target coordinate system.
+     * @return The parameterized transform.
+     * @throws FactoryException if the object creation failed. This exception is thrown
+     *         if some required parameter has not been supplied, or has illegal value.
+     *
+     * @since 2.5
+     */
+    public MathTransform createBaseToDerived(final CoordinateReferenceSystem baseCRS,
+                                             final MathTransform          projection,
+                                             final CoordinateSystem        derivedCS)
+            throws FactoryException
+    {
+        /*
+         * Computes matrix for swapping axis and performing units conversion.
+         * There is one matrix to apply before projection on (longitude,latitude)
+         * coordinates, and one matrix to apply after projection on (easting,northing)
+         * coordinates.
+         */
+        final CoordinateSystem sourceCS = baseCRS.getCoordinateSystem();
+        final Matrix swap1, swap3;
+        try {
+            swap1 = AbstractCS.swapAndScaleAxis(sourceCS, AbstractCS.standard(sourceCS));
+            swap3 = AbstractCS.swapAndScaleAxis(AbstractCS.standard(derivedCS), derivedCS);
+        } catch (IllegalArgumentException cause) {
+            // User-specified axis don't match.
+            throw new FactoryException(cause);
+        } catch (ConversionException cause) {
+            // A Unit conversion is non-linear.
+            throw new FactoryException(cause);
+        }
+        /*
+         * Prepares the concatenation of the matrix computed above and the projection.
+         * Note that at this stage, the dimensions between each step may not be compatible.
+         * For example the projection (step2) is usually two-dimensional while the source
+         * coordinate system (step1) may be three-dimensional if it has a height.
+         */
+        MathTransform step1 = createAffineTransform(swap1);
+        MathTransform step3 = createAffineTransform(swap3);
+        MathTransform step2 = projection;
+        /*
+         * If the target coordinate system has a height, instructs the projection to pass
+         * the height unchanged from the base CRS to the target CRS. After this block, the
+         * dimensions of 'step2' and 'step3' should match.
+         */
+        final int numTrailingOrdinates = step3.getSourceDimensions() - step2.getTargetDimensions();
+        if (numTrailingOrdinates > 0) {
+            step2 = createPassThroughTransform(0, step2, numTrailingOrdinates);
+        }
+        /*
+         * If the source CS has a height but the target CS doesn't, drops the extra coordinates.
+         * After this block, the dimensions of 'step1' and 'step2' should match.
+         */
+        final int sourceDim = step1.getTargetDimensions();
+        final int targetDim = step2.getSourceDimensions();
+        if (sourceDim > targetDim) {
+            final Matrix drop = MatrixFactory.create(targetDim+1, sourceDim+1);
+            drop.setElement(targetDim, sourceDim, 1);
+            step1 = createConcatenatedTransform(createAffineTransform(drop), step1);
+        }
+        return createConcatenatedTransform(createConcatenatedTransform(step1, step2), step3);
+    }
+

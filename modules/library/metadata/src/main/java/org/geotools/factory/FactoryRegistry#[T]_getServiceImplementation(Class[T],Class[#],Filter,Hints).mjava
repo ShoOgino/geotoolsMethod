@@ -1,0 +1,51 @@
+    /**
+     * Searchs the first implementation in the registery matching the specified conditions.
+     * This method is invoked only by the {@link #getServiceProvider(Class, Filter, Hints,
+     * Hints.Key)} public method above; there is no recursivity there. This method do not
+     * creates new instance if no matching factory is found.
+     *
+     * @param  category       The category to look for. Usually an interface class.
+     * @param  implementation The desired class for the implementation, or {@code null} if none.
+     * @param  filter         An optional filter, or {@code null} if none.
+     * @param  hints          A {@linkplain Hints map of hints}, or {@code null} if none.
+     * @return A factory for the specified category and hints, or {@code null} if none.
+     */
+    private <T> T getServiceImplementation(final Class<T> category, final Class<?> implementation,
+                                           final Filter filter, final Hints hints)
+    {
+        for (final Iterator<T> it=getUnfilteredProviders(category); it.hasNext();) {
+            final T candidate = it.next();
+            // Implementation class must be tested before 'isAcceptable'
+            // in order to avoid StackOverflowError in some situations.
+            if (implementation!=null && !implementation.isInstance(candidate)) {
+                continue;
+            }
+            if (!isAcceptable(candidate, category, hints, filter)) {
+                continue;
+            }
+            return candidate;
+        }
+        final List<Reference<T>> cached = getCachedProviders(category);
+        if (cached != null) {
+            /*
+             * Checks if a factory previously created by FactoryCreator could fit. This
+             * block should never be executed if this instance is not a FactoryCreator.
+             */
+            for (final Iterator<Reference<T>> it=cached.iterator(); it.hasNext();) {
+                final T candidate = it.next().get();
+                if (candidate == null) {
+                    it.remove();
+                    continue;
+                }
+                if (implementation!=null && !implementation.isInstance(candidate)) {
+                    continue;
+                }
+                if (!isAcceptable(candidate, category, hints, filter)) {
+                    continue;
+                }
+                return candidate;
+            }
+        }
+        return null;
+    }
+

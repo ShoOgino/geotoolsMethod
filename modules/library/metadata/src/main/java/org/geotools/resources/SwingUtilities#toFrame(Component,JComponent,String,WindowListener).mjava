@@ -1,0 +1,71 @@
+    /**
+     * Insert a Swing component into a frame. The kind of frame depends on the owner:
+     *
+     * <ul>
+     *   <li>If {@code owner} or one of its parent is a {@link JDesktopPane},
+     *       then {@code panel} is added into a {@link JInternalFrame}.</li>
+     *   <li>If {@code owner} or one of its parent is a {@link Frame} or a {@link Dialog},
+     *       then {@code panel} is added into a {@link JDialog}.</li>
+     *   <li>Otherwise, {@code panel} is added into a {@link JFrame}.</li>
+     * </ul>
+     *
+     * @param  owner The frame's owner, or {@code null} if none.
+     * @param  panel The panel to insert into a frame.
+     * @param  title The frame's title.
+     * @param  listener A listener to receives frame events.  If non-null, then this listener will
+     *         be registered to whatever kind of frame this method will constructs. In the special
+     *         case where this method constructs an {@linkplain JInternalFrame internal frame} and
+     *         the {@code listener} is not an instance of {@link javax.swing.event.InternalFrameListener},
+     *         then this method will wrap the {@code listener} into an {@code InternalFrameListener}.
+     * @return The frame. This frame is not initially visible. The method
+     *         {@code Component.setVisible(true)} must be invoked in order to show the frame.
+     */
+    public static Component toFrame(Component owner,
+                                    final JComponent     panel,
+                                    final String         title,
+                                    final WindowListener listener)
+    {
+        while (owner != null) {
+            if (owner == panel) {
+                throw new IllegalArgumentException();
+            }
+            // NOTE: All 'addFooListener(...)' below ignore null argument. No need to check ourself.
+            if (owner instanceof JDesktopPane) {
+                final JInternalFrame frame = new JInternalFrame(title, true, true, true, true);
+                frame.setDefaultCloseOperation(JInternalFrame.DISPOSE_ON_CLOSE);
+                frame.addInternalFrameListener(InternalWindowListener.wrap(listener));
+                ((JDesktopPane) owner).add(frame);
+                frame.getContentPane().add(panel);
+                frame.pack();
+                return frame;
+            }
+            if (owner instanceof Frame) {
+                final JDialog dialog = new JDialog((Frame) owner, title);
+                dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+                dialog.addWindowListener(listener);
+                dialog.getContentPane().add(panel);
+                dialog.pack();
+                return dialog;
+            }
+            if (owner instanceof Dialog) {
+                final JDialog dialog = new JDialog((Dialog) owner, title);
+                dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+                dialog.addWindowListener(listener);
+                dialog.getContentPane().add(panel);
+                dialog.pack();
+                return dialog;
+            }
+            owner = owner.getParent();
+        }
+        //
+        // Add the panel as a standalone window.
+        // This window has its own button on the task bar.
+        //
+        final JFrame frame = new JFrame(title);
+        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        frame.addWindowListener(listener);
+        frame.getContentPane().add(panel);
+        frame.pack();
+        return frame;
+    }
+

@@ -1,0 +1,75 @@
+    /**
+     * Called when the filter handler has reached the end of an expression
+     *
+     * @param message the expression to end.
+     *
+     * @throws IllegalFilterException If there are problems creating
+     *         exceptions.
+     */
+    public void end(String message) throws IllegalFilterException {
+        LOGGER.finer("declared type: " + declaredType);
+        LOGGER.finer("end message: " + message);
+        LOGGER.finer("current state: " + currentState);
+        LOGGER.finest("expression factory: " + expFactory);
+
+        // first, check to see if there are internal (nested) expressions
+        //  note that this is identical to checking if the curExprssn
+        //  is a math expression
+        // if this internal expression exists, send its factory an end message
+        if (expFactory != null) {
+            expFactory.end(message);
+
+            // if the factory is ready to be returned:
+            //  (1) add its expression to the current expression, as determined
+            //      by the current state
+            //  (2) increment the current state
+            //  (3) set the factory to null to indicate that it is now done
+            // if in a bad state, throw exception
+            if (expFactory.isReady()) {
+                if (currentState.equals("leftValue")) {
+                    ((MathExpression) curExprssn).addLeftValue(expFactory
+                        .create());
+                    currentState = "rightValue";
+                    expFactory = new ExpressionSAXParser(schema);
+                    LOGGER.finer("just added left value: " + currentState);
+                } else if (currentState.equals("rightValue")) {
+                    ((MathExpression) curExprssn).addRightValue(expFactory
+                        .create());
+                    currentState = "complete";
+                    expFactory = null;
+                    LOGGER.finer("just added right value: " + currentState);
+                } else if (currentState.equals("accumulate")) {
+                        accumalationOfExpressions.add(expFactory.create());
+                        expFactory = null;
+                        // currentState = "accumulate";  //leave unchanged
+                        LOGGER.finer("just added a parameter for a function: " + currentState);
+                                  
+                        if (  ((FunctionExpression) curExprssn).getArgCount() ==   accumalationOfExpressions.size())
+                        {
+                        	//hay, we've parsed all the arguments!
+                        	currentState = "complete";
+                        	((FunctionExpression) curExprssn).setArgs( (Expression[]) accumalationOfExpressions.toArray( new Expression[0] ));
+                        }
+                        else
+                        {
+                        	expFactory = new ExpressionSAXParser(schema); // we're gonna get more expressions
+                        }
+                    } else {
+                    throw new IllegalFilterException(
+                        "Attempted to add sub expression in a bad state: "
+                        + currentState);
+                }
+            }
+        } else if (declaredType.equals(message)
+                && currentState.equals("complete")) {
+            // if there are no nested expressions here,
+            //  determine if this expression is ready and set flag appropriately
+            readChars = false;
+            readyFlag = true;
+        } else { // otherwise, throw exception
+            throw new IllegalFilterException(
+                "Reached end of unready, non-nested expression: "
+                + currentState);
+        }
+    }
+

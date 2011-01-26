@@ -1,0 +1,141 @@
+    /**
+     * Sets the current label. The label will be laid out according to the label
+     * item settings (curved lines, auto wrapping, curved line usage) and the
+     * painter will be ready to draw it.
+     * 
+     * @param labelItem
+     */
+    public void setLabel(LabelCacheItem labelItem) {
+        this.labelItem = labelItem;
+        labelItem.getTextStyle().setLabel(labelItem.getLabel());
+
+        // reset previous caches
+        labelBounds = null;
+        lines = null;
+
+        // split the label into lines
+        String text = labelItem.getLabel();
+        // set the multiline labeller only if we're not using curved labels, and
+        // also only if makes sense to have multiple lines (at least a newline
+        if (!(text.contains("\n") || labelItem.getAutoWrap() > 0)
+                || labelItem.isFollowLineEnabled()) {
+            FontRenderContext frc = graphics.getFontRenderContext();
+            TextLayout layout = new TextLayout(text, labelItem.getTextStyle().getFont(), frc);
+            LineInfo line = new LineInfo(text, layoutSentence(text, labelItem), layout);
+            labelBounds = line.gv.getVisualBounds();
+            normalizeBounds(labelBounds);
+            lines = Collections.singletonList(line);
+            return;
+        } 
+        
+        // first split along the newlines
+        String[] splitted = text.split("\\n");
+        
+        lines = new ArrayList<LineInfo>();
+        if(labelItem.getAutoWrap() <= 0) {
+            // no need for auto-wrapping, we already have the proper split
+            for (String line : splitted) {
+                FontRenderContext frc = graphics.getFontRenderContext();
+                TextLayout layout = new TextLayout(line, labelItem.getTextStyle().getFont(), frc);
+                LineInfo info = new LineInfo(line, layoutSentence(line, labelItem), layout);
+                lines.add(info);
+            }
+        } else {
+            // Perform an auto-wrap using the java2d facilities. This
+            // is done using a LineBreakMeasurer, but first we need to create
+            // some extra objects
+
+            // setup the attributes
+            Map<TextAttribute, Object> map = new HashMap<TextAttribute, Object>();
+            map.put(TextAttribute.FONT, labelItem.getTextStyle().getFont());
+
+            // accumulate the lines
+            for (int i = 0; i < splitted.length; i++) {
+                String line = splitted[i];
+
+                // build the line break iterator that will split lines at word
+                // boundaries when the wrapping length is exceeded
+                AttributedString attributed = new AttributedString(line, map);
+                AttributedCharacterIterator iter = attributed.getIterator();
+                LineBreakMeasurer lineMeasurer = new LineBreakMeasurer(iter, BreakIterator
+                        .getWordInstance(), graphics.getFontRenderContext());
+                BreakIterator breaks = BreakIterator.getWordInstance();
+                breaks.setText(line);
+
+                // setup iteration and start splitting at word boundaries
+                int prevPosition = 0;
+                while (lineMeasurer.getPosition() < iter.getEndIndex()) {
+                    // grab the next portion of text within the wrapping limits
+                    TextLayout layout = lineMeasurer.nextLayout(labelItem.getAutoWrap(), line.length(), true);
+                    int newPosition = prevPosition;
+
+                    if (layout != null) {
+                        newPosition = lineMeasurer.getPosition();
+                    } else {
+                        int nextBoundary = breaks.following(prevPosition);
+                        if (nextBoundary == BreakIterator.DONE) {
+                            newPosition = line.length();
+                        } else {
+                            newPosition = nextBoundary;
+                        }
+                        AttributedCharacterIterator subIter = attributed.getIterator(null, prevPosition, newPosition);
+                        layout = new TextLayout(subIter, graphics.getFontRenderContext());
+                        lineMeasurer.setPosition(newPosition);
+                    }
+
+                    // extract the text, and trim it since leading and trailing
+                    // and ... spaces can affect label alignment in an
+                    // unpleasant way (improper left or right alignment, or bad
+                    // centering)
+
+                    String extracted = line.substring(prevPosition, newPosition).trim();
+                    if(!"".equals(extracted)) {
+	                    LineInfo info = new LineInfo(extracted, layoutSentence(extracted, labelItem),
+	                            layout);
+	                    lines.add(info);
+                    }
+                    prevPosition = newPosition;
+                }
+            }
+        }
+        
+        // compute the max line length
+        double maxWidth = 0;
+        for (LineInfo line : lines) {
+            maxWidth = Math.max(line.gv.getVisualBounds().getWidth(), maxWidth);
+        }
+
+        // now that we know how big each line and how big is the longest,
+        // we can layout the items and compute the total bounds
+        double boundsY = 0;
+        double labelY = 0;
+        for (LineInfo info : lines) {
+            Rectangle2D currBounds = info.gv.getVisualBounds();
+            TextLayout layout = info.layout;
+
+            // the position at which we start to draw, x and y
+            // for x we have to take into consideration alignment as
+            // well since that affects the horizontal size of the
+            // bounds,
+            // for y we don't care right now as we're computing
+            // only the total bounds for a text located in the origin
+            double minX = (maxWidth - currBounds.getWidth())
+                    * labelItem.getTextStyle().getAnchorX() - currBounds.getMinX();
+            info.x = minX;
+
+            if (labelBounds == null) {
+                labelBounds = currBounds;
+                boundsY = currBounds.getMinY() + layout.getAscent() + layout.getDescent()
+                        + layout.getLeading();
+            } else {
+                Rectangle2D translated = new Rectangle2D.Double(minX, boundsY, currBounds
+                        .getWidth(), currBounds.getHeight());
+                boundsY += layout.getAscent() + layout.getDescent() + layout.getLeading();
+                labelY += layout.getAscent() + layout.getDescent() + layout.getLeading();
+                labelBounds = labelBounds.createUnion(translated);
+            }
+            info.y = labelY;
+        }
+        normalizeBounds(labelBounds);
+    }
+

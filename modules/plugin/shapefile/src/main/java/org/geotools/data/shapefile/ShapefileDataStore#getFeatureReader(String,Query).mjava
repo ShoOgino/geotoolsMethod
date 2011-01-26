@@ -1,0 +1,46 @@
+    /**
+     * Just like the basic version, but adds a small optimization: if no
+     * attributes are going to be read, don't uselessly open and read the dbf
+     * file. Makes sure to consider also attributes in the query.
+     * 
+     * @see org.geotools.data.AbstractDataStore#getFeatureReader(java.lang.String,
+     *      org.geotools.data.Query)
+     */
+    protected  FeatureReader<SimpleFeatureType, SimpleFeature> getFeatureReader(String typeName, Query query)
+            throws IOException {
+        String[] propertyNames = query.getPropertyNames();
+        String defaultGeomName = schema.getGeometryDescriptor().getLocalName();
+        
+        // gather attributes needed by the query tool, they will be used by the
+        // query filter
+        FilterAttributeExtractor extractor = new FilterAttributeExtractor(schema);
+        Filter filter = query.getFilter();
+        filter.accept(extractor, null);
+        String[] filterAttnames = extractor.getAttributeNames();
+
+        // check if the geometry is the one and only attribute needed
+        // to return attribute _and_ to run the query filter
+        if ((propertyNames != null)
+                && (propertyNames.length == 1)
+                && propertyNames[0].equals(defaultGeomName)
+                && (filterAttnames.length == 0 || (filterAttnames.length == 1 && filterAttnames[0]
+                        .equals(defaultGeomName)))) {
+            try {
+                SimpleFeatureType newSchema = DataUtilities.createSubType(
+                        schema, propertyNames);
+
+                return createFeatureReader(typeName,
+                        getAttributesReader(false, query), newSchema);
+            } catch (SchemaException se) {
+                throw new DataSourceException("Error creating schema", se);
+            }
+        }
+
+        try {
+            return createFeatureReader(getSchema().getTypeName(),
+                    getAttributesReader(true, query), schema);
+        } catch (SchemaException se) {
+            throw new DataSourceException("Error creating schema", se);
+        }
+    }
+

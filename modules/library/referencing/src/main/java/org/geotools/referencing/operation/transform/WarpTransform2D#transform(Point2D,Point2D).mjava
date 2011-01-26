@@ -1,0 +1,35 @@
+    /**
+     * Transforms source coordinates (usually pixel indices) into destination coordinates
+     * (usually "real world" coordinates).
+     *
+     * @param ptSrc the specified coordinate point to be transformed.
+     * @param ptDst the specified coordinate point that stores the result of transforming
+     *              {@code ptSrc}, or {@code null}.
+     * @return the coordinate point after transforming {@code ptSrc} and storing the result in
+     *         {@code ptDst}.
+     */
+    @Override
+    public Point2D transform(Point2D ptSrc, Point2D ptDst) {
+        /*
+         * We have to copy the coordinate in a temporary point object because we don't know
+         * neither the ptSrc or ptDst type. Since mapDestPoint returns a clone of the point
+         * given in argument,  giving ptSrc directly would result in a lost of precision if
+         * its type is java.awt.Point (for example), even if ptDst had a greater precision.
+         *
+         * There is also an other reason for creating a temporary object:
+         * JAI's Warp is designed for mapping pixel coordinates in J2SE's image. In JAI, pixel
+         * coordinates map by definition to the pixel's upper left corner. But for interpolation
+         * purpose, JAI needs to map pixel's center. This introduce a shift of 0.5, which is
+         * documented (for example) in WarpAffine.mapDestPoint(Point2D).
+         */
+        ptSrc = new PointDouble(ptSrc.getX() - 0.5, ptSrc.getY() - 0.5);
+        final Point2D result = warp.mapDestPoint(ptSrc);
+        result.setLocation(result.getX() + 0.5, result.getY() + 0.5);
+        if (ptDst == null) {
+            // Do not returns 'result' directly, since it has tricked 'clone()' method.
+            ptDst = new Point2D.Float();
+        }
+        ptDst.setLocation(result);
+        return ptDst;
+    }
+

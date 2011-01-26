@@ -1,0 +1,113 @@
+    /**
+     * Creates and lays out the frame's components that have been
+     * specified with the enable methods (e.g. {@linkplain #enableToolBar(boolean)} ).
+     * If not called explicitly by the client this method will be invoked by
+     * {@linkplain #setVisible(boolean) } when the frame is first shown.
+     */
+    public void initComponents() {
+        if (uiSet) {
+            // @todo log a warning ?
+            return;
+        }
+
+        /*
+         * We use the MigLayout manager to make it easy to manually code
+         * our UI design
+         */
+        StringBuilder sb = new StringBuilder();
+        if (!toolSet.isEmpty()) {
+            sb.append("[]"); // fixed size
+        }
+        sb.append("[grow]"); // map pane and optionally layer table fill space
+        if (showStatusBar) {
+            sb.append("[30px::]"); // status bar height
+        }
+
+        JPanel panel = new JPanel(new MigLayout(
+                "wrap 1, insets 0", // layout constrains: 1 component per row, no insets
+
+                "[grow]", // column constraints: col grows when frame is resized
+
+                sb.toString() ));
+
+        /*
+         * A toolbar with buttons for zooming in, zooming out,
+         * panning, and resetting the map to its full extent.
+         * The cursor tool buttons (zooming and panning) are put
+         * in a ButtonGroup.
+         *
+         * Note the use of the XXXAction objects which makes constructing
+         * the tool bar buttons very simple.
+         */
+        if (!toolSet.isEmpty()) {
+            toolBar = new JToolBar();
+            toolBar.setOrientation(JToolBar.HORIZONTAL);
+            toolBar.setFloatable(false);
+
+            ButtonGroup cursorToolGrp = new ButtonGroup();
+
+            if (toolSet.contains(Tool.ZOOM)) {
+                JButton zoomInBtn = new JButton(new ZoomInAction(mapPane));
+                toolBar.add(zoomInBtn);
+                cursorToolGrp.add(zoomInBtn);
+
+                JButton zoomOutBtn = new JButton(new ZoomOutAction(mapPane));
+                toolBar.add(zoomOutBtn);
+                cursorToolGrp.add(zoomOutBtn);
+
+                toolBar.addSeparator();
+            }
+
+            if (toolSet.contains(Tool.PAN)) {
+                JButton panBtn = new JButton(new PanAction(mapPane));
+                toolBar.add(panBtn);
+                cursorToolGrp.add(panBtn);
+
+                toolBar.addSeparator();
+            }
+
+            if (toolSet.contains(Tool.INFO)) {
+                JButton infoBtn = new JButton(new InfoAction(mapPane));
+                toolBar.add(infoBtn);
+
+                toolBar.addSeparator();
+            }
+
+            if (toolSet.contains(Tool.RESET)) {
+                JButton resetBtn = new JButton(new ResetAction(mapPane));
+                toolBar.add(resetBtn);
+            }
+
+            panel.add(toolBar, "grow");
+        }
+
+        if (showLayerTable) {
+            mapLayerTable = new MapLayerTable(mapPane);
+
+            /*
+             * We put the map layer panel and the map pane into a JSplitPane
+             * so that the user can adjust their relative sizes as needed
+             * during a session. The call to setPreferredSize for the layer
+             * panel has the effect of setting the initial position of the
+             * JSplitPane divider
+             */
+            mapLayerTable.setPreferredSize(new Dimension(200, -1));
+            JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, false, mapLayerTable, mapPane);
+            panel.add(splitPane, "grow");
+
+        } else {
+            /*
+             * No layer table, just the map pane
+             */
+            panel.add(mapPane, "grow");
+        }
+
+        if (showStatusBar) {
+            statusBar = new StatusBar(mapPane);
+            panel.add(statusBar, "grow");
+        }
+
+        this.getContentPane().add(panel);
+        uiSet = true;
+    }
+

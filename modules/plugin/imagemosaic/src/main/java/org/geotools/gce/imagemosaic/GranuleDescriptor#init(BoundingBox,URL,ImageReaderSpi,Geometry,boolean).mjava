@@ -1,0 +1,123 @@
+	private void init(final BoundingBox granuleBBOX, final URL granuleUrl,
+			final ImageReaderSpi suggestedSPI, final Geometry inclusionGeometry,
+			final boolean heterogeneousGranules) {
+		this.granuleBBOX = ReferencedEnvelope.reference(granuleBBOX);
+		this.granuleUrl = granuleUrl;
+		this.inclusionGeometry = inclusionGeometry;
+		
+		// create the base grid to world transformation
+		ImageInputStream inStream = null;
+		ImageReader reader = null;
+		try {
+			//
+			//get info about the raster we have to read
+			//
+			
+			// get a stream
+			inStream = Utils.getInputStream(granuleUrl);
+			if(inStream == null)
+				throw new IllegalArgumentException("Unable to get an input stream for the provided file "+granuleUrl.toString());
+			
+			// get a reader and try to cache the suggested SPI first
+			if(cachedReaderSPI == null){
+				inStream.mark();
+				if(suggestedSPI!=null && suggestedSPI.canDecodeInput(inStream))
+				{
+					cachedReaderSPI=suggestedSPI;
+					inStream.reset();
+				}
+				else{
+					inStream.mark();
+					reader = Utils.getReader(inStream);
+					if(reader != null)
+						cachedReaderSPI = reader.getOriginatingProvider();
+					inStream.reset();
+				}
+				
+			}
+			reader = cachedReaderSPI.createReaderInstance();
+			if(reader == null)
+				throw new IllegalArgumentException("Unable to get an ImageReader for the provided file "+granuleUrl.toString());
+			
+			//get selected level and base level dimensions
+			final Rectangle originalDimension = Utils.getDimension(0,inStream, reader);
+			
+			// build the g2W for this tile, in principle we should get it
+			// somehow from the tile itself or from the index, but at the moment
+			// we do not have such info, hence we assume that it is a simple
+			// scale and translate
+			final GridToEnvelopeMapper geMapper= new GridToEnvelopeMapper(new GridEnvelope2D(originalDimension), granuleBBOX);
+			geMapper.setPixelAnchor(PixelInCell.CELL_CENTER);//this is the default behavior but it is nice to write it down anyway
+			this.baseGridToWorld = geMapper.createAffineTransform();
+			
+			try {
+				if (inclusionGeometry != null) {
+					LiteShape2 shape = null;
+					geMapper.setPixelAnchor(PixelInCell.CELL_CORNER);
+					shape = new LiteShape2(inclusionGeometry, geMapper.createTransform().inverse(), null, false);
+					this.granuleROIShape = (ROIShape) new ROIShape(shape);
+				}
+
+			} catch (TransformException e1) {
+				throw new IllegalArgumentException(e1);
+			} catch (FactoryException e1) {
+				throw new IllegalArgumentException(e1);
+			}
+			
+			// add the base level
+			this.granuleLevels.put(Integer.valueOf(0), new GranuleOverviewLevelDescriptor(1, 1, originalDimension.width, originalDimension.height));
+			
+			////////////////////// Setting overviewController ///////////////////////
+			if (heterogeneousGranules) {
+			    // //
+			    //
+			    // Right now we are setting up overviewsController by assuming that
+			    // overviews are internal images as happens in TIFF images
+			    // We can improve this by leveraging on coverageReaders  
+			    //
+			    // //
+			    
+	                    // Getting the first level descriptor
+                            final GranuleOverviewLevelDescriptor baseOverviewLevelDescriptor = granuleLevels.get(0);
+
+                            // Variables initialization
+			    final int numberOfOvervies = reader.getNumImages(true) - 1;
+			    final AffineTransform2D baseG2W = baseOverviewLevelDescriptor.getGridToWorldTransform();
+			    final int width = baseOverviewLevelDescriptor.getWidth();
+			    final int height = baseOverviewLevelDescriptor.getHeight();
+			    final double resX = AffineTransform2D.getScaleX0(baseG2W);
+			    final double resY = AffineTransform2D.getScaleY0(baseG2W);
+			    final double[] highestRes = new double[]{resX, resY};
+			    final double[][] overviewsResolution = new double[numberOfOvervies][2];
+			    
+			    // Populating overviews and initializing overviewsController
+			    for (int i = 0; i < numberOfOvervies; i++){
+			        overviewsResolution[i][0]= (highestRes[0] * width) / reader.getWidth(i + 1);
+			        overviewsResolution[i][1]= (highestRes[1] * height) / reader.getWidth(i + 1);
+			    }
+			    overviewsController = new OverviewsController(highestRes, numberOfOvervies, overviewsResolution);
+			}
+                        //////////////////////////////////////////////////////////////////////////
+			
+
+		} catch (IllegalStateException e) {
+			throw new IllegalArgumentException(e);
+			
+		} catch (IOException e) {
+			throw new IllegalArgumentException(e);
+		} finally {
+		    // close/dispose stream and readers
+			try {
+				if(inStream != null){
+					inStream.close();
+				}
+			} catch (Throwable e) {
+				throw new IllegalArgumentException(e);
+			} finally{
+				if (reader != null){
+					reader.dispose();
+				}
+			}
+		}
+	}
+

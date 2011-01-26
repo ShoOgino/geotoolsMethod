@@ -1,0 +1,128 @@
+	/**
+	 * Creates a mosaic for the provided input parameters.
+	 * 
+	 * @param location
+	 *            path to the directory where to gather the elements for the
+	 *            mosaic.
+	 * @param indexName
+	 *            name to give to this mosaic
+	 * @param wildcard
+	 *            wildcard to use for walking through files. We are using
+	 *            commonsIO for this task
+	 * @param absolutePath
+	 * 			  tells the catalogue builder to use absolute paths.
+	 * @param hints hints to control reader instantiations
+	 * @return <code>true</code> if everything is right, <code>false</code>if
+	 *         something bad happens, in which case the reason should be logged
+	 *         to the logger.
+	 */
+	static boolean createMosaic(
+			final String location, 
+			final String indexName,
+			final String wildcard, 
+			final boolean absolutePath, 
+			final Hints hints) {
+
+		// create a mosaic index builder and set the relevant elements
+		final CatalogBuilderConfiguration configuration = new CatalogBuilderConfiguration();
+		configuration.setAbsolute(absolutePath);
+		configuration.setHints(hints);
+		configuration.setRootMosaicDirectory(location);
+		configuration.setIndexingDirectories(Arrays.asList(location));
+		configuration.setIndexName(indexName);
+
+		// look for and indexed.properties file
+		final File parent = new File(location);
+		final File indexerProperties = new File(parent, "indexer.properties");
+		if (Utils.checkFileReadable(indexerProperties)) {
+			// load it and parse it
+			final Properties props = Utils.loadPropertiesFromURL(DataUtilities
+					.fileToURL(indexerProperties));
+
+			// name
+			if (props.containsKey("Name"))
+				configuration.setIndexName(props.getProperty("Name"));
+
+			// absolute
+			if (props.containsKey("Absolute"))
+				configuration.setAbsolute(Boolean.getBoolean(props
+						.getProperty("Absolute")));
+
+			// recursive
+			if (props.containsKey("Recursive"))
+				configuration.setRecursive(Boolean.valueOf(props
+						.getProperty("Recursive")));
+
+			// wildcard
+			if (props.containsKey("Wildcard"))
+				configuration.setWildcard(props.getProperty("Wildcard"));
+
+			// schema
+			if (props.containsKey("Schema"))
+				configuration.setSchema(props.getProperty("Schema"));
+
+			// time attr
+			if (props.containsKey("TimeAttribute"))
+				configuration.setTimeAttribute(props.getProperty("TimeAttribute"));
+			
+			// elevation attr
+			if (props.containsKey("ElevationAttribute"))
+				configuration.setElevationAttribute(props.getProperty("ElevationAttribute"));			
+			
+			// runtime attr
+			if (props.containsKey("RuntimeAttribute"))
+				configuration.setRuntimeAttribute(props.getProperty("RuntimeAttribute"));
+			
+			// imposed BBOX
+			if (props.containsKey("Envelope2D"))
+				configuration.setEnvelope2D(props.getProperty("Envelope2D"));	
+			
+			// imposed Pyramid Layout
+			if (props.containsKey("ResolutionLevels"))
+				configuration.setResolutionLevels(props.getProperty("ResolutionLevels"));			
+
+			// collectors
+			if (props.containsKey("PropertyCollectors"))
+				configuration.setPropertyCollectors(props.getProperty("PropertyCollectors"));
+		}
+
+		// create the builder
+		final CatalogBuilder catalogBuilder = new CatalogBuilder(configuration);
+		// this is going to help us with catching exceptions and logging them
+		final Queue<Throwable> exceptions = new LinkedList<Throwable>();
+		try {
+
+			final CatalogBuilder.ProcessingEventListener listener = new CatalogBuilder.ProcessingEventListener() {
+
+				@Override
+				public void exceptionOccurred(ExceptionEvent event) {
+					final Throwable t = event.getException();
+					exceptions.add(t);
+					if (LOGGER.isLoggable(Level.SEVERE))
+						LOGGER.log(Level.SEVERE, t.getLocalizedMessage(), t);
+
+				}
+
+				@Override
+				public void getNotification(ProcessingEvent event) {
+					if (LOGGER.isLoggable(Level.FINE))
+						LOGGER.fine(event.getMessage());
+
+				}
+
+			};
+			catalogBuilder.addProcessingEventListener(listener);
+			catalogBuilder.run();
+		} catch (Throwable e) {
+			LOGGER.log(Level.SEVERE, "Unable to build mosaic", e);
+			return false;
+		} finally {
+			catalogBuilder.dispose();
+		}
+
+		// check that nothing bad happened
+		if (exceptions.size() > 0)
+			return false;
+		return true;
+	}
+

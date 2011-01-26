@@ -1,0 +1,139 @@
+		public void produce(){
+			
+			// reusable parameters
+			alphaChannels = new PlanarImage[granulesNumber];
+			int granuleIndex=0;
+			inputTransparentColor = request.getInputTransparentColor();
+			doInputTransparency = inputTransparentColor != null&&!footprintManagement;
+			// execute them all
+			boolean firstGranule=true;
+			int[] alphaIndex=null;
+			
+			for (Future<GranuleLoadingResult> future :tasks) {
+				
+				
+				final RenderedImage loadedImage;
+				final GranuleLoadingResult result;
+				try {
+					if(!multithreadingAllowed)
+					{
+						//run the loading in this thread
+					    final FutureTask<GranuleLoadingResult> task=(FutureTask<GranuleLoadingResult>) future;
+                                            task.run();
+					}
+					result = future.get();
+                                        if (result == null) {
+                                            if (LOGGER.isLoggable(Level.FINE))
+                                                LOGGER.log(Level.FINE, "Unable to load the raster for granule " 
+                                                        + granuleIndex + " with request " + request.toString());
+                                            continue;
+                                        }
+					loadedImage = result.getRaster();
+					if(loadedImage==null)
+					{
+						if(LOGGER.isLoggable(Level.FINE))
+							LOGGER.log(Level.FINE,"Unable to load the raster for granuleDescriptor " +granuleIndex+ " with request "+request.toString());
+						continue;
+					}
+					if(firstGranule){
+						//
+						// We check here if the images have an alpha channel or some
+						// other sort of transparency. In case we have transparency
+						// I also save the index of the transparent channel.
+						//
+						// Specifically, I have to check if the loaded image have
+						// transparency, because if we do a ROI and/or we have a
+						// transparent color to set we have to remove it.
+						//
+						final ColorModel cm = loadedImage.getColorModel();
+						alphaIn = cm.hasAlpha();
+						if (alphaIn||doInputTransparency)
+							alphaIndex = new int[] { cm.getNumComponents() - 1 };
+
+
+						//
+						// we set the input threshold accordingly to the input
+						// image data type. I find the default value (which is 0) very bad
+						// for data type other than byte and ushort. With float and double
+						// it can cut off a large par of the dynamic.
+						//
+						sourceThreshold = new double[][] { { CoverageUtilities.getMosaicThreshold(loadedImage.getSampleModel().getDataType()) } };
+						
+						
+						firstGranule=false;
+										
+					}					
+					
+				} catch (InterruptedException e) {
+					if(LOGGER.isLoggable(Level.SEVERE))
+						LOGGER.log(Level.SEVERE,"Unable to load the raster for granuleDescriptor " +granuleIndex,e);
+					continue;
+				} catch (ExecutionException e) {
+					if(LOGGER.isLoggable(Level.SEVERE))
+						LOGGER.log(Level.SEVERE,"Unable to load the raster for granuleDescriptor " +granuleIndex,e);
+					continue;
+				}
+
+				catch (ImagingException e) {
+					if (LOGGER.isLoggable(Level.FINE))
+						LOGGER.fine("Adding to mosaic image number " + granuleIndex+ " failed, original request was "+request);
+					continue;
+				}
+				catch (javax.media.jai.util.ImagingException e) {
+					if (LOGGER.isLoggable(Level.FINE))
+						LOGGER.fine("Adding to mosaic image number " + granuleIndex+ " failed, original request was "+request);
+					continue;
+				}
+
+
+				if (LOGGER.isLoggable(Level.FINER)) {
+					LOGGER.finer("Adding to mosaic image number " + granuleIndex);
+				}
+				
+				//
+				// add to the mosaic collection, with preprocessing
+				//
+				final RenderedImage raster = processGranuleRaster(
+						loadedImage,
+						granuleIndex, 
+						alphaIndex,
+						alphaIn, 
+						alphaChannels, 
+						doInputTransparency,
+						inputTransparentColor);
+				
+				// we need to add its roi in order to avoid problems whith the mosaic overl
+				ROI imageBounds = new ROIShape(PlanarImage.wrapRenderedImage(raster).getBounds());
+                                if (footprintManagement){
+                                    final ROIShape footprint = result.getFootprint();
+								    if (footprint != null){
+								        if (imageBounds.contains(footprint.getBounds())) {
+								            imageBounds = footprint;
+								        } else {
+								            imageBounds = imageBounds.intersect(footprint);
+								        }
+								    }
+				    
+				    
+				}
+                                rois.add(imageBounds);
+
+				// add to mosaic
+                                sources.add(raster);
+                                
+			
+				//increment index 
+				granuleIndex++;
+			}
+
+			granulesNumber=granuleIndex;
+			if(granulesNumber==0)
+			{
+				if(LOGGER.isLoggable(Level.FINE))
+					LOGGER.log(Level.FINE,"Unable to load any granuleDescriptor ");
+				return;
+			}
+			
+	                sourceRoi = rois.toArray(new ROI[rois.size()]);
+		}
+

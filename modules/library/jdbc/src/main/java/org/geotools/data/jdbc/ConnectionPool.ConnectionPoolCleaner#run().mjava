@@ -1,0 +1,36 @@
+        /**
+         * Executes the Connection Pool Cleaning.
+         */
+        public void run() {
+            while (active) {
+                synchronized (mutex) {
+                    for (Iterator iter = availableConnections.iterator(); iter.hasNext();) {
+                        ManagedPooledConnection conn = (ManagedPooledConnection) iter.next();
+
+                        conn.pooledConn.removeConnectionEventListener(listManager);
+
+                        if (!conn.isValid()) {
+                            LOGGER.fine("Connection invalid, removing from pool");
+
+                            try {
+                                conn.pooledConn.close();
+                            } catch (SQLException e) {
+                                LOGGER.log(Level.WARNING, "Error closing dead connection", e);
+                            }
+
+                            iter.remove();
+                        } else {
+                            // Connection is fine, add the list manager again.
+                            conn.pooledConn.addConnectionEventListener(listManager);
+                        }
+                    }
+                }
+
+                try {
+                    Thread.sleep(waitTime);
+                } catch (InterruptedException e) {
+                    LOGGER.log(Level.WARNING, "Interrupted exception when wait in Pool Cleaner", e);
+                }
+            }
+        }
+

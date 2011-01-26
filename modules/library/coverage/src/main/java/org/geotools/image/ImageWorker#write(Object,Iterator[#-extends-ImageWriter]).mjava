@@ -1,0 +1,64 @@
+    /**
+     * Writes the {@linkplain #image} to the specified output, trying all
+     * encoders in the specified iterator in the iteration order.
+     *
+     * @return this {@link ImageWorker}.
+     */
+    private ImageWorker write(final Object output, final Iterator<? extends ImageWriter> encoders)
+            throws IOException
+    {
+        if (encoders != null) {
+            while (encoders.hasNext()) {
+                final ImageWriter writer = encoders.next();
+                final ImageWriterSpi spi = writer.getOriginatingProvider();
+                final Class<?>[] outputTypes;
+                if (spi == null) {
+                    outputTypes = ImageWriterSpi.STANDARD_OUTPUT_TYPE;
+                } else {
+                    /*
+                     * If the encoder is for some format handled in a special way (e.g. GIF), apply
+                     * the required operation. Note that invoking the same method many time (e.g.
+                     * "forceIndexColorModelForGIF", which could occurs if there is more than one
+                     * GIF encoder registered) should not hurt - all method invocation after the
+                     * first one should be no-op.
+                     */
+                    final String[] formats = spi.getFormatNames();
+                    if (containsFormatName(formats, "gif")) {
+                        forceIndexColorModelForGIF(true);
+                    } else {
+                        tile();
+                    }
+                    if (!spi.canEncodeImage(image)) {
+                        continue;
+                    }
+                    outputTypes = spi.getOutputTypes();
+                }
+                /*
+                 * Now try to set the output directly (if possible), or as an ImageOutputStream if
+                 * the encoder doesn't accept directly the specified output. Note that some formats
+                 * like HDF may not support ImageOutputStream.
+                 */
+                final ImageOutputStream stream;
+                if (acceptInputType(outputTypes, output.getClass())) {
+                    writer.setOutput(output);
+                    stream = null;
+                } else if (acceptInputType(outputTypes, ImageOutputStream.class)) {
+                    stream = ImageIO.createImageOutputStream(output);
+                    writer.setOutput(stream);
+                } else {
+                    continue;
+                }
+                /*
+                 * Now saves the image.
+                 */
+                writer.write(image);
+                writer.dispose();
+                if (stream != null) {
+                    stream.close();
+                }
+                return this;
+            }
+        }
+        throw new IIOException(Errors.format(ErrorKeys.NO_IMAGE_WRITER));
+    }
+

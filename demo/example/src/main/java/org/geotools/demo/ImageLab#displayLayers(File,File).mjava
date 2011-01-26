@@ -1,0 +1,67 @@
+    // docs start display layers
+    /**
+     * Displays a GeoTIFF file overlaid with a Shapefile
+     * 
+     * @param rasterFile
+     *            the GeoTIFF file
+     * @param shpFile
+     *            the Shapefile
+     */
+    private void displayLayers(File rasterFile, File shpFile) throws Exception {
+        AbstractGridFormat format = GridFormatFinder.findFormat( rasterFile );        
+        reader = format.getReader(rasterFile);
+
+        // Initially display the raster in greyscale using the
+        // data from the first image band
+        Style rasterStyle = createGreyscaleStyle(1);
+
+        // Connect to the shapefile
+        FileDataStore dataStore = FileDataStoreFinder.getDataStore(shpFile);
+        SimpleFeatureSource shapefileSource = dataStore
+                .getFeatureSource();
+
+        // Create a basic style with yellow lines and no fill
+        Style shpStyle = SLD.createPolygonStyle(Color.YELLOW, null, 0.0f);
+
+        // Set up a MapContext with the two layers
+        final MapContext map = new DefaultMapContext();
+        map.setTitle("ImageLab");
+        map.addLayer(reader, rasterStyle);
+        map.addLayer(shapefileSource, shpStyle);
+
+        // Create a JMapFrame with a menu to choose the display style for the
+        frame = new JMapFrame(map);
+        frame.setSize(800, 600);
+        frame.enableStatusBar(true);
+        //frame.enableTool(JMapFrame.Tool.ZOOM, JMapFrame.Tool.PAN, JMapFrame.Tool.RESET);
+        frame.enableToolBar(true);
+
+        JMenuBar menuBar = new JMenuBar();
+        frame.setJMenuBar(menuBar);
+        JMenu menu = new JMenu("Raster");
+        menuBar.add(menu);
+
+        menu.add( new SafeAction("Grayscale display") {
+            public void action(ActionEvent e) throws Throwable {
+                Style style = createGreyscaleStyle();
+                if (style != null) {
+                    map.getLayer(0).setStyle(style);
+                    frame.repaint();
+                }
+            }
+        });
+
+        menu.add( new SafeAction("RGB display") {
+            public void action(ActionEvent e) throws Throwable {
+                Style style = createRGBStyle();
+                if (style != null) {
+                    map.getLayer(0).setStyle(style);
+                    frame.repaint();
+                }
+           }
+        });
+        // Finally display the map frame.
+        // When it is closed the app will exit.
+        frame.setVisible(true);
+    }
+

@@ -1,0 +1,50 @@
+    /**
+     * Compares two tiles for optimal order in sequential reads. Default implementation sorts by
+     * {@linkplain #getInput input} first, then increasing {@linkplain #getImageIndex image index}.
+     * This ordering allows efficient access for tiles that use the same
+     * {@linkplain #getImageReader image reader}.
+     * <p>
+     * For tiles having the same input and index, additional criterions are used like increasing
+     * subsampling, increasing <var>y</var> then increasing <var>x</var> coordinates. But the
+     * actual set of additional criterions may change.
+     * <p>
+     * This method is consistent with {@link #equals} in the most common case where every
+     * tiles to be compared (typically every tiles given to a {@link TileManager} instance)
+     * have inputs of the same kind (preferrably {@link File}, {@link URL}, {@link URI} or
+     * {@link String}), and there is no duplicated ({@linkplain #getInput input},
+     * {@linkplain #getImageIndex image index}) pair.
+     *
+     * @param  other The tile to compare with.
+     * @return -1 if this tile should be read before {@code other}, +1 if it should be read
+     *         after or 0 if equals.
+     */
+    public final int compareTo(final Tile other) {
+        int c = compareInputs(input, other.input);
+        if (c == 0) {
+            c = (imageIndex & MASK) - (other.imageIndex & MASK);
+            if (c == 0) {
+                /*
+                 * From this point it doesn't matter much for disk access. But we continue to
+                 * define criterions for consistency with 'equals(Object)' method. We compare
+                 * subsampling first because it may be undefined while it is needed for (x,y)
+                 * ordering. Undefined subsampling will be ordered first (this is arbitrary).
+                 */
+                final int sy =  this.ySubsampling & MASK;
+                final int oy = other.ySubsampling & MASK;
+                c = sy - oy;
+                if (c == 0) {
+                    final int sx =  this.xSubsampling & MASK;
+                    final int ox = other.xSubsampling & MASK;
+                    c = sx - ox;
+                    if (c == 0) {
+                        c = (y * sy) - (other.y * oy);
+                        if (c == 0) {
+                            c = (x * sx) - (other.x * ox);
+                        }
+                    }
+                }
+            }
+        }
+        return c;
+    }
+

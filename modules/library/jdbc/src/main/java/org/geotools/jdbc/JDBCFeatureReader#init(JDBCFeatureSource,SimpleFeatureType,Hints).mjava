@@ -1,0 +1,47 @@
+    protected void init( JDBCFeatureSource featureSource, SimpleFeatureType featureType, Hints hints ) {
+        // init the tracer if we need to debug a connection leak
+        if(TRACE_ENABLED) {
+            tracer = new Exception();
+            tracer.fillInStackTrace();
+        }
+        
+        // init base fields
+        this.featureSource = featureSource;
+        this.dataStore = featureSource.getDataStore();
+        this.featureType = featureType;
+        this.tx = featureSource.getTransaction();
+        this.hints = hints;
+        
+        //grab a geometry factory... check for a special hint
+        geometryFactory = (GeometryFactory) hints.get(Hints.JTS_GEOMETRY_FACTORY);
+        if (geometryFactory == null) {
+            // look for a coordinate sequence factory
+            CoordinateSequenceFactory csFactory = 
+                (CoordinateSequenceFactory) hints.get(Hints.JTS_COORDINATE_SEQUENCE_FACTORY);
+
+            if (csFactory != null) {
+                geometryFactory = new GeometryFactory(csFactory);
+            }
+        }
+
+        if (geometryFactory == null) {
+            // fall back on one privided by datastore
+            geometryFactory = dataStore.getGeometryFactory();
+        }
+        
+        // create a feature builder using the factory hinted or the one coming 
+        // from the datastore
+        FeatureFactory ff = (FeatureFactory) hints.get(Hints.FEATURE_FACTORY);
+        if(ff == null)
+            ff = featureSource.getDataStore().getFeatureFactory();
+        builder = new SimpleFeatureBuilder(featureType, ff);
+        
+        // find the primary key
+        try {
+            pkey = dataStore.getPrimaryKey(featureType);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+    }
+

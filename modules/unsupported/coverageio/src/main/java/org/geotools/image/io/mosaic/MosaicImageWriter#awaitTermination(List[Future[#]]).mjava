@@ -1,0 +1,43 @@
+    /**
+     * Waits for every tasks to be completed. The tasks collection is emptied by this method.
+     *
+     * @throws IOException if at least one task threw a {@code IOException}.
+     */
+    private final void awaitTermination(final List<Future<?>> tasks) throws IOException {
+        Throwable exception = null;
+        for (int i=0; i<tasks.size(); i++) {
+            Future<?> task = tasks.get(i);
+            try {
+                task.get();
+                continue;
+            } catch (ExecutionException e) {
+                if (exception == null) {
+                    exception = e.getCause();
+                }
+                // Abort after the catch block.
+            } catch (InterruptedException e) {
+                // Abort after the catch block.
+            }
+            abort();
+            for (int j=tasks.size(); --j>i;) {
+                task = tasks.get(j);
+                if (task.cancel(false)) {
+                    tasks.remove(j);
+                }
+            }
+        }
+        tasks.clear();
+        if (exception != null) {
+            if (exception instanceof IOException) {
+                throw (IOException) exception;
+            }
+            if (exception instanceof RuntimeException) {
+                throw (RuntimeException) exception;
+            }
+            if (exception instanceof Error) {
+                throw (Error) exception;
+            }
+            throw new UndeclaredThrowableException(exception);
+        }
+    }
+

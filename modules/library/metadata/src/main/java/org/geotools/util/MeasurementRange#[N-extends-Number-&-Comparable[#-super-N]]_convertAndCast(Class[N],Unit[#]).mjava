@@ -1,0 +1,46 @@
+    /**
+     * Casts this range to the specified type and converts to the specified units.
+     *
+     * @param  type The class to cast to. Must be one of {@link Byte}, {@link Short},
+     *             {@link Integer}, {@link Long}, {@link Float} or {@link Double}.
+     * @param  targetUnit the target units.
+     * @return The casted range, or {@code this}.
+     * @throws ConversionException if the target units are not compatible with
+     *         this {@linkplain #getUnits range units}.
+     */
+    private <N extends Number & Comparable<? super N>> MeasurementRange<N>
+            convertAndCast(final Class<N> type, final Unit<?> targetUnits) throws ConversionException
+    {
+        if (targetUnits == null || targetUnits.equals(units)) {
+            if (type.equals(elementClass)) {
+                @SuppressWarnings("unchecked")
+                final MeasurementRange<N> result = (MeasurementRange) this;
+                return result;
+            } else {
+                return new MeasurementRange<N>(type, this, units);
+            }
+        }
+        if (units == null) {
+            return new MeasurementRange<N>(type, this, targetUnits);
+        }
+        final UnitConverter converter = units.getConverterTo(targetUnits);
+        if (converter.equals(UnitConverter.IDENTITY)) {
+            return new MeasurementRange<N>(type, this, targetUnits);
+        }
+        boolean isMinIncluded = isMinIncluded();
+        boolean isMaxIncluded = isMaxIncluded();
+        Double minimum = converter.convert(getMinimum());
+        Double maximum = converter.convert(getMaximum());
+        if (minimum.compareTo(maximum) > 0) {
+            final Double td = minimum;
+            minimum = maximum;
+            maximum = td;
+            final boolean tb = isMinIncluded;
+            isMinIncluded = isMaxIncluded;
+            isMaxIncluded = tb;
+        }
+        return new MeasurementRange<N>(type,
+                ClassChanger.cast(minimum, type), isMinIncluded,
+                ClassChanger.cast(maximum, type), isMaxIncluded, targetUnits);
+    }
+

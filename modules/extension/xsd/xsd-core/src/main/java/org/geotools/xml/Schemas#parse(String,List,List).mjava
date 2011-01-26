@@ -1,0 +1,36 @@
+    public static final XSDSchema parse(String location, List locators, List resolvers)
+        throws IOException {
+        
+        //url decode to take care of paths with spaces
+        location = URLDecoder.decode( location );
+        
+        //check for case of file url, make sure it is an absolute reference
+        if (new File(location).exists()) {
+            location = new File(location).getCanonicalFile().toURI().toString();
+
+            //location = new File(location).getCanonicalPath();
+        }
+
+        URI uri = URI.createURI(location);
+        final ResourceSet resourceSet = new ResourceSetImpl();
+
+        //add the specialized schema location resolvers
+        if ((resolvers != null) && !resolvers.isEmpty()) {
+            AdapterFactory adapterFactory = new SchemaLocationResolverAdapterFactory(resolvers);
+            resourceSet.getAdapterFactories().add(adapterFactory);
+        }
+
+        //add the specialized schema locators as adapters
+        if ((locators != null) && !locators.isEmpty()) {
+            AdapterFactory adapterFactory = new SchemaLocatorAdapterFactory(locators);
+            resourceSet.getAdapterFactories().add(adapterFactory);
+        }
+
+        XSDResourceImpl xsdMainResource = (XSDResourceImpl) resourceSet.createResource(URI.createURI(
+                    ".xsd"));
+        xsdMainResource.setURI(uri);
+        xsdMainResource.load(resourceSet.getLoadOptions());
+
+        return xsdMainResource.getSchema();
+    }
+

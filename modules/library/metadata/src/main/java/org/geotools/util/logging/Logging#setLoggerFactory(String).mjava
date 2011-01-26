@@ -1,0 +1,55 @@
+    /**
+     * Sets a new logger factory from a fully qualidifed class name. This method should be
+     * preferred to {@link #setLoggerFactory(LoggerFactory)} when the underlying logging
+     * framework is not garanteed to be on the classpath.
+     *
+     * @param  className The fully qualified factory class name.
+     * @throws ClassNotFoundException if the specified class was not found.
+     * @throws IllegalArgumentException if the specified class is not a subclass of
+     *         {@link LoggerFactory}, or if no public static {@code getInstance()} method
+     *         has been found or can be executed.
+     */
+    public void setLoggerFactory(final String className)
+            throws ClassNotFoundException, IllegalArgumentException
+    {
+        final LoggerFactory factory;
+        if (className == null) {
+            factory = null;
+        } else {
+            final Class<?> factoryClass;
+            try {
+                factoryClass = Class.forName(className);
+            } catch (NoClassDefFoundError error) {
+                throw factoryNotFound(className, error);
+            }
+            if (!LoggerFactory.class.isAssignableFrom(factoryClass)) {
+                throw new IllegalArgumentException(Errors.format(
+                        ErrorKeys.ILLEGAL_CLASS_$2, factoryClass, LoggerFactory.class));
+            }
+            try {
+                final Method method = factoryClass.getMethod("getInstance", (Class[]) null);
+                factory = LoggerFactory.class.cast(method.invoke(null, (Object[]) null));
+            } catch (Exception e) {
+                /*
+                 * Catching java.lang.Exception is usually bad practice, but there is really a lot
+                 * of checked exceptions when using reflection. Unfortunatly there is nothing like
+                 * a "ReflectionException" parent class that we could catch instead. There is also
+                 * a few unchecked exception that we want to process here, like ClassCastException.
+                 */
+                Throwable cause = e;
+                if (e instanceof InvocationTargetException) {
+                    cause = e.getCause(); // Simplify the stack trace.
+                }
+                if (cause instanceof ClassNotFoundException) {
+                    throw (ClassNotFoundException) e;
+                }
+                if (cause instanceof NoClassDefFoundError) {
+                    throw factoryNotFound(className, (NoClassDefFoundError) cause);
+                }
+                throw new IllegalArgumentException(Errors.format(
+                        ErrorKeys.CANT_CREATE_FACTORY_$1, className, cause));
+            }
+        }
+        setLoggerFactory(factory);
+    }
+

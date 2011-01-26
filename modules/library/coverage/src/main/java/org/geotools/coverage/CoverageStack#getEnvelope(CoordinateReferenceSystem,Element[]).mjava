@@ -1,0 +1,177 @@
+    /**
+     * Returns the envelope for the given elements. If {@code crs} is {@code null},
+     * then the most frequently used CRS will be selected.
+     * <p>
+     * The {@code elements} array will be modified, so it should never be a direct reference
+     * to a user argument. This method should stay private for that reason.
+     *
+     * @param  crs The coordinate reference system for the coverage, or {@code null}.
+     * @param  elements All coverage {@link Element Element}s for the coverage stack.
+     * @return The envelope in the CRS to be used for the coverage stack (never {@code null}).
+     * @throws IOException if an I/O operation was required and failed.
+     */
+    @SuppressWarnings("fallthrough")
+    private static GeneralEnvelope getEnvelope(CoordinateReferenceSystem crs, final Element[] elements)
+            throws IOException
+    {
+        try {
+            Arrays.sort(elements, COMPARATOR);
+        } catch (UndeclaredThrowableException exception) {
+            throw rethrow(exception);
+        }
+        /*
+         * If no CRS was specified, selects the most frequently used one. The loop below memorizes
+         * the envelopes in order to avoid asking them a second time in the loop after.
+         */
+        Envelope[] envelopes = null;
+        int zDimension = 0;
+        int errorCode = ErrorKeys.ILLEGAL_COORDINATE_REFERENCE_SYSTEM; // In case of error
+        if (crs == null) {
+            errorCode = ErrorKeys.MISMATCHED_COORDINATE_REFERENCE_SYSTEM;
+            FrequencySortedSet<CoordinateReferenceSystem> frequency = null;
+            for (int i=0; i<elements.length; i++) {
+                final Envelope envelope = elements[i].getEnvelope();
+                if (envelope != null) {
+                    if (envelopes == null) {
+                        envelopes = new Envelope[elements.length];
+                    }
+                    envelopes[i] = envelope;
+                    final CoordinateReferenceSystem candidate = envelope.getCoordinateReferenceSystem();
+                    if (candidate != null) {
+                        if (frequency == null) {
+                            frequency = new FrequencySortedSet<CoordinateReferenceSystem>(true);
+                        }
+                        frequency.add(candidate);
+                    }
+                    final int dimension = envelope.getDimension();
+                    if (dimension > zDimension) {
+                        zDimension = dimension - 1;
+                    }
+                }
+            }
+            /*
+             * At this point, all CRS have been added in the frequency set. Now inspect the result.
+             * If there is more than one CRS, logs a warning and selects the most frequently used.
+             */
+            if (frequency != null) {
+                final int size = frequency.size();
+                switch (size) {
+                    default: {
+                        final int[] f = frequency.frequencies();
+                        final LogRecord record = Loggings.format(Level.WARNING, LoggingKeys.
+                                FOUND_MISMATCHED_CRS_$4, size, elements.length, f[0], f[size-1]);
+                        record.setSourceClassName(CoverageStack.class.getName());
+                        record.setSourceMethodName("<init>"); // This is the public method invoked.
+                        final Logger logger = Logging.getLogger(CoverageStack.class);
+                        record.setLoggerName(logger.getName());
+                        logger.log(record);
+                        // Fall through
+                    }
+                    case 1: {
+                        crs = frequency.first();
+                        // Fall through
+                    }
+                    case 0: break;
+                }
+            }
+        }
+        /*
+         * Now we should know the CRS. Discarts the old 'zDimension', which was only a fallback.
+         * If we don't know the CRS, keep the 'zDimension' fallback which should be inferred from
+         * the envelope with the greatest amount of dimensions.
+         */
+        if (crs != null) {
+            zDimension = crs.getCoordinateSystem().getDimension() - 1;
+        }
+        if (zDimension <= 0) {
+            throw new IllegalArgumentException(Errors.format(ErrorKeys.UNSUPPORTED_CRS_$1,
+                    (crs == null) ? "null" : crs.getName().getCode()));
+        }
+        /*
+         * Prepares the envelope, to be computed in the loop later and returned by this method.
+         * Ordinates are initialized to NaN. They will stay NaN if none of the supplied elements
+         * can provide an envelope.
+         */
+        final GeneralEnvelope envelope;
+        if (crs != null) {
+            envelope = new GeneralEnvelope(crs);
+        } else {
+            envelope = new GeneralEnvelope(zDimension + 1);
+        }
+        envelope.setToNull();
+        /*
+         * Computes a CRS without the z dimension (which is assumed to be the last one, as
+         * specified in the javadoc). A coordinate operation is cached during the loop for
+         * transforming envelopes, if needed.
+         */
+        final CoordinateReferenceSystem reducedCRS = CRSUtilities.getSubCRS(crs, 0, zDimension);
+        CoordinateOperation operation = null;
+        for (int j=0; j<elements.length; j++) {
+            final Element element = elements[j];
+            Envelope candidate = (envelopes != null) ? envelopes[j] : element.getEnvelope();
+            if (candidate == null) {
+                continue;
+            }
+            /*
+             * Computes an envelope for all coverage elements. If a coordinate reference system
+             * information is bundled with the envelope, it will be used in order to reproject
+             * the envelope on the fly (if needed). Otherwise, CRS are assumed the same than the
+             * one specified at construction time.
+             */
+            final CoordinateReferenceSystem sourceCRS = candidate.getCoordinateReferenceSystem();
+            if (sourceCRS != null && !equalsIgnoreMetadata(sourceCRS, crs)
+                                  && !equalsIgnoreMetadata(sourceCRS, reducedCRS))
+            {
+                // A transformation is required. Reuse the previous operation if possible.
+                if (operation==null || !equalsIgnoreMetadata(sourceCRS, operation.getSourceCRS())) {
+                    CoordinateOperationFactory factory = CRS.getCoordinateOperationFactory(true);
+                    try {
+                        try {
+                            // Try a transformation to the full target CRS including z dimension.
+                            operation = factory.createOperation(sourceCRS, crs);
+                        } catch (OperationNotFoundException e) {
+                            // Try a transformation to the target CRS without z dimension.
+                            assert !equalsIgnoreMetadata(reducedCRS, crs) : reducedCRS;
+                            operation = factory.createOperation(sourceCRS, reducedCRS);
+                        }
+                    } catch (FactoryException e) {
+                        throw new MismatchedReferenceSystemException(Errors.format(errorCode, e));
+                    }
+                }
+                try {
+                    candidate = CRS.transform(operation, candidate);
+                } catch (TransformException exception) {
+                    throw new MismatchedReferenceSystemException(Errors.format(errorCode, exception));
+                }
+            }
+            /*
+             * Increase the envelope in order to contains 'candidate'.
+             * The range of z-values will be included in the envelope.
+             */
+            final int dim = candidate.getDimension();
+            for (int i=0; i<=zDimension; i++) {
+                double min = envelope.getMinimum(i);
+                double max = envelope.getMaximum(i);
+                final double minimum, maximum;
+                if (i < dim) {
+                    minimum = candidate.getMinimum(i);
+                    maximum = candidate.getMaximum(i);
+                } else if (i == zDimension) {
+                    final NumberRange range = element.getZRange();
+                    minimum = range.getMinimum();
+                    maximum = range.getMaximum();
+                } else {
+                    minimum = NEGATIVE_INFINITY;
+                    maximum = POSITIVE_INFINITY;
+                }
+                boolean changed = false;
+                if (Double.isNaN(min) || minimum < min) {min = minimum; changed = true;}
+                if (Double.isNaN(max) || maximum > max) {max = maximum; changed = true;}
+                if (changed) {
+                    envelope.setRange(i, min, max);
+                }
+            }
+        }
+        return envelope;
+    }
+

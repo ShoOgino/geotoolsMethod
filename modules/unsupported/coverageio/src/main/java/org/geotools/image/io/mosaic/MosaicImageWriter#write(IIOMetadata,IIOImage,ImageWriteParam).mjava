@@ -1,0 +1,52 @@
+    /**
+     * Writes the specified image as a set of tiles. The default implementation copies the image in
+     * a temporary file, then invokes {@link #writeFromInput}. This somewhat inefficient approach
+     * may be changed in a future version.
+     *
+     * @param  metadata The stream metadata.
+     * @param  image    The image to write.
+     * @param  param    The parameter for the image to write.
+     * @throws IOException if an error occured while writing the image.
+     */
+    public void write(final IIOMetadata metadata, final IIOImage image, ImageWriteParam param)
+            throws IOException
+    {
+        /*
+         * We could check for 'output' before to create the temporary file in order to avoid
+         * creating the file if we are going to fail anyway,  but we don't because users are
+         * allowed to override the 'filter' methods and set the output there (undocumented
+         * but possible, and TileBuilder do something like that).
+         *
+         * Uses the PNG format, which is lossless and bundled in standard Java distributions.
+         */
+        final Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("png");
+        while (writers.hasNext()) {
+            final ImageWriter writer = writers.next();
+            if (!filter(writer)) {
+                continue;
+            }
+            final File file = File.createTempFile("MIW", ".png");
+            try {
+                final ImageOutputStream output = ImageIO.createImageOutputStream(file);
+                writer.setOutput(output);
+                writer.write(metadata, image, param);
+                output.close();
+                /*
+                 * We don't want to take in account parameters like source region, subsampling, etc.
+                 * since they were already handled by the writing process above. But we want to take
+                 * in account the parameters specific to MosaicImageWriteParam. So retain only them.
+                 */
+                if (param instanceof MosaicImageWriteParam) {
+                    param = new MosaicImageWriteParam((MosaicImageWriteParam) param);
+                } else {
+                    param = null;
+                }
+                writeFromInput(file, 0, param);
+            } finally {
+                file.delete();
+            }
+            return;
+        }
+        throw new IIOException(Errors.format(ErrorKeys.NO_IMAGE_WRITER));
+    }
+

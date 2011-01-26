@@ -1,0 +1,45 @@
+    /**
+     * Transforms a given position and stores the result in this object.
+     *
+     * <ul>
+     *   <li><p>The {@linkplain CoordinateOperation#getSourceCRS source CRS} is the
+     *       {@linkplain DirectPosition#getCoordinateReferenceSystem CRS associated with the given
+     *       position}, or the {@code sourceCRS} argument given at
+     *       {@linkplain #TransformedDirectPosition(CoordinateReferenceSystem,
+     *       CoordinateReferenceSystem, Hints) construction time} <strong>if and only if</strong>
+     *       the CRS associated with {@code position} is null.</p></li>
+     *
+     *   <li><p>The {@linkplain CoordinateOperation#getTargetCRS target CRS} is the {@linkplain
+     *       #getCoordinateReferenceSystem CRS associated with this position}. This is always the
+     *       {@code targetCRS} argument given at {@linkplain
+     *       #TransformedDirectPosition(CoordinateReferenceSystem, CoordinateReferenceSystem,
+     *       Hints) construction time} or by the last call to {@link #setCoordinateReferenceSystem
+     *       setCoordinateReferenceSystem}.</p></li>
+     * </ul>
+     *
+     * @param  position A position using an arbitrary CRS. This object will not be modified.
+     * @throws TransformException if a coordinate transformation was required and failed.
+     */
+    public void transform(final DirectPosition position) throws TransformException {
+        CoordinateReferenceSystem userCRS = position.getCoordinateReferenceSystem();
+        if (userCRS == null) {
+            userCRS = defaultCRS;
+            if (userCRS == null) {
+                setLocation(position);
+                return;
+            }
+        }
+        /*
+         * A projection may be required. Checks if it is the same one than the one used
+         * last time this method has been invoked. If the specified position uses a new
+         * CRS, then gets the transformation and saves it in case the next call to this
+         * method would uses again the same transformation.
+         */
+        if (forward==null || !CRS.equalsIgnoreMetadata(sourceCRS, userCRS)) {
+            setSourceCRS(userCRS);
+        }
+        if (forward.transform(position, this) != this) {
+            throw new AssertionError(forward); // Should never occurs.
+        }
+    }
+

@@ -1,0 +1,127 @@
+	private AttributeType createType(XSDComplexTypeDefinition xsdType, int depth) {
+	        if (depth > maxDepth) {
+                        throw new RuntimeException( xsdType.getName() );
+                }
+                if (printRecursionPaths) {
+                        for ( int i = 0; i < depth; i++ ) {
+                                System.out.print("-");
+                        }
+                        System.out.println(xsdType.getName());
+                }
+                
+		//already processed?
+		if (types.containsKey(xsdType)) {
+			return (AttributeType) types.get(xsdType);
+		}
+		
+		//import?
+		if (!xsdType.getTargetNamespace().equals(schema.getTargetNamespace())) {
+			return findType(xsdType);
+		}
+		
+		//first build super type
+		AttributeType/*ComplexType*/ superType = null;
+		XSDTypeDefinition baseType = xsdType.getBaseType();
+		if (baseType != null && !baseType.equals(xsdType)) {
+			if (baseType.getName() != null) {
+				//ignore unamed types
+				superType = createType(/*(XSDComplexTypeDefinition)*/baseType, depth+1);
+				assert superType != null;
+			}
+		}
+		
+		// now build child types
+		ArrayList properties = new ArrayList();
+		if (followComplexTypes) {
+			List children = Schemas.getChildElementParticles(xsdType, false);
+			for (Iterator itr = children.iterator(); itr.hasNext();) {
+			    XSDParticle particle = (XSDParticle) itr.next();
+				XSDElementDeclaration element = (XSDElementDeclaration) particle.getContent();
+				if (element.isElementDeclarationReference()) {
+				    element = element.getResolvedElementDeclaration();
+				}
+				
+				XSDTypeDefinition childType = element.getTypeDefinition();
+				if (childType == null) {
+				    childType = findGlobalElementXSDType(element);
+				}
+				
+				AttributeType gtType = null;
+				if (childType != null ) {
+        				gtType = createType(childType, depth+1);
+				}
+				else {
+				    //set to xs:anyType
+				    gtType = xsAnyType();
+				}
+    				assert gtType != null;
+    				
+    				String uri = element.getTargetNamespace();
+    				String name = element.getName();
+    				
+    				int minOccurs = particle.getMinOccurs();
+    				int maxOccurs = particle.getMaxOccurs();
+    				if (maxOccurs == -1) {
+    				    maxOccurs = Integer.MAX_VALUE;
+    				}
+    				boolean isNillable = element.isNillable();
+    				
+    				//TODO: default value
+    				AttributeDescriptor ad = factory.createAttributeDescriptor(
+    					gtType, new NameImpl(uri,name),minOccurs, maxOccurs, isNillable, null
+    				);
+    				properties.add(ad);
+			}
+			
+			List atts = Schemas.getAttributeDeclarations(xsdType,false);
+			for (Iterator itr = atts.iterator(); itr.hasNext();) {
+                            XSDAttributeDeclaration attribute = (XSDAttributeDeclaration) itr.next();
+                            if ( attribute.isAttributeDeclarationReference() ) {
+                                attribute = attribute.getResolvedAttributeDeclaration();
+                            }
+                            
+                            XSDSimpleTypeDefinition type = attribute.getTypeDefinition();
+                            if (type == null) {
+                                //look up in global schema
+                                for (Iterator a = schema.getAttributeDeclarations().iterator(); a.hasNext();) {
+                                    XSDAttributeDeclaration ad = (XSDAttributeDeclaration) a.next();
+                                    if (Utilities.equals(ad.getTargetNamespace(), attribute.getTargetNamespace()) 
+                                        && Utilities.equals(ad.getName(), attribute.getName())) {
+                                        type = ad.getTypeDefinition();
+                                        break;
+                                    }
+                                }
+                            }
+                            if ( type.getName() == null ) {
+                            	//TODO: deal with anonymous attribute types
+                            	continue;
+                            }
+                            AttributeType gtType = createType(type, depth+1);
+                            if ( "uom".equals( attribute.getName() ) ) {
+                            	System.out.println();
+                            }
+                            String uri = attribute.getTargetNamespace();
+                            if (uri == null ) {
+                            	uri = xsdType.getTargetNamespace();
+                            }
+                            //TODO: if attribute is required
+                            AttributeDescriptor ad = factory.createAttributeDescriptor(
+                                gtType, new NameImpl(uri, attribute.getName()),
+                                0, 1, true, null);
+                            properties.add(ad);
+                                
+			}
+		}
+		
+		
+		//TODO: isIdentifiable
+		//TODO: restrictions
+		//TODO: description
+		ComplexType gtType = factory.createComplexType(
+			name(xsdType), properties, false, xsdType.isAbstract(), 
+			Collections.EMPTY_LIST, superType, null
+		);
+		types.put(xsdType,gtType);
+		return gtType;
+	}
+

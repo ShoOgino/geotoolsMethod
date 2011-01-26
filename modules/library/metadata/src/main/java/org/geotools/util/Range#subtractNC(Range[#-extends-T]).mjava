@@ -1,0 +1,35 @@
+    /**
+     * Implementation of {@link #subtract(Range)} to be invoked directly by subclasses.
+     * "NC" stands for "No Cast" - this method do not try to cast the value to a compatible type.
+     */
+    final Range<T>[] subtractNC(final Range<? extends T> range) throws IllegalArgumentException {
+        final Range<T> subtract;
+        if (!intersects(range)) {
+            subtract = this;
+        } else {
+            final boolean clipMin = compareMinTo(range.minValue, range.isMinIncluded ? 0 : +1) >= 0;
+            final boolean clipMax = compareMaxTo(range.maxValue, range.isMaxIncluded ? 0 : -1) <= 0;
+            if (clipMin) {
+                if (clipMax) {
+                    // The given range contains fully this range.
+                    assert range.contains(this) : range;
+                    return newArray(0);
+                }
+                subtract = create(range.maxValue, !range.isMaxIncluded, maxValue, isMaxIncluded);
+            } else {
+                if (!clipMax) {
+                    final Range<T>[] array = newArray(2);
+                    array[0] = create(minValue, isMinIncluded, range.minValue, !range.isMinIncluded);
+                    array[1] = create(range.maxValue, !range.isMaxIncluded, maxValue, isMaxIncluded);
+                    return array;
+                }
+                subtract = create(minValue, isMinIncluded, range.minValue, !range.isMinIncluded);
+            }
+        }
+        assert contains(subtract) : subtract;
+        assert !subtract.intersects(range) : subtract;
+        final Range<T>[] array = newArray(1);
+        array[0] = subtract;
+        return array;
+    }
+

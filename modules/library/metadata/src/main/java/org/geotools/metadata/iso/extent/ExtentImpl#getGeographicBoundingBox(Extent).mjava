@@ -1,0 +1,52 @@
+    /**
+     * Convenience method returning a single geographic bounding box from the specified extent.
+     * If no bounding box was found, then this method returns {@code null}. If more than one box
+     * is found, then boxes are {@linkplain GeographicBoundingBoxImpl#add added} together.
+     *
+     * @since 2.2
+     */
+    public static GeographicBoundingBox getGeographicBoundingBox(final Extent extent) {
+        GeographicBoundingBox candidate = null;
+        if (extent != null) {
+            GeographicBoundingBoxImpl modifiable = null;
+            for (final GeographicExtent element : extent.getGeographicElements()) {
+                final GeographicBoundingBox bounds;
+                if (element instanceof GeographicBoundingBox) {
+                    bounds = (GeographicBoundingBox) element;
+                } else if (element instanceof BoundingPolygon) {
+                    // TODO: iterates through all polygons and invoke Polygon.getEnvelope();
+                    continue;
+                } else {
+                    continue;
+                }
+                /*
+                 * A single geographic bounding box has been extracted. Now add it to previous
+                 * ones (if any). All exclusion boxes before the first inclusion box are ignored.
+                 */
+                if (candidate == null) {
+                    /*
+                     * Reminder: 'inclusion' is a mandatory attribute, so it should never be
+                     * null for a valid metadata object.  If the metadata object is invalid,
+                     * it is better to get an exception than having a code doing silently
+                     * some probably inappropriate work.
+                     */
+                    final Boolean inclusion = bounds.getInclusion();
+                    ensureNonNull("inclusion", inclusion);
+                    if (inclusion.booleanValue()) {
+                        candidate = bounds;
+                    }
+                } else {
+                    if (modifiable == null) {
+                        modifiable = new GeographicBoundingBoxImpl(candidate);
+                        candidate = modifiable;
+                    }
+                    modifiable.add(bounds);
+                }
+            }
+            if (modifiable != null) {
+                modifiable.freeze();
+            }
+        }
+        return candidate;
+    }
+

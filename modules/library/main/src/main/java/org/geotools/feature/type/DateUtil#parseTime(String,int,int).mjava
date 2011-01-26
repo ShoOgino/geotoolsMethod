@@ -1,0 +1,80 @@
+    /**
+     * Parse general time value from text. Time values are expected to be in
+     * W3C XML Schema standard format as hh:mm:ss.fff, with optional leading
+     * sign and trailing time zone.
+     *
+     * @param text text to be parsed
+     * @param start offset of first character of time value
+     * @param length number of characters in time value
+     *
+     * @return converted time as millisecond value
+     *
+     * @throws IllegalArgumentException on parse error
+     */
+    public static long parseTime(String text, int start, int length)
+        throws IllegalArgumentException {
+        // validate time value following date
+        long milli = 0;
+        boolean valid = (length > (start + 7))
+            && (text.charAt(start + 2) == ':')
+            && (text.charAt(start + 5) == ':');
+
+        if (valid) {
+            int hour = parseDigits(text, start, 2);
+            int minute = parseDigits(text, start + 3, 2);
+            int second = parseDigits(text, start + 6, 2);
+
+            if ((hour > 23) || (minute > 59) || (second > 60)) {
+                valid = false;
+            } else {
+                // convert to base millisecond in day
+                milli = ((((hour * 60) + minute) * 60) + second) * 1000;
+                start += 8;
+
+                if (length > start) {
+                    // adjust for time zone
+                    if (text.charAt(length - 1) == 'Z') {
+                        length--;
+                    } else {
+                        char chr = text.charAt(length - 6);
+
+                        if ((chr == '-') || (chr == '+')) {
+                            hour = parseDigits(text, length - 5, 2);
+                            minute = parseDigits(text, length - 2, 2);
+
+                            if ((hour > 23) || (minute > 59)) {
+                                valid = false;
+                            } else {
+                                int offset = ((hour * 60) + minute) * 60 * 1000;
+
+                                if (chr == '-') {
+                                    milli += offset;
+                                } else {
+                                    milli -= offset;
+                                }
+                            }
+
+                            length -= 6;
+                        }
+                    }
+
+                    // check for trailing fractional second
+                    if (text.charAt(start) == '.') {
+                        double fraction = Double.parseDouble(text.substring(
+                                    start, length));
+                        milli += (fraction * 1000.0);
+                    } else if (length > start) {
+                        valid = false;
+                    }
+                }
+            }
+        }
+
+        // check for valid result
+        if (valid) {
+            return milli;
+        } else {
+            throw new IllegalArgumentException("Invalid dateTime format");
+        }
+    }
+

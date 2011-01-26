@@ -1,0 +1,85 @@
+    /**
+     * Determines whether DataStore created by this factory can process the
+     * parameters.
+     * <p>
+     * Required Parameters are:
+     * </p>
+     * <ul>
+     * <li>
+     * <code>dbtype</code> - must equal "oracle"
+     * </li>
+     * <li>
+     * <code>host</code>
+     * </li>
+     * <li>
+     * <code>port</code>
+     * </li>
+     * <li>
+     * <code>user</code>
+     * </li>
+     * <li>
+     * <code>passwd</code>
+     * </li>
+     * <li>
+     * <code>instance</code>
+     * </li>     
+     * </ul>
+     * 
+     * <p>
+     * There are no defaults since each parameter must be explicitly defined by the user, or
+     * another DataSourceFactorySpi should be used. This behaviour is defined in the
+     * DataStoreFactorySpi contract.
+     * </p>
+     *
+     * @param params The parameter to check.
+     *
+     * @return True if all the required parameters are supplied.
+     */
+    public boolean canProcess(Map params) {
+        if (params != null) {
+            if (params.get("dbtype") == null || !params.get("dbtype").toString().equalsIgnoreCase("oracle")) {
+                return false; //short circuit test
+            }
+            Param arrayParameters[] = getParametersInfo();
+            for (int i = 0; i < arrayParameters.length; i++) {
+            	Param param = arrayParameters[i];
+            	Object value;
+            	if( !params.containsKey( param.key ) ){
+            		if( param.required ){
+            			return false; // missing required key!
+            		}
+            		else {
+            			continue;
+            		}
+            	}
+				try {
+					value = param.lookUp( params );
+				} catch (IOException e) {
+					LOGGER.warning( param.key+":"+e );
+					// could not upconvert/parse to expected type!
+					// even if this parameter is not required
+					// we are going to refuse to process
+					// these params
+					return false; 
+				}
+				if( value == null ){					
+					if (param.required) {
+                        return (false);
+                    }
+                }
+				else {
+					if ( !param.type.isInstance( value )){
+						return false; // value was not of the required type
+					}
+				}
+            }
+        } else {
+            return (false);
+        }
+        if (!(((String) params.get("dbtype")).equalsIgnoreCase("oracle"))) {
+            return (false);
+        } else {
+            return (true);
+        }
+    }
+

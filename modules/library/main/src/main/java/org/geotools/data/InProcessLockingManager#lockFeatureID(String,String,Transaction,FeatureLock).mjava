@@ -1,0 +1,63 @@
+    /**
+     * Aquire lock on featureID.
+     * 
+     * <p>
+     * This method will fail if Lock is already held by another.
+     * </p>
+     *
+     * @param typeName TypeName storing feature
+     * @param featureID FeatureID to lock
+     * @param transaction Transaction to lock against
+     * @param featureLock FeatureLock describing lock request
+     *
+     * @throws FeatureLockException Indicates a problem with the lock request
+     */
+    public synchronized void lockFeatureID(String typeName, String featureID,
+        Transaction transaction, FeatureLock featureLock)
+        throws FeatureLockException {
+        Lock lock = getLock(typeName, featureID);
+
+        // This is a loop so we can wait on Transaction Locks
+        //
+        while (lock != null) {
+            // we have a conflict
+            if (lock instanceof TransactionLock) {
+                TransactionLock tlock = (TransactionLock) lock;
+
+                if (transaction == tlock.transaction) {
+                    // lock already held by this transacstion
+                    // we could just consider returning here
+                    //
+                    throw new FeatureLockException("Transaction Lock is already held by this Transaction",
+                        featureID);
+                } else {
+                    // we should wait till it is available and then grab
+                    // the lock
+                    try {
+                        synchronized (tlock) {
+                            tlock.wait();
+                        }
+
+                        lock = getLock(typeName, featureID);
+                    } catch (InterruptedException interupted) {
+                        throw new FeatureLockException("Interupted while waiting for Transaction Lock",
+                            featureID, interupted);
+                    }
+                }
+            } else if (lock instanceof MemoryLock) {
+                MemoryLock mlock = (MemoryLock) lock;
+                throw new FeatureLockException(
+                    "Feature Lock is held by Authorization " + mlock.authID,
+                    featureID);
+            } else {
+                throw new FeatureLockException("Lock is already held " + lock,
+                    featureID);
+            }
+        }
+
+        // Lock is Available
+        //
+        lock = createLock(transaction, featureLock);
+        locks(typeName).put(featureID, lock);
+    }
+

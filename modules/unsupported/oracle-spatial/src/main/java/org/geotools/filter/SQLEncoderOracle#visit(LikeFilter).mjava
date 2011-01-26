@@ -1,0 +1,42 @@
+    /**
+     * Writes the SQL for the Like Filter.  Assumes the current java
+     * implemented wildcards for the Like Filter: . for multi and .? for
+     * single. And replaces them with the SQL % and _, respectively. Currently
+     * does nothing, and should not be called, not included in the
+     * capabilities.
+     *
+     * @param filter the Like Filter to be visited.
+     *
+     * @task TODO: LikeFilter doesn't work right...revisit this when it does.
+     *       Need to think through the escape char, so it works right when
+     *       Java uses one, and escapes correctly with an '_'.
+     */
+    public void visit(LikeFilter filter) {
+        try {
+            String pattern = filter.getPattern();
+            
+            String multi = "\\Q"+filter.getWildcardMulti()+"\\E"; 
+            pattern = pattern.replaceAll( multi, SQL_WILD_MULTI);
+            
+            String single = "\\Q"+filter.getWildcardSingle()+"\\E";
+            pattern = pattern.replaceAll( single, SQL_WILD_SINGLE);
+
+            //pattern = pattern.replace('\\', ''); //get rid of java escapes.
+            out.write("UPPER(");
+            ((Expression) filter.getValue()).accept(this);
+            out.write(") LIKE ");
+            out.write("UPPER('" + pattern + "')");
+
+            String esc = filter.getEscape();
+
+            if (pattern.indexOf(esc) != -1) { //if it uses the escape char
+                out.write(" ESCAPE " + "'" + esc + "'"); //this needs testing
+            }
+
+            //TODO figure out when to add ESCAPE clause, probably just for the
+            // '_' char.
+        } catch (java.io.IOException ioe) {
+            LOGGER.warning("Unable to export filter" + ioe);
+        }
+    }
+

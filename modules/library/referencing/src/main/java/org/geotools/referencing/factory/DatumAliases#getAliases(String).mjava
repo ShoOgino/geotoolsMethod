@@ -1,0 +1,79 @@
+    /**
+     * Returns the aliases, as a set of {@link GenericName}, for the given name.
+     * This method returns an internal array; do not modify the returned value.
+     *
+     * @param name Datum alias name to lookup.
+     * @return A set of datum aliases as {@link GenericName} objects for the given name,
+     *         or {@code null} if the name is not in our list of aliases.
+     *
+     * @see #addAliases
+     * @see #reload
+     */
+    private GenericName[] getAliases(String name) {
+        assert Thread.holdsLock(this);
+        if (aliasMap.isEmpty()) try {
+            reload();
+        } catch (IOException exception) {
+            log(exception);
+            // Continue in case the requested alias has been read before the failure occured.
+        }
+        /*
+         * Gets the aliases for the specified name.  If an entry exists for this name with a null
+         * value, this means that 'freeUnused()' has been invoked previously. Reload the file and
+         * try again since the requested name may be one of the set of discarted aliases.
+         */
+        name = toCaseless(name);
+        Object[] aliases = aliasMap.get(name);
+        if (aliases == null) {
+            // Unknow name. We are done.
+            return null;
+        }
+        if (aliases == NEED_LOADING) {
+            // Known name, but the list of alias has been previously
+            // discarted because never used. Reload the file.
+            try {
+                reload();
+            } catch (IOException exception) {
+                log(exception);
+                // Continue in case the requested alias has been read before the failure occured.
+            }
+            aliases = aliasMap.get(name);
+            if (aliases == NEED_LOADING) {
+                // Should never happen, unless reloading failed or some lines have
+                // been deleted in the file since last time the file has been loaded.
+                return null;
+            }
+        }
+        if (aliases instanceof GenericName[]) {
+            return (GenericName[]) aliases;
+        }
+        /*
+         * Aliases has been found, but available as an array of strings only. This means
+         * that those aliases have never been requested before. Transforms the array of
+         * strings into an array of generic names. The new array replaces the old one for
+         * all aliases enumerated in the array (not just the requested one).
+         */
+        int count = 0;
+        GenericName[] names = new GenericName[aliases.length];
+        for (int i=0; i<aliases.length; i++) {
+            final CharSequence alias = (CharSequence) aliases[i];
+            if (alias != null) {
+                if (count < authorities.length) {
+                    final LocalName authority = authorities[count];
+                    if (authority != null) {
+                        names[count++] = new org.geotools.util.ScopedName(authority, alias);
+                        continue;
+                    }
+                }
+                names[count++] = new LocalName(alias);
+            }
+        }
+        names = XArray.resize(names, count);
+        for (int i=0; i<names.length; i++) {
+            final String alias = names[i].tip().toString();
+            final Object[] previous = aliasMap.put(toCaseless(alias), names);
+            assert previous==names || Arrays.equals(aliases, previous) : alias;
+        }
+        return names;
+    }
+

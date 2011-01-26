@@ -1,0 +1,40 @@
+    @Test
+    public void testPropertyName() throws Exception {
+        PropertyName ae = ff.property("/wq_plus/measurement/result");
+        List unrolled = (List) ae.accept(visitor, null);
+        assertNotNull(unrolled);
+        assertEquals(1, unrolled.size());
+
+        Expression unmappedExpr = (Expression) unrolled.get(0);
+        assertTrue(unmappedExpr instanceof PropertyName);
+        PropertyName attExp = (PropertyName) unmappedExpr;
+        assertEquals("results_value", attExp.getPropertyName());
+
+        // now try with an AttributeExpression that is not directly mapped to an
+        // attribute
+        // expresion on the surrogate FeatureType, but to a composite one.
+        // For example, create a mapping from the test case simple source to
+        // a complex type with an "areaOfInfluence" attribute, which is a buffer
+        // over the simple "location" attribute
+        // and another which is the concatenation of the attributes "anzlic_no"
+        // and "project_no"
+        FeatureTypeMapping mapping = createSampleDerivedAttributeMappings();
+        targetDescriptor = mapping.getTargetFeature();
+
+        visitor = new UnmappingFilterVisitor(mapping);
+        attExp = ff.property("areaOfInfluence");
+        List unrolledExpressions = (List) attExp.accept(visitor, null);
+
+        assertNotNull(unrolledExpressions);
+        assertEquals(1, unrolledExpressions.size());
+
+        unmappedExpr = (Expression) unrolledExpressions.get(0);
+        assertTrue(unmappedExpr instanceof Function);
+        Function fe = (Function) unmappedExpr;
+        assertEquals("buffer", fe.getName());
+
+        Expression arg0 = (Expression) fe.getParameters().get(0);
+        assertTrue(arg0 instanceof PropertyName);
+        assertEquals("location", ((PropertyName) arg0).getPropertyName());
+    }
+

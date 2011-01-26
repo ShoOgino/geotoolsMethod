@@ -1,0 +1,33 @@
+        /**
+         * Removes the entries from the backing hash map. This method need to
+         * override the {@link SoftReference#clear} method because it is invoked
+         * by {@link WeakCollectionCleaner}.
+         */
+        @Override
+        public void clear() {
+            if(cleaner != null) {
+                final Object value = get();
+                if(value != null) {
+                    try {
+                        cleaner.clean(value);
+                    } catch(Throwable t) {
+                        // never let a bad implementation break soft reference cleaning
+                        LOGGER.log(Level.SEVERE, "Exception occurred while cleaning soft referenced object", t);
+                    }
+                }
+            }
+            
+            super.clear();
+            synchronized (hash) {
+                final Object old = hash.remove(key);
+                /*
+                 * If the entry was used for an other value, then put back the old value. This
+                 * case may occurs if a new value was set in the hash map before the old value
+                 * was garbage collected.
+                 */
+                if (old != this && old != null) {
+                    hash.put(key, old);
+                }
+            }
+        }
+

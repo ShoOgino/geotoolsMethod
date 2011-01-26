@@ -1,0 +1,48 @@
+    /**
+     * Set various data fields used to control the vectorizing process.
+     *
+     * @param coverage the input grid coverage
+     * @param bounds bounds (world coords) of the area to be vectorized
+     * @param monitor a progress listener (may be {@code null})
+     */
+    private void initialize(GridCoverage2D coverage, Envelope bounds, ProgressListener monitor)
+            throws TransformException, InvalidGridGeometryException {
+
+        if (monitor == null)
+            monitor = new NullProgressListener();
+
+        try {
+            monitor.started();
+            this.coverage = coverage;
+            GridGeometry2D gridGeom = coverage.getGridGeometry();
+
+            // image used to sample the grid coverage
+            image = coverage.getRenderedImage();
+
+            this.transformLR = coverage.getGridGeometry().getGridToCRS2D(
+                    PixelOrientation.LOWER_RIGHT);
+            monitor.progress(30);
+
+            imageBounds = coverage.getGridGeometry().worldToGrid(new Envelope2D(bounds));
+
+            cellWidthX = gridGeom.getEnvelope2D().getSpan(gridGeom.axisDimensionX) /
+                         gridGeom.getGridRange2D().getSpan(gridGeom.gridDimensionX);
+
+            cellWidthY = gridGeom.getEnvelope2D().getSpan(gridGeom.axisDimensionY) /
+                         gridGeom.getGridRange2D().getSpan(gridGeom.gridDimensionY);
+
+            lines = new ArrayList<LineString>();
+            geomFactory = new GeometryFactory();
+            polygonizer = new Polygonizer();
+
+            monitor.progress(80);
+
+            vertLines = new HashMap<Integer, LineSegment>();
+
+            cornerTouches = new ArrayList<Coordinate>();
+
+        } finally {
+            monitor.complete();
+        }
+    }
+

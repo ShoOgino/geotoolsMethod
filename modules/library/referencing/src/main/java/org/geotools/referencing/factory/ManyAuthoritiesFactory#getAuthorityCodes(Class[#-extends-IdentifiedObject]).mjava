@@ -1,0 +1,104 @@
+    /**
+     * Returns the set of authority codes of the given type.
+     *
+     * @param  type The spatial reference objects type (may be {@code IdentifiedObject.class}).
+     * @return The set of authority codes for spatial reference objects of the given type.
+     *         If this factory doesn't contains any object of the given type, then this method
+     *         returns an {@linkplain java.util.Collections#EMPTY_SET empty set}.
+     * @throws FactoryException if access to the underlying database failed.
+     */
+    @Override
+    public Set<String> getAuthorityCodes(final Class<? extends IdentifiedObject> type)
+            throws FactoryException
+    {
+        if (Boolean.TRUE.equals(inProgress.get())) {
+            /*
+             * 'getAuthorityCodes' is invoking itself (indirectly). Returns an empty set in order
+             * to avoid infinite recursivity. Note that the end result (the output of the caller)
+             * will usually not be empty.
+             */
+            return Collections.emptySet();
+        }
+        final Set<String> codes = new LinkedHashSet<String>();
+        final Set<AuthorityFactory> done = new HashSet<AuthorityFactory>();
+        done.add(this); // Safety for avoiding recursive calls.
+        try {
+            inProgress.set(Boolean.TRUE);
+            for (String authority : getAuthorityNames()) {
+                authority = authority.trim();
+                final char separator = getSeparator(authority);
+                /*
+                 * Prepares a buffer with the "AUTHORITY:" part in "AUTHORITY:NUMBER".
+                 * We will reuse this buffer in order to prefix the authority name in
+                 * front of every codes.
+                 */
+                final StringBuilder code = new StringBuilder(authority);
+                int codeBase = code.length();
+                if (codeBase != 0 && code.charAt(codeBase - 1) != separator) {
+                    code.append(separator);
+                    codeBase = code.length();
+                }
+                code.append("all");
+                final String dummyCode = code.toString();
+                /*
+                 * Now scan over all factories. We will process a factory only if this particular
+                 * factory has not already been done in a previous iteration (some implementation
+                 * apply to more than one factory).
+                 */
+scanForType:    for (int i=0; i<FACTORY_TYPES.length; i++) {
+                    if (!OBJECT_TYPES[i].isAssignableFrom(type)) {
+                        continue;
+                    }
+                    final Class<? extends AuthorityFactory> factoryType = FACTORY_TYPES[i];
+                    final AuthorityFactory factory;
+                    try {
+                        factory = getAuthorityFactory(factoryType, dummyCode);
+                    } catch (NoSuchAuthorityCodeException e) {
+                        continue;
+                    }
+                    if (!done.add(factory)) {
+                        continue;
+                    }
+                    AuthorityFactory wrapped = factory;
+                    while (wrapped instanceof AuthorityFactoryAdapter) {
+                        final AuthorityFactoryAdapter adapter = (AuthorityFactoryAdapter) wrapped;
+                        try {
+                            wrapped = adapter.getAuthorityFactory(factoryType, dummyCode);
+                        } catch (NoSuchAuthorityCodeException exception) {
+                            /*
+                             * The factory doesn't understand our dummy code. It happen with
+                             * URN_AuthorityFactory, which expect the type ("CRS", etc.) in the URN.
+                             */
+                            continue scanForType;
+                        }
+                        if (!done.add(wrapped)) {
+                            /*
+                             * Avoid the factories that are wrapper around an other factory already
+                             * done. If we don't do that, we will duplicate the whole set of EPSG
+                             * identifiers (more than 3000 codes) for OrderedAuthorityFactory,
+                             * HTTP_AuthorityFactory, URN_AuthorityFactory, etc.
+                             */
+                            continue scanForType;
+                        }
+                    }
+                    for (String candidate : factory.getAuthorityCodes(type)) {
+                        candidate = candidate.trim();
+                        if (candidate.length() < codeBase ||
+                            Character.isLetterOrDigit (candidate.charAt(codeBase-1)) ||
+                           !authority.equalsIgnoreCase(candidate.substring(0, codeBase-1)))
+                        {
+                            // Prepend the authority code if it was not already presents.
+                            code.setLength(codeBase);
+                            code.append(candidate);
+                            candidate = code.toString();
+                        }
+                        codes.add(candidate);
+                    }
+                }
+            }
+        } finally {
+            inProgress.remove();
+        }
+        return codes;
+    }
+

@@ -1,0 +1,51 @@
+    /**
+     * Tests the wrapper with a parameter overriden.
+     */
+    @Test
+    public void testExtensions() {
+        /*
+         * The parameter descriptor for the subsampling.
+         */
+        final ParameterDescriptor SPATIAL_SUBSAMPLING_X =
+                new DefaultParameterDescriptor(Citations.OGC, "xPeriod",
+                    Double.class,    // Value class (mandatory)
+                    null,            // Array of valid values
+                    null,            // Default value
+                    0.0,             // Minimal value
+                    null,            // Maximal value
+                    null,            // Unit of measure
+                    false);          // Parameter is optional
+
+        // Gets the descriptors for extrema  JAI operation
+        final OperationRegistry registry = JAI.getDefaultInstance().getOperationRegistry();
+        final OperationDescriptor operation = (OperationDescriptor) registry
+                        .getDescriptor(RenderedRegistryMode.MODE_NAME, "Extrema");
+
+        // Gets the ImagingParameterDescriptors to replace xPeriod
+        final List<ParameterDescriptor> replacingDescriptors = new ArrayList<ParameterDescriptor>(1);
+        replacingDescriptors.add(SPATIAL_SUBSAMPLING_X);
+        final ImagingParameterDescriptors ripd =
+                new ImagingParameterDescriptors(operation, replacingDescriptors);
+
+        // Sets the parameter we want to override
+        final ParameterValueGroup rip = ripd.createValue();
+        assertSame(ripd, rip.getDescriptor());
+        final ParameterValue p = rip.parameter("xPeriod");
+        assertSame(SPATIAL_SUBSAMPLING_X, p.getDescriptor());
+
+        // Note that we are supposed to use spatial coordinates for this value we are seeting here.
+        p.setValue(Double.valueOf(2.3));
+        assertTrue(p.toString().startsWith("xPeriod = 2.3"));
+
+        // Tests direct access to the parameter list.
+        final ParameterList pl = ((ImagingParameters) rip).parameters;
+        assertSame(pl, pl.setParameter("xPeriod", 2));
+        assertSame(pl, pl.setParameter("yPeriod", 2));
+        assertEquals(2, pl.getIntParameter("xPeriod"));
+        assertEquals(2, pl.getIntParameter("yPeriod"));
+        assertEquals("Setting 'xPeriod' on ParameterList should have no effect on ParameterValue.",
+                     2.3, p.doubleValue(), 1E-6);
+        assertEquals("'yPeriod' should still backed by the ParameterList.",
+                     2, rip.parameter("yPeriod").intValue());
+    }
+

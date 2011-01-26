@@ -1,0 +1,38 @@
+	/**
+	 * Constructs a {@link STRTreeGranuleCatalog} out of a {@link FeatureCollection}.
+	 * @param readLock 
+	 * 
+	 * @param features
+	 * @throws IOException
+	 */
+	private SpatialIndex getIndex(Lock readLock) throws IOException {
+		final Lock writeLock=rwLock.writeLock();
+		try{
+			// upgrade the read lock to write lock
+			readLock.unlock();
+			writeLock.lock();
+					
+			// check if the index has been cleared
+			checkStore();
+			
+			// do your thing
+			STRtree tree = index.get();
+			if (tree == null) {
+				if (LOGGER.isLoggable(Level.FINE))
+					LOGGER.fine("No index exits and we create a new one.");
+				createIndex();
+				tree = index.get();
+			} else if (LOGGER.isLoggable(Level.FINE))
+				LOGGER.fine("Index does not need to be created...");
+			
+			return tree;
+		}finally{
+			// get read lock again
+			readLock.lock();
+			// leave write lock
+			writeLock.unlock();
+			
+		}
+
+	}
+

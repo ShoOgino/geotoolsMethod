@@ -1,0 +1,98 @@
+	/**
+	 * Takes the input and determines if it is a class that we can understand
+	 * and then futher checks the format of the class to make sure we can
+	 * read/write to it.
+	 * 
+	 * @param input
+	 *            The object to check for acceptance.
+	 * 
+	 * @return true if the input is acceptable, false otherwise
+	 */
+	@Override
+	public boolean accepts(Object input,Hints hints) {
+		String pathname = "";
+
+		if (input instanceof URL) {
+			final URL url = (URL) input;
+			final String protocol = url.getProtocol();
+			if (protocol.equalsIgnoreCase("file"))
+				pathname = DataUtilities.urlToFile(url).getPath();
+			else {
+				if (protocol.equalsIgnoreCase("http")) {
+					final String query;
+					try {
+						query = java.net.URLDecoder.decode(url.getQuery()
+								.intern(), "UTF-8");
+					} catch (UnsupportedEncodingException e) {
+						if (LOGGER.isLoggable(Level.FINE))
+							LOGGER.log(Level.FINE, e.getLocalizedMessage(), e);
+						return false;
+					}
+
+					// should we proceed? Let's look for a getmap WMS request
+					// we do a very basic check we should make this stronger!
+					// @todo
+					if (query.toLowerCase().intern().indexOf("getmap") == -1)
+						return false;
+					return true;
+
+				}
+			}
+		} else if (input instanceof File) {
+			File file = (File) input;
+
+			pathname = file.getAbsolutePath();
+		} else if (input instanceof String)
+			pathname = (String) input;
+		// else if (input instanceof InputStream
+		// || input instanceof ImageInputStream)
+		// return true;// @ask TODO is this right?????
+		else
+			return false;
+		// check if we can decode this file
+		if (!(pathname.endsWith(".gif") || pathname.endsWith(".jpg")
+				|| pathname.endsWith(".jpeg") || pathname.endsWith(".tif")
+				|| pathname.endsWith(".tiff") || pathname.endsWith(".png") || pathname
+				.endsWith(".bmp"))) {
+			return false;
+		}
+
+		// check the presence of the world file
+		final File source = new File(pathname);
+		if (!source.exists())
+			return false;
+		String suffix;
+		String fileName;
+
+		boolean answer = false;
+		final File parentDir = source.getParentFile();
+		if (parentDir != null) {
+			final int dotIndex = pathname.lastIndexOf('.');
+			if (dotIndex != -1) {
+				fileName = pathname.substring(0, dotIndex);
+				suffix = pathname.substring(dotIndex + 1, pathname.length());
+				final Set<String> suffixes = WorldImageFormat.getWorldExtension(suffix);
+				final Iterator<String> it = suffixes.iterator();
+				StringBuffer buff = new StringBuffer(fileName);
+				do {
+					answer = new File(buff.append(it.next()).toString()).exists();
+					buff = new StringBuffer(fileName);
+				} while (!answer && it.hasNext());
+				if (!answer) {
+					buff.setLength(0);
+					buff.append(fileName);
+					buff.append(".wld");
+					answer = new File(buff.toString()).exists();
+				}
+				if (!answer) {
+					buff.setLength(0);
+					buff.append(fileName);
+					buff.append(".meta");
+					answer = new File(buff.toString()).exists();
+				}
+			}
+
+		}
+		return answer;
+	}
+

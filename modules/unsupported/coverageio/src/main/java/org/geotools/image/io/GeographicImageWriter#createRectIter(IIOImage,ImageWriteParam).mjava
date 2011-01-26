@@ -1,0 +1,92 @@
+    /**
+     * Returns an iterator over the pixels of the specified image, taking subsampling in account.
+     *
+     * @param  image The image or raster to be written.
+     * @param  parameters The write parameters, or {@code null} if the whole image will be written.
+     * @return An iterator over the pixel values of the image to be written.
+     */
+    protected static RectIter createRectIter(final IIOImage image, final ImageWriteParam parameters) {
+        /*
+         * Examines the parameters for subsampling in lines, columns and bands. If a subsampling
+         * is specified, the source region will be translated by the subsampling offset (if any).
+         */
+        Rectangle bounds;
+        int[] sourceBands;
+        final int sourceXSubsampling;
+        final int sourceYSubsampling;
+        if (parameters != null) {
+            bounds             = parameters.getSourceRegion(); // Needs to be a clone.
+            sourceXSubsampling = parameters.getSourceXSubsampling();
+            sourceYSubsampling = parameters.getSourceYSubsampling();
+            if (sourceXSubsampling != 1 || sourceYSubsampling != 1) {
+                if (bounds == null) {
+                    if (image.hasRaster()) {
+                        bounds = image.getRaster().getBounds(); // Needs to be a clone.
+                    } else {
+                        final RenderedImage i = image.getRenderedImage();
+                        bounds = new Rectangle(i.getMinX(), i.getMinY(), i.getWidth(), i.getHeight());
+                    }
+                }
+                final int xOffset  = parameters.getSubsamplingXOffset();
+                final int yOffset  = parameters.getSubsamplingYOffset();
+                bounds.x      += xOffset;
+                bounds.y      += yOffset;
+                bounds.width  -= xOffset;
+                bounds.height -= yOffset;
+                // Fits to the smallest bounding box, which is
+                // required by SubsampledRectIter implementation.
+                bounds.width  -= (bounds.width  - 1) % sourceXSubsampling;
+                bounds.height -= (bounds.height - 1) % sourceYSubsampling;
+            }
+            sourceBands = parameters.getSourceBands();
+        } else {
+            sourceBands        = null;
+            bounds             = null;
+            sourceXSubsampling = 1;
+            sourceYSubsampling = 1;
+        }
+        /*
+         * Creates the JAIiterator which will iterates over all pixels in the source region.
+         * If no subsampling is specified and the source bands do not move and band, then the
+         * JAI iterator is returned directly.
+         */
+        final int numBands;
+        RectIter iterator;
+        if (image.hasRaster()) {
+            final Raster raster = image.getRaster();
+            numBands = raster.getNumBands();
+            iterator = RectIterFactory.create(raster, bounds);
+        } else {
+            final RenderedImage raster = image.getRenderedImage();
+            numBands = raster.getSampleModel().getNumBands();
+            iterator = RectIterFactory.create(raster, bounds);
+        }
+        if (sourceXSubsampling == 1 && sourceYSubsampling == 1) {
+            if (sourceBands == null) {
+                return iterator;
+            }
+            if (sourceBands.length == numBands) {
+                boolean identity = true;
+                for (int i=0; i<numBands; i++) {
+                    if (sourceBands[i] != i) {
+                        identity = false;
+                        break;
+                    }
+                }
+                if (identity) {
+                    return iterator;
+                }
+            }
+        }
+        /*
+         * A subsampling is required. Wraps the JAI iterator into a subsampler.
+         */
+        if (sourceBands == null) {
+            sourceBands = new int[numBands];
+            for (int i=0; i<numBands; i++) {
+                sourceBands[i] = i;
+            }
+        }
+        return new SubsampledRectIter(iterator, sourceXSubsampling, sourceYSubsampling, sourceBands);
+    }
+

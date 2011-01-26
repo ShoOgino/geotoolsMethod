@@ -1,0 +1,59 @@
+    /**
+     * Recursively ensures that the specified metadata implementation has
+     * setters for every methods.
+     */
+    private static void assertSetters(final PropertyAccessor accessor, final Set<Class<?>> done) {
+        if (done.add(accessor.type)) {
+            /*
+             * Tries to instantiate the implementation. Every implementation should have a
+             * no-args constructor, and their instantiation should never fail. Note that
+             * this dummy will also be of some help later in this test.
+             */
+            final Object dummyInstance;
+            final boolean isImplemented = isImplemented(accessor.type);
+            if (isImplemented) try {
+                dummyInstance = accessor.implementation.getConstructor((Class[]) null).
+                        newInstance((Object[]) null);
+            } catch (Exception e) {
+                fail(e.toString());
+                return;
+            } else {
+                dummyInstance = null;
+            }
+            /*
+             * Iterates over all properties defined in the interface,
+             * and checks for the existences of a setter method.
+             */
+            final String classname = Classes.getShortName(accessor.type) + '.';
+            final int count = accessor.count();
+            for (int i=0; i<count; i++) {
+                final String name = accessor.name(i);
+                assertNotNull(String.valueOf(i), name);
+                final String fullname = classname + name;
+                assertEquals(fullname, i, accessor.indexOf(name));
+                if (!isImplemented) {
+                    continue;
+                }
+                // We can not continue below this point for
+                // implementations that are only partial.
+                assertTrue(fullname, accessor.isWritable(i));
+                /*
+                 * Get the property type. In the special case where the property type
+                 * is a collection, get an empty collection from the implementation.
+                 * This is needed in order to get the element type in the collection.
+                 */
+                Class<?> type = accessor.type(i);
+                if (Collection.class.isAssignableFrom(type)) {
+                    final Object example = accessor.get(i, dummyInstance);
+                    if (example instanceof CheckedCollection) {
+                        type = ((CheckedCollection) example).getElementType();
+                    }
+                }
+                final Class<?> impl = getImplementation(type);
+                if (impl != null) {
+                    assertSetters(new PropertyAccessor(impl, type), done);
+                }
+            }
+        }
+    }
+

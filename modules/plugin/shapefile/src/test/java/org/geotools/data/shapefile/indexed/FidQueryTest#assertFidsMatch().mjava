@@ -1,0 +1,68 @@
+/*
+    public void testFIDBBoxQuery() throws Exception {
+        SimpleFeatureIterator features = featureStore.getFeatures().features();
+        SimpleFeature feature;
+        try {
+            feature = features.next();
+            feature = features.next();
+            feature = features.next();
+        } finally {
+            if (features != null)
+                features.close();
+        }
+        // FilterFactory factory = FilterFactoryFinder.createFilterFactory();
+        // BBoxExpression bb =
+        // factory.createBBoxExpression(feature.getBounds());
+        //
+        // GeometryFilter bboxFilter =
+        // factory.createGeometryFilter(FilterType.GEOMETRY_INTERSECTS);
+        // bboxFilter.addRightGeometry(bb);
+        //
+        // String geom = ds.getSchema().getDefaultGeometry().getLocalName();
+        //
+        // bboxFilter.addLeftGeometry(factory.createAttributeExpression(geom));
+
+        FilterFactory2 ff = CommonFactoryFinder.getFilterFactory2(null);
+        BBOX bbox = ff.bbox(ff.property(""), feature.getBounds());
+
+        features = featureStore.getFeatures(bbox).features();
+
+        try {
+            while (features.hasNext()) {
+                SimpleFeature newFeature = features.next();
+                assertEquals(newFeature, fids.get(newFeature.getID()));
+            }
+        } finally {
+            if (features != null)
+                features.close();
+        }
+    }
+*/
+    private void assertFidsMatch() throws IOException {
+        // long start = System.currentTimeMillis();
+        DefaultQuery query = new DefaultQuery(featureStore.getSchema()
+                .getTypeName());
+
+        int i = 0;
+
+        for (Iterator iter = fids.entrySet().iterator(); iter.hasNext();) {
+            i++;
+            Map.Entry entry = (Map.Entry) iter.next();
+            String fid = (String) entry.getKey();
+            FeatureId id = fac.featureId(fid);
+            Filter filter = fac.id(Collections.singleton(id));
+            query.setFilter(filter);
+            SimpleFeatureIterator features = featureStore.getFeatures(query)
+                    .features();
+            try {
+                SimpleFeature feature = features.next();
+                assertFalse(features.hasNext());
+                assertEquals(i + "th feature", entry.getValue(), feature);
+            } finally {
+                if (features != null)
+                    features.close();
+            }
+
+        }
+    }
+

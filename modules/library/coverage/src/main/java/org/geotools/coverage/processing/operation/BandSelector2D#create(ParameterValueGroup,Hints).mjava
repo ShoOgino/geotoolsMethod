@@ -1,0 +1,150 @@
+    /**
+     * Applies the band select operation to a grid coverage.
+     *
+     * @param  parameters List of name value pairs for the parameters.
+     * @param  A set of rendering hints, or {@code null} if none.
+     * @return The result as a grid coverage.
+     */
+    static GridCoverage2D create(final ParameterValueGroup parameters, Hints hints) {
+        /*
+         * Fetch all parameters, clone them if needed. The "VisibleSampleDimension" parameter is
+         * Geotools-specific and optional. We get it as an Integer both for catching null value,
+         * and also because it is going to be stored as an image's property anyway.
+         */
+        GridCoverage2D source = (GridCoverage2D) parameters.parameter("Source").getValue();
+        int[] bandIndices = parameters.parameter("SampleDimensions").intValueList();
+        if (bandIndices != null) {
+            bandIndices = bandIndices.clone();
+        }
+        Integer visibleBand = (Integer) parameters.parameter("VisibleSampleDimension").getValue();
+        /*
+         * Prepares the informations needed for JAI's "BandSelect" operation. The loop below
+         * should be executed only once, except if the source grid coverage is itself an instance
+         * of an other BandSelect2D object, in which case the sources will be extracted
+         * recursively until a non-BandSelect2D object is found.
+         */
+        int visibleSourceBand;
+        int visibleTargetBand;
+        GridSampleDimension[] sourceBands;
+        GridSampleDimension[] targetBands;
+        RenderedImage sourceImage;
+        while (true) {
+            sourceBands = source.getSampleDimensions();
+            targetBands = sourceBands;
+            /*
+             * Constructs an array of target bands.  If the 'bandIndices' parameter contains
+             * only "identity" indices (0, 1, 2...), then we will work as if no band indices
+             * were provided. It will allow us to use the "Null" operation rather than
+             * "BandSelect", which make it possible to avoid to copy raster data.
+             */
+            if (bandIndices != null) {
+                if (bandIndices.length != sourceBands.length || !isIdentity(bandIndices)) {
+                    targetBands = new GridSampleDimension[bandIndices.length];
+                    for (int i=0; i<bandIndices.length; i++) {
+                        targetBands[i] = sourceBands[bandIndices[i]];
+                    }
+                } else {
+                    bandIndices = null;
+                }
+            }
+            sourceImage       = source.getRenderedImage();
+            visibleSourceBand = CoverageUtilities.getVisibleBand(sourceImage);
+            if (visibleBand != null) {
+                visibleTargetBand = mapSourceToTarget(visibleBand.intValue(), bandIndices);
+                if (visibleSourceBand < 0) {
+                    // TODO: localize
+                    throw new IllegalArgumentException("Visible sample dimension is " +
+                    		"not among the ones specified in SampleDimensions param");
+                }
+            } else {
+                // Try to keep the original one, if it hasn't been selected, fall
+                // back on the first selected band.
+                visibleTargetBand = mapSourceToTarget(visibleSourceBand, bandIndices);
+                if (visibleTargetBand < 0) {
+                    visibleTargetBand = 0;
+                }
+            }
+            if (bandIndices == null && visibleSourceBand == visibleTargetBand) {
+                return source;
+            }
+            if (!(source instanceof BandSelector2D)) {
+                break;
+            }
+            /*
+             * If the source coverage was the result of an other "BandSelect" operation, go up
+             * the chain and checks if an existing GridCoverage could fit. We do that in order
+             * to avoid to create new GridCoverage everytime the user is switching the visible
+             * band. For example we could change the visible band from 0 to 1, and then come
+             * back to 0 later.
+             */
+            final int[] parentIndices = ((BandSelector2D) source).bandIndices;
+            if (parentIndices != null) {
+                if (bandIndices != null) {
+                    for (int i=0; i<bandIndices.length; i++) {
+                        bandIndices[i] = parentIndices[bandIndices[i]];
+                    }
+                } else {
+                    bandIndices = parentIndices.clone();
+                }
+            }
+            assert source.getSources().size() == 1 : source;
+            source = (GridCoverage2D) source.getSources().get(0);
+        }
+        /*
+         * All required information are now know. Creates the GridCoverage resulting from the
+         * operation. A color model will be defined only if the user didn't specify an explicit
+         * one.
+         */
+        String operation = "Null";
+        ImageLayout layout = null;
+        if (hints != null) {
+            layout = (ImageLayout) hints.get(JAI.KEY_IMAGE_LAYOUT);
+        }
+        if (layout == null) {
+            layout = new ImageLayout();
+        }
+        if (visibleBand!=null || !layout.isValid(ImageLayout.COLOR_MODEL_MASK)) {
+            ColorModel colors = sourceImage.getColorModel();
+            if (colors instanceof IndexColorModel &&
+                sourceBands[visibleSourceBand].equals(targetBands[visibleTargetBand]))
+            {
+                /*
+                 * If the source color model was an instance of  IndexColorModel,  reuse
+                 * its color mapping. It may not matches the category colors if the user
+                 * provided its own color model. We are better to use what the user said.
+                 */
+                final IndexColorModel indexed = (IndexColorModel) colors;
+                final int[] ARGB = new int[indexed.getMapSize()];
+                indexed.getRGBs(ARGB);
+                colors = ColorUtilities.getIndexColorModel(ARGB, targetBands.length, visibleTargetBand);
+            } else {
+                colors = targetBands[visibleTargetBand]
+                      .getColorModel(visibleTargetBand, targetBands.length);
+            }
+            /*
+             * If we are not able to provide a color model because our sample dimensions
+             * are very simple, let's JAI do its magic and figure out the best one for us.
+             */
+            if (colors != null) {
+                layout.setColorModel(colors);
+            }
+            if (hints != null) {
+                hints = hints.clone();
+                hints.put(JAI.KEY_IMAGE_LAYOUT, layout);
+            } else {
+                hints = new Hints(JAI.KEY_IMAGE_LAYOUT, layout);
+            }
+        }
+        if (visibleBand == null) {
+            visibleBand = visibleTargetBand;
+        }
+        ParameterBlock params = new ParameterBlock().addSource(sourceImage);
+        if (targetBands != sourceBands) {
+            operation = "BandSelect";
+            params = params.add(bandIndices);
+        }
+        final PlanarImage image = OperationJAI.getJAI(hints).createNS(operation, params, hints);
+        image.setProperty("GC_VisibleBand", visibleBand);
+        return new BandSelector2D(source, image, targetBands, bandIndices, hints);
+    }
+

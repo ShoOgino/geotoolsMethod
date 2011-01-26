@@ -1,0 +1,78 @@
+    /**
+     * Constructor - creates an instance of JMapPane with the given
+     * renderer and map context.
+     *
+     * @param renderer a renderer object
+     * @param context an instance of MapContext
+     */
+    public JMapPane(GTRenderer renderer, MapContext context) {
+        imageOrigin = new Point(0, 0);
+
+        acceptRepaintRequests = true;
+        needNewBaseImage = true;
+        redrawBaseImage = true;
+        baseImageMoved = false;
+        clearLabelCache = false;
+
+        /*
+         * We use a Timer object to avoid rendering delays and
+         * flickering when the user is drag-resizing the parent
+         * container of this map pane.
+         *
+         * Using a ComponentListener doesn't work because, unlike
+         * a JFrame, the pane receives a stream of events during
+         * drag-resizing.
+         */
+        resizingPaintDelay = DEFAULT_RESIZING_PAINT_DELAY;
+        resizeTimer = new Timer(resizingPaintDelay, new ActionListener() {
+
+            public void actionPerformed(ActionEvent e) {
+                onResizingCompleted();
+            }
+        });
+        resizeTimer.setRepeats(false);
+
+        setRenderer(renderer);
+        setMapContext(context);
+
+        renderingExecutor = new RenderingExecutor(this);
+
+        toolManager = new MapToolManager(this);
+
+        dragBox = new DragBox();
+        this.addMouseListener(dragBox);
+        this.addMouseMotionListener(dragBox);
+
+        this.addMouseListener(toolManager);
+        this.addMouseMotionListener(toolManager);
+        this.addMouseWheelListener(toolManager);
+
+        /*
+         * Listen for mouse entered events to (re-)set the
+         * current tool cursor, otherwise the cursor seems to
+         * default to the standard cursor sometimes (at least
+         * on OSX)
+         */
+        this.addMouseListener(new MouseInputAdapter() {
+
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                super.mouseEntered(e);
+                CursorTool tool = toolManager.getCursorTool();
+                if (tool != null) {
+                    JMapPane.this.setCursor(tool.getCursor());
+                }
+            }
+        });
+
+        addComponentListener(new ComponentAdapter() {
+
+            @Override
+            public void componentResized(ComponentEvent ev) {
+                acceptRepaintRequests = false;
+                renderingExecutor.cancelTask();
+                resizeTimer.restart();
+            }
+        });
+    }
+

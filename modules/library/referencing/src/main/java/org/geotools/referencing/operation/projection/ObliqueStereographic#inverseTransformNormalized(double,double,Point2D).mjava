@@ -1,0 +1,52 @@
+    /**
+     * Transforms the specified (<var>x</var>,<var>y</var>) coordinates
+     * and stores the result in {@code ptDst}.
+     */
+    @Override
+    protected Point2D inverseTransformNormalized(double x, double y, Point2D ptDst)
+            throws ProjectionException
+    {
+        // Compute using USGS formulas, for comparaison later.
+        assert (ptDst = super.inverseTransformNormalized(x, y, ptDst)) != null;
+        final double rho = hypot(x, y);
+        if (abs(rho) < EPSILON) {
+            x = 0.0;
+            y = phic0;
+        } else {
+            final double ce   = 2.0 * atan2(rho, R2);
+            final double sinc = sin(ce);
+            final double cosc = cos(ce);
+            x = atan2(x * sinc, rho * cosc0 * cosc - y * sinc0 * sinc);
+            y = (cosc * sinc0) + (y * sinc * cosc0 / rho);
+
+            if (abs(y) >= 1.0) {
+                y = (y < 0.0) ? -PI/2.0 : PI/2.0;
+            } else {
+                y = asin(y);
+            }
+        }
+        // Begin pj_inv_gauss(...) method inlined
+        x /= C;
+        double num = pow(tan(0.5 * y + PI/4)/K, 1.0/C);
+        for (int i=MAXIMUM_ITERATIONS;;) {
+            double phi = 2.0 * atan(num * srat(excentricity * sin(y), -0.5 * excentricity)) - PI/2;
+            if (abs(phi - y) < ITERATION_TOLERANCE) {
+                break;
+            }
+            y = phi;
+            if (--i < 0) {
+                throw new ProjectionException(ErrorKeys.NO_CONVERGENCE);
+            }
+        }
+        // End pj_inv_gauss(...) method inlined
+
+        // TODO: the tolerance in the following assertion is quite large for
+        //       an angle in radians. We should check if this is normal.
+        assert checkInverseTransform(x, y, ptDst, 0.01);
+        if (ptDst != null) {
+            ptDst.setLocation(x,y);
+            return ptDst;
+        }
+        return new Point2D.Double(x,y);
+    }
+

@@ -1,0 +1,53 @@
+    /**
+     * Prints a list of codes that duplicate the ones provided by {@link ThreadedEpsgFactory}.
+     * This is used for implementation of {@linkplain #main main method} in order to check
+     * the content of the {@value #FILENAME} file (or whatever property file used as backing
+     * store for this factory) from the command line.
+     *
+     * @param  out The writer where to print the report.
+     * @return The set of duplicated codes.
+     * @throws FactoryException if an error occured.
+     *
+     * @since 2.4
+     */
+    protected Set reportDuplicatedCodes(final PrintWriter out) throws FactoryException {
+        final AbstractAuthorityFactory sqlFactory = getFactory(ThreadedEpsgFactory.class);
+        final Vocabulary resources = Vocabulary.getResources(null);
+        out.println(resources.getLabel(VocabularyKeys.COMPARE_WITH));
+        try {
+            final IndentedLineWriter w = new IndentedLineWriter(out);
+            w.setIndentation(4);
+            w.write(sqlFactory.getBackingStoreDescription());
+            w.flush();
+        } catch (IOException e) {
+            // Should never happen, since we are writting to a PrintWriter.
+            throw new AssertionError(e);
+        }
+        out.println();
+        final Set<String> wktCodes   = this.      getAuthorityCodes(IdentifiedObject.class);
+        final Set<String> sqlCodes   = sqlFactory.getAuthorityCodes(IdentifiedObject.class);
+        final Set<String> duplicated = new TreeSet<String>();
+        for (String code : wktCodes) {
+            code = code.trim();
+            if (sqlCodes.contains(code)) {
+                duplicated.add(code);
+                /*
+                 * Note: we don't use wktCodes.retainsAll(sqlCode) because the Set implementations
+                 *       are usually not the standard ones, but rather some implementations backed
+                 *       by a connection to the resources of the underlying factory. We also close
+                 *       the connection after this loop for the same reason.  In addition, we take
+                 *       this opportunity for sorting the codes.
+                 */
+            }
+        }
+        if (duplicated.isEmpty()) {
+            out.println(resources.getString(VocabularyKeys.NO_DUPLICATION_FOUND));
+        } else {
+            for (final String code : duplicated) {
+                out.print(resources.getLabel(VocabularyKeys.DUPLICATED_VALUE));
+                out.println(code);
+            }
+        }
+        return duplicated;
+    }
+

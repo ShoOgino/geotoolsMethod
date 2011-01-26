@@ -1,0 +1,50 @@
+    /**
+     * Loads data from the specified streal until the first blank line or end of stream.
+     *
+     * @param  in The stream to read.
+     * @param  locale The locale for the numbers to be parsed.
+     * @return The matrix parsed from the stream.
+     * @throws IOException if an error occured while reading the stream.
+     *
+     * @since 2.2
+     */
+    public static GeneralMatrix load(final BufferedReader in, final Locale locale)
+            throws IOException
+    {
+        final LineFormat parser = new LineFormat(locale);
+        double[] data = null;
+        double[] row  = null;
+        int   numRow  = 0;
+        int   numData = 0;
+        String line;
+        while ((line=in.readLine()) != null) {
+            if ((line=line.trim()).length() == 0) {
+                if (numRow == 0) {
+                    continue;
+                } else {
+                    break;
+                }
+            }
+            try {
+                parser.setLine(line);
+                row = parser.getValues(row);
+            } catch (ParseException exception) {
+                throw new ContentFormatException(exception.getLocalizedMessage(), exception);
+            }
+            final int upper = numData + row.length;
+            if (data == null) {
+                // Assumes a square matrix.
+                data = new double[numData * numData];
+            }
+            if (upper > data.length) {
+                data = XArray.resize(data, upper*2);
+            }
+            System.arraycopy(row, 0, data, numData, row.length);
+            numData = upper;
+            numRow++;
+            assert numData % numRow == 0 : numData;
+        }
+        data = (data!=null) ? XArray.resize(data, numData) : new double[0];
+        return new GeneralMatrix(numRow, numData/numRow, data);
+    }
+

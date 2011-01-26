@@ -1,0 +1,36 @@
+    /**
+     * Submit a new rendering task. If no rendering task is presently running
+     * this new task will be accepted; otherwise it will be rejected (ie. there
+     * is no task queue).
+     *
+     * @param envelope the map area (world coordinates) to be rendered
+     * @param graphics the graphics object to draw on
+     *
+     * @return true if the rendering task was accepted; false if it was
+     *         rejected
+     */
+    public synchronized boolean submit(ReferencedEnvelope envelope, Rectangle paintArea, Graphics2D graphics) {
+        if (!isRunning() || cancelLatch.getCount() > 0) {
+            try {
+                // wait for any cancelled task to finish its shutdown
+                cancelLatch.await();
+            } catch (InterruptedException ex) {
+                return false;
+            }
+
+            task = new Task(envelope, paintArea, graphics);
+            taskRunning.set(true);
+            taskResult = taskExecutor.submit(task);
+            watcher = watchExecutor.scheduleAtFixedRate(new Runnable() {
+
+                public void run() {
+                    pollTaskResult();
+                }
+            }, DEFAULT_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL, TimeUnit.MILLISECONDS);
+
+            return true;
+        }
+
+        return false;
+    }
+

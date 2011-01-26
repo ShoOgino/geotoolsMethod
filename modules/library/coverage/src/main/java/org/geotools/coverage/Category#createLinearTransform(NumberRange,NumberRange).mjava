@@ -1,0 +1,57 @@
+    /**
+     * Creates a linear transform mapping values from {@code sampleValueRange}
+     * to {@code geophysicsValueRange}.
+     */
+    private static MathTransform1D createLinearTransform(final NumberRange sampleValueRange,
+                                                         final NumberRange geophysicsValueRange)
+    {
+        final Class<?> sType =     sampleValueRange.getElementClass();
+        final Class<?> gType = geophysicsValueRange.getElementClass();
+        /*
+         * First, find the direction of the adjustment to apply to the ranges if we wanted
+         * all values to be inclusives. Then, check if the adjustment is really needed: if
+         * the values of both ranges are inclusive or exclusive, then there is no need for
+         * an adjustment before computing the coefficient of a linear relation.
+         */
+        int sMinInc =     sampleValueRange.isMinIncluded() ? 0 : +1;
+        int sMaxInc =     sampleValueRange.isMaxIncluded() ? 0 : -1;
+        int gMinInc = geophysicsValueRange.isMinIncluded() ? 0 : +1;
+        int gMaxInc = geophysicsValueRange.isMaxIncluded() ? 0 : -1;
+        if (sMinInc == gMinInc) sMinInc = gMinInc = 0;
+        if (sMaxInc == gMaxInc) sMaxInc = gMaxInc = 0;
+        /*
+         * If the minimal geophysics value is exclusive while the minimal sample value is inclusive,
+         * prepares to substract 1 to the sample value in order to make it exclusive (so that sample
+         * and geophysics values have the same "exclusive" state).  Do similar processing on maximal
+         * values as well.  Note: the change is usually applied on sample values, but may be applied
+         * on geophysics values instead if sample are floats or geophysics values are integers.
+         */
+        final boolean adjustSamples = (Classes.isInteger(sType) && !Classes.isInteger(gType));
+        if ((adjustSamples ? gMinInc : sMinInc) != 0) {
+            int swap = sMinInc;
+            sMinInc = -gMinInc;
+            gMinInc = -swap;
+        }
+        if ((adjustSamples ? gMaxInc : sMaxInc) != 0) {
+            int swap = sMaxInc;
+            sMaxInc = -gMaxInc;
+            gMaxInc = -swap;
+        }
+        /*
+         * Now, extracts the minimal and maximal values and computes the linear coefficients.
+         */
+        final double minSample = doubleValue(sType,     sampleValueRange.getMinValue(), sMinInc);
+        final double maxSample = doubleValue(sType,     sampleValueRange.getMaxValue(), sMaxInc);
+        final double minValue  = doubleValue(gType, geophysicsValueRange.getMinValue(), gMinInc);
+        final double maxValue  = doubleValue(gType, geophysicsValueRange.getMaxValue(), gMaxInc);
+        double scale = (maxValue-minValue) / (maxSample-minSample);
+        if (Double.isNaN(scale) &&
+           !Double.isNaN(maxValue  - minValue) &&
+           !Double.isNaN(maxSample - minSample))
+        {
+            scale = 1.0;
+        }
+        final double offset = minValue - scale*minSample;
+        return createLinearTransform(scale, offset);
+    }
+

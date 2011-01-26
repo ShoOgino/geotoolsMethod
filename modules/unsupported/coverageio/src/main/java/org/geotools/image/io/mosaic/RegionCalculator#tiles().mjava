@@ -1,0 +1,151 @@
+    /**
+     * Returns the tiles. Keys are grid geometry (containing image bounds and <cite>grid to
+     * coordinate reference system</cite> transforms) and values are the tiles. This method
+     * usually returns a singleton map, but more entries may be present if this method was
+     * not able to build a single pyramid using all provided tiles.
+     * <p>
+     * <strong>Invoking this method flush the collection</strong>. On return, this instance
+     * is in the same state as if {@link #clear} has been invoked. This is because current
+     * implementation modify its workspace directly for efficiency.
+     */
+    public Map<ImageGeometry,Tile[]> tiles() {
+        final Map<ImageGeometry,Tile[]> results = new HashMap<ImageGeometry,Tile[]>(4);
+        for (final Map<AffineTransform,Dimension> tilesAT : computePyramidLevels(tiles.keySet())) {
+            /*
+             * Picks an affine transform to be used as the reference one. We need the finest one.
+             * If more than one have the finest resolution, the exact choice does not matter much.
+             * But we will save a little bit of CPU if we pickup the one that will lead to a (0,0)
+             * translation at the end of this method.
+             */
+            AffineTransform reference = null;
+            double xMin  = Double.POSITIVE_INFINITY;
+            double xLead = Double.POSITIVE_INFINITY; // Minimum on the first row only.
+            double yMin  = Double.POSITIVE_INFINITY;
+            double scale = Double.POSITIVE_INFINITY;
+            for (final AffineTransform tr : tilesAT.keySet()) {
+                final double s = XAffineTransform.getScale(tr);
+                double y = tr.getTranslateY(); if (tr.getScaleY() < 0 || tr.getShearY() < 0) y = -y;
+                double x = tr.getTranslateX(); if (tr.getScaleX() < 0 || tr.getShearX() < 0) x = -x;
+                if (!(Math.abs(s - scale) <= EPS)) {
+                    if (!(s < scale)) continue;  // '!' is for catching NaN.
+                    scale = s; // Found a smaller scale.
+                    yMin = y;
+                    xMin = x;
+                } else { // Found a transform with the same scale.
+                    if (x < xMin) xMin = x;
+                    if (!(Math.abs(y - yMin) <= EPS)) {
+                        if (!(y < yMin)) continue;
+                        yMin = y; // Found a smaller y.
+                    } else if (!(x < xLead)) continue;
+                }
+                xLead = x;
+                reference = tr;
+            }
+            /*
+             * If there is missing tiles at the begining of the first row, then the x location
+             * of the first tile is greater than the "true" minimum. We will need to adjust.
+             */
+            if (reference == null) {
+                continue;
+            }
+            xLead -= xMin;
+            if (xLead > EPS) {
+                final double[] matrix = new double[6];
+                reference.getMatrix(matrix);
+                matrix[4] -= xLead;
+                reference = new AffineTransform(matrix);
+            } else {
+                reference = new AffineTransform(reference); // Protects from upcomming changes.
+            }
+            /*
+             * Transforms the image bounding box from its own space to the reference space. If
+             * 'computePyramidLevels' did its job correctly, the transform should contains only
+             * a scale and translation - no shear (we don't put assertions because of rounding
+             * errors). In such particular case, transforming a Rectangle2D is accurate. We
+             * round (we do not clip as in the default Rectangle implementation) because we
+             * really expect integer results.
+             */
+            final AffineTransform toGrid;
+            try {
+                toGrid = reference.createInverse();
+            } catch (NoninvertibleTransformException e) {
+                throw new IllegalStateException(e);
+            }
+            int index = 0;
+            Rectangle groupBounds = null;
+            final Rectangle2D.Double envelope = new Rectangle2D.Double();
+            final Tile[] tilesArray = new Tile[tilesAT.size()];
+            for (final Map.Entry<AffineTransform,Dimension> entry : tilesAT.entrySet()) {
+                final AffineTransform tr = entry.getKey();
+                Tile tile = tiles.remove(tr); // Should never be null.
+                tr.preConcatenate(toGrid);
+                /*
+                 * Computes the transformed bounds. If we fail to obtain it, there is probably
+                 * something wrong with the tile (typically a wrong filename) but this is not
+                 * fatal to this method. In such case, we will transform only the location instead
+                 * of the full box, which sometime imply a lost of accuracy but not always. Note
+                 * that the user is likely to obtains the same exception if the MosaicImageReader
+                 * attempts to read the same tile (but as long as it doesn't, it may work).
+                 */
+                Rectangle bounds;
+                synchronized (tile) {
+                    tile.setSubsampling(entry.getValue());
+                    try {
+                        bounds = tile.getRegion();
+                    } catch (IOException exception) {
+                        bounds = null;
+                        Logging.unexpectedException(RegionCalculator.class, "tiles", exception);
+                    }
+                    if (bounds != null) {
+                        XAffineTransform.transform(tr, bounds, envelope);
+                        bounds.x      = (int) Math.round(envelope.x);
+                        bounds.y      = (int) Math.round(envelope.y);
+                        bounds.width  = (int) Math.round(envelope.width);
+                        bounds.height = (int) Math.round(envelope.height);
+                    } else {
+                        final Point location = tile.getLocation();
+                        tr.transform(location, location);
+                        bounds = new Rectangle(location.x, location.y, 0, 0);
+                    }
+                    tile.setAbsoluteRegion(bounds);
+                }
+                if (groupBounds == null) {
+                    groupBounds = bounds;
+                } else {
+                    groupBounds.add(bounds);
+                }
+                tilesArray[index++] = tile;
+            }
+            tilesAT.clear(); // Lets GC do its work.
+            /*
+             * Translates the tiles in such a way that the upper-left corner has the coordinates
+             * specified by (xLocation, yLocation). Adjusts the tile affine transform concequently.
+             * After this block, tiles having the same subsampling will share the same immutable
+             * affine transform instance.
+             */
+            if (groupBounds != null) {
+                final int dx = xLocation - groupBounds.x;
+                final int dy = yLocation - groupBounds.y;
+                if (dx != 0 || dy != 0) {
+                    reference.translate(-dx, -dy);
+                    groupBounds.translate(dx, dy);
+                }
+                final ImageGeometry geometry = new ImageGeometry(groupBounds, reference);
+                reference = geometry.getGridToCRS(); // Fetchs the immutable instance.
+                final Map<Dimension,TranslatedTransform> pool =
+                        new HashMap<Dimension,TranslatedTransform>();
+                for (final Tile tile : tilesArray) {
+                    final Dimension subsampling = tile.getSubsampling();
+                    TranslatedTransform translated = pool.get(subsampling);
+                    if (translated == null) {
+                        translated = new TranslatedTransform(subsampling, reference, dx, dy);
+                        pool.put(subsampling, translated);
+                    }
+                    translated.applyTo(tile);
+                }
+                results.put(geometry, tilesArray);
+            }
+        }
+        return results;
+    }
+

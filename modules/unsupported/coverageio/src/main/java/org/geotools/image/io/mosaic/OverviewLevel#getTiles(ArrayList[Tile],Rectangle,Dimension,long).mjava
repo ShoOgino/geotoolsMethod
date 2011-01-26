@@ -1,0 +1,95 @@
+    /**
+     * Adds to the given list every tiles that intersect the given region. This is
+     * caller responsability to ensure that this level uses the subsampling of interest.
+     *
+     * @param  addTo The list where to add the tiles.
+     * @param  search The region of interest in absolute coordinates.
+     * @param  subsampling The subsampling to apply on the tiles to be read.
+     *         Used for cost calculation.
+     * @param  costLimit If reading the returned tiles would have a cost equals or higher
+     *         than the given number, stop the search and returns {@code null}.
+     * @return The cost of reading the tiles, or {@code -1} if the cost limit has been reached
+     *         (in which case no tiles has been added to the list).
+     * @throws IOException if an error occured while creating the URL for the tiles.
+     */
+    final long getTiles(final ArrayList<Tile> addTo, final Rectangle search,
+            final Dimension subsampling, final long costLimit) throws IOException
+    {
+        final Rectangle atr = toTileIndex(search);
+        final int xmin = atr.x;
+        final int ymin = atr.y;
+        final int xmax = atr.width  + xmin;
+        final int ymax = atr.height + ymin;
+        /*
+         * Recycles the rectangle created by toTileIndex. The "atr" name stands for "Absolute
+         * Tile Region". Width and height will not change anymore. X and y will be set later.
+         */
+        atr.width  = dx * xSubsampling;
+        atr.height = dy * ySubsampling;
+        final int size = addTo.size();
+        if (size == 0) {
+            final int n = (xmax - xmin) * (ymax - ymin);
+            addTo.ensureCapacity(n);
+        }
+        /*
+         * Creates the destination array with a capacity equals to the maximal number of tiles
+         * expected at this level. The array may not be filled completly if the iteration gets
+         * some null tiles. The array way also expand belong the expected "maximal" size if we
+         * put tiles from finer levels into the mix (as the loop below may do).
+         */
+        long totalCost = 0;
+        for (int y=ymin; y<ymax; y++) {
+nextTile:   for (int x=xmin; x<xmax; x++) {
+                final Tile tile = getTile(x, y);
+                if (tile == null) {
+                    continue;
+                }
+                /*
+                 * We have found a tile to add to the list. Before doing so, computes the cost
+                 * of reading this tile and checks if reading a tile at a finer level would be
+                 * cheaper.
+                 */
+                final long cost = tile.countUnwantedPixelsFromAbsolute(search, subsampling);
+                if (cost != 0) {
+                    totalCost += cost;
+                    if (totalCost >= costLimit) {
+                        /*
+                         * The new tile increases the cost above the limit. Forget the tiles found
+                         * so far and cancel the search. Note that it is theorically possible that
+                         * the search in finer levels (code below) finds cheaper tiles which would
+                         * have allowed us to stay below the cost limit. We could have enabled this
+                         * case by performing this check at the end of the loop rather than now.
+                         * However doing so implies that every levels are tested recursively down
+                         * to the finest level. We have more to gain by stopping this method early
+                         * instead.
+                         */
+                        addTo.subList(size, addTo.size()).clear();
+                        return -1;
+                    }
+                    atr.x = atr.width  * x;
+                    atr.y = atr.height * y;
+                    assert atr.equals(tile.getAbsoluteRegion()) ||
+                            !tile.getClass().equals(Tile.class) : atr;
+                    OverviewLevel previous = this;
+                    while ((previous = previous.getFinerLevel()) != null) {
+                        if (!previous.isAbsoluteTilesRegion(atr)) {
+                            continue;
+                        }
+                        final Rectangle clipped = atr.intersection(search);
+                        final long c = previous.getTiles(addTo, clipped, subsampling, cost);
+                        if (c >= 0) {
+                            // Tiles at the finer level are cheaper than the current tiles. So keep
+                            // them (they have been added to the 'addTo' array) and discart 'tile'.
+                            totalCost += (c - cost);
+                            continue nextTile;
+                        }
+                        break;
+                    }
+                }
+                addTo.add(tile);
+            }
+        }
+        assert (addTo.size() > size) == intersects(search);
+        return totalCost;
+    }
+

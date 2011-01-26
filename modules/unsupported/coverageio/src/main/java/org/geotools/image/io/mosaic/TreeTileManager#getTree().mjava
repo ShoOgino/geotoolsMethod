@@ -1,0 +1,31 @@
+    /**
+     * Returns the RTree, creating it if necessary. Calls to this method must be followed by a
+     * {@code try ... finally} block with call to {@link #release} in the {@code finally} block.
+     */
+    private synchronized RTree getTree() throws IOException {
+        if (trees == null) {
+            final TreeNode root  = new GridNode(tiles);
+            final RTree    tree  = new RTree(root);
+            final RTree[]  trees = new RTree[CONCURRENT_THREADS];
+            trees[0] = tree;
+            assert root.containsAll(allTiles);
+            this.trees = trees; // Save last so it is saved only on success.
+        }
+        /*
+         * Returns the first instance available for use,
+         * creating a new one if we hit an empty slot.
+         */
+        for (int i=0; i<trees.length; i++) {
+            RTree tree = trees[i];
+            if (tree == null) {
+                trees[i] = tree = trees[0].clone();
+            } else if (tree.inUse) {
+                continue;
+            }
+            tree.inUse = true;
+            return tree;
+        }
+        // Every instances are in use. Returns a clone to be discarted after usage.
+        return trees[0].clone();
+    }
+

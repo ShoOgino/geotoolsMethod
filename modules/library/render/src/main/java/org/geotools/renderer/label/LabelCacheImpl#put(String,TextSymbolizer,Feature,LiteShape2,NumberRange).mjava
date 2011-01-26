@@ -1,0 +1,66 @@
+    /**
+     * @see org.geotools.renderer.lite.LabelCache#put(org.geotools.renderer.style.TextStyle2D,
+     *      org.geotools.renderer.lite.LiteShape)
+     */
+    public void put(String layerId, TextSymbolizer symbolizer, Feature feature,
+            LiteShape2 shape, NumberRange scaleRange) {
+        needsOrdering = true;
+        try {
+            // get label and geometry
+            if(symbolizer.getLabel() == null) {
+                return;
+            }
+            
+            String label = (String) symbolizer.getLabel().evaluate(feature, String.class);
+
+            if (label == null)
+                return;
+
+            if (label.length() == 0) {
+                return; // dont label something with nothing!
+            }
+            double priorityValue = getPriority(symbolizer, feature);
+            boolean group = getBooleanOption(symbolizer, TextSymbolizer.GROUP_KEY, false);
+            if (!(group)) {
+                LabelCacheItem item = buildLabelCacheItem(layerId, symbolizer, feature, shape,
+                        scaleRange, label, priorityValue);
+                labelCacheNonGrouped.add(item);
+            } else { // / --------- grouping case ----------------
+
+                // equals and hashcode of LabelCacheItem is the hashcode of
+                // label and the
+                // equals of the 2 labels so label can be used to find the
+                // entry.
+
+                // DJB: this is where the "grouping" of 'same label' features
+                // occurs
+                LabelCacheItem lci = (LabelCacheItem) labelCache.get(label);
+                if (lci == null) // nothing in there yet!
+                {
+                    lci = buildLabelCacheItem(layerId, symbolizer, feature, shape, scaleRange,
+                            label, priorityValue);
+                    labelCache.put(label, lci);
+                } else {
+                    // add only in the non-default case or non-literal. Ie.
+                    // area()
+                    if ((symbolizer.getPriority() != null)
+                            && (!(symbolizer.getPriority() instanceof Literal)))
+                        lci.setPriority(lci.getPriority() + priorityValue); // djb--
+                    // changed
+                    // because
+                    // you
+                    // do
+                    // not
+                    // always
+                    // want
+                    // to
+                    // add!
+
+                    lci.getGeoms().add(shape.getGeometry());
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error adding label to the label cache", e);
+        }
+    }
+

@@ -1,0 +1,69 @@
+    /**
+     * This method invokes the OpenDataStoreFeatureReader class
+     * This method has been borrowed from
+     * https://svn.osgeo.org/geotools/trunk/modules/library/jdbc/src/main/java/org/geotools/jdbc/JDBCFeatureSource.java
+     * @param fnQuery
+     * @return FeatureReader
+     * @throws IOException
+     */
+    @Override
+    protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query fnQuery) throws IOException {
+        // simplify the filter
+        Filter filter = fnQuery.getFilter();
+        SimplifyingFilterVisitor simplifier = new SimplifyingFilterVisitor();
+        filter = (Filter) filter.accept(simplifier, null);
+        
+        // Split the filter into two parts, pre and post 
+        Filter[] split = splitFilter(filter);
+
+        Filter preFilter = split[0];
+        Filter postFilter = split[1];
+
+        /* Getting the preFilter part of the query*/
+        Query preQuery = new Query(fnQuery);
+        preQuery.setFilter(preFilter);
+
+        /* Check if the schema remains same of do we need to update it*/
+        SimpleFeatureType querySchema;
+        SimpleFeatureType returnedSchema;
+
+        if (query.getPropertyNames() == Query.ALL_NAMES) {
+
+            returnedSchema = querySchema = getSchema();
+
+        } else {
+
+            returnedSchema = SimpleFeatureTypeBuilder.retype(getSchema(), query.getPropertyNames());
+            FilterAttributeExtractor extractor = new FilterAttributeExtractor(getSchema());
+            postFilter.accept(extractor, null);
+            String[] extraAttributes = extractor.getAttributeNames();
+            if (extraAttributes == null || extraAttributes.length == 0) {
+                querySchema = returnedSchema;
+            } else {
+                List<String> allAttributes = new ArrayList<String>(Arrays.asList(query.getPropertyNames()));
+                for (String extraAttribute : extraAttributes) {
+                    if (!allAttributes.contains(extraAttribute)) {
+                        allAttributes.add(extraAttribute);
+                    }
+                }
+                String[] allAttributeArray = (String[]) allAttributes.toArray(new String[allAttributes.size()]);
+                querySchema = SimpleFeatureTypeBuilder.retype(getSchema(), allAttributeArray);
+            }
+        }
+
+        /* Get the reader*/
+        FeatureReader<SimpleFeatureType, SimpleFeature> reader;
+
+
+        /* Do the pre part first */
+        reader = new SFSFeatureReader(getState(), layer, preQuery, returnedSchema);
+
+        /* Finish off with Post Filtering*/
+        if (postFilter != null && postFilter != Filter.INCLUDE) {
+
+            reader = new FilteringFeatureReader<SimpleFeatureType, SimpleFeature>(reader, postFilter);
+        }
+
+        return reader;
+    }
+

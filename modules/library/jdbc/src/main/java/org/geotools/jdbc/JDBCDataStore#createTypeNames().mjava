@@ -1,0 +1,61 @@
+    /**
+     * Generates the list of type names provided by the database.
+     * <p>
+     * The list is generated from the underlying database metadata.
+     * </p>
+     */
+    protected List createTypeNames() throws IOException {
+        Connection cx = createConnection();
+
+        /*
+         *        <LI><B>TABLE_CAT</B> String => table catalog (may be <code>null</code>)
+         *        <LI><B>TABLE_SCHEM</B> String => table schema (may be <code>null</code>)
+         *        <LI><B>TABLE_NAME</B> String => table name
+         *        <LI><B>TABLE_TYPE</B> String => table type.  Typical types are "TABLE",
+         *                        "VIEW",        "SYSTEM TABLE", "GLOBAL TEMPORARY",
+         *                        "LOCAL TEMPORARY", "ALIAS", "SYNONYM".
+         *        <LI><B>REMARKS</B> String => explanatory comment on the table
+         *  <LI><B>TYPE_CAT</B> String => the types catalog (may be <code>null</code>)
+         *  <LI><B>TYPE_SCHEM</B> String => the types schema (may be <code>null</code>)
+         *  <LI><B>TYPE_NAME</B> String => type name (may be <code>null</code>)
+         *  <LI><B>SELF_REFERENCING_COL_NAME</B> String => name of the designated
+         *                  "identifier" column of a typed table (may be <code>null</code>)
+         *        <LI><B>REF_GENERATION</B> String => specifies how values in
+         *                  SELF_REFERENCING_COL_NAME are created. Values are
+         *                  "SYSTEM", "USER", "DERIVED". (may be <code>null</code>)
+         */
+        List typeNames = new ArrayList();
+
+        try {
+            DatabaseMetaData metaData = cx.getMetaData();
+            ResultSet tables = metaData.getTables(null, databaseSchema, "%",
+                    new String[] { "TABLE", "VIEW" });
+
+            try {
+                while (tables.next()) {
+                    String schemaName = tables.getString( "TABLE_SCHEM");
+                    String tableName = tables.getString("TABLE_NAME");
+
+                    //use the dialect to filter
+                    if (!dialect.includeTable(schemaName, tableName, cx)) {
+                        continue;
+                    }
+
+                    typeNames.add(new NameImpl(namespaceURI, tableName));
+                }
+            } finally {
+                closeSafe(tables);
+            }
+        } catch (SQLException e) {
+            throw (IOException) new IOException("Error occurred getting table name list.").initCause(e);
+        } finally {
+            closeSafe(cx);
+        }
+
+        
+        for(String virtualTable : virtualTables.keySet()) {
+            typeNames.add(new NameImpl(namespaceURI, virtualTable));
+        }
+        return typeNames;
+    }
+

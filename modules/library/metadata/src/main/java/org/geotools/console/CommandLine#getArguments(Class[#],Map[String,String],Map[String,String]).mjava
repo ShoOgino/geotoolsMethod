@@ -1,0 +1,40 @@
+    /**
+     * Gets the arguments for the given class. The arguments are added in the given set.
+     *
+     * @param classe    The class to parse for arguments.
+     * @param mantatory The set where to put mandatory arguments.
+     * @param optional  The set where to put optional arguments.
+     */
+    private void getArguments(final Class<?> classe,
+                              final Map<String,String> mandatory,
+                              final Map<String,String> optional) {
+        final Class<?> parent = classe.getSuperclass();
+        if (!CommandLine.class.equals(parent)) {
+            getArguments(parent, mandatory, optional);
+        }
+        for (final Field field : classe.getDeclaredFields()) {
+            final Option option = field.getAnnotation(Option.class);
+            if (option == null) {
+                continue;
+            }
+            String description = option.description().trim();
+            if (description.length() != 0) {
+                String name = option.name().trim();
+                if (name.length() == 0) {
+                    name = field.getName();
+                }
+                final Class<?> type = Classes.primitiveToWrapper(field.getType());
+                if (Number.class.isAssignableFrom(type)) {
+                    name = name + "=N";
+                } else if (!Boolean.class.isAssignableFrom(type)) {
+                    name = name + "=S";
+                }
+                if (option.mandatory()) {
+                    mandatory.put(name, description);
+                } else {
+                    optional.put(name, description);
+                }
+            }
+        }
+    }
+

@@ -1,0 +1,75 @@
+    public void visit(LikeFilter filter) throws UnsupportedOperationException {
+    	char esc = filter.getEscape().charAt(0);
+    	char multi = filter.getWildcardMulti().charAt(0);
+    	char single = filter.getWildcardSingle().charAt(0);
+        boolean matchCase = filter.isMatchingCase();
+    	String pattern = LikeFilterImpl.convertToSQL92(esc, multi, single, matchCase, 
+	        filter.getPattern());
+    	
+    	DefaultExpression att = (DefaultExpression) filter.getValue();
+    	
+    	try {
+    		out.write( " ( " );
+
+                if (!matchCase) {
+                    out.write("UPPER( ");
+                }
+
+	    	att.accept(this);
+
+                if (!matchCase) {
+                    out.write(" ) LIKE '"); 
+                } else { 
+                    out.write(" LIKE '");
+                }
+
+	    	out.write(pattern);
+	    	out.write("' ");	
+	    	
+	    	//JD: this is an ugly ugly hack!! hopefully when the new feature model is around we can 
+	    	// fix this
+	    	//check for context for a date
+	    	if ( att instanceof AttributeExpression && context != null 
+	    			&& java.util.Date.class.isAssignableFrom( context ) ) {
+	    		//if it is a date, add additional logic for a timestamp, or a timestamp with 
+	    		// timezone
+	    		out.write( " OR " );
+                        if (!matchCase) {
+                            out.write("UPPER( ");
+                        }
+                        
+                        att.accept( this );
+
+                        if (!matchCase) {
+                            out.write(" ) LIKE '"); 
+                        } else { 
+                            out.write(" LIKE '");
+                        }
+
+	    		out.write(pattern + " __:__:__'" );	//timestamp
+	    		
+	    		out.write( " OR " );
+                        if (!matchCase) {
+                            out.write("UPPER( ");
+                        }
+
+                        att.accept( this );
+
+                        if (!matchCase) {
+                            out.write(" ) LIKE '"); 
+                        } else { 
+                            out.write(" LIKE '");
+                        }
+
+	    		out.write(pattern + " __:__:_____'" );	//timestamp with time zone
+		    }
+	    	
+	    	out.write( " ) " );
+	    	
+    	} catch (java.io.IOException ioe) {
+            throw new RuntimeException(IO_ERROR, ioe);
+        }    	
+    	
+    	
+    }
+

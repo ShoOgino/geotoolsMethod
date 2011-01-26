@@ -1,0 +1,71 @@
+        private CoordinateReferenceSystem getCRS(Object source) {
+            CoordinateReferenceSystem crs = null;
+        if (source instanceof File
+                || (source instanceof URL && (((URL) source).getProtocol() == "file"))) {
+            // getting name for the prj file
+            final String sourceAsString;
+
+            if (source instanceof File) {
+                sourceAsString = ((File) source).getAbsolutePath();
+            } else {
+                String auth = ((URL) source).getAuthority();
+                String path = ((URL) source).getPath();
+                if (auth != null && !auth.equals("")) {
+                    sourceAsString = "//" + auth + path;
+                } else {
+                    sourceAsString = path;
+                }
+            }
+
+            final int index = sourceAsString.lastIndexOf(".");
+            final StringBuilder base = new StringBuilder(sourceAsString
+                    .substring(0, index)).append(".prj");
+
+            // does it exist?
+            final File prjFile = new File(base.toString());
+            if (prjFile.exists()) {
+                // it exists then we have top read it
+                PrjFileReader projReader = null;
+                FileInputStream instream=null;
+                try {
+                	instream=new FileInputStream(prjFile);
+                    final FileChannel channel = instream.getChannel();
+                    projReader = new PrjFileReader(channel);
+                    crs = projReader.getCoordinateReferenceSystem();
+                } catch (FileNotFoundException e) {
+                    // warn about the error but proceed, it is not fatal
+                    // we have at least the default crs to use
+                    LOGGER.log(Level.INFO, e.getLocalizedMessage(), e);
+                } catch (IOException e) {
+                    // warn about the error but proceed, it is not fatal
+                    // we have at least the default crs to use
+                    LOGGER.log(Level.INFO, e.getLocalizedMessage(), e);
+                } catch (FactoryException e) {
+                    // warn about the error but proceed, it is not fatal
+                    // we have at least the default crs to use
+                    LOGGER.log(Level.INFO, e.getLocalizedMessage(), e);
+                } finally {
+                    if (projReader != null)
+                        try {
+                            projReader.close();
+                        } catch (IOException e) {
+                            // warn about the error but proceed, it is not fatal
+                            // we have at least the default crs to use
+                            LOGGER .log(Level.FINE, e.getLocalizedMessage(),e);
+                        }
+                        
+                        if (instream != null)
+                            try {
+                                instream.close();
+                            } catch (IOException e) {
+                                // warn about the error but proceed, it is not fatal
+                                // we have at least the default crs to use
+                                LOGGER.log(Level.FINE, e.getLocalizedMessage(),e);
+                            }                        
+                }
+
+            }
+        }
+        return crs;
+    }
+

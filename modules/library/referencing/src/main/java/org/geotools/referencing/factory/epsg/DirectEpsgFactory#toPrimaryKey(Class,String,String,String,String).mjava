@@ -1,0 +1,63 @@
+    /**
+     * Converts a code from an arbitrary name to the numerical identifier (the primary key).
+     * If the supplied code is already a numerical value, then it is returned unchanged.
+     * If the code is not found in the name column, it is returned unchanged as well so that
+     * the caller will produces an appropriate "Code not found" error message. If the code
+     * is found more than once, then an exception is thrown.
+     * <p>
+     * Note that this method includes a call to {@link #trimAuthority}, so there is no need to
+     * call it before or after this method.
+     *
+     * @param  type       The type of object to create.
+     * @param  code       The code to check.
+     * @param  table      The table where the code should appears.
+     * @param  codeColumn The column name for the code.
+     * @param  nameColumn The column name for the name.
+     * @return The numerical identifier (i.e. the table primary key value).
+     * @throws SQLException if an error occured while reading the database.
+     */
+    private String toPrimaryKey(final Class  type,
+                                final String code,
+                                final String table,
+                                final String codeColumn,
+                                final String nameColumn)
+            throws SQLException, FactoryException
+    {
+        assert Thread.holdsLock(this);
+        String identifier = trimAuthority(code);
+        if (!isPrimaryKey(identifier)) {
+            /*
+             * The character is not the numerical code. Search the value in the database.
+             * If a prepared statement is already available, reuse it providing that it was
+             * created for the current table. Otherwise, we will create a new statement.
+             */
+            final String KEY = "NumericalIdentifier";
+            PreparedStatement statement = statements.get(KEY);
+            if (statement != null) {
+                if (!table.equals(lastTableForName)) {
+                    statements.remove(KEY);
+                    statement.close();
+                    statement        = null;
+                    lastTableForName = null;
+                }
+            }
+            if (statement == null) {
+                final String query = "SELECT " + codeColumn + " FROM " + table +
+                                     " WHERE " + nameColumn + " = ?";
+                statement = connection.prepareStatement(adaptSQL(query));
+                statements.put(KEY, statement);
+            }
+            statement.setString(1, identifier);
+            identifier = null;
+            final ResultSet result = statement.executeQuery();
+            while (result.next()) {
+                identifier = ensureSingleton(result.getString(1), identifier, code);
+            }
+            result.close();
+            if (identifier == null) {
+                throw noSuchAuthorityCode(type, code);
+            }
+        }
+        return identifier;
+    }
+

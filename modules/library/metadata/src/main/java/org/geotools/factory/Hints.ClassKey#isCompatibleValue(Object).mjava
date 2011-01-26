@@ -1,0 +1,55 @@
+        /**
+         * Returns {@code true} if the specified object is a valid value for
+         * this key. This method checks if the specified value is non-null and
+         * is one of the following:
+         * <p>
+         * <ul>
+         *   <li>An instance of the {@linkplain #getValueClass expected value class}.</li>
+         *   <li>A {@link Class} assignable to the expected value class.</li>
+         *   <li>An array of {@code Class} objects assignable to the expected value class.</li>
+         * </ul>
+         */
+        @Override
+        public boolean isCompatibleValue(final Object value) {
+            if (value == null) {
+                return false;
+            }
+            /*
+             * If the value is an array of classes, invokes this method recursively
+             * in order to check the validity of each elements in the array.
+             */
+            if (value instanceof Class<?>[]) {
+                final Class<?>[] types = (Class<?>[]) value;
+                for (int i=0; i<types.length; i++) {
+                    if (!isCompatibleValue(types[i])) {
+                        return false;
+                    }
+                }
+                return types.length != 0;
+            }
+            /*
+             * If the value is a class, checks if it is assignable to the expected value class.
+             * As a special case, if the value is not assignable but is an abstract class while
+             * we expected an interface, we will accept this class anyway because the some sub-
+             * classes may implement the interface (we dont't really know). For example the
+             * AbstractAuthorityFactory class doesn't implements the CRSAuthorityFactory interface,
+             * but sub-classe of it do. We make this relaxation in order to preserve compatibility,
+             * but maybe we will make the check stricter in the future.
+             */
+            if (value instanceof Class<?>) {
+                final Class<?> type = (Class<?>) value;
+                final Class<?> expected = getValueClass();
+                if (expected.isAssignableFrom(type)) {
+                    return true;
+                }
+                if (expected.isInterface() && !type.isInterface()) {
+                    final int modifiers = type.getModifiers();
+                    if (Modifier.isAbstract(modifiers) && !Modifier.isFinal(modifiers)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            return super.isCompatibleValue(value);
+        }
+

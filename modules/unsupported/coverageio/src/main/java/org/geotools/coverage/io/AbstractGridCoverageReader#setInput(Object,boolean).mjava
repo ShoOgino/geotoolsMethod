@@ -1,0 +1,54 @@
+    /**
+     * Sets the input source to the given object. The input is usually a
+     * {@link File} or an {@link URL} object. But some other types (e.g.
+     * {@link ImageInputStream}) may be accepted too.
+     * <p>
+     * If this method is invoked for the first time or after a call to
+     * {@link #reset}, then it will queries {@link #getImageReaders} for
+     * a list of {@link ImageReader}s and select the first one that accept
+     * the input.
+     *
+     * @param  input The {@link File} or {@link URL} to be read.
+     * @param  seekForwardOnly if {@code true}, grid coverages
+     *         and metadata may only be read in ascending order from
+     *         the input source.
+     * @throws IOException if an I/O operation failed.
+     * @throws IllegalArgumentException if input is not an instance
+     *         of one of the classes declared by the {@link ImageReader}
+     *         service provider.
+     */
+    public synchronized void setInput(final Object input, final boolean seekForwardOnly)
+            throws IOException
+    {
+        clear();
+        if (input != null) {
+            ImageReader rdr = this.reader;
+            boolean reuseLast = (rdr != null);
+            for (final Iterator it=getImageReaders(input); it.hasNext();) {
+                if (!reuseLast) {
+                    rdr = (ImageReader) it.next();
+                    setReaderLocale(locale);
+                }
+                reuseLast = false;
+                final Class[] types = rdr.getOriginatingProvider().getInputTypes();
+                if (contains(types, input.getClass())) {
+                    rdr.setInput(input, seekForwardOnly);
+                    this.input  = input;
+                    this.reader = rdr;
+                    return;
+                }
+                if (contains(types, ImageInputStream.class)) {
+                    assert stream == null;
+                    stream = ImageIO.createImageInputStream(input);
+                    if (stream != null) {
+                        rdr.setInput(stream, seekForwardOnly);
+                        this.input  = input;
+                        this.reader = rdr;
+                        return;
+                    }
+                }
+            }
+            throw new IllegalArgumentException(getString(ErrorKeys.NO_IMAGE_READER));
+        }
+    }
+

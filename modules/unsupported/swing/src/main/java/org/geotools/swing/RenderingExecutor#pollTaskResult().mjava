@@ -1,0 +1,39 @@
+    private void pollTaskResult() {
+        if (!taskResult.isDone()) {
+            return;
+        }
+
+        TaskResult result = TaskResult.PENDING;
+
+        try {
+            result = taskResult.get();
+        } catch (Exception ex) {
+            throw new IllegalStateException("When getting rendering result", ex);
+        }
+
+        watcher.cancel(false);
+        taskRunning.set(false);
+
+        /*
+         * We zero the cancel latch here because it's possible that the job
+         * completed (or failed) before it could be cancelled. When this statement 
+         * was only executed for the CANCELLED case (below) it led to 
+         * apps somtimes freezing.
+         */
+        cancelLatch.countDown();
+
+        switch (result) {
+            case CANCELLED:
+                mapPane.onRenderingCancelled();
+                break;
+
+            case COMPLETED:
+                mapPane.onRenderingCompleted();
+                break;
+
+            case FAILED:
+                mapPane.onRenderingFailed();
+                break;
+        }
+    }
+

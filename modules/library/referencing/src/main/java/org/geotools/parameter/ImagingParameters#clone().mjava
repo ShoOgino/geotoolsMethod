@@ -1,0 +1,37 @@
+    /**
+     * Returns a deep copy of this group of parameter values.
+     */
+    @Override
+    public synchronized ImagingParameters clone() {
+        final ImagingParameters copy = (ImagingParameters) super.clone();
+        try {
+            final Method cloneMethod = parameters.getClass().getMethod("clone", (Class[])null);
+            final Field  paramField  = ImagingParameters.class.getField("parameters");
+            paramField.setAccessible(true); // Will work only with J2SE 1.5 or above.
+            paramField.set(copy, cloneMethod.invoke(parameters, (Object[]) null));
+        } catch (Exception exception) {
+            // TODO: localize.
+            throw new UnsupportedOperationException("Clone not supported.", exception);
+        }
+        /*
+         * Most elements in the values list are ImagingParameter instances, which are backed by the
+         * ParameterList.  If the list was already created, we need to overwrite it with a new list
+         * filled with ImagingParameter instances that reference the cloned ParameterList. The call
+         * to createElements() do this job while preserving the parameter values since we cloned the
+         * ParameterList first.
+         *
+         * We can not just set the list to null and wait for it to be lazily created, because not
+         * all elements are ImagingParameter instances. Those that are not need to be cloned.
+         */
+        if (copy.values != null) {
+            final GeneralParameterValue[] cloned = copy.createElements();
+            assert values.size() == cloned.length : values;
+            for (int i=0; i<cloned.length; i++) {
+                if (!(cloned[i] instanceof ImagingParameter)) {
+                    cloned[i] = ((ParameterValue) values.get(i)).clone();
+                }
+            }
+        }
+        return copy;
+    }
+

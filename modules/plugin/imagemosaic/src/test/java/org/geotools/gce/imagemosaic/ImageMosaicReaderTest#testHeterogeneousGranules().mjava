@@ -1,0 +1,57 @@
+    /**
+     * Tests the {@link ImageMosaicReader} with support for different
+     * resolutions/different number of overviews.
+     * 
+     * world_a.tif => Pixel Size = (0.833333333333333,-0.833333333333333); 4
+     * overviews world_b1.tif => Pixel Size =
+     * (1.406250000000000,-1.406250000000000); 2 overviews world_b2.tif => Pixel
+     * Size = (0.666666666666667,-0.666666666666667); 0 overviews
+     * 
+     * @throws IOException
+     * @throws MismatchedDimensionException
+     * @throws FactoryException
+     */
+    @Test
+    public void testHeterogeneousGranules() throws IOException,
+            MismatchedDimensionException, FactoryException {
+
+        final AbstractGridFormat format = getFormat(heterogeneousGranulesURL);
+        final ImageMosaicReader reader = getReader(heterogeneousGranulesURL, format);
+
+        final ParameterValue<GridGeometry2D> gg = ImageMosaicFormat.READ_GRIDGEOMETRY2D.createValue();
+        final GeneralEnvelope envelope = reader.getOriginalEnvelope();
+        final Dimension dim = new Dimension();
+        dim.setSize(reader.getOriginalGridRange().getSpan(0) / 7.0, reader.getOriginalGridRange().getSpan(1) / 7.0);
+        final Rectangle rasterArea = ((GridEnvelope2D) reader.getOriginalGridRange());
+        rasterArea.setSize(dim);
+        final GridEnvelope2D range = new GridEnvelope2D(rasterArea);
+        gg.setValue(new GridGeometry2D(range, envelope));
+
+        // use imageio with defined tiles
+        final ParameterValue<Boolean> useJai = ImageMosaicFormat.USE_JAI_IMAGEREAD.createValue();
+        useJai.setValue(false);
+
+        final ParameterValue<OverviewPolicy> op = ImageMosaicFormat.OVERVIEW_POLICY.createValue();
+
+        LOGGER.info("\nTesting with OverviewPolicy = QUALITY");
+        op.setValue(OverviewPolicy.QUALITY);
+        checkCoverage(reader, new GeneralParameterValue[] { gg, useJai, op },
+                "heterogeneous granules test: OverviewPolicy=QUALITY", rasterArea);
+
+        LOGGER.info("\nTesting with OverviewPolicy = SPEED");
+        op.setValue(OverviewPolicy.SPEED);
+        checkCoverage(reader, new GeneralParameterValue[] { gg, useJai, op },
+                "heterogeneous granules test: OverviewPolicy=SPEED", rasterArea);
+
+        LOGGER.info("\nTesting with OverviewPolicy = NEAREST");
+        op.setValue(OverviewPolicy.NEAREST);
+        checkCoverage(reader, new GeneralParameterValue[] { gg, useJai, op },
+                "heterogeneous granules test: OverviewPolicy=NEAREST", rasterArea);
+
+        LOGGER.info("\nTesting with OverviewPolicy = IGNORE");
+        op.setValue(OverviewPolicy.IGNORE);
+        checkCoverage(reader, new GeneralParameterValue[] { gg, useJai, op },
+                "heterogeneous granules test: OverviewPolicy=IGNORE", rasterArea);
+
+    }
+

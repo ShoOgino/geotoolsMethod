@@ -1,0 +1,22 @@
+    /**
+     * Declares that the value for the specified key must be retained by hard reference.
+     * If there is already {@link #hardReferencesCount} hard references, then this method
+     * replaces the oldest hard reference by a soft one.
+     */
+    private void retainStrongly(final K key) {
+        assert Thread.holdsLock(hash);
+        assert !hardCache.contains(key) : key;
+        hardCache.addFirst(key);
+        if (hardCache.size() > hardReferencesCount) {
+            // Remove the last entry if list longer than hardReferencesCount
+            final K toRemove = hardCache.removeLast();
+            final Object value = hash.get(toRemove);
+            assert value!=null && !(value instanceof Reference) : toRemove;
+            @SuppressWarnings("unchecked")
+            final V v = (V) value;
+            hash.put(toRemove, new Reference<K,V>(hash, toRemove, v));
+            assert hardCache.size() == hardReferencesCount;
+        }
+        assert isValid();
+    }
+

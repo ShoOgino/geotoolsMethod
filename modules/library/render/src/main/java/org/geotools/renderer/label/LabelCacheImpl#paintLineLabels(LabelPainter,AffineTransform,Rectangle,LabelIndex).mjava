@@ -1,0 +1,181 @@
+    private boolean paintLineLabels(LabelPainter painter, AffineTransform originalTransform,
+            Rectangle displayArea, LabelIndex paintedBounds) throws Exception {
+        final LabelCacheItem labelItem = painter.getLabel();
+        List<LineString> lines = (List<LineString>) getLineSetRepresentativeLocation(labelItem
+                .getGeoms(), displayArea, labelItem.removeGroupOverlaps());
+
+        if (lines == null || lines.size() == 0)
+            return false;
+
+        // if we just want to label the longest line, remove the others
+        if (!labelItem.labelAllGroup() && lines.size() > 1) {
+            lines = Collections.singletonList(lines.get(0));
+        }
+
+        // pre compute some labelling params
+        final Rectangle2D textBounds = painter.getFullLabelBounds();
+        // ... use at least a 2 pixel step, no matter what the label length is
+        final double step = painter.getAscent() > 2 ? painter.getAscent() : 2;
+        int space = labelItem.getSpaceAround();
+        int haloRadius = Math.round(labelItem.getTextStyle().getHaloFill() != null ? labelItem
+                .getTextStyle().getHaloRadius() : 0);
+        int extraSpace = space + haloRadius;
+        // repetition distance, if any
+        int labelDistance = labelItem.getRepeat();
+        // min distance, if any
+        int minDistance = labelItem.getMinGroupDistance();
+        LabelIndex groupLabels = new LabelIndex();
+        // Max displacement for the current label
+        double labelOffset = labelItem.getMaxDisplacement();
+        boolean allowOverruns = labelItem.allowOverruns();
+        double maxAngleDelta = labelItem.getMaxAngleDelta();
+
+        int labelCount = 0;
+        for (LineString line : lines) {
+            // if we are following lines, use a simplified version of the line,
+            // we don't want very small segments to influence the character
+            // orientation
+            if (labelItem.isFollowLineEnabled())
+                line = decimateLineString(line, step);
+
+            // max distance between candidate label points, if any
+            final double lineStringLength = line.getLength();
+
+            // if the line is too small compared to the label, don't label it
+            // and exit right away, since the lines are sorted from longest to
+            // shortest
+            if ((!allowOverruns || labelItem.isFollowLineEnabled())
+                    && line.getLength() < textBounds.getWidth())
+                return labelCount > 0;
+
+            // create the candidate positions for the labels over the line. If
+            // we can place just one
+            // label or we're not supposed to replicate them, create the mid
+            // position, otherwise
+            // create mid and then create the sequence of before and after
+            // labels
+            double[] labelPositions;
+            if (labelDistance > 0 && labelDistance < lineStringLength / 2) {
+                labelPositions = new double[(int) (lineStringLength / labelDistance)];
+                labelPositions[0] = lineStringLength / 2;
+                double offset = labelDistance;
+                for (int i = 1; i < labelPositions.length; i++) {
+                    labelPositions[i] = labelPositions[i - 1] + offset;
+                    // this will generate a sequence like s, -2s, 3s, -4s, ...
+                    // which will make the cursor alternate on mid + s, mid - s,
+                    // mid + 2s, mid - 2s, mid + 3s, ...
+                    double signum = Math.signum(offset);
+                    offset = -1 * signum * (Math.abs(offset) + labelDistance);
+                }
+            } else {
+                labelPositions = new double[1];
+                labelPositions[0] = lineStringLength / 2;
+            }
+
+            // Ok, now we try to paint each of the labels in each position, and
+            // we take into
+            // account that we might have to displace the labels
+            LineStringCursor cursor = new LineStringCursor(line);
+            AffineTransform tx = new AffineTransform();
+            for (int i = 0; i < labelPositions.length; i++) {
+                cursor.moveTo(labelPositions[i]);
+                Coordinate centroid = cursor.getCurrentPosition();
+                double currOffset = 0;
+
+                // label displacement loop
+                boolean painted = false;
+                while (Math.abs(currOffset) <= labelOffset * 2 && !painted) {
+                    // reset transform and other computation parameters
+                    tx.setToIdentity();
+                    Rectangle2D labelEnvelope;
+                    double maxAngleChange = 0;
+
+                    // the line ordinates where we presume the label will start
+                    // and end (using full bounds,
+                    // thus taking into account shield and halo)
+                    double startOrdinate = cursor.getCurrentOrdinate() - textBounds.getWidth() / 2;
+                    double endOrdinate = cursor.getCurrentOrdinate() + textBounds.getWidth() / 2;
+
+                    // compute label bounds
+                    if (labelItem.followLineEnabled) {
+                        // curved label, but we might end up drawing a straight
+                        // one as an optimization
+                        maxAngleChange = cursor.getMaxAngleChange(startOrdinate, endOrdinate);
+                        if (maxAngleChange < MIN_CURVED_DELTA) {
+                            // if label will be painted as straight, use the
+                            // straight bounds
+                            setupLineTransform(painter, cursor, centroid, tx, true);
+                            labelEnvelope = tx.createTransformedShape(textBounds).getBounds2D();
+                        } else {
+                            // otherwise use curved bounds, more expensive to
+                            // compute
+                            labelEnvelope = getCurvedLabelBounds(cursor, startOrdinate,
+                                    endOrdinate, textBounds.getHeight() / 2);
+                        }
+                    } else {
+                        setupLineTransform(painter, cursor, centroid, tx, false);
+                        labelEnvelope = tx.createTransformedShape(textBounds).getBounds2D();
+                    }
+
+                    // try to paint the label, the condition under which this
+                    // happens are complex
+                    if (displayArea.contains(labelEnvelope)
+                            && !(labelItem.isConflictResolutionEnabled() && paintedBounds.labelsWithinDistance(labelEnvelope, extraSpace))
+                            && !groupLabels.labelsWithinDistance(labelEnvelope, minDistance)) {
+                        if (labelItem.isFollowLineEnabled()) {
+                            // for curved labels we never paint in case of
+                            // overrun
+                            if ((startOrdinate > 0 && endOrdinate <= cursor.getLineStringLength())) {
+                                if (maxAngleChange < maxAngleDelta) {
+                                    // if the max angle is very small, draw it
+                                    // like a straight line
+                                    if (maxAngleChange < MIN_CURVED_DELTA)
+                                        painter.paintStraightLabel(tx);
+                                    else {
+                                        painter.paintCurvedLabel(cursor);
+                                    }
+                                    painted = true;
+                                }
+                            }
+                        } else {
+                            // for straight labels, check overrun only if
+                            // required
+                            if ((allowOverruns || (startOrdinate > 0 && endOrdinate <= cursor
+                                    .getLineStringLength()))) {
+                                painter.paintStraightLabel(tx);
+                                painted = true;
+                            }
+
+                        }
+                    }
+
+                    // if we actually painted the label, add the envelope to the
+                    // indexes and break out of the loop,
+                    // otherwise move to the next candidate position in the
+                    // displacement sequence
+                    if (painted) {
+                        labelCount++;
+                        groupLabels.addLabel(labelItem, labelEnvelope);
+                        if(labelItem.isConflictResolutionEnabled())
+                            paintedBounds.addLabel(labelItem, labelEnvelope);
+                    } else {
+                        // this will generate a sequence like s, -2s, 3s, -4s,
+                        // ...
+                        // which will make the cursor alternate on mid + s, mid
+                        // - s, mid + 2s, mid - 2s, mid + 3s, ...
+                        double signum = Math.signum(currOffset);
+                        if (signum == 0) {
+                            currOffset = step;
+                        } else {
+                            currOffset = -1 * signum * (Math.abs(currOffset) + step);
+                        }
+                        cursor.moveRelative(currOffset);
+                        cursor.getCurrentPosition(centroid);
+                    }
+                }
+            }
+        }
+
+        return labelCount > 0;
+    }
+

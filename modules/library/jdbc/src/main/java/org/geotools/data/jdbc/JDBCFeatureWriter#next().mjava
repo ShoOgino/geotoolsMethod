@@ -1,0 +1,55 @@
+    /**
+     * @see org.geotools.data.FeatureWriter#next()
+     */
+    public SimpleFeature next() throws IOException {
+        if (reader == null) {
+            throw new IOException("FeatureWriter has been closed");
+        }
+
+        SimpleFeatureType featureType = getFeatureType();
+
+        if (hasNext()) {
+            try {
+                live = reader.next();
+                current = SimpleFeatureBuilder.copy(live);
+                LOGGER.finer("Calling next on writer");
+            } catch (IllegalAttributeException e) {
+                throw new DataSourceException("Unable to edit " + live.getID()
+                    + " of " + featureType.getTypeName(), e);
+            }
+        } else {
+            //			new content
+            live = null;
+
+            try {
+                SimpleFeature temp = SimpleFeatureBuilder.template(featureType, null);
+
+                /* Here we create a Feature with a Mutable FID.
+                 * We use data utilities to create a default set of attributes
+                 * for the feature and these are copied into the a new
+                 * MutableFIDFeature.  Thsi can probably be improved later,
+                 * there is also a dependency on DefaultFeatureType here since
+                 * DefaultFeature depends on it and MutableFIDFeature extends default
+                 * feature.  This may be an issue if someone reimplements the Feature
+                 * interfaces.  It could address by providing a full implementation
+                 * of Feature in MutableFIDFeature at a later date.
+                 *
+                 */
+                current = new MutableFIDFeature((List) temp.getAttributes(), featureType, null);
+
+                if (useQueryDataForInsert()) {
+                    queryData.startInsert();
+                }
+            } catch (IllegalAttributeException e) {
+                throw new DataSourceException(
+                    "Unable to add additional Features of "
+                    + featureType.getTypeName(), e);
+            } catch (SQLException e) {
+                throw new DataSourceException("Unable to move to insert row. "
+                    + e.getMessage(), e);
+            }
+        }
+
+        return current;
+    }
+

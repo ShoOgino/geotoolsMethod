@@ -1,0 +1,58 @@
+    /**
+     * Creates a new grid of tesselated hexagons within a bounding rectangle
+     * with grid elements represented by densified polygons (ie. additional
+     * vertices added to each edge).
+     *
+     * @param bounds the bounding rectangle
+     *
+     * @param sideLen hexagon side length
+     *
+     * @param vertexSpacing maximum distance between adjacent vertices in a grid
+     *        element; if {@code <= 0} or {@code >= min(width, height) / 2.0} it
+     *        is ignored and the polygons will not be densified
+     *
+     * @param orientation hexagon orientation
+     *
+     * @param gridFeatureBuilder an instance of {@code GridFeatureBuilder}
+     *
+     * @return a new grid
+     *
+     * @throws IllegalArgumentException
+     *         if bounds is null or empty; or
+     *         if sideLen is {@code <=} 0; or
+     *         if the {@code CoordinateReferenceSystems}
+     *         set for the bounds and the {@code GridFeatureBuilder} are both
+     *         non-null but different
+     */
+    public static SimpleFeatureSource createGrid(
+            ReferencedEnvelope bounds,
+            double sideLen,
+            double vertexSpacing,
+            Orientation orientation,
+            GridFeatureBuilder gridFeatureBuilder) {
+        
+        if (bounds == null || bounds.isEmpty() || bounds.isNull()) {
+            throw new IllegalArgumentException("bounds should not be null or empty");
+        }
+
+        if (sideLen <= 0) {
+            throw new IllegalArgumentException("sideLen must be greater than 0");
+        }
+
+        if (orientation == null) {
+            throw new IllegalArgumentException("orientation should not be null");
+        }
+
+        CoordinateReferenceSystem boundsCRS = bounds.getCoordinateReferenceSystem();
+        CoordinateReferenceSystem builderCRS = gridFeatureBuilder.getType().getCoordinateReferenceSystem();
+        if (boundsCRS != null && builderCRS != null &&
+                !CRS.equalsIgnoreMetadata(boundsCRS, builderCRS)) {
+            throw new IllegalArgumentException("Different CRS set for bounds and grid feature builder");
+        }
+
+        final SimpleFeatureCollection fc = new ListFeatureCollection(gridFeatureBuilder.getType());
+        HexagonGridBuilder gridBuilder = new HexagonGridBuilder(bounds, sideLen, orientation);
+        gridBuilder.buildGrid(fc, gridFeatureBuilder, vertexSpacing);
+        return DataUtilities.source(fc);
+    }
+

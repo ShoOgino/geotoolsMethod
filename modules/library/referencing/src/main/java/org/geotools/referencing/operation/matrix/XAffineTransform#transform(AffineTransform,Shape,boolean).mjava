@@ -1,0 +1,77 @@
+    /**
+     * Transforms the given shape. This method is similar to
+     * {@link #createTransformedShape createTransformedShape} except that:
+     * <p>
+     * <ul>
+     *   <li>It tries to preserve the shape kind when possible. For example if the given shape
+     *       is an instance of {@link RectangularShape} and the given transform do not involve
+     *       rotation, then the returned shape may be some instance of the same class.</li>
+     *   <li>It tries to recycle the given object if {@code overwrite} is {@code true}.</li>
+     * </ul>
+     *
+     * @param transform Affine transform to use.
+     * @param shape     The shape to transform.
+     * @param overwrite If {@code true}, this method is allowed to overwrite {@code shape} with the
+     *                  transform result. If {@code false}, then {@code shape} is never modified.
+     *
+     * @return The direct transform of the given shape. May or may not be the same instance than
+     *         the given shape.
+     *
+     * @see #createTransformedShape
+     *
+     * @since 2.5
+     */
+    public static Shape transform(final AffineTransform transform, Shape shape, boolean overwrite) {
+        final int type = transform.getType();
+        if (type == TYPE_IDENTITY) {
+            return shape;
+        }
+        // If there is only scale, flip, quadrant rotation or translation,
+        // then we can optimize the transformation of rectangular shapes.
+        if ((type & (TYPE_GENERAL_ROTATION | TYPE_GENERAL_TRANSFORM)) == 0) {
+            // For a Rectangle input, the output should be a rectangle as well.
+            if (shape instanceof Rectangle2D) {
+                final Rectangle2D rect = (Rectangle2D) shape;
+                return transform(transform, rect, overwrite ? rect : null);
+            }
+            // For other rectangular shapes, we restrict to cases whithout
+            // rotation or flip because we don't know if the shape is symetric.
+            if ((type & (TYPE_FLIP & TYPE_MASK_ROTATION)) == 0) {
+                if (shape instanceof RectangularShape) {
+                    RectangularShape rect = (RectangularShape) shape;
+                    if (!overwrite) {
+                        rect = (RectangularShape) rect.clone();
+                    }
+                    final Rectangle2D frame = rect.getFrame();
+                    rect.setFrame(transform(transform, frame, frame));
+                    return rect;
+                }
+            }
+        }
+        // TODO: Check for Path2D instance instead of GeneralPath
+        //       when we will be allowed to compile for Java 6.
+        if (shape instanceof GeneralPath) {
+            final GeneralPath path = (GeneralPath) shape;
+            if (overwrite) {
+                path.transform(transform);
+            } else {
+                shape = path.createTransformedShape(transform);
+            }
+        } else if (shape instanceof Area) {
+            final Area area = (Area) shape;
+            if (overwrite) {
+                area.transform(transform);
+            } else {
+                shape = area.createTransformedArea(transform);
+            }
+        } else {
+            final GeneralPath path = new GeneralPath(shape);
+            path.transform(transform);
+            shape = path;
+            // TODO: use the line below instead of the above 3 lines when we will
+            //       be allowed to compile for Java 6:
+//          shape = new Path2D.Double(shape, transform);
+        }
+        return shape;
+    }
+

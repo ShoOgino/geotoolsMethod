@@ -1,0 +1,63 @@
+    /**
+     * Gets and initializes an {@linkplain ImageReader image reader} that can decode the specified
+     * input. The returned reader has its {@linkplain ImageReader#setInput input} already set. If
+     * the reader input is different than the specified one, then it is probably an {@linkplain
+     * ImageInputStream image input stream} and closing it is caller's responsability.
+     *
+     * @param  input The input to read.
+     * @return The image reader that seems to be the most appropriated (never {@code null}).
+     * @throws IOException If no suitable image reader has been found or if an error occured
+     *         while creating an image reader or initiazing it.
+     */
+    private ImageReader getImageReader(final Object input) throws IOException {
+        /*
+         * First check if the input type is one of those accepted by MosaicImageReader.  We
+         * perform this check in a dedicaced code since MosaicImageReader is not registered
+         * as a SPI, because it does not comply to Image I/O contract which requires that
+         * readers accept ImageInputStream.
+         */
+        for (final Class<?> type : MosaicImageReader.Spi.INPUT_TYPES) {
+            if (type.isInstance(input)) {
+                final ImageReader reader = new MosaicImageReader();
+                reader.setInput(input);
+                if (filter(reader)) {
+                    return reader;
+                }
+                break;
+            }
+        }
+        ImageInputStream stream = null;
+        boolean createStream = false;
+        /*
+         * The following loop will be executed at most twice. The first iteration tries the given
+         * input directly. The second iteration tries the input wrapped in an ImageInputStream.
+         */
+        do {
+            final Object candidate;
+            if (createStream) {
+                stream = ImageIO.createImageInputStream(input);
+                if (stream == null) {
+                    continue;
+                }
+                candidate = stream;
+            } else {
+                candidate = input;
+            }
+            final Iterator<ImageReader> readers = ImageIO.getImageReaders(candidate);
+            while (readers.hasNext()) {
+                final ImageReader reader = readers.next();
+                reader.setInput(candidate);
+                // If there is any more advanced check to perform, we should do it here.
+                // For now we accept the reader inconditionnaly.
+                if (filter(reader)) {
+                    return reader;
+                }
+                reader.dispose();
+            }
+        } while ((createStream = !createStream) == true);
+        if (stream != null) {
+            stream.close();
+        }
+        throw new IIOException(Errors.format(ErrorKeys.NO_IMAGE_READER));
+    }
+

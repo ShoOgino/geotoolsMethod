@@ -1,0 +1,118 @@
+    /**
+     * returns the representative geometry (for further processing)
+     * 
+     * TODO: handle lineplacement for a polygon (perhaps we're supposed to grab
+     * the outside line and label it, but spec is unclear)
+     */
+    private boolean paintPolygonLabel(LabelPainter painter, AffineTransform tempTransform,
+            Rectangle displayArea, LabelIndex glyphs) throws Exception {
+        LabelCacheItem labelItem = painter.getLabel();
+        Polygon geom = getPolySetRepresentativeLocation(labelItem.getGeoms(), displayArea);
+        if (geom == null) {
+            return false;
+        }
+        
+        Point centroid;
+        try {
+            centroid = geom.getCentroid();
+        } catch (Exception e) {
+            // generalized polygons causes problems - this
+            // tries to hide them.
+            try {
+                centroid = geom.getExteriorRing().getCentroid();
+            } catch (Exception ee) {
+                try {
+                    centroid = geom.getFactory().createPoint(geom.getCoordinate());
+                } catch (Exception eee) {
+                    return false; // we're hooped
+                }
+            }
+        }
+        
+        // check we're inside, if not, use a different approach
+        PreparedGeometry pg = PreparedGeometryFactory.prepare(geom);
+        if(!pg.contains(centroid)) {
+            // resort to sampling, computing the intersection is slow and
+            // due invalid geometries can easily break with an exception
+            Envelope env = geom.getEnvelopeInternal();
+            double step = 5;
+            int steps = (int) Math.round((env.getMaxX() - env.getMinX()) / step);
+            Coordinate c = new Coordinate();
+            Point pp = gf.createPoint(c);
+            c.y = centroid.getY();
+            int max = -1;
+            int maxIdx = -1;
+            int containCounter = -1;
+            for (int i = 0; i < steps; i++) {
+                c.x = env.getMinX() + step * i;
+                pp.geometryChanged();
+                if(!pg.contains(pp)) {
+                    containCounter = 0;
+                } else if(i == 0) {
+                    containCounter = 1;
+                } else {
+                    containCounter++;
+                    if(containCounter > max) {
+                        max = containCounter;
+                        maxIdx = i;
+                    }
+                }
+            }
+                    
+            if(maxIdx != -1) {
+                int midIdx = max > 1 ? maxIdx - max / 2 : maxIdx;
+                c.x = env.getMinX() + step * midIdx;
+                pp.geometryChanged();
+                centroid = pp;
+            } else {
+                return false;
+            }
+        }
+
+        // compute the transformation used to position the label
+        TextStyle2DExt textStyle = new TextStyle2DExt(labelItem);
+        if(labelItem.getMaxDisplacement() > 0) {
+            textStyle.setDisplacementX(0);
+            textStyle.setDisplacementY(0);
+            textStyle.setAnchorX(0.5);
+            textStyle.setAnchorY(0.5);
+        }
+        AffineTransform tx = new AffineTransform(tempTransform);
+        if(paintPolygonLabelInternal(painter, tx, displayArea, glyphs, labelItem,
+                pg, centroid, textStyle))
+            return true;
+        
+        // candidate position was busy, let's circle out and find a good position
+        // ... use at least a 2 pixel step, no matter what the label length is
+        final double step = painter.getAscent() > 2 ? painter.getAscent() : 2;
+        double radius = step;
+        Coordinate c = new Coordinate(centroid.getCoordinate());
+        Coordinate cc = centroid.getCoordinate();
+        Point testPoint = centroid.getFactory().createPoint(c);
+        while(radius < labelItem.getMaxDisplacement()) {
+            for(int angle = 0; angle < 360; angle += 45) {
+                double dx = Math.cos(Math.toRadians(angle)) * radius;
+                double dy = Math.sin(Math.toRadians(angle)) * radius;
+                
+                c.x = cc.x + dx;
+                c.y = cc.y + dy;
+                testPoint.geometryChanged();
+                if(!pg.contains(testPoint))
+                    continue;
+                
+                textStyle.setDisplacementX(dx);
+                textStyle.setDisplacementY(dy);
+                
+                tx = new AffineTransform(tempTransform);
+                if(paintPolygonLabelInternal(painter, tx, displayArea, glyphs, labelItem,
+                        pg, centroid, textStyle))
+                    return true;
+            }
+            
+            radius += step;
+        }
+        
+        return false;
+        
+    }
+

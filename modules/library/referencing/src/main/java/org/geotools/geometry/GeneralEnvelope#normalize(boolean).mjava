@@ -1,0 +1,125 @@
+    /**
+     * Restricts this envelope to the CS or CRS
+     * {@linkplain CoordinateReferenceSystem#getDomainOfValidity domain of validity}. This method
+     * performs two steps:
+     * 
+     * <ol>
+     * <li>
+     * <p>
+     * First, it ensures that the envelope is contained in the {@linkplain CoordinateSystem
+     * coordinate system} domain. Out of range ordinates are validated in a way that depends on the
+     * {@linkplain CoordinateSystemAxis#getRangeMeaning range meaning}:
+     * <ul>
+     * <li>If {@linkplain RangeMeaning#EXACT EXACT} (typically <em>latitudes</em> ordinates), values
+     * greater than the {@linkplain CoordinateSystemAxis#getMaximumValue maximum value} are replaced
+     * by the maximum, and values smaller than the {@linkplain CoordinateSystemAxis#getMinimumValue
+     * minimum value} are replaced by the minimum.</li>
+     * 
+     * <li>If {@linkplain RangeMeaning#WRAPAROUND WRAPAROUND} (typically <em>longitudes</em>
+     * ordinates), a multiple of the range (e.g. 360° for longitudes) is added or subtracted. If a
+     * value stay out of range after this correction, then the ordinates are set to the full [
+     * {@linkplain CoordinateSystemAxis#getMinimumValue minimum} ...
+     * {@linkplain CoordinateSystemAxis#getMaximumValue maximum}] range.
+     * 
+     * <blockquote> <b>Example:</b> [185° ... 190°] of longitude is equivalent to [-175° ...
+     * -170°]. But [175° ... 185°] would be equivalent to [175° ... -175°], which is likely to
+     * mislead most users of {@link Envelope} since the lower bounds is numerically greater than the
+     * upper bounds. Reordering as [-175° ... 175°] would interchange the meaning of what is
+     * "inside" and "outside" the envelope. So this implementation conservatively expands the range
+     * to [-180° ... 180°] in order to ensure that the validated envelope fully contains the
+     * original envelope. </blockquote></li>
+     * </ul>
+     * </p>
+     * </li>
+     * <li>
+     * <p>
+     * Second and only if {@code crsDomain} is {@code true}, the envelope normalized in the previous
+     * step is intersected with the CRS {@linkplain CoordinateReferenceSystem#getDomainOfValidity
+     * domain of validity}, if any.
+     * </p>
+     * </li>
+     * </ol>
+     * 
+     * @param crsDomain
+     *            {@code true} if the envelope should be restricted to the CRS domain in addition of
+     *            the CS domain.
+     * @return {@code true} if this envelope has been modified, or {@code false} if no change was
+     *         done.
+     * 
+     * @since 2.5
+     */
+    public boolean normalize(final boolean crsDomain) {
+        boolean changed = false;
+        if (crs != null) {
+            final int dimension = ordinates.length / 2;
+            final CoordinateSystem cs = crs.getCoordinateSystem();
+            for (int i = 0; i < dimension; i++) {
+                final int j = i + dimension;
+                final CoordinateSystemAxis axis = cs.getAxis(i);
+                final double minimum = axis.getMinimumValue();
+                final double maximum = axis.getMaximumValue();
+                final RangeMeaning rm = axis.getRangeMeaning();
+                if (RangeMeaning.EXACT.equals(rm)) {
+                    if (ordinates[i] < minimum) {
+                        ordinates[i] = minimum;
+                        changed = true;
+                    }
+                    if (ordinates[j] > maximum) {
+                        ordinates[j] = maximum;
+                        changed = true;
+                    }
+                } else if (RangeMeaning.WRAPAROUND.equals(rm)) {
+                    final double length = maximum - minimum;
+                    if (length > 0 && length < Double.POSITIVE_INFINITY) {
+                        final double offset = Math.floor((ordinates[i] - minimum) / length)
+                                * length;
+                        if (offset != 0) {
+                            ordinates[i] -= offset;
+                            ordinates[j] -= offset;
+                            changed = true;
+                        }
+                        if (ordinates[j] > maximum) {
+                            ordinates[i] = minimum; // See method Javadoc
+                            ordinates[j] = maximum;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+            if (crsDomain) {
+                final Envelope domain = CRS.getEnvelope(crs);
+                if (domain != null) {
+                    final CoordinateReferenceSystem domainCRS = domain
+                            .getCoordinateReferenceSystem();
+                    if (domainCRS == null) {
+                        intersect(domain);
+                    } else {
+                        /*
+                         * The domain may have fewer dimensions than this envelope (typically only
+                         * the ones relative to horizontal dimensions). We can rely on directions
+                         * for matching axis since CRS.getEnvelope(crs) should have transformed the
+                         * domain to this envelope CRS.
+                         */
+                        final CoordinateSystem domainCS = domainCRS.getCoordinateSystem();
+                        final int domainDimension = domainCS.getDimension();
+                        for (int i = 0; i < domainDimension; i++) {
+                            final double minimum = domain.getMinimum(i);
+                            final double maximum = domain.getMaximum(i);
+                            final AxisDirection direction = domainCS.getAxis(i).getDirection();
+                            for (int j = 0; j < dimension; j++) {
+                                if (direction.equals(cs.getAxis(j).getDirection())) {
+                                    final int k = j + dimension;
+                                    if (ordinates[j] < minimum)
+                                        ordinates[j] = minimum;
+                                    if (ordinates[k] > maximum)
+                                        ordinates[k] = maximum;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return changed;
+    }
+

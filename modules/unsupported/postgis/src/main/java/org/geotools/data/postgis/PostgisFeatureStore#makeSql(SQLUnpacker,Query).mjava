@@ -1,0 +1,68 @@
+    /**
+     * Creates a SQL statement for the PostGIS database.
+     * 
+     * @deprecated please use makeSql(query) 
+     * @param unpacker the object to get the encodable filter.
+     * @param query the getFeature query - for the tableName, properties and
+     *        maxFeatures.
+     * @throws IOException if there are problems encoding the sql.
+     */
+    public String makeSql(SQLUnpacker unpacker, Query query) throws IOException {
+        //one to one relationship for now, so typeName is not used.
+        //String tableName = query.getTypeName();
+
+        boolean useLimit = (unpacker.getUnSupported() == null);
+        Filter filter = unpacker.getSupported();
+        LOGGER.fine("Filter in making sql is " + filter);
+
+        AttributeDescriptor[] attributeTypes = getAttTypes(query);
+        int numAttributes = attributeTypes.length;
+
+        StringBuffer sqlStatement = new StringBuffer("SELECT ");
+        if (!fidMapper.returnFIDColumnsAsAttributes()) {
+            for (int i = 0; i < fidMapper.getColumnCount(); i++) {
+                sqlStatement.append(fidMapper.getColumnName(i));
+                if (numAttributes > 0 || i < (fidMapper.getColumnCount() - 1))
+                    sqlStatement.append(", ");
+            }
+        }
+
+        LOGGER.finer("making sql for " + numAttributes + " attributes");
+
+        for (int i = 0; i < numAttributes; i++) {
+            String curAttName = attributeTypes[i].getLocalName();
+
+            if (Geometry.class.isAssignableFrom(attributeTypes[i].getType().getBinding())) {
+                sqlStatement.append(", AsText(force_2d(\"" + curAttName + "\"))");
+            } else {
+                sqlStatement.append(", \"" + curAttName + "\"");
+            }
+        }
+
+        String where = "";
+
+        if (filter != null) {
+            try {
+                StringBuffer sb = new StringBuffer();
+                sqlBuilder.encode(sb, filter);
+                where = "WHERE " + sb.toString();
+            } catch (SQLEncoderException sqle) {
+                String message = "Encoder error" + sqle.getMessage();
+                LOGGER.warning(message);
+                throw new DataSourceException(message, sqle);
+            }
+        }
+
+        //int limit = HARD_MAX_FEATURES;
+        String limit = "";
+
+        if (useLimit) {
+            limit = " LIMIT " + query.getMaxFeatures();
+        }
+
+        sqlStatement.append(" FROM \"" + tableName + "\" " + where + limit + ";").toString();
+        LOGGER.fine("sql statement is " + sqlStatement);
+
+        return sqlStatement.toString();
+    }
+

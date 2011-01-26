@@ -1,0 +1,65 @@
+    /**
+     * Check two {@link TemporalGeometricPrimitive} objects. Return {@code true} in case the first argument
+     * contains the second one. In case of instants, return {@code true} if they are equals. 
+     * In case the first argument is a period and the second one is an instant, check if the instant is
+     * contained within the period. In case they are Periods, check for an intersection.
+     * 
+     * @param containing 
+     * @param contained
+     * @return
+     */
+    public static boolean contains(TemporalGeometricPrimitive containing, TemporalGeometricPrimitive contained) {
+        // //
+        //
+        // Instants should match to be taken
+        // 
+        // //
+        if (containing instanceof Instant && contained instanceof Instant)
+            return containing.equals(contained);
+        // //
+        //
+        // If the first time is a period I will check if the second time (an instant)
+        // is between the beginning and the ending of the period.
+        //
+        // //
+        else if (containing instanceof Period && contained instanceof Instant) {
+            final Date position = ((DefaultInstant) contained).getPosition()
+                    .getDate();
+            final DefaultPeriod period = (DefaultPeriod) containing;
+            final Date startPeriod = period.getBeginning().getPosition()
+                    .getDate();
+            final Date endPeriod = period.getEnding().getPosition().getDate();
+            if (position.compareTo(startPeriod) >= 0
+                    && position.compareTo(endPeriod) <= 0)
+                return true;
+        }
+        // //
+        //
+        // In case both times are periods, I check for an intersection.
+        //
+        // //
+        else if (containing instanceof Period && contained instanceof Period) {
+            final DefaultPeriod containingPeriod = (DefaultPeriod) containing;
+            final Date startContaining = containingPeriod.getBeginning().getPosition().getDate();
+            final Date endContaining = containingPeriod.getEnding().getPosition().getDate();
+            final DefaultPeriod containedPeriod = (DefaultPeriod) contained;
+            final Date startContained = containedPeriod.getBeginning().getPosition().getDate();
+            final Date endContained = containedPeriod.getEnding().getPosition().getDate();
+
+            // Return false if the period which should be contained is totally
+            // outside the containing one.
+            // Silly example: a period between 3AM and 5AM isn't contained in a
+            // period between 6AM and 8AM.
+            // Instead, a period between 5AM and 7AM should be considered
+            // contained within the period between 6AM and 8AM since part of
+            // them are intersecting.
+            if (endContained.compareTo(startContaining) < 0
+                    || startContained.compareTo(endContaining) > 0)
+                return false;
+            else
+                return true;
+
+        }
+        return false;
+    }
+

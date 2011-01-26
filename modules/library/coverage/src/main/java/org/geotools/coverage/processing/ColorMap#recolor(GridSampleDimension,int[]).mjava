@@ -1,0 +1,107 @@
+    /**
+     * Applies to the specified sample dimension the colors given to this color map. This method
+     * iterates throug every {@linkplain Category categories} in the given sample dimension. For
+     * each category with a {@linkplain Category#getName name} matching one of the (<var>name</var>,
+     * <var>colors</var>) or (<var>name</var>, <var>range</var>) entries given to this color map,
+     * the {@link Category#recolor recolor} method is invoked on that category and the result
+     * inserted into a new sample dimension to be returned.
+     * <p>
+     * If the optional {@code ARGB} array is non-null, then the ARGB colors for recolorized
+     * categories will be written in this array. Only the elements with index in the
+     * {@linkplain Category#getRange category range} will be overwritten; other elements
+     * will not be modified.
+     * <p>
+     * <strong>NOTE:</strong> The {@linkplain #setGeophysicsRange geophysics} and
+     * {@linkplain #setRelativeRange relative} ranges are taken in account for the
+     * {@code ARGB} array only; they do not have impact on the categories to be
+     * included in the returned sample dimension.
+     *
+     * @param  sampleDimension The sample dimension to recolorize.
+     * @param  ARGB An optional array where to store the ARGB values of recolorized categories,
+     *         or {@code null} if none.
+     * @return A new sample dimension, or {@code sampleDimension} if no color change were applied.
+     *
+     * @see Category#recolor
+     */
+    public GridSampleDimension recolor(final GridSampleDimension sampleDimension, final int[] ARGB) {
+        final GridSampleDimension displayDimension = sampleDimension.geophysics(false);
+        boolean changed = false;
+        final Category categories[] = (Category[]) displayDimension.getCategories().toArray();
+        for (int i=0; i<categories.length; i++) {
+            Category category = categories[i];
+            Color[] colors = getColors(category.getName());
+            if (colors == null) {
+                if (category.isQuantitative()) {
+                    colors = getColors(ANY_QUANTITATIVE_CATEGORY);
+                }
+                if (colors == null && resetUnspecifiedColors) {
+                    colors = category.getColors();
+                }
+                // 'colors' may still null, so we will need to check.
+            }
+            if (ARGB != null) {
+                final NumberRange range = category.getRange();
+                int lower = ((Number) range.getMinValue()).intValue();
+                int upper = ((Number) range.getMaxValue()).intValue();
+                if (!range.isMinIncluded()) lower++;
+                if ( range.isMaxIncluded()) upper++;
+                boolean outOfBounds = false;
+                if (lower < 0) {
+                    lower = 0;
+                    outOfBounds = true;
+                }
+                if (upper > ARGB.length) {
+                    upper = ARGB.length;
+                    outOfBounds = true;
+                }
+                if (outOfBounds) {
+                    CoverageProcessor.LOGGER.warning(Errors.format(
+                            ErrorKeys.VALUE_OUT_OF_BOUNDS_$3, category, 0, ARGB.length - 1));
+                }
+                if (upper <= lower) {
+                    continue;
+                }
+                final NumberRange target = getTargetRange(category, sampleDimension.getUnits());
+                if (target != null) {
+                    if (colors == null) {
+                        colors = category.getColors();
+                    }
+                    if (colors.length >= 2) {
+                        assert target.isMinIncluded() && !target.isMaxIncluded() : target;
+                        final int lo = Math.max(lower, ((Number) target.getMinValue()).intValue());
+                        final int hi = Math.min(upper, ((Number) target.getMaxValue()).intValue());
+                        if (lo != lower || hi != upper) {
+                            Arrays.fill(ARGB, lower, lo, colors[0].getRGB());
+                            Arrays.fill(ARGB, hi, upper, colors[colors.length-1].getRGB());
+                            lower = lo;
+                            upper = hi;
+                        }
+                    }
+                } else if (colors == null) {
+                    /*
+                     * If there is no range to change (target == null) and no colors explicitly
+                     * specified by the user (colors == null), then there is nothing to do.
+                     */
+                    continue;
+                }
+                ColorUtilities.expand(colors, ARGB, lower, upper);
+            } else if (colors == null) {
+                continue;
+            }
+            category = category.recolor(colors);
+            if (!categories[i].equals(category)) {
+                categories[i] = category;
+                changed = true;
+            }
+        }
+        if (!changed) {
+            return sampleDimension;
+        }
+        GridSampleDimension result = new GridSampleDimension(displayDimension.getDescription(),
+                categories, displayDimension.getUnits());
+        if (sampleDimension != displayDimension) {
+            result = result.geophysics(true);
+        }
+        return result;
+    }
+

@@ -1,0 +1,261 @@
+    /**
+     * Returns a set of feature ids for features that where modified, created or deleted between
+     * version1 and version2 and that matched the specified filter at least in one revision between
+     * version1 and version2. <br>
+     * If called on an unversioned feature type, will return empty Sets.
+     * <p>
+     * The semantics is a little complex, so here is a more detailed explaination:
+     * <ul>
+     * <li>A feature is said to have been modified between version1 and version2 if a new state of
+     * it has been created after version1 and before or at version2 (included), or if it has been
+     * deleted between version1 (excluded) and version2 (included).</li>
+     * <li>Filter is used to match every state between version1 and version2, so all new states
+     * after version1, but also the states existent at version1 provided they existed also at
+     * version1 + 1.</li>
+     * <li>If at least one state matches the filter, the feature id is returned.</li>
+     * </ul>
+     * The result is composed of three sets of feature ids:
+     * <ul>
+     * <li>A matched feature created after version1 is included in the created set</li>
+     * <li>A matched feature deleted before or at version2 is included in the deleted set</li>
+     * <li>A matched feature not included in the created/deleted sets is included in the modified
+     * set</li>
+     * </ul>
+     * The following graph illustrates feature matching and set destination. Each line represents a
+     * feature lifeline, with different symbols for filter matched states, unmatched states, state
+     * creation, expiration, and lack of feature existance.<br>
+     * 
+     * <pre>
+     *                         v1                         v2
+     *                         |                          |
+     *                f1 ======]..........................|........... Not returned
+     *                f2 ======][-------------------------|----------- Not returned     
+     *                f3 ======|==].......................|........... Returned (deleted)
+     *                f4 ======|==][----------------------|---]....... Returned (modified)
+     *                f5 ......|.[=======]................|........... Returned (created/deleted)
+     *                f5 ......[=========]................|........... Returned (deleted)
+     *                f5 ......[-------------------][=====|====]...... Returned (modified)
+     *                f6 [-----|----][=============][-----|----------- Returned (modified)
+     * </pre>
+     * 
+     * Legend:
+     * <ul>
+     * <li> -: unmatched state</li>
+     * <li> =: matched state</li>
+     * <li> .: no state (feature has ben deleted)</li>
+     * <li> [: creation of a state</li>
+     * <li> ]: expiration of a state</li>
+     * </ul>
+     * 
+     * @param version1 -
+     *            the first revision
+     * @param version2 -
+     *            the second revision, or null if you want the diff between version1 and current
+     * @param filter a filter to limit the features that must be taken into consideration
+     * @param users an eventual list of user ids that can be used to further filter the features,
+     * only features touched by any of these users will be  
+     * @param transaction
+     * @throws IOException
+     * @throws IllegalAttributeException
+     * @throws NoSuchElementException
+     */
+    public ModifiedFeatureIds getModifiedFeatureFIDs(String typeName, String version1,
+            String version2, Filter originalFilter, String[] users, Transaction transaction) throws IOException {
+        if(originalFilter == null)
+            originalFilter = Filter.INCLUDE;
+        RevisionInfo r1 = new RevisionInfo(version1);
+        RevisionInfo r2 = new RevisionInfo(version2);
+
+        if (!isVersioned(typeName)) {
+            return new ModifiedFeatureIds(r1, r2);
+        } else if (r1.revision > r2.revision) {
+            // swap them
+            RevisionInfo tmp = r1;
+            r1 = r2;
+            r2 = tmp;
+        }
+        
+        // version enable the filter
+        Filter filter = transformFidFilter(typeName, originalFilter);
+        
+        // gather the minimum revision at which it makes sense to check for changes
+        // then check if it makes sense to have any result, and limit the minimum rev
+        // to avoid picking up the changeset where the feature type was revision enabled
+        long baseRevision = getBaseRevision(typeName, transaction);
+        if(baseRevision > r2.revision)
+            return new ModifiedFeatureIds(r1, r2); 
+        if(baseRevision > r1.revision)
+            r1.revision = baseRevision;
+        
+        // gather revisions where the specified users were involved... that would be
+        // a job for joins, but I don't want to make this code datastore dependent, so
+        // far this one is relatively easy to port over to other dbms, I would like it
+        // to stay so
+        Set userRevisions = getRevisionsCreatedBy(typeName, r1, r2, users, transaction);
+        
+        // We have to perform the following query:
+        // ------------------------------------------------------------
+        // select rowId, revisionCreated, [columnsForSecondaryFilter]
+        // from data
+        // where (
+        // (revision < r1 and expired > r1 and expired <= r2)
+        // or
+        // (revision > r1 and revision <= r2)
+        // )
+        // and [encodableFilterComponent]
+        // and revision in [user created revisions]
+        // order by rowId, revisionCreated
+        // ------------------------------------------------------------
+        // and then run the post filter against the results.
+        // Beware, the query extracts rows that do match the prefilter, so it does not
+        // allow us to conclude that a feature has been created after r1 only because
+        // the smallest revision attribute with find is > r1. There may be a feature
+        // that was already there, but that matches the filter only after r1.
+        // A second query, fid filter based, is required to decide whether a feature
+        // has really come to live after r1.
+        // The same goes for deletion, the may be a feature that matches the filter
+        // only before r2, and does not match it in the state laying across r2 (if there
+        // is one, if a rollback already occurred in the past, there may be holes, intervals
+        // where the feature did not exist, a hole is always created when a feature is deleted
+        // and then the deletion is rolled back).
+
+        // build a list of columns we need to get out. We need the fid columns, revision (which is
+        // part of the internal type fid) and everything to run the post filter against
+        Set columns = new HashSet();
+        SQLBuilder builder = wrapped.getSqlBuilder(typeName);
+        SimpleFeatureType internalType = wrapped.getSchema(typeName);
+        Filter preFilter = builder.getPreQueryFilter(filter);
+        Filter postFilter = builder.getPostQueryFilter(filter);
+        columns.addAll(Arrays.asList(DataUtilities.attributeNames(postFilter, internalType)));
+        VersionedFIDMapper mapper = (VersionedFIDMapper) wrapped.getFIDMapper(typeName);
+        for (int i = 0; i < mapper.getColumnCount(); i++) {
+            columns.add(mapper.getColumnName(i));
+        }
+        columns.add("revision");
+        columns.add("expired");
+
+        // build a filter to extract stuff modified between r1 and r2 and matching the prefilter
+        Filter revLeR1 = ff.lessOrEqual(ff.property("revision"), ff.literal(r1.revision));
+        Filter expGtR1 = ff.greater(ff.property("expired"), ff.literal(r1.revision));
+        Filter expLeR2 = ff.lessOrEqual(ff.property("expired"), ff.literal(r2.revision));
+        Filter expLtR2 = ff.less(ff.property("expired"), ff.literal(r2.revision));
+        Filter revGtR1 = ff.greater(ff.property("revision"), ff.literal(r1.revision));
+        Filter revLeR2 = ff.lessOrEqual(ff.property("revision"), ff.literal(r2.revision));
+        Filter versionFilter;
+        if(r2.isLast())
+            versionFilter = ff.or(ff.and(revLeR1, ff.and(expGtR1, expLtR2)), revGtR1);
+        else
+            versionFilter = ff.or(ff.and(revLeR1, ff.and(expGtR1, expLeR2)), ff.and(revGtR1,
+                revLeR2));
+        // ... merge in the prefilter
+        Filter newFilter = null;
+        if (Filter.EXCLUDE.equals(preFilter)) {
+            return new ModifiedFeatureIds(r1, r2);
+        } else if (Filter.INCLUDE.equals(preFilter)) {
+            newFilter = versionFilter;
+        } else {
+            Filter clone = transformFidFilter(typeName, preFilter);
+            newFilter = ff.and(versionFilter, clone);
+        }
+        // ... and the user revision checks
+        if(userRevisions != null) {
+            // if no revisions touched by those users, no changes
+            if(userRevisions.isEmpty())
+                return new ModifiedFeatureIds(r1, r2);
+            
+            List urFilters = new ArrayList(userRevisions.size());
+            PropertyName revisionProperty = ff.property("revision");
+            for (Iterator it = userRevisions.iterator(); it.hasNext();) {
+                Long revision = (Long) it.next();
+                urFilters.add(ff.equals(revisionProperty, ff.literal(revision)));
+            }
+            newFilter = ff.and(newFilter, ff.or(urFilters));
+        }
+        
+
+        // query the underlying datastore
+         FeatureReader<SimpleFeatureType, SimpleFeature> fr = null;
+        Set matched = new HashSet();
+        Set createdBefore = new HashSet();
+        Set expiredAfter = new HashSet();
+        try {
+            // ... first gather all fids that do match the pre and post filters between r1 and r2
+            // and gather all those fids that we already know were born before r1 or deleted after
+            // r2
+            String[] colArray = (String[]) columns.toArray(new String[columns.size()]);
+            DefaultQuery q = new DefaultQuery(typeName, newFilter, colArray);
+            fr = wrapped.getFeatureReader(q, transaction);
+            while (fr.hasNext()) {
+                SimpleFeature f = fr.next();
+                long revision = ((Long) f.getAttribute("revision")).longValue();
+                long expired = ((Long) f.getAttribute("expired")).longValue();
+
+                // get the external id, the one that really gives us feature identity
+                // and not just feature history
+                String id = mapper.getUnversionedFid(f.getID());
+                if (!matched.contains(id)
+                        && (revision > r1.revision || (expired > r1.revision && expired <= r2.revision))
+                        && postFilter.evaluate(f)) {
+                    matched.add(id);
+                }
+                // little optimization, pre-gather all stuff that we already know was created before
+                // or deleted after the interval we are taking into consideration
+                if (revision <= r1.revision)
+                    createdBefore.add(id);
+                if (expired > r2.revision)
+                    expiredAfter.add(id);
+            }
+            fr.close();
+            fr = null;
+
+            // now onto the created ones. We do start from candidates, those matched for
+            // which the prefilter did not return a version before r1 (which does not mean it
+            // does not exists...)
+            Set created = new HashSet(matched);
+            created.removeAll(createdBefore);
+            if (!created.isEmpty()) {
+                Filter r1FidFilter = buildFidFilter(created);
+                Filter r1Filter = buildVersionedFilter(typeName, r1FidFilter, r1);
+                DefaultQuery r1q = new DefaultQuery(typeName, r1Filter, colArray);
+                fr = wrapped.getFeatureReader(r1q, transaction);
+                while (fr.hasNext()) {
+                    String versionedId = fr.next().getID();
+                    String unversionedId = mapper.getUnversionedFid(versionedId);
+                    created.remove(unversionedId);
+                }
+                fr.close();
+                fr = null;
+            }
+
+            // and then onto the deleted ones. Same reasoning
+            Set deleted = new HashSet(matched);
+            deleted.removeAll(expiredAfter);
+            if (!deleted.isEmpty()) {
+                Filter r2FidFilter = buildFidFilter(deleted);
+                Filter r2Filter = buildVersionedFilter(typeName, r2FidFilter, r2);
+                DefaultQuery r2q = new DefaultQuery(typeName, r2Filter, colArray);
+                fr = wrapped.getFeatureReader(r2q, transaction);
+                while (fr.hasNext()) {
+                    String versionedId = fr.next().getID();
+                    String unversionedId = mapper.getUnversionedFid(versionedId);
+                    deleted.remove(unversionedId);
+                }
+                fr.close();
+                fr = null;
+            }
+
+            // all matched that are not created after or deleted before are the "modified" ones
+            Set modified = new HashSet(matched);
+            modified.removeAll(created);
+            modified.removeAll(deleted);
+            
+            // oh, finally we have all we need to return :-)
+            return new ModifiedFeatureIds(r1, r2, created, deleted, modified);
+        } catch (Exception e) {
+            throw new DataSourceException("Error occurred while computing modified fids", e);
+        } finally {
+            if (fr != null)
+                fr.close();
+        }
+    }
+

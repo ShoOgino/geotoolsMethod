@@ -1,0 +1,90 @@
+    /**
+     * For an image backed by an {@link IndexColorModel}, replaces all occurences of the given
+     * color (usually opaque) by a fully transparent color.
+     *
+     * @param transparentColor The color to make transparent.
+     * @return this image worker.
+     *
+     */
+    private final ImageWorker maskIndexColorModel(final Color transparentColor) {
+        assert image.getColorModel() instanceof IndexColorModel;
+
+        // Gets informations about the provided images.
+        IndexColorModel cm = (IndexColorModel) image.getColorModel();
+        final int numComponents     = cm.getNumComponents();
+        int       transparency      = cm.getTransparency();
+        int       transparencyIndex = cm.getTransparentPixel();
+        final int mapSize           = cm.getMapSize();
+        final int transparentRGB    = transparentColor.getRGB() & 0x00FFFFFF;
+        /*
+         * Optimization in case of Transparency.BITMASK.
+         * If the color we want to use as the fully transparent one is the same
+         * that is actually used as the transparent color, we leave doing nothing.
+         */
+        if (transparency == Transparency.BITMASK && transparencyIndex != -1) {
+            int transpColor = cm.getRGB(transparencyIndex) & 0x00FFFFFF;
+            if (transpColor == transparentRGB) {
+                return this;
+            }
+        }
+        /*
+         * Find the index of the specified color. Most of the time, the color should appears only
+         * once, which will leads us to a BITMASK image. However we allows more occurences, which
+         * will leads us to a TRANSLUCENT image.
+         */
+        final List<Integer> transparentPixelsIndexes = new ArrayList<Integer>();
+        for (int i=0; i<mapSize; i++) {
+            // Gets the color for this pixel removing the alpha information.
+            final int color = cm.getRGB(i) & 0xFFFFFF;
+            if (transparentRGB == color) {
+                transparentPixelsIndexes.add(i);
+                if (Transparency.BITMASK == transparency) {
+                    break;
+                }
+            }
+        }
+        final int found = transparentPixelsIndexes.size();
+        if (found == 1) {
+            // Transparent color found.
+            transparencyIndex = transparentPixelsIndexes.get(0);
+            transparency = Transparency.BITMASK;
+        } else if (found == 0) {
+            return this;
+        } else {
+            transparencyIndex = -1;
+            transparency = Transparency.TRANSLUCENT;
+        }
+
+        // Prepare the new ColorModel.
+        // Get the old map and update it as needed.
+        final byte rgb[][] = new byte[4][mapSize];
+        cm.getReds  (rgb[0]);
+        cm.getGreens(rgb[1]);
+        cm.getBlues (rgb[2]);
+        if (numComponents == 4) {
+            cm.getAlphas(rgb[3]);
+        } else {
+            Arrays.fill(rgb[3], (byte) 255);
+        }
+        if (transparency != Transparency.TRANSLUCENT) {
+            cm = new IndexColorModel(cm.getPixelSize(), mapSize,
+                    rgb[0], rgb[1], rgb[2], transparencyIndex);
+        } else {
+            for (int k=0; k<found; k++) {
+                rgb[3][transparentPixelsIndexes.get(k)] = (byte) 0;
+            }
+            cm = new IndexColorModel(cm.getPixelSize(), mapSize,
+                    rgb[0], rgb[1], rgb[2], rgb[3]);
+        }
+
+        // Format the input image.
+        final ImageLayout layout = new ImageLayout(image);
+        layout.setColorModel(cm);
+        final RenderingHints hints = getRenderingHints();
+        hints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
+        hints.add(new RenderingHints(JAI.KEY_REPLACE_INDEX_COLOR_MODEL, Boolean.FALSE));
+        image = FormatDescriptor.create(image, image.getSampleModel().getDataType(), hints);
+        invalidateStatistics();
+        return this;
+    }
+

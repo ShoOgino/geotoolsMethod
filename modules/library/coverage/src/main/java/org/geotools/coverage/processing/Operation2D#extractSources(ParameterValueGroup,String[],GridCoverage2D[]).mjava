@@ -1,0 +1,61 @@
+    /**
+     * Extracts and prepares the sources for this {@code Operation2D}, taking into account the
+     * need for going to the geophysics view of the data in case this operation requires so.
+     * <p>
+     * This method fills the {@code sources} array with needed sources, changing to their
+     * geophysics view if needed.
+     *
+     * @param parameters  Parameters that will control this operation.
+     * @param sourceNames Names of the sources to extract from {@link ParameterValueGroup}.
+     * @param sources     On input, an array with the same length than {@code sourceNames}.
+     *                    On output, the {@link GridCoverage2D} to be used as sources for
+     *                    this operation.
+     * @return            The type of the {@linkplain #PRIMARY_SOURCE_INDEX primary source},
+     *                    or {@code null} if unknow or if the type should not be changed.
+     *
+     * @throws IllegalArgumentException
+     *                  if an argument is {@code null}, or if {@code sources} and
+     *                  {@code sourceNames} doesn't have length.
+     * @throws ParameterNotFoundException
+     *                  if a required source has not been found.
+     * @throws InvalidParameterValueException
+     *                  if a source doesn't contain a value of type {@link GridCoverage2D}.
+     *
+     * @since 2.4
+     */
+    protected ViewType extractSources(final ParameterValueGroup parameters,
+                                      final String[]            sourceNames,
+                                      final GridCoverage2D[]    sources)
+            throws ParameterNotFoundException, InvalidParameterValueException
+    {
+        Utilities.ensureNonNull("parameters",  parameters);
+        Utilities.ensureNonNull("sourceNames", sourceNames);
+        Utilities.ensureNonNull("sources",     sources);
+        if (sources.length != sourceNames.length) {
+            throw new IllegalArgumentException(Errors.format(ErrorKeys.MISMATCHED_ARRAY_LENGTH));
+        }
+        ViewType type = null;
+        final boolean computeOnGeophysicsValues = computeOnGeophysicsValues(parameters);
+        for (int i=0; i<sourceNames.length; i++) {
+            Object candidate = parameters.parameter(sourceNames[i]).getValue();
+            if (candidate == null) {
+                // assume it is an optional parameter
+                continue;
+            }
+            if (!(candidate instanceof GridCoverage2D)) {
+                throw new InvalidParameterValueException(Errors.format(ErrorKeys.ILLEGAL_CLASS_$2,
+                        Classes.getClass(candidate), GridCoverage2D.class), sourceNames[i], candidate);
+            }
+            GridCoverage2D source = (GridCoverage2D) candidate;
+            if (computeOnGeophysicsValues) {
+                final GridCoverage2D old = source;
+                source = source.view(ViewType.GEOPHYSICS);
+                if (i == PRIMARY_SOURCE_INDEX) {
+                    type = (old == source) ? ViewType.GEOPHYSICS : ViewType.PACKED;
+                }
+            }
+            sources[i] = source;
+        }
+        return type;
+    }
+

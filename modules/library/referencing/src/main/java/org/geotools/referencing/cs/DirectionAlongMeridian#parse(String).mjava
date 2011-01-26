@@ -1,0 +1,44 @@
+    /**
+     * If the specified name is a direction along some specific meridian,
+     * returns information about that. Otherwise returns {@code null}.
+     */
+    public static DirectionAlongMeridian parse(final String name) {
+        final Matcher m = EPSG.matcher(name);
+        if (!m.matches()) {
+            // Not the expected pattern.
+            return null;
+        }
+        String group = m.group(1);
+        final AxisDirection baseDirection = findDirection(BASE_DIRECTIONS, group);
+        if (baseDirection == null || !AxisDirection.NORTH.equals(baseDirection.absolute())) {
+            // We expected "North" or "South" direction.
+            return null;
+        }
+        group = m.group(2);
+        double meridian;
+        try {
+            meridian = Double.parseDouble(group);
+        } catch (NumberFormatException exception) {
+            // Not a legal axis direction. Just ignore the exception,
+            // since we are supposed to return 'null' in this situation.
+            return null;
+        }
+        if (!(meridian >= -180 && meridian <= 180)) {
+            // Meridian is NaN or is not in the valid range.
+            return null;
+        }
+        group = m.group(4);
+        if (group != null) {
+            final AxisDirection sign = findDirection(BASE_DIRECTIONS, group);
+            final AxisDirection abs = sign.absolute();
+            if (sign == null || !AxisDirection.EAST.equals(abs)) {
+                // We expected "East" or "West" direction.
+                return null;
+            }
+            if (sign != abs) {
+                meridian = -meridian;
+            }
+        }
+        return new DirectionAlongMeridian(baseDirection, meridian);
+    }
+

@@ -1,0 +1,45 @@
+    /**
+     * Takes a filter and merges in the extra conditions needed to extract the specified revision
+     * 
+     * @param filter
+     *            The original filter
+     * @param ri
+     *            The revision information
+     * 
+     * @return a new filter
+     * @throws FactoryRegistryException
+     * @throws IOException
+     */
+    Filter buildVersionedFilter(String featureTypeName, Filter filter, RevisionInfo ri)
+            throws IOException {
+        // build extra filter we need to append to query in order to retrieve
+        // the desired revision
+        Filter extraFilter = null;
+        if (ri.isLast()) {
+            // expired = Long.MAX_VALUE
+            extraFilter = ff.equals(ff.property("expired"), ff.literal(Long.MAX_VALUE));
+        } else {
+            // revision <= [revision]
+            // and expired > [revision]
+            Filter revf = ff.lessOrEqual(ff.property("revision"), ff.literal(ri.revision));
+            Filter expf = ff.greater(ff.property("expired"), ff.literal(ri.revision));
+            extraFilter = ff.and(revf, expf);
+        }
+
+        // handle include and exclude separately since the
+        // filter factory does not handle them properly
+        if (filter.equals(Filter.EXCLUDE)) {
+            return Filter.EXCLUDE;
+        }
+        if (filter.equals(Filter.INCLUDE))
+            return extraFilter;
+
+        // we need to turn eventual fid filters into normal filters since we
+        // played tricks on fids and hidden the revision attribute
+        // (which is part of the primary key)
+        Filter transformedFidFilter = transformFidFilter(featureTypeName, filter);
+        Filter newFilter = ff.and(transformedFidFilter, extraFilter);
+
+        return newFilter;
+    }
+

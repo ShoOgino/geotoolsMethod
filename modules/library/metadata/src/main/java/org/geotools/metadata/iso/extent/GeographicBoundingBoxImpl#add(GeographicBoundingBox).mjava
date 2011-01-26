@@ -1,0 +1,42 @@
+    /**
+     * Adds a geographic bounding box to this box. If the {@linkplain #getInclusion inclusion}
+     * status is the same for this box and the box to be added, then the resulting bounding box
+     * is the union of the two boxes. If the {@linkplain #getInclusion inclusion} status are
+     * opposite (<cite>exclusion</cite>), then this method attempt to exclude some area of
+     * specified box from this box. The resulting bounding box is smaller if the exclusion can
+     * be performed without ambiguity.
+     *
+     * @param box The geographic bounding box to add to this box.
+     *
+     * @since 2.2
+     */
+    public synchronized void add(final GeographicBoundingBox box) {
+        checkWritePermission();
+        final double xmin = box.getWestBoundLongitude();
+        final double xmax = box.getEastBoundLongitude();
+        final double ymin = box.getSouthBoundLatitude();
+        final double ymax = box.getNorthBoundLatitude();
+        /*
+         * Reminder: 'inclusion' is a mandatory attribute, so it should never be null for a
+         * valid metadata object.  If the metadata object is invalid, it is better to get a
+         * an exception than having a code doing silently some inappropriate work.
+         */
+        final Boolean inc1 =     getInclusion(); ensureNonNull("inclusion", inc1);
+        final Boolean inc2 = box.getInclusion(); ensureNonNull("inclusion", inc2);
+        if (inc1.booleanValue() == inc2.booleanValue()) {
+            if (xmin < westBoundLongitude) westBoundLongitude = xmin;
+            if (xmax > eastBoundLongitude) eastBoundLongitude = xmax;
+            if (ymin < southBoundLatitude) southBoundLatitude = ymin;
+            if (ymax > northBoundLatitude) northBoundLatitude = ymax;
+        } else {
+            if (ymin <= southBoundLatitude && ymax >= northBoundLatitude) {
+                if (xmin > westBoundLongitude) westBoundLongitude = xmin;
+                if (xmax < eastBoundLongitude) eastBoundLongitude = xmax;
+            }
+            if (xmin <= westBoundLongitude && xmax >= eastBoundLongitude) {
+                if (ymin > southBoundLatitude) southBoundLatitude = ymin;
+                if (ymax < northBoundLatitude) northBoundLatitude = ymax;
+            }
+        }
+    }
+

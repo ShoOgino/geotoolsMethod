@@ -1,0 +1,27 @@
+    /**
+     * Override that uses sql statements to perform the operation.
+     * 
+     * @see org.geotools.data.jdbc.JDBCFeatureWriter#doUpdate(org.geotools.feature.Feature,
+     *      org.geotools.feature.Feature)
+     */
+    protected void doUpdate(SimpleFeature live, SimpleFeature current) throws IOException,
+            SQLException {
+        LOGGER.fine("updating postgis feature " + current);
+
+        // lazily create the insert statement
+        if (updateStatement != null) {
+            updateStatement = createUpdateStatement(queryData.getConnection(), queryData
+                    .getFeatureType());
+        }
+
+        try {
+            fillUpdateParameters(updateStatement, current, live);
+            updateStatement.executeUpdate();
+        } catch (SQLException sqle) {
+            String msg = "SQL Exception writing geometry column";
+            LOGGER.log(Level.SEVERE, msg, sqle);
+            queryData.close(sqle);
+            throw new DataSourceException(msg, sqle);
+        }
+    }
+

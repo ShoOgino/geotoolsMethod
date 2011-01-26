@@ -1,0 +1,44 @@
+    /**
+     * Pre processes the geometry, e.g. cuts it, splits it, etc. in its native srs. May return null
+     * if the geometry is not to be drawn
+     */
+    public Geometry preProcess(CoordinateReferenceSystem geomCRS, Geometry geometry) throws TransformException, FactoryException {
+        // if not reprojection is going on, we don't need to cut
+        if (CRS.equalsIgnoreMetadata(geomCRS, renderingEnvelope.getCoordinateReferenceSystem())) {
+            return geometry;
+        }
+        
+        // if there is no valid area, no cutting is required either
+        if(validArea == null)
+            return geometry;
+
+        // if the geometry is within the valid area for this projection
+        // just skip expensive cutting
+        ReferencedEnvelope ge = new ReferencedEnvelope(geometry.getEnvelopeInternal(), geomCRS);
+        ReferencedEnvelope geWGS84 = ge.transform(WGS84, true);
+        if (validArea.contains((Envelope) geWGS84)) {
+            return geometry;
+        }
+
+        // we need to cut, first thing, we intersect the geometry envelope
+        // and the valid area in WGS84, which is a neutral, everything can
+        // be turned into it, and then turn back the intersection into
+        // the origin SRS
+        ReferencedEnvelope envIntWgs84 = new ReferencedEnvelope(validArea.intersection(geWGS84), WGS84);
+        
+        // if the intersection is empty the geometry is completely outside of the valid area, skip it
+        if(envIntWgs84.isEmpty())
+            return null;
+            
+        ReferencedEnvelope envInt = envIntWgs84.transform(geomCRS, true);
+
+        // turn the envelope into a geometry and perform the intersection
+        Geometry result = geometry.intersection(JTS.toGeometry((Envelope) envInt));
+
+        // handle in special way empty intersections
+        if (result instanceof GeometryCollection && ((GeometryCollection) result).isEmpty())
+            return null;
+        else
+            return result;
+    }
+

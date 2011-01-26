@@ -1,0 +1,69 @@
+	private void loadPropertyCollectors() {
+		// load property collectors
+		final String pc=runConfiguration.getPropertyCollectors();
+		if(pc!=null&& pc.length()>0)
+		{
+			// load the SPI set
+			final Set<PropertiesCollectorSPI> pcSPIs = PropertiesCollectorFinder.getPropertiesCollectorSPI();
+			
+			// parse the string
+			final List<PropertiesCollector> pcs= new ArrayList<PropertiesCollector>();
+			final String[] pcsDefs=pc.split(",");
+			for(String pcDef: pcsDefs)
+			{
+				// parse this def as NAME[CONFIG_FILE](PROPERTY;PROPERTY;....;PROPERTY)
+				final int squareLPos=pcDef.indexOf("[");
+				final int squareRPos=pcDef.indexOf("]");
+				final int squareRPosLast= pcDef.lastIndexOf("]");
+				final int roundLPos=pcDef.indexOf("(");
+				final int roundRPos=pcDef.indexOf(")");
+				final int roundRPosLast= pcDef.lastIndexOf(")");				
+				if(squareRPos!=squareRPosLast)
+					continue;
+				if(squareLPos==-1 || squareRPos ==-1)
+					continue;
+				if(squareLPos==0)
+					continue;
+				
+				if(roundRPos!=roundRPosLast)
+					continue;
+				if(roundLPos==-1 || roundRPos ==-1)
+					continue;
+				if(roundLPos==0)
+					continue;	
+				if(roundLPos!=squareRPos+1)//]( or exit
+					continue;		
+				if(roundRPos!=(pcDef.length()-1))// end with )
+					continue;	
+				
+				// name
+				final String name=pcDef.substring(0,squareLPos);
+				PropertiesCollectorSPI selectedSPI=null;
+				for(PropertiesCollectorSPI spi:pcSPIs){
+					if(spi.isAvailable()&&spi.getName().equalsIgnoreCase(name))
+					{
+						selectedSPI=spi;
+						break;
+					}
+				}
+				if(selectedSPI==null)
+					continue;
+				
+				// config
+				final String config=squareLPos<squareRPos?pcDef.substring(squareLPos+1,squareRPos):"";
+				final File configFile= new File(runConfiguration.getRootMosaicDirectory(),config+".properties");
+				if(!Utils.checkFileReadable(configFile))
+					continue;
+				// it is readable
+				
+				// property names
+				final String propertyNames[]=pcDef.substring(roundLPos+1, roundRPos).split(",");
+				
+				// create the PropertiesCollector
+				pcs.add(selectedSPI.create(configFile, Arrays.asList(propertyNames)));
+				
+			}
+			this.propertiesCollectors=pcs;
+		}
+	}
+

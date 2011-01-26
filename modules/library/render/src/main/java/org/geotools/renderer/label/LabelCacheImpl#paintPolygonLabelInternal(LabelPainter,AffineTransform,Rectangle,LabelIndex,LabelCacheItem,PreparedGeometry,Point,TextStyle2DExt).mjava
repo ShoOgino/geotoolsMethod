@@ -1,0 +1,42 @@
+    private boolean paintPolygonLabelInternal(LabelPainter painter, AffineTransform tempTransform,
+            Rectangle displayArea, LabelIndex glyphs, LabelCacheItem labelItem, PreparedGeometry pg,
+            Point centroid, TextStyle2DExt textStyle) throws Exception {
+        // useful to debug the label/centroid relationship 
+        // painter.graphics.setColor(Color.RED);
+        // painter.graphics.drawRect((int)(centroid.getX() - 2), (int) (centroid.getY() - 2), 2, 2);
+        
+        AffineTransform original = new AffineTransform(tempTransform);
+        setupPointTransform(tempTransform, centroid, textStyle, painter);
+
+        Rectangle2D transformed = tempTransform
+                .createTransformedShape(painter.getFullLabelBounds()).getBounds2D();
+        if (!displayArea.contains(transformed)
+                || (labelItem.isConflictResolutionEnabled() 
+                        && glyphs.labelsWithinDistance(transformed, labelItem.getSpaceAround()))
+                || goodnessOfFit(painter, tempTransform, pg) < painter.getLabel().getGoodnessOfFit()) {
+            // try the alternate rotation if possible
+            if(textStyle.flipRotation(pg.getGeometry())) {
+                tempTransform.setTransform(original);
+                setupPointTransform(tempTransform, centroid, textStyle, painter);
+
+                transformed = tempTransform.createTransformedShape(painter.getFullLabelBounds()).getBounds2D();
+                if (!displayArea.contains(transformed)
+                        || (labelItem.isConflictResolutionEnabled() 
+                                && glyphs.labelsWithinDistance(transformed, labelItem.getSpaceAround()))
+                        || goodnessOfFit(painter, tempTransform, pg) < painter.getLabel().getGoodnessOfFit()) {
+                    textStyle.flipRotation(pg.getGeometry());
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+            
+
+        painter.paintStraightLabel(tempTransform);
+        if(labelItem.isConflictResolutionEnabled()) {
+            glyphs.addLabel(labelItem, transformed);
+        }
+        return true;
+    }
+

@@ -1,0 +1,46 @@
+    /**
+     * Transforms the specified {@code ptSrc} and stores the result in {@code ptDst}.
+     * <p>
+     * This method standardizes the source {@code x} coordinate
+     * by removing the {@link #centralMeridian}, before invoking
+     * <code>{@link #transformNormalized transformNormalized}(x, y, ptDst)</code>.
+     * It also multiplies by {@link #globalScale} and adds the {@link #falseEasting} and
+     * {@link #falseNorthing} to the point returned by the {@code transformNormalized(...)} call.
+     *
+     * @param ptSrc the specified coordinate point to be transformed.
+     *              Ordinates must be in decimal degrees.
+     * @param ptDst the specified coordinate point that stores the result of transforming
+     *              {@code ptSrc}, or {@code null}. Ordinates will be in metres.
+     * @return      the coordinate point after transforming {@code ptSrc} and storing
+     *              the result in {@code ptDst}.
+     * @throws ProjectionException if the point can't be transformed.
+     */
+    @Override
+    public final Point2D transform(final Point2D ptSrc, Point2D ptDst) throws ProjectionException {
+        final double x = ptSrc.getX();
+        final double y = ptSrc.getY();
+        if (verifyCoordinateRanges()) {
+            if (verifyGeographicRanges(this, x, y)) {
+                warningLogged();
+            }
+        }
+        /*
+         * Makes sure that the longitude before conversion stay within +/- PI radians. As a
+         * special case, we do not check the range if no rotation were applied on the longitude.
+         * This is because the user may have a big area ranging from -180° to +180°. With the
+         * slight rounding errors related to map projections, the 180° longitude may be slightly
+         * over the limit. Rolling the longitude would changes its sign. For example a bounding
+         * box from 30° to +180° would become 30° to -180°, which is probably not what the user
+         * wanted.
+         */
+        ptDst = transformNormalized(centralMeridian != 0 ?
+                rollLongitude(toRadians(x) - centralMeridian) : toRadians(x), toRadians(y), ptDst);
+        ptDst.setLocation(globalScale*ptDst.getX() + falseEasting,
+                          globalScale*ptDst.getY() + falseNorthing);
+
+        if(invertible) {
+            assert checkReciprocal(ptDst, (ptSrc!=ptDst) ? ptSrc : new Point2D.Double(x,y), true);
+        }
+        return ptDst;
+    }
+

@@ -1,0 +1,128 @@
+    /**
+     * Remove a range of values from this set. Range may be removed in any order.
+     *
+     * @param  min The lower value to remove, exclusive.
+     * @param  max The upper value to remove, exclusive.
+     * @return {@code true} if this set changed as a result of the call.
+     * @throws IllegalArgumentException if {@code lower} is greater than {@code upper}.
+     */
+    public <N> boolean remove(final Comparable<? super N> min, final Comparable<? super N> max)
+            throws IllegalArgumentException
+    {
+        Comparable lower = toArrayElement(min);
+        Comparable upper = toArrayElement(max);
+        if (lower.compareTo(upper) >= 0) {
+            throw new IllegalArgumentException(Errors.format(ErrorKeys.BAD_RANGE_$2, min, max));
+        }
+        // if already empty, or range outside the current set, nothing to change
+        if (array == null) {
+            return false;
+        }
+        final int modCountChk = modCount;
+        int i0 = binarySearch(lower);
+        int i1 = binarySearch(upper);
+        if (i0 < 0) {
+            if (((i0 = ~i0) & 1) != 0) { // Attention: c'est ~ et non -
+                /*
+                 * Si le début de la plage ne correspond pas à une des dates en mémoire,
+                 * il faudra faire un trou à quelque part dans le tableau. Si la date tombe
+                 * dans une des plages déjà existantes (si son index est impair), on change
+                 * la date de fin de la plage existante. Visuellement, on fait:
+                 *
+                 *   0   1     2      3     4   5    6     7
+                 *   #####     #####---     --###    #######
+                 *                 ^          ^
+                 *             lower(i=3)   upper(i=5)
+                 */
+                modCount++;
+                if (i1 != ~i0) {
+                    Array.set(array, i0, lower);
+                } else {
+                    /*
+                     * Special case if the upper index is inside the same range than the lower one:
+                     *
+                     *   0   1     2                3     4   5
+                     *   #####     ####---------#####     #####
+                     *                ^         ^
+                     *           lower(i=3)   upper(i=3)
+                     */
+                    final Object old = array;
+                    final int length = Array.getLength(array);
+                    array = Array.newInstance(arrayElementClass, length + 2);
+                    System.arraycopy(old, 0,  array, 0, i0);
+                    System.arraycopy(old, i0, array, i0 + 2, length - i0);
+                    Array.set(array, i0 + 0, lower);
+                    Array.set(array, i0 + 1, upper);
+                    return true;
+                }
+            } else {
+                /*
+                 * Si la date de début ne tombe pas dans une plage déjà
+                 * existante, il faut prendre la date de fin de la plage
+                 * précédente. Visuellement, on fait:
+                 *
+                 *   0   1     2      3     4   5    6     7
+                 *   #####     ########     #####    #######
+                 *       <---^                  ^
+                 *       lower(i=2)        upper(i=5)
+                 */
+                i0--;
+            }
+        } else {
+            if ((i0 & 1) == 0) {
+                i0--;
+            }
+        }
+        /*
+         * A ce stade, on est certain que 'i0' est impair et pointe vers la fin
+         * d'une plage dans le tableau. Fait maintenant le traitement pour 'i1'.
+         */
+        if (i1 < 0) {
+            /*
+             * Si la date de fin tombe dans une des plages déjà existantes
+             * (si son index est impair), on change la date de début de la
+             * plage existante. Visuellement, on fait:
+             *
+             *   0   1     2      3     4   5    6     7
+             *   #####     ########     --###    #######
+             *                    ^       ^
+             *            lower(i=3)    upper(i=5)
+             */
+            if (((i1 = ~i1) & 1) != 0) { // Attention: c'est ~ et non -
+                modCount++;
+                Array.set(array, --i1, upper);
+            } else {
+                /*
+                 * Si la date de fin ne tombe pas dans une plage déjà existante, il
+                 * faudra (plus tard) supprimer les éventuelles plages qui le précède.
+                 *
+                 *   0   1     2      3        4     5        6         7
+                 *   #####     ########        #######        ###########
+                 *                    ^                  ^
+                 *            lower(i=3)         upper(i=6)
+                 */
+                // nothing to do
+            }
+        } else {
+            i1 &= ~1;
+        }
+        /*
+         * A ce stade, on est certain que 'i1' est pair et pointe vers la début
+         * de la plage dans le tableau. On va maintenant supprimer tout ce qui
+         * se trouve entre 'i0' et 'i1', à l'exclusion de 'i0' et 'i1'.
+         */
+        assert (i0 & 1) != 0 : i0;
+        assert (i1 & 1) == 0 : i1;
+        final int n = i1 - (++i0);
+        if (n > 0) {
+            modCount++;
+            final Object old = array;
+            final int length = Array.getLength(array);
+            array = Array.newInstance(arrayElementClass, length - n);
+            System.arraycopy(old, 0, array, 0, i0);
+            System.arraycopy(old, i1, array, i0, length - i1);
+        }
+        assert (Array.getLength(array) & 1) == 0;
+        return modCountChk != modCount;
+    }
+

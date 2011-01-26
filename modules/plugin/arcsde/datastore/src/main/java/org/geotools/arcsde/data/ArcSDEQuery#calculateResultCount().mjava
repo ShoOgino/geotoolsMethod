@@ -1,0 +1,53 @@
+    /**
+     * if the query has been parsed as just a where clause filter, or has no filter at all, the
+     * result count calculation is optimized by selecting a <code>count()</code> single row. If the
+     * filter involves any kind of spatial filter, such as BBOX, the calculation can't be optimized
+     * by this way, because the ArcSDE Java API throws a <code>"DATABASE LEVEL
+     * ERROR OCURRED"</code> exception. So, in this case, a query over the shape field is made and
+     * the result is traversed counting the number of rows inside a while loop
+     * 
+     */
+    public int calculateResultCount() throws IOException {
+
+        final SimpleFeatureType schema = this.schema;
+        final GeometryDescriptor geometryDescriptor = schema.getGeometryDescriptor();
+
+        final String colName;
+        if (geometryDescriptor == null) {
+            // gemetryless type, use any other column for the query
+            colName = schema.getDescriptor(0).getLocalName();
+        } else {
+            colName = geometryDescriptor.getLocalName();
+        }
+        final SeQueryInfo qInfo = filters.getQueryInfo(new String[] { colName });
+
+        final SeFilter[] spatialFilters = filters.getSpatialFilters();
+
+        final Command<Integer> countCmd = new Command<Integer>() {
+            @Override
+            public Integer execute(ISession session, SeConnection connection) throws SeException,
+                    IOException {
+
+                SeQuery query = new SeQuery(connection);
+                try {
+                    versioningHandler.setUpStream(session, query);
+
+                    if (spatialFilters != null && spatialFilters.length > 0) {
+                        query.setSpatialConstraints(SeQuery.SE_OPTIMIZE, true, spatialFilters);
+                    }
+
+                    SeTable.SeTableStats tableStats = query.calculateTableStatistics("*",
+                            SeTable.SeTableStats.SE_COUNT_STATS, qInfo, 0);
+
+                    int actualCount = tableStats.getCount();
+                    return new Integer(actualCount);
+                } finally {
+                    query.close();
+                }
+            }
+        };
+
+        final Integer count = session.issue(countCmd);
+        return count.intValue();
+    }
+

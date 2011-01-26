@@ -1,0 +1,63 @@
+    /**
+     * Test that mapping geologic unit inside mapped feature type is successful.
+     * 
+     * @throws IOException
+     */
+    @Test
+    public void testMappings() throws IOException {
+
+        Iterator<Feature> mfIterator = mfFeatures.iterator();
+
+        Iterator<Feature> guIterator = inputFeatures.iterator();
+
+        // Extract all geological unit features into a map by id
+        Map<String, Feature> guMap = new HashMap<String, Feature>();
+        Feature guFeature;
+        while (guIterator.hasNext()) {
+            guFeature = (Feature) guIterator.next();
+            String guId = guFeature.getIdentifier().getID();
+            if (!guMap.containsKey(guId)) {
+                guMap.put(guId, guFeature);
+            }
+        }
+        Feature mfFeature;
+        Collection<Property> nestedGuFeatures;
+        String guId;
+        final String NESTED_LINK = "specification";
+        while (mfIterator.hasNext()) {
+            mfFeature = (Feature) mfIterator.next();
+            String mfId = mfFeature.getIdentifier().toString();
+            String[] guIds = FeatureChainingTest.mfToGuMap.get(mfId).split(";");
+
+            // make sure we have the right number of nested features
+            nestedGuFeatures = (Collection<Property>) mfFeature.getProperties(NESTED_LINK);
+            assertEquals(guIds.length, nestedGuFeatures.size());
+
+            ArrayList<String> nestedGuIds = new ArrayList<String>();
+
+            for (Property property : nestedGuFeatures) {
+                Object value = property.getValue();
+                assertNotNull(value);
+                assertTrue(value instanceof Collection);
+                assertEquals(1, ((Collection) value).size());
+
+                Feature nestedGuFeature = (Feature) ((Collection) value).iterator().next();
+                /**
+                 * Test geological unit
+                 */
+                // make sure each of the nested geologic unit is valid
+                guId = nestedGuFeature.getIdentifier().toString();
+                assertTrue(guMap.containsKey(guId));
+
+                nestedGuIds.add(guId);
+
+                // make sure the nested geologic unit feature has the right properties
+                guFeature = guMap.get(guId.toString());
+                Collection<Property> guProperties = guFeature.getProperties();
+                assertEquals(nestedGuFeature.getProperties(), guProperties);
+            }
+            // make sure all the nested geological unit features are there
+            assertTrue(nestedGuIds.containsAll(Arrays.asList(guIds)));
+        }
+    }
+

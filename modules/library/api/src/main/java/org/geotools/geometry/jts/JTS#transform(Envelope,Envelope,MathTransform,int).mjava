@@ -1,0 +1,73 @@
+    /**
+     * Transforms the densified envelope using the specified math transform.
+     * The envelope is densified (extra points put around the outside edge)
+     * to provide a better new envelope for high deformed situations.
+     * <p>
+     * If an optional target envelope is provided, this envelope will be
+     * {@linkplain Envelope#expandToInclude expanded} with the transformation result. It will
+     * <strong>not</strong> be {@linkplain Envelope#setToNull nullified} before the expansion.
+     * <p>
+     * Note that this method can not handle the case where the envelope contains the North or
+     * South pole, or when it cross the &plusmn;180ï¿½ longitude, because {@linkplain MathTransform
+     * math transforms} do not carry suffisient informations. For a more robust envelope
+     * transformation, use {@link ReferencedEnvelope#transform(CoordinateReferenceSystem,
+     * boolean, int)} instead.
+     *
+     * @param  sourceEnvelope  The envelope to transform.
+     * @param  targetEnvelope  An envelope to expand with the transformation result, or {@code null}
+     *                         for returning an new envelope.
+     * @param  transform       The transform to use.
+     * @param  npoints         Densification of each side of the rectange.
+     * @return {@code targetEnvelope} if it was non-null, or a new envelope otherwise.
+     *         In all case, the returned envelope fully contains the transformed envelope.
+     * @throws TransformException if a coordinate can't be transformed.
+     */
+    public static Envelope transform(final Envelope sourceEnvelope, Envelope targetEnvelope,
+        final MathTransform transform, int npoints) throws TransformException {
+        ensureNonNull("sourceEnvelope", sourceEnvelope);
+        ensureNonNull("transform", transform);
+
+        if ((transform.getSourceDimensions() != 2) || (transform.getTargetDimensions() != 2)) {
+            throw new MismatchedDimensionException(Errors.format(ErrorKeys.BAD_TRANSFORM_$1,
+            		Classes.getShortClassName(transform)));
+        }
+
+        npoints++; // for the starting point.
+
+        final double[] coordinates = new double[(4 * npoints) * 2];
+        final double xmin = sourceEnvelope.getMinX();
+        final double xmax = sourceEnvelope.getMaxX();
+        final double ymin = sourceEnvelope.getMinY();
+        final double ymax = sourceEnvelope.getMaxY();
+        final double scaleX = (xmax - xmin) / npoints;
+        final double scaleY = (ymax - ymin) / npoints;
+
+        int offset = 0;
+
+        for (int t = 0; t < npoints; t++) {
+            final double dx = scaleX * t;
+            final double dy = scaleY * t;
+            coordinates[offset++] = xmin; // Left side, increasing toward top.
+            coordinates[offset++] = ymin + dy;
+            coordinates[offset++] = xmin + dx; // Top side, increasing toward right.
+            coordinates[offset++] = ymax;
+            coordinates[offset++] = xmax; // Right side, increasing toward bottom.
+            coordinates[offset++] = ymax - dy;
+            coordinates[offset++] = xmax - dx; // Bottom side, increasing toward left.
+            coordinates[offset++] = ymin;
+        }
+        assert offset == coordinates.length;
+        xform(transform, coordinates, coordinates);
+
+        // Now find the min/max of the result
+        if (targetEnvelope == null) {
+            targetEnvelope = new Envelope();
+        }
+
+        for (int t = 0; t < offset;) {
+            targetEnvelope.expandToInclude(coordinates[t++], coordinates[t++]);
+        }
+
+        return targetEnvelope;
+    }
+

@@ -1,0 +1,58 @@
+    /**
+     * 
+     * @param type AttributeType (often attribute.getType() )
+     * @param attribute Attribute being tested
+     * @param attributeContent Content of the attribute (often attribute.getValue() )
+     * @param isSuper True if super type is being checked
+     * @throws IllegalAttributeException
+     */
+    protected static void validate(AttributeType type, Attribute attribute,
+            Object attributeContent, boolean isSuper) throws IllegalAttributeException {
+
+        if (type == null) {
+            throw new IllegalAttributeException("null type");
+        }
+
+        if (attributeContent == null) {
+            if (!attribute.isNillable()) {
+                throw new IllegalAttributeException(type.getName() + " not nillable");
+            }
+            return;
+        }
+
+        if (type.isIdentified() && attribute.getIdentifier() == null) {
+            throw new NullPointerException(type.getName() + " is identified, null id not accepted");
+        }
+
+        if (!isSuper) {
+
+            // JD: This is an issue with how the xml simpel type hierarchy
+            // maps to our current Java Type hiearchy, the two are inconsitent.
+            // For instance, xs:integer, and xs:int, the later extend the
+            // former, but their associated java bindings, (BigDecimal, and
+            // Integer)
+            // dont.
+            Class clazz = attributeContent.getClass();
+            Class binding = type.getBinding();
+            if (binding != null && binding != clazz && !binding.isAssignableFrom(clazz)) {
+                throw new IllegalAttributeException(clazz.getName()
+                        + " is not an acceptable class for " + type.getName()
+                        + " as it is not assignable from " + binding);
+            }
+        }
+
+        if (type.getRestrictions() != null) {
+            for (Filter f : type.getRestrictions()) {
+                if (!f.evaluate(attribute)) {
+                    throw new IllegalAttributeException("Attribute instance (" + attribute.getIdentifier() + ")"
+                            + "fails to pass filter: " + f);
+                }
+            }
+        }
+
+        // move up the chain,
+        if (type.getSuper() != null) {
+            validate(type.getSuper(), attribute, attributeContent, true);
+        }
+    }
+

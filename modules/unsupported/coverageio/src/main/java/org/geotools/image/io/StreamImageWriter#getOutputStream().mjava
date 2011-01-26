@@ -1,0 +1,53 @@
+    /**
+     * Returns the {@linkplain #output output} as an {@linkplain OutputStream output stream} object.
+     * If the output is already an output stream, it is returned unchanged. Otherwise this method
+     * creates a new {@linkplain OutputStream output stream} (usually <strong>not</strong>
+     * {@linkplain BufferedOutputStream buffered}) from {@link File}, {@link URL},
+     * {@link URLConnection} or {@link ImageOutputStream} outputs.
+     * <p>
+     * This method creates a new {@linkplain OutputStream output stream} only when first invoked.
+     * All subsequent calls will returns the same instance. Consequently, the returned stream
+     * should never be closed by the caller. It may be {@linkplain #close closed} automatically
+     * when {@link #setOutput}, {@link #reset()} or {@link #dispose()} methods are invoked.
+     *
+     * @return {@link #getOutput} as an {@link OutputStream}. This output stream is usually
+     *         not {@linkplain BufferedOutputStream buffered}.
+     * @throws IllegalStateException if the {@linkplain #output output} is not set.
+     * @throws IOException If the output stream can't be created for an other reason.
+     *
+     * @see #getOutput
+     * @see org.geotools.image.io.text.TextImageWriter#getWriter
+     */
+    protected OutputStream getOutputStream() throws IllegalStateException, IOException {
+        if (stream == null) {
+            final Object output = getOutput();
+            if (output == null) {
+                // TODO: Adds the localized message.
+                throw new IllegalStateException(/*getErrorResources().getString(ErrorKeys.NO_IMAGE_OUTPUT)*/);
+            }
+            if (output instanceof OutputStream) {
+                stream = (OutputStream) output;
+                closeOnReset = null; // We don't own the stream, so don't close it.
+            } else if (output instanceof ImageOutputStream) {
+                stream = new OutputStreamAdapter((ImageOutputStream) output);
+                closeOnReset = null; // We don't own the ImageOutputStream, so don't close it.
+            } else if (output instanceof String) {
+                stream = new FileOutputStream((String) output);
+                closeOnReset = stream;
+            } else if (output instanceof File) {
+                stream = new FileOutputStream((File) output);
+                closeOnReset = stream;
+            } else if (output instanceof URL) {
+                stream = ((URL) output).openConnection().getOutputStream();
+                closeOnReset = stream;
+            } else if (output instanceof URLConnection) {
+                stream = ((URLConnection) output).getOutputStream();
+                closeOnReset = stream;
+            } else {
+                throw new IllegalStateException(getErrorResources().getString(
+                        ErrorKeys.ILLEGAL_CLASS_$2, Classes.getClass(output), OutputStream.class));
+            }
+        }
+        return stream;
+    }
+

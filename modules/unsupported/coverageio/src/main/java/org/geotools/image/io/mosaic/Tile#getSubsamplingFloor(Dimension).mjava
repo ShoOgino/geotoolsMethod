@@ -1,0 +1,46 @@
+    /**
+     * Returns the highest subsampling that this tile can handle, not greater than the given
+     * subsampling. Special cases:
+     * <p>
+     * <ul>
+     *   <li>If the given subsampling is {@code null}, then this method returns {@code null}.</li>
+     *   <li>Otherwise if the given subsampling is {@code (0,0)}, then this method returns the
+     *       same {@code subsampling} reference unchanged. Callers can test using the identity
+     *       ({@code ==}) operator.</li>
+     *   <li>Otherwise if this tile can handle exactly the given subsampling, then this method
+     *       returns the same {@code subsampling} reference unchanged. Callers can test using
+     *       the identity ({@code ==}) operator.</li>
+     *   <li>Otherwise if there is no subsampling that this tile could handle,
+     *       then this method returns {@code null}.</li>
+     *   <li>Otherwise this method returns a new {@link Dimension} set to the greatest subsampling
+     *       that this tile can handle, not greater than the given subsampling.</li>
+     * </ul>
+     *
+     * @param  subsampling The subsampling along <var>x</var> and <var>y</var> axis.
+     * @return A subsampling equals or finer than the given one.
+     * @throws IllegalStateException If this tile has been {@linkplain #Tile(ImageReaderSpi,
+     *         Object, int, Dimension, AffineTransform) created without location} and not yet
+     *         processed by {@link TileManagerFactory}.
+     */
+    public Dimension getSubsamplingFloor(final Dimension subsampling) throws IllegalStateException {
+        if (subsampling != null) {
+            final int dx, dy;
+            try {
+                dx = subsampling.width  % (xSubsampling & MASK);
+                dy = subsampling.height % (ySubsampling & MASK);
+            } catch (ArithmeticException e) {
+                throw new IllegalStateException("Tile must be processed by TileManagerFactory.", e);
+            }
+            if (dx != 0 || dy != 0) {
+                final int sourceXSubsampling = subsampling.width  - dx;
+                final int sourceYSubsampling = subsampling.height - dy;
+                if (sourceXSubsampling != 0 && sourceYSubsampling != 0) {
+                    return new Dimension(sourceXSubsampling, sourceYSubsampling);
+                } else {
+                    return null;
+                }
+            }
+        }
+        return subsampling;
+    }
+

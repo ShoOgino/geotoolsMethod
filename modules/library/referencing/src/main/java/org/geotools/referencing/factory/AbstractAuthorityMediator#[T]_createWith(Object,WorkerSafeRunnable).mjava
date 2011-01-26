@@ -1,0 +1,74 @@
+    /**
+     * This method is used to cut down the amount of try/catch/finally code
+     * needed when working with the cache and workers.
+     * <p>
+     * This code brings together two try/catch/finally blocks.
+     *
+     * For cache management:<pre><code>
+     *  T value = (T) cache.get(key);
+     *  if (value == null) {
+     *      try {
+     *          cache.writeLock(key);
+     *          value = (T) cache.peek(key);
+     *          if (value == null) {
+     *          	....generate value....
+     *              cache.put( key, value );
+     *          }
+     *      } finally {
+     *          cache.writeUnLock(key);
+     *      }
+     *  }
+     * </code></pre>
+     * And worker management when generating values:<pre><code>
+     * AbstractCachedAuthorityFactory worker = null;
+     * try {
+     *  worker = (AbstractCachedAuthorityFactory) getPool().borrowObject();
+     *  value = (T) runner.run( worker );
+     * } catch (FactoryException e) {
+     *     throw e;
+     * } catch (Exception e) {
+     *     throw new FactoryException(e);
+     * } finally {
+     *     try {
+     *         getPool().returnObject(worker);
+     *     } catch (Exception e) {
+     *         LOGGER.log(Level.WARNING, "Unable to return worker " + e, e);
+     *     }
+     * }
+     * </code></pre>
+     *
+     * @param key Used to look in the cache
+     * @param runner Used to generate a value in the case of a cache miss
+     * @return value from either the cache or generated
+     */
+    protected <T> T createWith( Object key, WorkerSafeRunnable runner ) throws FactoryException {
+        T value = (T) cache.get(key);
+        if (value == null) {
+            try {
+                cache.writeLock(key);
+                value = (T) cache.peek(key);
+                if (value == null) {
+                	AbstractCachedAuthorityFactory worker = null;
+                    try {
+                        worker = (AbstractCachedAuthorityFactory) getPool().borrowObject();
+                        value = (T) runner.run( worker );
+                    } catch (FactoryException e) {
+                        throw e;
+                    } catch (Exception e) {
+                        throw new FactoryException(e);
+                    } finally {
+                        try {
+                            getPool().returnObject(worker);
+                        } catch (Exception e) {
+                            LOGGER.log(Level.WARNING, "Unable to return worker " + e, e);
+                        }
+                    }
+                    cache.put(key, value);
+                }
+            } finally {
+                cache.writeUnLock(key);
+            }
+        }
+        return value;
+    }
+

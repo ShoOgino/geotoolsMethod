@@ -1,0 +1,89 @@
+    /**
+     * Creates a new instance of a {@link BaseGridCoverage2DReader}. I assume
+     * nothing about file extension.
+     * 
+     * @param input
+     *                Source object for which we want to build a
+     *                {@link BaseGridCoverage2DReader}.
+     * @param hints
+     * 
+     * Hints to be used by this reader throughout his life.
+     * @param formatSpecificSpi
+     *                an instance of a proper {@code ImageReaderSpi}.
+     * @throws DataSourceException
+     */
+    protected BaseGridCoverage2DReader(Object input, final Hints hints,
+            final ImageReaderSpi formatSpecificSpi) throws DataSourceException {
+
+        try {
+            // //
+            //
+            // managing hints
+            //
+            // //
+            if (this.hints == null)
+                this.hints = new Hints();
+
+            if (hints != null)
+                this.hints.add(hints);
+            this.coverageFactory = CoverageFactoryFinder.getGridCoverageFactory(this.hints);
+            readerSPI = formatSpecificSpi;
+
+
+            // //
+            //
+            // Source management
+            //
+            // //
+            checkSource(input);
+            final ImageReader reader = readerSPI.createReaderInstance();
+            reader.setInput(inputFile);
+
+            // //
+            //
+            // Setting Envelope, GridRange and CoordinateReferenceSystem
+            //
+            // //
+            setCoverageProperties(reader);
+            if (getCoverageCRS() == null) {
+                LOGGER.info("crs not found, proceeding with EPSG:4326");
+                setCoverageCRS(AbstractGridFormat.getDefaultCRS());
+            }
+
+            if (getCoverageEnvelope() == null) {
+                throw new DataSourceException(
+                        "Unavailable envelope for this coverage");
+
+            }
+
+            // Additional settings due to "final" methods getOriginalXXX
+            originalEnvelope = getCoverageEnvelope();
+            originalGridRange = getCoverageGridRange();
+            crs = getCoverageCRS();
+
+            // //
+            //
+            // Information about multiple levels and such
+            //
+            // //
+            getResolutionInfo(reader);
+
+            // //
+            //
+            // Reset and dispose reader
+            //
+            // //
+            reader.reset();
+        } catch (IOException e) {
+            if (LOGGER.isLoggable(Level.SEVERE))
+                LOGGER.log(Level.SEVERE, e.getLocalizedMessage(), e);
+
+            throw new DataSourceException(e);
+        } catch (TransformException e) {
+            if (LOGGER.isLoggable(Level.SEVERE))
+                LOGGER.log(Level.SEVERE, e.getLocalizedMessage(), e);
+
+            throw new DataSourceException(e);
+        }
+    }
+

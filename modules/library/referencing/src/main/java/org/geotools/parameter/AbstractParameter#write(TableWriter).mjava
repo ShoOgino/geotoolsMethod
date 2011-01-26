@@ -1,0 +1,74 @@
+    /**
+     * Write the content of this parameter to the specified table. This method make it easier
+     * to align values properly than overriding the {@link #toString} method. The table's columns
+     * are defined as below:
+     * <ol>
+     *   <li>The parameter name</li>
+     *   <li>The separator</li>
+     *   <li>The parameter value</li>
+     * </ol>
+     *
+     * <P>The default implementation is suitable for most cases. However, subclasses are free to
+     * override this method with the following idiom:</P>
+     *
+     * <blockquote><pre>
+     * table.{@linkplain TableWriter#write(String) write}("<var>parameter name</var>");
+     * table.{@linkplain TableWriter#nextColumn() nextColumn}()
+     * table.{@linkplain TableWriter#write(String) write}('=');
+     * table.{@linkplain TableWriter#nextColumn() nextColumn}()
+     * table.{@linkplain TableWriter#write(String) write}("<var>parameter value</var>");
+     * table.{@linkplain TableWriter#nextLine() nextLine}()
+     * </pre></blockquote>
+     *
+     * @param  table The table where to format the parameter value.
+     * @throws IOException if an error occurs during output operation.
+     */
+    protected void write(final TableWriter table) throws IOException {
+        table.write(getName(descriptor));
+        table.nextColumn();
+        if (this instanceof ParameterValue) {
+            /*
+             * Provides a default implementation for parameter value. This implementation doesn't
+             * need to be a Geotools's one. Putting a default implementation here avoid duplication
+             * in all subclasses implementing the same interface.
+             */
+            table.write('=');
+            table.nextColumn();
+            append(table, ((ParameterValue) this).getValue());
+        } else if (this instanceof ParameterValueGroup) {
+            /*
+             * Provides a default implementation for parameter value group, for the same reasons
+             * then the previous block. Reminder: the above 'instanceof' check for interface, not
+             * for subclass. This explain why we use it instead of method overriding.
+             */
+            table.write(':');
+            table.nextColumn();
+            TableWriter inner = null;
+            for (final Iterator it=((ParameterValueGroup) this).values().iterator(); it.hasNext();) {
+                final GeneralParameterValue value = (GeneralParameterValue) it.next();
+                if (value instanceof AbstractParameter) {
+                    if (inner == null) {
+                        inner = new TableWriter(table, 1);
+                    }
+                    ((AbstractParameter) value).write(inner);
+                } else {
+                    // Unknow implementation. It will break the formatting. Too bad...
+                    if (inner != null) {
+                        inner.flush();
+                        inner = null;
+                    }
+                    table.write(value.toString());
+                    table.write(System.getProperty("line.separator", "\r"));
+                }
+            }
+            if (inner != null) {
+                inner.flush();
+            }
+        } else {
+            /*
+             * No know parameter value for this default implementation.
+             */
+        }
+        table.nextLine();
+    }
+

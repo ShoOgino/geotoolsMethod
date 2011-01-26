@@ -1,0 +1,32 @@
+    @Override
+    public Object visit(Or filter, Object extraData) {
+     // scan, clone and simplify the children
+        List<Filter> newChildren = new ArrayList<Filter>(filter.getChildren().size());
+        for (Filter child : filter.getChildren()) {
+            Filter cloned = (Filter) child.accept(this, extraData);
+            
+            // if any of the child filters is include, 
+            // the whole chain of OR is equivalent to 
+            // INCLUDE
+            if(cloned == Filter.INCLUDE)
+                return Filter.INCLUDE;
+            
+            // these can be skipped
+            if(cloned == Filter.EXCLUDE)
+                continue;
+            
+            newChildren.add(cloned);
+        }
+        
+        // we might end up with an empty list
+        if(newChildren.size() == 0)
+            return Filter.EXCLUDE;
+        
+        // remove the logic we have only one filter
+        if(newChildren.size() == 1)
+            return newChildren.get(0);
+        
+        // else return the cloned and simplified up list
+        return getFactory(extraData).or(newChildren);
+    }
+

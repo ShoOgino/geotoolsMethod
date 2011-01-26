@@ -1,0 +1,45 @@
+    /**
+     * Number of Features in this query.
+     *
+     * <p>
+     * This implementation will generate the correct results from reader() if
+     * the provided SimpleFeatureSource does not provide an optimized result via
+     * FeatureSource.getCount( Query ).
+     * </p>
+     *
+     *
+     * @throws IOException If feature could not be read
+     * @throws DataSourceException See IOException
+     *
+     * @see org.geotools.data.FeatureResults#getCount()
+     */
+    public int getCount() throws IOException {
+        int count;
+        count = featureSource.getCount(query);
+
+        if (count != -1) {
+            // optimization worked, return maxFeatures if count is
+            // greater.
+            int maxFeatures = query.getMaxFeatures();
+            return (count < maxFeatures) ? count : maxFeatures;
+        }
+
+        // Okay lets count the FeatureReader
+        try {
+            count = 0;
+
+            FeatureReader<SimpleFeatureType, SimpleFeature> reader = reader();
+            try {
+            	for (; reader.hasNext(); count++) {
+            		reader.next();
+            	}
+            } finally {
+            	reader.close();
+            }
+
+            return count;
+        } catch (IllegalAttributeException e) {
+            throw new DataSourceException("Could not read feature ", e);
+        }
+    }
+

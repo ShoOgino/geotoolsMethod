@@ -1,0 +1,43 @@
+    /**
+     * Workaround for RFE #4093999 ("Relax constraint on placement of this()/super()
+     * call in constructors").
+     */
+    private CoverageStack(final CharSequence name,
+                          final GeneralEnvelope envelope,
+                          final Element[] elements) throws IOException
+    {
+        super(name, envelope.getCoordinateReferenceSystem(), null, null);
+        assert XArray.isSorted(elements, COMPARATOR);
+        this.elements = elements;
+        this.envelope = envelope;
+        zDimension = envelope.getDimension() - 1;
+        boolean sampleDimensionMismatch = false;
+        SampleDimension[] sampleDimensions = null;
+        for (int j=0; j<elements.length; j++) {
+            final Element element = elements[j];
+            /*
+             * Ensures that all coverages uses the same number of sample dimension.
+             * To be strict, we should ensure that all sample dimensions are identical.
+             * However, this is not needed for proper working of this class, so we will
+             * ensure this condition only in 'getSampleDimension' method.
+             */
+            final SampleDimension[] candidate = element.getSampleDimensions();
+            if (candidate != null) {
+                if (sampleDimensions == null) {
+                    sampleDimensions = candidate;
+                } else {
+                    if (sampleDimensions.length != candidate.length) {
+                        throw new IllegalArgumentException( // TODO: localize
+                                    "Inconsistent number of sample dimensions.");
+                    }
+                    if (!Arrays.equals(sampleDimensions, candidate)) {
+                        sampleDimensionMismatch = true;
+                    }
+                }
+            }
+        }
+        this.numSampleDimensions = (sampleDimensions != null) ? sampleDimensions.length : 0;
+        this.sampleDimensions = sampleDimensionMismatch ? null : sampleDimensions;
+        zCRS = CRSUtilities.getSubCRS(crs, zDimension, zDimension+1);
+    }
+

@@ -1,0 +1,241 @@
+	/**
+	 * This method loads the granules which overlap the requested
+	 * {@link GeneralEnvelope} using the provided values for alpha and input
+	 * ROI.
+	 * @return
+	 * @throws DataSourceException
+	 */
+	private RenderedImage prepareResponse() throws DataSourceException {
+
+		try {
+			
+			//
+			// prepare the params for executing a mosaic operation.
+			//
+			// It might important to set the mosaic type to blend otherwise
+			// sometimes strange results jump in.
+
+			// select the relevant overview, notice that at this time we have
+			// relaxed a bit the requirement to have the same exact resolution
+			// for all the overviews, but still we do not allow for reading the
+			// various grid to world transform directly from the input files,
+			// therefore we are assuming that each granuleDescriptor has a scale and
+			// translate only grid to world that can be deduced from its base
+			// level dimension and envelope. The grid to world transforms for
+			// the other levels can be computed accordingly knowing the scale
+			// factors.
+			if (request.getRequestedBBox() != null && request.getRequestedRasterArea() != null && !request.isHeterogeneousGranules())
+				imageChoice = ReadParamsController.setReadParams(
+				        request.getRequestedResolution(),
+				        request.getOverviewPolicy(),
+				        request.getDecimationPolicy(),
+				        baseReadParameters,
+				        request.rasterManager,
+				        request.rasterManager.overviewsController); // use general overviews controller
+			else
+				imageChoice = 0;
+			assert imageChoice>=0;
+			if (LOGGER.isLoggable(Level.FINE))
+				LOGGER.fine(new StringBuffer("Loading level ").append(
+						imageChoice).append(" with subsampling factors ")
+						.append(baseReadParameters.getSourceXSubsampling()).append(" ")
+						.append(baseReadParameters.getSourceYSubsampling()).toString());			
+			
+			
+			// ok we got something to return, let's load records from the index
+			final BoundingBox cropBBOX = request.getCropBBox();
+			if (cropBBOX != null)
+				mosaicBBox = ReferencedEnvelope.reference(cropBBOX);
+			else
+				mosaicBBox = new ReferencedEnvelope(coverageEnvelope);
+						
+			//compute final world to grid
+			// base grid to world for the center of pixels
+			
+			
+			final AffineTransform g2w;
+
+			final OverviewLevel baseLevel = rasterManager.overviewsController.resolutionsLevels
+					.get(0);
+			final double resX = baseLevel.resolutionX;
+			final double resY = baseLevel.resolutionY;
+			final double[] requestRes = request.getRequestedResolution();
+			if ((requestRes[0] < resX || requestRes[1] < resY) && !needsReprojection) {
+				// Using the best available resolution
+				oversampledRequest = true;
+				g2w = new AffineTransform((AffineTransform) baseGridToWorld);
+				g2w.concatenate(CoverageUtilities.CENTER_TO_CORNER);
+			} else {
+				if (!needsReprojection) {
+					g2w = new AffineTransform(request.getRequestedGridToWorld());
+					g2w.concatenate(CoverageUtilities.CENTER_TO_CORNER);
+				} else {
+					GridToEnvelopeMapper mapper = new GridToEnvelopeMapper(
+							new GridEnvelope2D(request.getRequestedRasterArea()),
+							mosaicBBox);
+					mapper.setPixelAnchor(PixelInCell.CELL_CORNER);
+					g2w = mapper.createAffineTransform();
+				}
+			}
+
+			// move it to the corner
+			finalGridToWorldCorner = new AffineTransform2D(g2w);
+			finalWorldToGridCorner = finalGridToWorldCorner.inverse();// compute raster bounds
+			final GeneralEnvelope tempRasterBounds = CRS.transform(finalWorldToGridCorner, mosaicBBox);
+//			rasterBounds=tempRasterBounds.toRectangle2D().getBounds();
+			// SG using the above may lead to problems since the reason is that  may be a little (1 px) bigger
+			// than what we need. The code below is a bit better since it uses a proper logic (see GridEnvelope
+			// Javadoc)
+			rasterBounds = new GridEnvelope2D(new Envelope2D(tempRasterBounds), PixelInCell.CELL_CORNER);
+			if (rasterBounds.width == 0)
+			    rasterBounds.width++;
+			if (rasterBounds.height == 0)
+			    rasterBounds.height++;
+			
+			
+			// create the index visitor and visit the feature
+			final MosaicBuilder visitor = new MosaicBuilder();
+			visitor.request = request;
+			final List<Date> times = request.getRequestedTimes();
+			final List<Double> elevations=request.getElevation();
+			final Filter filter = request.getFilter();
+			final boolean hasTime=(times!=null&&times.size()>0);
+			final boolean hasElevation=(elevations!=null && elevations.size()>0);
+			final boolean hasFilter = filter != null;
+
+			final SimpleFeatureType type = rasterManager.granuleCatalog.getType();
+			Query query = null;
+			if (type != null){
+			    query= new Query(rasterManager.granuleCatalog.getType().getTypeName());
+			    final Filter bbox=FeatureUtilities.DEFAULT_FILTER_FACTORY.bbox(FeatureUtilities.DEFAULT_FILTER_FACTORY.property(rasterManager.granuleCatalog.getType().getGeometryDescriptor().getName()),mosaicBBox);
+			    query.setFilter( bbox);
+			}
+			
+			if(hasTime||hasElevation||hasFilter )
+			{
+				//handle elevation indexing first since we then combine this with the max in case we are asking for current in time
+				if (hasElevation){
+					
+					final Filter oldFilter = query.getFilter();
+					final PropertyIsEqualTo elevationF = 
+						FeatureUtilities.DEFAULT_FILTER_FACTORY.equal(
+								FeatureUtilities.DEFAULT_FILTER_FACTORY.property(
+										rasterManager.elevationAttribute), 
+										FeatureUtilities.DEFAULT_FILTER_FACTORY.literal(elevations.get(0)),
+										true
+						);
+					query.setFilter(FeatureUtilities.DEFAULT_FILTER_FACTORY.and(oldFilter, elevationF));	
+				}
+
+				//handle runtime indexing since we then combine this with the max in case we are asking for current in time
+				if (hasFilter){
+					final Filter oldFilter = query.getFilter();
+					query.setFilter(FeatureUtilities.DEFAULT_FILTER_FACTORY.and(oldFilter, filter));	
+				}
+				
+				// fuse time query with the bbox query
+				if(hasTime){
+					final Filter oldFilter = query.getFilter();
+					final int size=times.size();
+					boolean current= size==1&&times.get(0)==null;
+					if( !current){
+						Filter temporal=null;
+						if(size==1)
+							temporal=FeatureUtilities.DEFAULT_FILTER_FACTORY.equal(FeatureUtilities.DEFAULT_FILTER_FACTORY.property(rasterManager.timeAttribute), FeatureUtilities.DEFAULT_FILTER_FACTORY.literal(times.get(0)),true);
+						else{
+							boolean first =true;
+							for( Date datetime: times){
+								if(first){
+									temporal=FeatureUtilities.DEFAULT_FILTER_FACTORY.equal(FeatureUtilities.DEFAULT_FILTER_FACTORY.property(rasterManager.timeAttribute), FeatureUtilities.DEFAULT_FILTER_FACTORY.literal(datetime),true);
+									first =false;
+								}
+								else{
+									final PropertyIsEqualTo temp =
+										FeatureUtilities.DEFAULT_FILTER_FACTORY.equal(FeatureUtilities.DEFAULT_FILTER_FACTORY.property(rasterManager.timeAttribute), FeatureUtilities.DEFAULT_FILTER_FACTORY.literal(datetime),true);
+									temporal= FeatureUtilities.DEFAULT_FILTER_FACTORY.or(Arrays.asList(temporal,temp));
+								}
+							}
+						}
+						if(temporal!=null)//should not happen
+							query.setFilter(FeatureUtilities.DEFAULT_FILTER_FACTORY.and(oldFilter, temporal));
+					}
+					else{
+						// current management
+						final SortBy[] descendingSortOrder = new SortBy[]{
+								new SortByImpl(
+										FeatureUtilities.DEFAULT_FILTER_FACTORY.property(rasterManager.timeAttribute),
+										SortOrder.DESCENDING
+								)};
+						final QueryCapabilities queryCapabilities = rasterManager.granuleCatalog.getQueryCapabilities();
+						if(queryCapabilities.supportsSorting(descendingSortOrder))
+							query.setSortBy(descendingSortOrder);
+						else{
+							// the datastore does not support descending sortby, let's support the maximum
+							final MaxVisitor max = new MaxVisitor(rasterManager.timeAttribute);
+							rasterManager.granuleCatalog.computeAggregateFunction(query,max);
+							final Object result=max.getResult().getValue();		
+							
+							// now let's get this feature by is fid
+							final Filter temporal = FeatureUtilities.DEFAULT_FILTER_FACTORY.equal(FeatureUtilities.DEFAULT_FILTER_FACTORY.property(rasterManager.timeAttribute), FeatureUtilities.DEFAULT_FILTER_FACTORY.literal(Converters.convert(result, Date.class)),true);
+							query.setFilter(FeatureUtilities.DEFAULT_FILTER_FACTORY.and(oldFilter, temporal));
+						}
+						
+					}
+				}
+				
+				rasterManager.getGranules(query, visitor);
+
+			} else {
+			    rasterManager.getGranules(mosaicBBox, visitor);    
+			}
+			// get those granules
+			visitor.produce();
+			
+			//
+			// Did we actually load anything?? Notice that it might happen that
+			// either we have holes inside the definition area for the mosaic
+			// or we had some problem with missing tiles, therefore it might
+			// happen that for some bboxes we don't have anything to load.
+			//
+			if (visitor.granulesNumber>=1) {
+
+				//
+				// Create the mosaic image by doing a crop if necessary and also
+				// managing the transparent color if applicable. Be aware that
+				// management of the transparent color involves removing
+				// transparency information from the input images.
+				// 
+				if (LOGGER.isLoggable(Level.FINER))
+					LOGGER.finer(new StringBuilder("Loaded bbox ").append(
+							mosaicBBox.toString()).append(" while crop bbox ")
+							.append(request.getCropBBox().toString())
+							.toString());
+				
+				
+				return buildMosaic(visitor);				
+			
+			}
+			else{
+				// if we get here that means that we do not have anything to load
+				// but still we are inside the definition area for the mosaic,
+				// therefore we create a fake coverage using the background values,
+				// if provided (defaulting to 0), as well as the compute raster
+				// bounds, envelope and grid to world.
+				
+			        final Number[] values = Utils.getBackgroundValues(rasterManager.defaultSM, backgroundValues);
+				
+				// create a constant image with a proper layout
+				return ConstantDescriptor.create(
+						Float.valueOf(rasterBounds.width), 
+						Float.valueOf(rasterBounds.height),
+						values,
+						rasterManager.defaultImageLayout!=null?new RenderingHints(JAI.KEY_IMAGE_LAYOUT,rasterManager.defaultImageLayout):null);
+			}
+
+		} catch (IOException e) {
+			throw new DataSourceException("Unable to create this mosaic", e);
+		} catch (TransformException e) {
+			throw new DataSourceException("Unable to create this mosaic", e);
+		} 
+	}
+

@@ -1,0 +1,70 @@
+    /**
+     * Tries to returns an optimized concatenation, for example by merging to affine transforms
+     * into a single one. If no optimized cases has been found, returns {@code null}. In the later
+     * case, the caller will need to create a more heavy {@link ConcatenatedTransform} instance.
+     */
+    private static MathTransform createOptimized(final MathTransform tr1, final MathTransform tr2) {
+        /*
+         * Trivial - but actually essential!! - check for the identity cases.
+         */
+        if (tr1.isIdentity()) return tr2;
+        if (tr2.isIdentity()) return tr1;
+        /*
+         * If both transforms use matrix, then we can create
+         * a single transform using the concatenated matrix.
+         */
+        final XMatrix matrix1 = getMatrix(tr1);
+        if (matrix1 != null) {
+            final XMatrix matrix2 = getMatrix(tr2);
+            if (matrix2 != null) {
+                // Compute "matrix = matrix2 * matrix1". Reuse an existing matrix object
+                // if possible, which is always the case when both matrix are square.
+                final int numRow = matrix2.getNumRow();
+                final int numCol = matrix1.getNumCol();
+                final XMatrix matrix;
+                if (numCol == matrix2.getNumCol()) {
+                    matrix = matrix2;
+                    matrix2.multiply(matrix1);
+                } else {
+                    final GeneralMatrix m = new GeneralMatrix(numRow, numCol);
+                    m.mul(toGMatrix(matrix2), toGMatrix(matrix1));
+                    matrix = m;
+                }
+                if (matrix.isIdentity(EPSILON)) {
+                    matrix.setIdentity();
+                }
+                // May not be really affine, but work anyway...
+                // This call will detect and optimize the special
+                // case where an 'AffineTransform' can be used.
+                return ProjectiveTransform.create(matrix);
+            }
+        }
+        /*
+         * If one transform is the inverse of the
+         * other, returns the identity transform.
+         */
+        if (areInverse(tr1, tr2) || areInverse(tr2, tr1)) {
+            assert tr1.getSourceDimensions() == tr2.getTargetDimensions();
+            assert tr1.getTargetDimensions() == tr2.getSourceDimensions();
+            return IdentityTransform.create(tr1.getSourceDimensions());
+        }
+        /*
+         * Gives a chance to AbstractMathTransform to returns an optimized object.
+         * The main use case is Logarithmic vs Exponential transforms.
+         */
+        if (tr1 instanceof AbstractMathTransform) {
+            final MathTransform optimized = ((AbstractMathTransform) tr1).concatenate(tr2, false);
+            if (optimized != null) {
+                return optimized;
+            }
+        }
+        if (tr2 instanceof AbstractMathTransform) {
+            final MathTransform optimized = ((AbstractMathTransform) tr2).concatenate(tr1, true);
+            if (optimized != null) {
+                return optimized;
+            }
+        }
+        // No optimized case found.
+        return null;
+    }
+

@@ -1,0 +1,39 @@
+    /**
+     * Implement next.
+     * 
+     * <p>
+     * Description ...
+     * </p>
+     *
+     *
+     * @throws IOException
+     * @throws IllegalAttributeException
+     * @throws NoSuchElementException
+     * @throws IllegalStateException DOCUMENT ME!
+     * @throws DataSourceException DOCUMENT ME!
+     *
+     * @see org.geotools.data.FeatureReader#next()
+     */
+    public SimpleFeature next()
+        throws IOException, IllegalAttributeException, NoSuchElementException {
+        if (reader == null) {
+            throw new IllegalStateException("Reader has already been closed");
+        }
+
+        SimpleFeature next = reader.next();
+        Object[] attributes = next.getAttributes().toArray();
+
+        try {
+            for (int i = 0; i < attributes.length; i++) {
+                if (attributes[i] instanceof Geometry) {
+                    attributes[i] = transformer.transform((Geometry) attributes[i]);
+                }
+            }
+        } catch (TransformException e) {
+            throw new DataSourceException("A transformation exception occurred while reprojecting data on the fly",
+                e);
+        }
+
+        return SimpleFeatureBuilder.build(schema, attributes, next.getID());
+    }
+

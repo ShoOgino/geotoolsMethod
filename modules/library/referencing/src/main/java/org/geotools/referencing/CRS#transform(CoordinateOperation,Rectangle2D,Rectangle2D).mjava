@@ -1,0 +1,135 @@
+    /**
+     * Transforms a rectangular envelope using the given {@linkplain CoordinateOperation coordinate
+     * operation}. The transformation is only approximative. Invoking this method is equivalent to
+     * invoking the following:
+     * <p>
+     * <pre>transform(operation, new GeneralEnvelope(envelope)).toRectangle2D()</pre>
+     * <p>
+     * This method can handle the case where the rectangle contains the North or South pole,
+     * or when it cross the &plusmn;180° longitude.
+     *
+     * @param  operation The operation to use. Source and target dimension must be 2.
+     * @param  envelope The rectangle to transform (may be {@code null}).
+     * @param  destination The destination rectangle (may be {@code envelope}).
+     *         If {@code null}, a new rectangle will be created and returned.
+     * @return {@code destination}, or a new rectangle if {@code destination} was non-null
+     *         and {@code envelope} was null.
+     * @throws TransformException if a transform failed.
+     *
+     * @since 2.4
+     *
+     * @see #transform(MathTransform2D, Rectangle2D, Rectangle2D)
+     * @see org.geotools.referencing.operation.matrix.XAffineTransform#transform(
+     *      java.awt.geom.AffineTransform, Rectangle2D, Rectangle2D)
+     */
+    public static Rectangle2D transform(final CoordinateOperation operation,
+                                        final Rectangle2D         envelope,
+                                              Rectangle2D         destination)
+            throws TransformException
+    {
+        if (envelope == null) {
+            return null;
+        }
+        final MathTransform transform = operation.getMathTransform();
+        if (!(transform instanceof MathTransform2D)) {
+            throw new MismatchedDimensionException(Errors.format(ErrorKeys.NO_TRANSFORM2D_AVAILABLE));
+        }
+        MathTransform2D mt = (MathTransform2D) transform;
+        final Point2D.Double center = new Point2D.Double();
+        destination = transform(mt, envelope, destination, center);
+        /*
+         * If the source envelope crosses the expected range of valid coordinates, also projects
+         * the range bounds as a safety. See the comments in transform(Envelope, ...).
+         */
+        final CoordinateReferenceSystem sourceCRS = operation.getSourceCRS();
+        if (sourceCRS != null) {
+            final CoordinateSystem cs = sourceCRS.getCoordinateSystem();
+            if (cs != null && cs.getDimension() == 2) { // Paranoiac check.
+                CoordinateSystemAxis axis = cs.getAxis(0);
+                double min = envelope.getMinX();
+                double max = envelope.getMaxX();
+                Point2D.Double pt = null;
+                for (int i=0; i<4; i++) {
+                    if (i == 2) {
+                        axis = cs.getAxis(1);
+                        min = envelope.getMinY();
+                        max = envelope.getMaxY();
+                    }
+                    final double v = (i & 1) == 0 ? axis.getMinimumValue() : axis.getMaximumValue();
+                    if (!(v > min && v < max)) {
+                        continue;
+                    }
+                    if (pt == null) {
+                        pt = new Point2D.Double();
+                    }
+                    if ((i & 2) == 0) {
+                        pt.x = v;
+                        pt.y = envelope.getCenterY();
+                    } else {
+                        pt.x = envelope.getCenterX();
+                        pt.y = v;
+                    }
+                    destination.add(mt.transform(pt, pt));
+                }
+            }
+        }
+        /*
+         * Now takes the target CRS in account...
+         */
+        final CoordinateReferenceSystem targetCRS = operation.getTargetCRS();
+        if (targetCRS == null) {
+            return destination;
+        }
+        final CoordinateSystem targetCS = targetCRS.getCoordinateSystem();
+        if (targetCS == null || targetCS.getDimension() != 2) {
+            // It should be an error, but we keep this method tolerant.
+            return destination;
+        }
+        /*
+         * Checks for singularity points. See the transform(CoordinateOperation, Envelope)
+         * method for comments about the algorithm. The code below is the same algorithm
+         * adapted for the 2D case and the related objects (Point2D, Rectangle2D, etc.).
+         */
+        Point2D sourcePt = null;
+        Point2D targetPt = null;
+        for (int flag=0; flag<4; flag++) { // 2 dimensions and 2 extremums compacted in a flag.
+            final int i = flag >> 1; // The dimension index being examined.
+            final CoordinateSystemAxis axis = targetCS.getAxis(i);
+            if (axis == null) { // Should never be null, but check as a paranoiac safety.
+                continue;
+            }
+            final double extremum = (flag & 1) == 0 ? axis.getMinimumValue() : axis.getMaximumValue();
+            if (Double.isInfinite(extremum) || Double.isNaN(extremum)) {
+                continue;
+            }
+            if (targetPt == null) {
+                try {
+                    // TODO: remove the cast when we will be allowed to compile for J2SE 1.5.
+                    mt = mt.inverse();
+                } catch (NoninvertibleTransformException exception) {
+                    unexpectedException("transform", exception);
+                    return destination;
+                }
+                targetPt = new Point2D.Double();
+            }
+            switch (i) {
+                case 0: targetPt.setLocation(extremum, center.y); break;
+                case 1: targetPt.setLocation(center.x, extremum); break;
+                default: throw new AssertionError(flag);
+            }
+            try {
+                sourcePt = mt.transform(targetPt, sourcePt);
+            } catch (TransformException e) {
+                // Do not log; this exception is often expected here.
+                continue;
+            }
+            if (envelope.contains(sourcePt)) {
+                destination.add(targetPt);
+            }
+        }
+        // Attempt the 'equalsEpsilon' assertion only if source and destination are not same.
+        assert (destination == envelope) || XRectangle2D.equalsEpsilon(destination,
+                transform(operation, new GeneralEnvelope(envelope)).toRectangle2D()) : destination;
+        return destination;
+    }
+

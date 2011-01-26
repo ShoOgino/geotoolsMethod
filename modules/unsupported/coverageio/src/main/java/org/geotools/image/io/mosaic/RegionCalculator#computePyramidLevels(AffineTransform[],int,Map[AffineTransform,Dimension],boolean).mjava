@@ -1,0 +1,95 @@
+    /**
+     * Computes the pyramid level for the given affine transforms along the X or Y axis, and
+     * stores the result in the given map.
+     *
+     * @param  gridToCRS The AffineTransform to analyse. This array <strong>must</strong> be
+     *                   sorted along the dimension specified by {@code term}.
+     * @param  length    The number of valid entries in the {@code gridToCRS} array.
+     * @param  result    An initially empty map in which to store the results.
+     * @param  isY       {@code false} for analyzing the X axis, or {@code true} for the Y axis.
+     * @return The number of entries remaining in {@code gridToCRS}.
+     */
+    private static int computePyramidLevels(final AffineTransform[] gridToCRS, final int length,
+            final Map<AffineTransform,Dimension> result, final boolean isY)
+    {
+        int processing = 0;  // Index of the AffineTransform under process.
+        int remaining  = 0;  // Count of AffineTransforms that this method did not processed.
+        AffineTransform base;
+        double scale, shear;
+        boolean scaleIsNull, shearIsNull;
+        do {
+            if (processing >= length) {
+                return remaining;
+            }
+            base = gridToCRS[processing++];
+            if (isY) {
+                scale = base.getScaleY();
+                shear = base.getShearY();
+            } else {
+                scale = base.getScaleX();
+                shear = base.getShearX();
+            }
+            scaleIsNull = Math.abs(scale) < EPS;
+            shearIsNull = Math.abs(shear) < EPS;
+        } while (scaleIsNull && shearIsNull && redo(result.remove(base)));
+        if (isY) {
+            // If we get a NullPointerException here, it would be a bug in the algorithm.
+            result.get(base).height = 1;
+        } else {
+            assert result.isEmpty() : result;
+            result.put(base, new Dimension(1,0));
+        }
+        /*
+         * From this point, consider 'base', 'scale', 'shear', 'scaleIsNull', 'shearIsNull'
+         * as final. They describe the AffineTransform with finest resolution along one axis
+         * (X or Y), not necessarly both.
+         */
+        while (processing < length) {
+            final AffineTransform candidate = gridToCRS[processing++];
+            final double scale2, shear2;
+            if (isY) {
+                scale2 = candidate.getScaleY();
+                shear2 = candidate.getShearY();
+            } else {
+                scale2 = candidate.getScaleX();
+                shear2 = candidate.getShearX();
+            }
+            final int level;
+            if (scaleIsNull) {
+                if (!(Math.abs(scale2) < EPS)) {
+                    // Expected a null scale but was not.
+                    gridToCRS[remaining++] = candidate;
+                    continue;
+                }
+                level = level(shear2 / shear);
+            } else {
+                level = level(scale2 / scale);
+                if (shearIsNull ? !(Math.abs(shear2) < EPS) : (level(shear2 / shear) != level)) {
+                    // Expected (a null shear) : (the same pyramid level), but was not.
+                    gridToCRS[remaining++] = candidate;
+                    continue;
+                }
+            }
+            if (level == 0) {
+                // Not a pyramid level (the ratio is not an integer).
+                gridToCRS[remaining++] = candidate;
+                continue;
+            }
+            /*
+             * Stores the pyramid level either as the width or as the height, depending on the
+             * 'isY' value. The map is assumed initially empty for the X values, and containing
+             * every required entries for the Y values.
+             */
+            if (isY) {
+                // If we get a NullPointerException here, it would be a bug in the algorithm.
+                result.get(candidate).height = level;
+            } else {
+                if (result.put(candidate, new Dimension(level,0)) != null) {
+                    throw new AssertionError(candidate); // Should never happen.
+                }
+            }
+        }
+        Arrays.fill(gridToCRS, remaining, length, null);
+        return remaining;
+    }
+

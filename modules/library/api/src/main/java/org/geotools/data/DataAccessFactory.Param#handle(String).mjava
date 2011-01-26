@@ -1,0 +1,87 @@
+        /**
+         * Handle text in a sensible manner.
+         *
+         * <p>
+         * Performs the most common way of handling text value:
+         * </p>
+         *
+         * <ul>
+         * <li>
+         * null: If text is null
+         * </li>
+         * <li>
+         * origional text: if type == String.class
+         * </li>
+         * <li>
+         * null: if type != String.class and text.getLength == 0
+         * </li>
+         * <li>
+         * parse( text ): if type != String.class
+         * </li>
+         * </ul>
+         *
+         *
+         * @param text
+         *
+         * @return Value as processed by text
+         *
+         * @throws IOException If text could not be parsed
+         */
+        public Object handle(String text) throws IOException {
+            if (text == null) {
+                return null;
+            }
+
+            if (type == String.class) {
+                return text;
+            }
+
+            if (text.length() == 0) {
+                return null;
+            }
+
+            // if type is an array, tokenize the string and have the reflection
+            // parsing be tried on each element, then build the array as a result
+            if (type.isArray()) {
+                StringTokenizer tokenizer = new StringTokenizer(text, " ");
+                List<Object> result = new ArrayList<Object>();
+
+                while (tokenizer.hasMoreTokens()) {
+                    String token = tokenizer.nextToken();
+                    Object element;
+
+                    try {
+                        if (type.getComponentType() == String.class) {
+                            element = token;
+                        } else {
+                            element = parse(token);
+                        }
+                    } catch (IOException ioException) {
+                        throw ioException;
+                    } catch (Throwable throwable) {
+                        throw new DataSourceException("Problem creating " + type.getName()
+                            + " from '" + text + "'", throwable);
+                    }
+
+                    result.add(element);
+                }
+
+                Object array = Array.newInstance(type.getComponentType(), result.size());
+
+                for (int i = 0; i < result.size(); i++) {
+                    Array.set(array, i, result.get(i));
+                }
+
+                return array;
+            }
+
+            try {
+                return parse(text);
+            } catch (IOException ioException) {
+                throw ioException;
+            } catch (Throwable throwable) {
+                throw new DataSourceException("Problem creating " + type.getName() + " from '"
+                    + text + "'", throwable);
+            }
+        }
+

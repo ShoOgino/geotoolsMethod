@@ -1,0 +1,98 @@
+    /**
+     * Checks for filter element end and - if not a Filter then sends it
+     * directly to the appropriate filter factory.
+     *
+     * @param namespaceURI Namespace of the element.
+     * @param localName Local name of the element.
+     * @param qName Full name of the element, including namespace prefix.
+     *
+     * @throws SAXException Parsing error occurred while reading coordinates.
+     */
+    public void endElement(String namespaceURI, String localName, String qName)
+        throws SAXException {
+        LOGGER.finer("found end element: " + localName);
+        
+        processCharacters();
+
+        if (localName.equals("Filter")) {
+            //moved by cholmes, bug fix for fid.
+            if (isFidFilter && !localName.equals("FeatureId")) {
+                isFidFilter = false;
+                LOGGER.finer("is fid (2): " + isFidFilter);
+
+                // if the filter is done, pass along to the parent
+                try {
+                    if (isLogicFilter) {
+                        addFilterToLogicFactory();
+                    } else {
+                        addFilterToParent();
+                    }
+                } catch (IllegalFilterException e) {
+                    throw new SAXException(
+                        "Attempted to construct illegal filter: "
+                        + e.getMessage());
+                }
+            }
+
+            insideFilter = false;
+        } else if (insideFilter) {
+            short filterType = convertType(localName);
+
+            try {
+                // if at the end of a complex filter, simplify the logic stack
+                //  appropriately
+                if (AbstractFilter.isLogicFilter(filterType)) {
+                    LOGGER.finest("found a logic filter end");
+
+                    if (isFidFilter) {
+                        addFilterToLogicFactory();
+                        isFidFilter = false;
+                    }
+
+                    logicFactory.end(filterType);
+
+                    // if the filter is done, pass along to the parent
+                    if (logicFactory.isComplete()) {
+                        LOGGER.finer("creating logic factory");
+                        parent.filter(logicFactory.create());
+                    }
+
+                    //isFidFilter = false;
+                } else if (AbstractFilter.isSimpleFilter(filterType)
+                        && !isFidFilter) {
+                    // if at the end of a simple filter, create it and push it 
+                    // on top of the logic stack
+                    LOGGER.finest("found a simple filter end");
+
+                    // if the filter is done, pass along to the parent
+                    if (isLogicFilter) {
+                        addFilterToLogicFactory();
+                    } else {
+                        addFilterToParent();
+                    }
+                }
+                // if at the end of an expression, two cases:
+                // 1. at the end of an outer expression, create it and pass 
+                //    to filter
+                //  2. at end of an inner expression, pass the message along to
+                //      current outer expression
+                else if (DefaultExpression.isExpression(filterType)) {
+                    LOGGER.finer("found an expression filter end");
+                    expressionFactory.end(localName);
+
+                    if (expressionFactory.isReady()) {
+                        LOGGER.finer("expression factory is ready");
+                        filterFactory.expression(expressionFactory.create());
+                    }
+                } else if (localName.equals("Distance")) {
+                    insideDistance = false;
+                }
+            } catch (IllegalFilterException e) {
+                throw new SAXException(
+                    "Attempted to construct illegal filter: " + e.getMessage());
+            }
+        } else {
+            parent.endElement(namespaceURI, localName, qName);
+        }
+    }
+

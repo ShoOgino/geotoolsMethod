@@ -1,0 +1,109 @@
+    /**
+     * Writes outs the image contained into this {@link ImageWorker} as a PNG
+     * using the provided destination, compression and compression rate.
+     * <p>
+     * The destination object can be anything providing that we have an
+     * {@link ImageOutputStreamSpi} that recognizes it.
+     *
+     * @param destination
+     *            where to write the internal {@link #image} as a PNG.
+     * @param compression
+     *            algorithm.
+     * @param compressionRate
+     *            percentage of compression.
+     * @param nativeAcc
+     *            should we use native acceleration.
+     * @param paletted
+     *            should we write the png as 8 bits?
+     * @return this {@link ImageWorker}.
+     * @throws IOException
+     *             In case an error occurs during the search for an
+     *             {@link ImageOutputStream} or during the eoncding process.
+     *
+     * @todo Current code doesn't check if the writer already accepts the provided destination.
+     *       It wraps it in a {@link ImageOutputStream} inconditionnaly.
+     */
+    public final void writePNG(final Object destination, final String compression,
+                               final float compressionRate, final boolean nativeAcc,
+                               final boolean paletted)
+            throws IOException
+    {
+        // Reformatting this image for PNG.
+        if (!paletted) {
+            forceComponentColorModel();
+        }else{
+        	forceIndexColorModelForGIF(true);
+        }
+        if(LOGGER.isLoggable(Level.FINER))
+			LOGGER.finer("Encoded input image for png writer");
+
+        // Getting a writer.
+        if(LOGGER.isLoggable(Level.FINER))
+			LOGGER.finer("Getting a writer");
+        final Iterator<ImageWriter> it = ImageIO.getImageWritersByFormatName("PNG");
+        if (!it.hasNext()) {
+            throw new IllegalStateException(Errors.format(ErrorKeys.NO_IMAGE_WRITER));
+        }
+        ImageWriter writer = it.next();
+
+        // Getting a stream.
+        if(LOGGER.isLoggable(Level.FINER))
+			LOGGER.finer("Setting write parameters for this writer");
+        ImageWriteParam iwp = null;
+        final ImageOutputStream memOutStream = ImageIO.createImageOutputStream(destination);
+        if(memOutStream==null)
+        	throw new IIOException(Errors.format(ErrorKeys.NULL_ARGUMENT_$1,"stream"));        
+        if (nativeAcc && writer.getClass().getName().equals(
+                "com.sun.media.imageioimpl.plugins.png.CLibPNGImageWriter"))
+        {
+            // Compressing with native.
+        	if(LOGGER.isLoggable(Level.FINER))
+    			LOGGER.finer("Writer is native");
+            iwp = writer.getDefaultWriteParam();
+            // Define compression mode
+            iwp.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            // best compression
+            iwp.setCompressionType(compression);
+            // we can control quality here
+            iwp.setCompressionQuality(compressionRate);
+            // destination image type
+            iwp.setDestinationType(new ImageTypeSpecifier(image.getColorModel(), image.getSampleModel()));
+        } else {
+            // Compressing with pure Java.
+            // pure java from native
+            if (!nativeAcc && it.hasNext() && writer.getClass().getName().equals(
+                    "com.sun.media.imageioimpl.plugins.png.CLibPNGImageWriter"))
+            {
+                writer = it.next();
+            }
+            if(LOGGER.isLoggable(Level.FINER))
+    			LOGGER.finer("Writer is NOT native");
+            // Instantiating PNGImageWriteParam
+            iwp = new PNGImageWriteParam();
+            // Define compression mode
+            iwp.setCompressionMode(ImageWriteParam.MODE_DEFAULT);
+        }
+        if(LOGGER.isLoggable(Level.FINER))
+			LOGGER.finer("About to write png image");
+        try{
+	        writer.setOutput(memOutStream);
+	        writer.write(null, new IIOImage(image, null, null), iwp);
+        }
+        finally{
+        	try{
+        		writer.dispose();
+        	}catch (Throwable e) {
+        		if(LOGGER.isLoggable(Level.FINEST))
+					LOGGER.log(Level.FINEST,e.getLocalizedMessage(),e);
+			}
+        	try{
+        		memOutStream.close();
+        	}catch (Throwable e) {
+        		if(LOGGER.isLoggable(Level.FINEST))
+					LOGGER.log(Level.FINEST,e.getLocalizedMessage(),e);
+			}        	
+            
+            
+        }
+    }
+

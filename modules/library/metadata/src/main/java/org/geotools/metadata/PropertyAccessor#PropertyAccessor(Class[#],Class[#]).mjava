@@ -1,0 +1,79 @@
+    /**
+     * Creates a new property reader for the specified metadata implementation.
+     *
+     * @param  metadata The metadata implementation to wrap.
+     * @param  type The interface implemented by the metadata.
+     *         Should be the value returned by {@link #getType}.
+     */
+    PropertyAccessor(final Class<?> implementation, final Class<?> type) {
+        this.implementation = implementation;
+        this.type = type;
+        assert type.isAssignableFrom(implementation) : implementation;
+        getters = getGetters(type);
+        mapping = new HashMap<String,Integer>(getters.length + (getters.length + 3) / 4);
+        Method[] setters = null;
+        final Class<?>[] arguments = new Class[1];
+        for (int i=0; i<getters.length; i++) {
+            /*
+             * Fetch the getter and remind its name. We do the same for
+             * the UML tag attached to the getter, if any.
+             */
+            final Integer index = i;
+            Method getter  = getters[i];
+            String name    = getter.getName();
+            final int base = prefix(name).length();
+            addMapping(name.substring(base), index);
+            final UML annotation = getter.getAnnotation(UML.class);
+            if (annotation != null) {
+                addMapping(annotation.identifier(), index);
+            }
+            /*
+             * Now try to infer the setter from the getter. We replace the "get" prefix by
+             * "set" and look for a parameter of the same type than the getter return type.
+             */
+            Class<?> returnType = getter.getReturnType();
+            arguments[0] = returnType;
+            if (name.length() > base) {
+                final char lo = name.charAt(base);
+                final char up = Character.toUpperCase(lo);
+                if (lo != up) {
+                    name = SET + up + name.substring(base + 1);
+                } else {
+                    name = SET + name.substring(base);
+                }
+            }
+            Method setter;
+            try {
+                setter = implementation.getMethod(name, arguments);
+            } catch (NoSuchMethodException e) {
+                /*
+                 * If we found no setter method expecting an argument of the same type than the
+                 * argument returned by the GeoAPI method,  try again with the type returned by
+                 * the implementation class. It is typically the same type, but sometime it may
+                 * be a subtype.
+                 */
+                try {
+                    getter = implementation.getMethod(getter.getName(), (Class[]) null);
+                } catch (NoSuchMethodException error) {
+                    // Should never happen, since the implementation class
+                    // implements the the interface where the getter come from.
+                    throw new AssertionError(error);
+                }
+                if (returnType.equals(returnType = getter.getReturnType())) {
+                    continue;
+                }
+                arguments[0] = returnType;
+                try {
+                    setter = implementation.getMethod(name, arguments);
+                } catch (NoSuchMethodException ignore) {
+                    continue;
+                }
+            }
+            if (setters == null) {
+                setters = new Method[getters.length];
+            }
+            setters[i] = setter;
+        }
+        this.setters = setters;
+    }
+

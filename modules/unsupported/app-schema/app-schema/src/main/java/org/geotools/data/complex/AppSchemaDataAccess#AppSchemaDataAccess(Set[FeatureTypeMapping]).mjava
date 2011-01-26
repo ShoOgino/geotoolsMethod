@@ -1,0 +1,44 @@
+    /**
+     * Constructor.
+     * 
+     * @param mappings
+     *            a Set containing a {@linkplain FeatureTypeMapping} for each FeatureType this
+     *            DataAccess is going to produce.
+     * @throws IOException
+     */
+    public AppSchemaDataAccess(Set<FeatureTypeMapping> mappings) throws IOException {
+        try {
+            for (FeatureTypeMapping mapping : mappings) {
+                Name name = mapping.getMappingName();
+                if (name == null) {
+                    name = mapping.getTargetFeature().getName();
+                }
+                if (this.mappings.containsKey(name) || DataAccessRegistry.hasName(name)) {
+                    // check both mappings and the registry, because the data access is
+                    // only registered at the bottom of this constructor, so it might not
+                    // be in the registry yet
+                    throw new DataSourceException(
+                            "Duplicate mappingName or targetElement across FeatureTypeMapping instances detected.\n"
+                            + "They have to be unique, or app-schema doesn't know which one to get.\n"
+                            + "Please check your mapping file(s) with mappingName or targetElement of: "
+                            + name);
+                }
+                this.mappings.put(name, mapping);
+                // if the type is not a feature, it should be wrapped with
+                // a fake feature type, so attributes can be chained/nested
+                AttributeType type = mapping.getTargetFeature().getType();
+                if (!(type instanceof FeatureType)) {
+                    // nasty side-effect: constructor edits mapping to use this type proxy
+                    new NonFeatureTypeProxy((ComplexType) type, mapping);
+                }
+            }
+        } catch (RuntimeException e) {
+            // dispose all source data stores in the input mappings
+            for (FeatureTypeMapping mapping : mappings) {
+                mapping.getSource().getDataStore().dispose();
+            }
+            throw e;
+        }
+        register();
+    }
+

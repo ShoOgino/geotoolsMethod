@@ -1,0 +1,74 @@
+    /**
+     * Creates a new {@link GridCoverageRenderer} object.
+     * 
+     * @param destinationCRS
+     *                the CRS of the {@link GridCoverage2D} to render.
+     * @param envelope
+     *                delineating the area to be rendered.
+     * @param screenSize
+     *                at which we want to rendere the source
+     *                {@link GridCoverage2D}.
+     * @param worldToScreen if not <code>null</code> and if it contains a rotation,
+     * this Affine Tranform is used directly to convert from world coordinates
+     * to screen coordinates. Otherwise, a standard {@link GridToEnvelopeMapper}
+     * is used to calculate the affine transform.
+     * 
+     * @param hints
+     *                {@link RenderingHints} to control this rendering process.
+     * @throws TransformException
+     * @throws NoninvertibleTransformException
+     */
+    public GridCoverageRenderer(
+            final CoordinateReferenceSystem destinationCRS,
+            final Envelope envelope, 
+            final Rectangle screenSize,
+            final AffineTransform worldToScreen, 
+            final RenderingHints hints) throws TransformException,
+            NoninvertibleTransformException {
+
+        // ///////////////////////////////////////////////////////////////////
+        //
+        // Initialize this renderer
+        //
+        // ///////////////////////////////////////////////////////////////////
+        this.destinationSize = screenSize;
+        this.destinationCRS = CRS.getHorizontalCRS(destinationCRS);
+        if (this.destinationCRS == null)
+            throw new TransformException(Errors.format(
+                    ErrorKeys.CANT_SEPARATE_CRS_$1, destinationCRS));
+        destinationEnvelope = new GeneralEnvelope(new ReferencedEnvelope(envelope, destinationCRS));
+        // ///////////////////////////////////////////////////////////////////
+        //
+        // FINAL DRAWING DIMENSIONS AND RESOLUTION
+        // I am here getting the final drawing dimensions (on the device) and
+        // the resolution for this rendererbut in the CRS of the source coverage
+        // since I am going to compare this info with the same info for the
+        // source coverage.
+        //
+        // ///////////////////////////////////////////////////////////////////
+        
+        // PHUSTAD : The gridToEnvelopeMapper does not handle rotated views. 
+        // 
+        if (worldToScreen != null && XAffineTransform.getRotation(worldToScreen) != 0.0) { 
+            finalWorldToGrid = new AffineTransform(worldToScreen);
+            finalGridToWorld = finalWorldToGrid.createInverse();
+        } else {
+            final GridToEnvelopeMapper gridToEnvelopeMapper = new GridToEnvelopeMapper();
+            gridToEnvelopeMapper.setPixelAnchor(PixelInCell.CELL_CORNER);
+            gridToEnvelopeMapper.setGridRange(new GridEnvelope2D(destinationSize));       
+            gridToEnvelopeMapper.setEnvelope(destinationEnvelope);            
+            finalGridToWorld = new AffineTransform(gridToEnvelopeMapper.createAffineTransform());
+            finalWorldToGrid = finalGridToWorld.createInverse();
+        }
+
+        //
+        // HINTS
+        //
+        if (hints != null)
+            this.hints.add(hints);
+        // this prevents users from overriding lenient hint
+        this.hints.put(Hints.LENIENT_DATUM_SHIFT, Boolean.TRUE);
+        this.hints.add(ImageUtilities.DONT_REPLACE_INDEX_COLOR_MODEL);
+
+    }
+

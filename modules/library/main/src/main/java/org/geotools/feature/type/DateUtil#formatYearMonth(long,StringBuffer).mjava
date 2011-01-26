@@ -1,0 +1,65 @@
+    /**
+     * Format time in milliseconds to year number and month number. The
+     * resulting year number format is consistent with W3C XML Schema
+     * definitions, using a minimum of four digits for the year and exactly
+     * two digits for the month.
+     *
+     * @param value time in milliseconds to be converted (from 1 C.E.)
+     * @param buff text formatting buffer
+     *
+     * @return number of milliseconds into month
+     */
+    protected static long formatYearMonth(long value, StringBuffer buff) {
+        // find the actual year and month number; this uses a integer arithmetic
+        //  conversion based on Baum, first making the millisecond count
+        //  relative to March 1 of the year 0 C.E., then using simple arithmetic
+        //  operations to compute century, year, and month; it's slightly
+        //  different for pre-C.E. values because of Java's handling of divisions.
+        long time = value + (306 * LMSPERDAY) + ((LMSPERDAY * 3) / 4);
+        long century = time / MSPERCENTURY; // count of centuries
+        long adjusted = time + ((century - (century / 4)) * MSPERDAY);
+        int year = (int) (adjusted / MSPERAVGYEAR); // year in March 1 terms
+
+        if (adjusted < 0) {
+            year--;
+        }
+
+        long yms = (adjusted + (LMSPERDAY / 4))
+            - (((year * 365) + (year / 4)) * LMSPERDAY);
+        int yday = (int) (yms / LMSPERDAY); // day number in year
+
+        if (yday == 0) { // special for negative
+
+            boolean bce = year < 0;
+
+            if (bce) {
+                year--;
+            }
+
+            int dcnt = ((year % 4) == 0) ? 366 : 365;
+
+            if (!bce) {
+                year--;
+            }
+
+            yms += (dcnt * LMSPERDAY);
+            yday += dcnt;
+        }
+
+        int month = ((5 * yday) + 456) / 153; // (biased) month number
+        long rem = yms - BIAS_MONTHMS[month] - LMSPERDAY; // ms into month
+
+        if (month > 12) { // convert start of year
+            year++;
+            month -= 12;
+        }
+
+        // format year and month as text
+        formatYearNumber(year, buff);
+        buff.append('-');
+        formatTwoDigits(month, buff);
+
+        // return extra milliseconds into month
+        return rem;
+    }
+

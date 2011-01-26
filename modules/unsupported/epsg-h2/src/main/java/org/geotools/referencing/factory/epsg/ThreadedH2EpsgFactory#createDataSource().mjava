@@ -1,0 +1,43 @@
+    /**
+     * Returns a data source for the HSQL database.
+     */
+    protected DataSource createDataSource() throws SQLException {
+        DataSource candidate = super.createDataSource();
+        if (candidate instanceof JdbcDataSource) {
+            return candidate;
+        }
+        final JdbcDataSource source = new JdbcDataSource();
+        File directory = getDirectory();
+        if (directory != null) {
+            /*
+             * Constructs the full path to the HSQL database. Note: we do not use
+             * File.toURI() because HSQL doesn't seem to expect an encoded URL
+             * (e.g. "%20" instead of spaces).
+             */
+            final StringBuilder url = new StringBuilder(PREFIX);
+            final String path = directory.getAbsolutePath().replace(File.separatorChar, '/');
+            if (path.length()==0 || path.charAt(0)!='/') {
+                url.append('/');
+            }
+            url.append(path);
+            
+            if (url.charAt(url.length()-1) != '/') {
+                url.append('/');
+            }
+            url.append(DATABASE_NAME);
+            // no need for validation query, saves some work
+            url.append(";AUTO_RECONNECT=TRUE;CACHE_SIZE=131072;CACHE_TYPE=TQ");
+            source.setURL((url.toString()));
+            source.setUser("sa");
+            source.setPassword("");
+            assert directory.equals(getDirectory(source)) : url;
+        }
+        /*
+         * If the temporary directory do not exists or can't be created, lets the 'database'
+         * attribute unset. If the user do not set it explicitly (through JNDI or by overrding
+         * this method), an exception will be thrown when 'createBackingStore()' will be invoked.
+         */
+        source.setUser("SA"); // System administrator. No password.
+        return source;
+    }
+

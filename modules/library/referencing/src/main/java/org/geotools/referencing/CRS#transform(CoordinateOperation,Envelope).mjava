@@ -1,0 +1,200 @@
+    /**
+     * Transforms an envelope using the given {@linkplain CoordinateOperation coordinate operation}.
+     * The transformation is only approximative. It may be bigger than the smallest possible
+     * bounding box, but should not be smaller. Note that the returned envelope may not have
+     * the same number of dimensions than the original envelope.
+     * <p>
+     * This method can handle the case where the envelope contains the North or South pole,
+     * or when it cross the &plusmn;180° longitude.
+     *
+     * @param  operation The operation to use. Source and target dimension must be 2.
+     * @param  envelope Envelope to transform, or {@code null}. This envelope will not be modified.
+     * @return The transformed envelope, or {@code null} if {@code envelope} was null.
+     * @throws TransformException if a transform failed.
+     *
+     * @since 2.4
+     *
+     * @see #transform(MathTransform, Envelope)
+     */
+    public static GeneralEnvelope transform(final CoordinateOperation operation, final Envelope envelope)
+            throws TransformException
+    {
+        if (envelope == null) {
+            return null;
+        }
+        final CoordinateReferenceSystem sourceCRS = operation.getSourceCRS();
+        if (sourceCRS != null) {
+            final CoordinateReferenceSystem crs = envelope.getCoordinateReferenceSystem();
+            if (crs != null && !equalsIgnoreMetadata(crs, sourceCRS)) {
+                throw new MismatchedReferenceSystemException(
+                        Errors.format(ErrorKeys.MISMATCHED_COORDINATE_REFERENCE_SYSTEM));
+            }
+        }
+        MathTransform mt = operation.getMathTransform();
+        final GeneralDirectPosition centerPt = new GeneralDirectPosition(mt.getTargetDimensions());
+        final GeneralEnvelope transformed = transform(mt, envelope, centerPt);
+        /*
+         * If the source envelope crosses the expected range of valid coordinates, also projects
+         * the range bounds as a safety. Example: if the source envelope goes from 150 to 200°E,
+         * some map projections will interpret 200° as if it was -160°, and consequently produce
+         * an envelope which do not include the 180°W extremum. We will add those extremum points
+         * explicitly as a safety. It may leads to bigger than necessary target envelope, but the
+         * contract is to include at least the source envelope, not to returns the smallest one.
+         */
+        if (sourceCRS != null) {
+            final CoordinateSystem cs = sourceCRS.getCoordinateSystem();
+            if (cs != null) { // Should never be null, but check as a paranoiac safety.
+                DirectPosition sourcePt = null;
+                DirectPosition targetPt = null;
+                final int dimension = cs.getDimension();
+                for (int i=0; i<dimension; i++) {
+                    final CoordinateSystemAxis axis = cs.getAxis(i);
+                    if (axis == null) { // Should never be null, but check as a paranoiac safety.
+                        continue;
+                    }
+                    final double min = envelope.getMinimum(i);
+                    final double max = envelope.getMaximum(i);
+                    final double  v1 = axis.getMinimumValue();
+                    final double  v2 = axis.getMaximumValue();
+                    final boolean b1 = (v1 > min && v1 < max);
+                    final boolean b2 = (v2 > min && v2 < max);
+                    if (!b1 && !b2) {
+                        continue;
+                    }
+                    if (sourcePt == null) {
+                        sourcePt = new GeneralDirectPosition(dimension);
+                        for (int j=0; j<dimension; j++) {
+                            sourcePt.setOrdinate(j, envelope.getCenter(j));
+                        }
+                    }
+                    if (b1) {
+                        sourcePt.setOrdinate(i, v1);
+                        transformed.add(targetPt = mt.transform(sourcePt, targetPt));
+                    }
+                    if (b2) {
+                        sourcePt.setOrdinate(i, v2);
+                        transformed.add(targetPt = mt.transform(sourcePt, targetPt));
+                    }
+                    sourcePt.setOrdinate(i, envelope.getCenter(i));
+                }
+            }
+        }
+        /*
+         * Now takes the target CRS in account...
+         */
+        final CoordinateReferenceSystem targetCRS = operation.getTargetCRS();
+        if (targetCRS == null) {
+            return transformed;
+        }
+        transformed.setCoordinateReferenceSystem(targetCRS);
+        final CoordinateSystem targetCS = targetCRS.getCoordinateSystem();
+        if (targetCS == null) {
+            // It should be an error, but we keep this method tolerant.
+            return transformed;
+        }
+        /*
+         * Checks for singularity points. For example the south pole is a singularity point in
+         * geographic CRS because we reach the maximal value allowed on one particular geographic
+         * axis, namely latitude. This point is not a singularity in the stereographic projection,
+         * where axis extends toward infinity in all directions (mathematically) and south pole
+         * has nothing special apart being the origin (0,0).
+         *
+         * Algorithm:
+         *
+         * 1) Inspect the target axis, looking if there is any bounds. If bounds are found, get
+         *    the coordinates of singularity points and project them from target to source CRS.
+         *
+         *    Example: if the transformed envelope above is (80°S to 85°S, 10°W to 50°W), and if
+         *             target axis inspection reveal us that the latitude in target CRS is bounded
+         *             at 90°S, then project (90°S,30°W) to source CRS. Note that the longitude is
+         *             set to the the center of the envelope longitude range (more on this later).
+         *
+         * 2) If the singularity point computed above is inside the source envelope, add that
+         *    point to the target (transformed) envelope.
+         *
+         * Note: We could choose to project the (-180, -90), (180, -90), (-180, 90), (180, 90)
+         * points, or the (-180, centerY), (180, centerY), (centerX, -90), (centerX, 90) points
+         * where (centerX, centerY) are transformed from the source envelope center. It make
+         * no difference for polar projections because the longitude is irrelevant at pole, but
+         * may make a difference for the 180° longitude bounds.  Consider a Mercator projection
+         * where the transformed envelope is between 20°N and 40°N. If we try to project (-180,90),
+         * we will get a TransformException because the Mercator projection is not supported at
+         * pole. If we try to project (-180, 30) instead, we will get a valid point. If this point
+         * is inside the source envelope because the later overlaps the 180° longitude, then the
+         * transformed envelope will be expanded to the full (-180 to 180) range. This is quite
+         * large, but at least it is correct (while the envelope without expansion is not).
+         */
+        GeneralEnvelope generalEnvelope = null;
+        DirectPosition sourcePt = null;
+        DirectPosition targetPt = null;
+        final int dimension = targetCS.getDimension();
+        for (int i=0; i<dimension; i++) {
+            final CoordinateSystemAxis axis = targetCS.getAxis(i);
+            if (axis == null) { // Should never be null, but check as a paranoiac safety.
+                continue;
+            }
+            boolean testMax = false; // Tells if we are testing the minimal or maximal value.
+            do {
+                final double extremum = testMax ? axis.getMaximumValue() : axis.getMinimumValue();
+                if (Double.isInfinite(extremum) || Double.isNaN(extremum)) {
+                    /*
+                     * The axis is unbounded. It should always be the case when the target CRS is
+                     * a map projection, in which case this loop will finish soon and this method
+                     * will do nothing more (no object instantiated, no MathTransform inversed...)
+                     */
+                    continue;
+                }
+                if (targetPt == null) {
+                    try {
+                        mt = mt.inverse();
+                    } catch (NoninvertibleTransformException exception) {
+                        /*
+                         * If the transform is non invertible, this method can't do anything. This
+                         * is not a fatal error because the envelope has already be transformed by
+                         * the caller. We lost the check for singularity points performed by this
+                         * method, but it make no difference in the common case where the source
+                         * envelope didn't contains any of those points.
+                         *
+                         * Note that this exception is normal if target dimension is smaller than
+                         * source dimension, since the math transform can not reconstituate the
+                         * lost dimensions. So we don't log any warning in this case.
+                         */
+                        if (dimension >= mt.getSourceDimensions()) {
+                            unexpectedException("transform", exception);
+                        }
+                        return transformed;
+                    }
+                    targetPt = new GeneralDirectPosition(mt.getSourceDimensions());
+                    for (int j=0; j<dimension; j++) {
+                        targetPt.setOrdinate(j, centerPt.getOrdinate(j));
+                    }
+                    // TODO: avoid the hack below if we provide a contains(DirectPosition)
+                    //       method in GeoAPI Envelope interface.
+                    if (envelope instanceof GeneralEnvelope) {
+                        generalEnvelope = (GeneralEnvelope) envelope;
+                    } else {
+                        generalEnvelope = new GeneralEnvelope(envelope);
+                    }
+                }
+                targetPt.setOrdinate(i, extremum);
+                try {
+                    sourcePt = mt.transform(targetPt, sourcePt);
+                } catch (TransformException e) {
+                    /*
+                     * This exception may be normal. For example we are sure to get this exception
+                     * when trying to project the latitude extremums with a cylindrical Mercator
+                     * projection. Do not log any message and try the other points.
+                     */
+                    continue;
+                }
+                if (generalEnvelope.contains(sourcePt)) {
+                    transformed.add(targetPt);
+                }
+            } while ((testMax = !testMax) == true);
+            if (targetPt != null) {
+                targetPt.setOrdinate(i, centerPt.getOrdinate(i));
+            }
+        }
+        return transformed;
+    }
+

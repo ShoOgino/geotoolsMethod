@@ -1,0 +1,38 @@
+    /**
+     * Returns the factory instance (usually {@link ThreadedEpsgFactory})
+     * to be used as the backing store.
+     *
+     * @throws FactoryException If no suitable factory instance was found.
+     */
+    protected AbstractAuthorityFactory createBackingStore() throws FactoryException {
+        /*
+         * Set the hints for the backing store to fetch. I'm not sure that we should request a
+         * org.geotools.referencing.factory.epsg.ThreadedEpsgFactory implementation; for now we are
+         * making this requirement mostly as a safety in order to get an implementation that is
+         * known to work, but we could relax that in a future version. AbstractAuthorityFactory
+         * is the minimal class required with current OrderedAxisAuthorityFactory API.
+         *
+         * The really important hints are the FORCE_*_AXIS_* handled by this class, which MUST
+         * be set to FALSE. This is especially important for FORCE_LONGITUDE_FIRST_AXIS_ORDER,
+         * which must be set to a different value than the value set by the constructor in order
+         * to prevent LongitudeFirstFactory to fetch itself. The other hints must also be set to
+         * false since forcing axis directions / units is handled by OrderedAxisAuthorityFactory
+         * and we don't want the backing store to interfer with that.
+         */
+        final Hints backingStoreHints;
+        backingStoreHints = new Hints(Hints.CRS_AUTHORITY_FACTORY, AbstractEpsgMediator.class);
+        backingStoreHints.put(Hints.FORCE_LONGITUDE_FIRST_AXIS_ORDER, Boolean.FALSE);
+        backingStoreHints.put(Hints.FORCE_STANDARD_AXIS_DIRECTIONS,   Boolean.FALSE);
+        backingStoreHints.put(Hints.FORCE_STANDARD_AXIS_UNITS,        Boolean.FALSE);
+        final AbstractAuthorityFactory factory;
+        try {
+            factory = (AbstractAuthorityFactory)
+                    ReferencingFactoryFinder.getCRSAuthorityFactory("EPSG", backingStoreHints);
+        } catch (FactoryNotFoundException exception) {
+            throw new org.geotools.referencing.factory.FactoryNotFoundException(exception);
+        } catch (FactoryRegistryException exception) {
+            throw new FactoryException(exception);
+        }
+        return new OrderedAxisAuthorityFactory(factory, new Hints(hints), null);
+    }
+

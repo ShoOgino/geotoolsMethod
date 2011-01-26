@@ -1,0 +1,39 @@
+    /**
+     * Returns a math transform for the two dimensional part. This method is similar
+     * to {@link #getGridToCRS2D()} except that the transform may maps a pixel corner
+     * instead of pixel center.
+     *
+     * @param  orientation The pixel part to map. The default value is
+     *         {@link PixelOrientation#CENTER CENTER}.
+     * @return The transform which allows for the transformations from grid coordinates
+     *         to real world earth coordinates.
+     * @throws InvalidGridGeometryException if a two-dimensional transform is not available
+     *         for this grid geometry.
+     *
+     * @since 2.3
+     */
+    public MathTransform2D getGridToCRS2D(final PixelOrientation orientation) {
+        if (gridToCRS2D == null) {
+            throw new InvalidGridGeometryException(ErrorKeys.NO_TRANSFORM2D_AVAILABLE);
+        }
+        if (!PixelOrientation.UPPER_LEFT.equals(orientation)) {
+            return computeGridToCRS2D(orientation);
+        }
+        synchronized (this) {
+            if (cornerToCRS2D == null) {
+                /*
+                 * If the gridToCRS transform is 2-dimensional, reuse the existing instance
+                 * (we will ensure in the assertion that it is suitable). Otherwise computes
+                 * and caches a new instance. We cache only the UPPER_LEFT case since it is
+                 * widely used; the other cases are rather unusual.
+                 */
+                if (gridToCRS.getSourceDimensions() == 2 && gridToCRS.getTargetDimensions() == 2) {
+                    cornerToCRS2D = (MathTransform2D) super.getGridToCRS(PixelInCell.CELL_CORNER);
+                } else {
+                    cornerToCRS2D = computeGridToCRS2D(orientation);
+                }
+            }
+        }
+        return cornerToCRS2D;
+    }
+

@@ -1,0 +1,137 @@
+    /**
+     * Creates a flat FeatureType <code>wq_ir_results</code> with a structure
+     * like the following, from which a complex one should be constructed
+     * grouping by station_no attribute.
+     * <p>
+     * Following this sample schema, a total of 10 unique station_no identifiers
+     * will be created, and for each one, a total of N desagregate rows with the
+     * same station_no, where N goes from 1 to 10. So for the first station_no
+     * there will be just one occurrence and the last one will have 10.
+     * </p>
+     * <p>
+     * <table>
+     * <tr>
+     * <td> station_no (string) </td>
+     * <td> sitename (string)</td>
+     * <td> anzlic_no (string)</td>
+     * <td> project_no (string)</td>
+     * <td> id (string)</td>
+     * <td> sample_collection_date (string)</td>
+     * <td> determinand_description (string)</td>
+     * <td> results_value (float)</td>
+     * <td> location (Point)</td>
+     * </tr>
+     * <tr>
+     * <td> station_1 </td>
+     * <td> sitename_1 </td>
+     * <td> anzlic_no_1 </td>
+     * <td> project_no_1 </td>
+     * <td> id_1_1 </td>
+     * <td> sample_collection_date_1_1 </td>
+     * <td> determinand_description_1_1 </td>
+     * <td> 1.1 </td>
+     * <td> POINT(1, 1) </td>
+     * </tr>
+     * <tr>
+     * <td> station_2 </td>
+     * <td> sitename_2 </td>
+     * <td> anzlic_no_2 </td>
+     * <td> project_no_2 </td>
+     * <td> id_2_1 </td>
+     * <td> sample_collection_date_2_1 </td>
+     * <td> determinand_description_2_1 </td>
+     * <td> 2.1 </td>
+     * <td> POINT(2, 2) </td>
+     * </tr>
+     * <tr>
+     * <td> station_2 </td>
+     * <td> sitename_2 </td>
+     * <td> anzlic_no_2 </td>
+     * <td> project_no_2 </td>
+     * <td> id_2_2 </td>
+     * <td> sample_collection_date_2_2 </td>
+     * <td> determinand_description_2_2 </td>
+     * <td> 2.2 </td>
+     * <td> POINT(2, 2) </td>
+     * </tr>
+     * <tr>
+     * <td colspan="9">...</td>
+     * </tr>
+     * <tr>
+     * <td> station_10 </td>
+     * <td> sitename_10 </td>
+     * <td> anzlic_no_10 </td>
+     * <td> project_no_10 </td>
+     * <td> id_10_10 </td>
+     * <td> sample_collection_date_10_9 </td>
+     * <td> determinand_description_10_9 </td>
+     * <td> 10.10 </td>
+     * <td> POINT(10, 10) </td>
+     * </tr>
+     * <tr>
+     * <td> station_10 </td>
+     * <td> sitename_10 </td>
+     * <td> anzlic_no_10 </td>
+     * <td> project_no_10 </td>
+     * <td> id_10_10 </td>
+     * <td> sample_collection_date_10_10 </td>
+     * <td> determinand_description_10_10 </td>
+     * <td> 10.10 </td>
+     * <td> POINT(10, 10) </td>
+     * </tr>
+     * </table>
+     * </p>
+     * 
+     * @return
+     * @throws Exception
+     */
+    public static MemoryDataStore createDenormalizedWaterQualityResults() throws Exception {
+        MemoryDataStore dataStore = new MemoryDataStore();
+        SimpleFeatureTypeBuilder builder = new SimpleFeatureTypeBuilder();
+
+        builder.setName(TestData.WATERSAMPLE_TYPENAME.getLocalPart());
+
+        builder.add("station_no", String.class);
+        builder.add("sitename", String.class);
+        builder.add("anzlic_no", String.class);
+        builder.add("project_no", String.class);
+        builder.add("id", String.class);
+        builder.add("sample_collection_date", String.class);
+        builder.add("determinand_description", String.class);
+        builder.add("results_value", Float.class);
+        builder.add("location", Point.class);
+
+        SimpleFeatureType type = builder.buildFeatureType();
+
+        dataStore.createSchema(type);
+
+        final int NUM_STATIONS = 10;
+        GeometryFactory gf = new GeometryFactory();
+
+        SimpleFeatureBuilder fb = new SimpleFeatureBuilder(type);
+        
+        for (int groupValue = 1; groupValue <= NUM_STATIONS; groupValue++) {
+
+            for (int measurement = 1; measurement <= groupValue; measurement++) {
+                String fid = type.getName().getLocalPart() + "." + groupValue + "." + measurement;
+                
+                fb.add("station_no." + groupValue);
+                fb.add("sitename" + groupValue);
+                fb.add("anzlic_no" + groupValue);
+                fb.add("project_no" + groupValue);
+
+                String sufix = "_" + groupValue + "_" + measurement;
+                fb.add("id" + sufix);
+                fb.add("sample_collection_date" + sufix);
+                fb.add("determinand_description" + sufix);
+                fb.add(new Float(groupValue + "." + measurement));
+
+                fb.add(gf.createPoint(new Coordinate(groupValue, groupValue)));
+
+                SimpleFeature f = fb.buildFeature(fid);
+                dataStore.addFeature(f);
+            }
+        }
+        return dataStore;
+    }
+

@@ -1,0 +1,57 @@
+    public void testLoadMappingsConfig() throws Exception {
+        XMLConfigDigester reader = new XMLConfigDigester();
+        String configLocation = schemaBase + "TimeSeriesTest_properties.xml";
+        URL url = getClass().getResource(configLocation);
+
+        // configLocation =
+        // "file:/home/gabriel/svn/geoserver/trunk/configuration/community-schema-timeseries2/TimeSeriesTest_properties.xml";
+        // URL url = new URL(configLocation);
+
+        AppSchemaDataAccessDTO config = reader.parse(url);
+
+        Set mappings = AppSchemaDataAccessConfigurator.buildMappings(config);
+
+        assertNotNull(mappings);
+        assertEquals(1, mappings.size());
+
+        FeatureTypeMapping mapping = (FeatureTypeMapping) mappings.iterator().next();
+
+        AttributeDescriptor targetFeature = mapping.getTargetFeature();
+        assertNotNull(targetFeature);
+        assertNotNull(targetFeature.getType());
+        assertEquals(AWNS, targetFeature.getName().getNamespaceURI());
+        assertEquals("SiteSinglePhenomTimeSeries", targetFeature.getName().getLocalPart());
+
+        List attributeMappings = mapping.getAttributeMappings();
+        AttributeMapping attMapping = (AttributeMapping) attributeMappings.get(0);
+        assertNotNull(attMapping);
+        assertEquals("aw:SiteSinglePhenomTimeSeries", attMapping.getTargetXPath().toString());
+
+        attMapping = (AttributeMapping) attributeMappings.get(1);
+        assertNotNull(attMapping);
+        assertEquals("gml:name[1]", attMapping.getTargetXPath().toString());
+
+        attMapping = (AttributeMapping) attributeMappings.get(2);
+        assertNotNull(attMapping);
+        assertEquals("sa:sampledFeature", attMapping.getTargetXPath().toString());
+        // this mapping has no source expression, just client properties
+        assertSame(Expression.NIL, attMapping.getSourceExpression());
+        assertSame(Expression.NIL, attMapping.getIdentifierExpression());
+        Map clientProperties = attMapping.getClientProperties();
+        assertEquals(2, clientProperties.size());
+
+        Name clientPropName = name(XLINK.NAMESPACE, "title");
+        assertTrue("client property " + clientPropName + " not found", clientProperties
+                .containsKey(clientPropName));
+        clientPropName = name(XLINK.NAMESPACE, "href");
+        assertTrue("client property " + clientPropName + " not found", clientProperties
+                .containsKey(clientPropName));
+
+        // now test the use of specific subtype overriding a general node type
+        attMapping = (AttributeMapping) attributeMappings.get(5);
+        assertNotNull(attMapping);
+        String expected = "aw:relatedObservation/aw:PhenomenonTimeSeries/om:observedProperty/swe:Phenomenon/gml:name";
+        String actual = attMapping.getTargetXPath().toString();
+        assertEquals(expected, actual);
+    }
+

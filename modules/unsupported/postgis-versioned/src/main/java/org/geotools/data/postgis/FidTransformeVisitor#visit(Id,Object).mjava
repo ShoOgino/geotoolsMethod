@@ -1,0 +1,51 @@
+    public Object visit(Id filter, Object extraData) {
+        Set ids = filter.getIDs();
+        if (ids.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Invalid fid filter provides, has no fids inside");
+        }
+        Filter result = null;
+        List<Filter> transformedIdFilters = new ArrayList<Filter>();
+        for (Iterator it = ids.iterator(); it.hasNext();) {
+            String id = (String) it.next();
+            Object[] attributes;
+            try {
+                attributes = mapper.getUnversionedPKAttributes(id);
+            } catch(IOException e) {
+                // assume the fid provided is not in the format the mapper can handle, so
+                // it's not really a real datastore fid but has been provided by the user.
+                // No harm dome, we just need to skip it
+                if(LOGGER.isLoggable(Level.FINE))
+                    LOGGER.fine("Skipping fid " + id + " since it's not in the " +
+                                    "proper format for this datastore" + e.getMessage());
+                continue;
+            }
+            Filter idf = null;
+            for (int i = 0, j = 0; i < attributes.length; j++) {
+                String colName = mapper.getColumnName(j);
+                if ("revision".equals(colName))
+                    continue;
+                transformedIdFilters.add(ff.equals(ff.property(colName), ff.literal(attributes[i])));
+                i++;
+            }
+        }
+        
+        // build the or of all the property is equals equivalent to each id filter
+        if(transformedIdFilters.size() > 1) {
+            result = ff.or(transformedIdFilters);
+        } else if (transformedIdFilters.size() == 1) {
+            result = transformedIdFilters.get(0);
+        }
+            
+        
+        // if all the fids are in an improper format, the fid filter is equivalent to
+        // a Filter that excludes everything... Since I cannot use Filter.EXCLUDE (it breaks
+        // the filter splitter with a class cast exception) I'm falling back on the old  
+        // "1 = 0" filter (ugly, but works...)
+        if(result == null) {
+            PropertyIsEqualTo equal = ff.equals(ff.literal(0),ff.literal(1));
+            return equal;
+        } else
+            return result;
+    }
+

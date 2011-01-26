@@ -1,0 +1,41 @@
+    private Handler getChildHandlerInternal(QName qName) {
+        SchemaIndex index = parser.getSchemaIndex();
+
+        XSDElementDeclaration element = index.getChildElement(content, qName);
+
+        if (element != null) {
+            //TODO: determine wether the element is complex or simple, and create
+            ElementHandler handler = parser.getHandlerFactory()
+                                           .createElementHandler(element, this, parser);
+
+            return handler;
+        }
+
+        //could not find the element as a direct child of the parent, check 
+        // for a global element, and then check its substituation group
+        element = index.getElementDeclaration(qName);
+
+        if (element != null) {
+            XSDElementDeclaration sub = element.getSubstitutionGroupAffiliation();
+
+            if (sub != null) {
+                QName subQName = new QName(sub.getTargetNamespace(), sub.getName());
+                Handler handler = getChildHandlerInternal(subQName);
+
+                if (handler != null) {
+                    //this means that hte element is substituatable for an 
+                    // actual child. now we have have choice, do we return 
+                    // a handler for the actual element, or the element it 
+                    // substituable for - the answer is to check the bindings
+                    //TODO: ask the binding
+                    handler = parser.getHandlerFactory().createElementHandler(element, this, parser);
+
+                    return handler;
+                }
+            }
+        }
+
+        //if 
+        return null;
+    }
+

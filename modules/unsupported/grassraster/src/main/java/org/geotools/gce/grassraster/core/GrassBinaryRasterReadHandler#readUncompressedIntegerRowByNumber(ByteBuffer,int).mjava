@@ -1,0 +1,53 @@
+    /**
+     * read a row of data from an uncompressed integer map.
+     * 
+     * <p>
+     * <b>INFO:</b> this is a reader method.
+     * </p>
+     * 
+     * @param rowdata
+     *            the buffer to hold the read row.
+     * @param currentrow
+     *            the index of the row to read.
+     * @throws IOException
+     * @throws DataFormatException
+     */
+    private void readUncompressedIntegerRowByNumber( ByteBuffer rowdata, int currentrow )
+            throws IOException, DataFormatException {
+        int cellValue = 0;
+        ByteBuffer cell = ByteBuffer.allocate(readerMapType);
+
+        /* The number of bytes that are inside a row in the file. */
+        int filerowsize = nativeRasterRegion.getCols() * readerMapType;
+
+        /* Position the file pointer to read the row */
+        imageIS.seek((currentrow * (long) filerowsize));
+
+        /* Read the row of data from the file */
+        ByteBuffer tmpBuffer = ByteBuffer.allocate(filerowsize);
+        imageIS.read(tmpBuffer.array());
+
+        /*
+         * Transform the readerMapType-size-values to a standard 4 bytes integer
+         * value
+         */
+        while( tmpBuffer.hasRemaining() ) {
+            // read the value
+            tmpBuffer.get(cell.array());
+
+            /*
+             * Integers can be of 1, 2, or 4 bytes. As rasterBuffer expects 4
+             * byte integers we need to pad them with 0's. The order of the
+             * padding is determined by the ByteOrder of the buffer.
+             */
+            if (readerMapType == 1) {
+                cellValue = (cell.get(0) & 0xff);
+            } else if (readerMapType == 2) {
+                cellValue = cell.getShort(0);
+            } else if (readerMapType == 4) {
+                cellValue = cell.getInt(0);
+            }
+            rowdata.putInt(cellValue);
+        }
+    }
+

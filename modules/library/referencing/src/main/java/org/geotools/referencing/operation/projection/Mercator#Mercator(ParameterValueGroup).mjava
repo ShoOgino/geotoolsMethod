@@ -1,0 +1,39 @@
+    /**
+     * Constructs a new map projection from the supplied parameters.
+     *
+     * @param  parameters The parameter values in standard units.
+     * @throws ParameterNotFoundException if a mandatory parameter is missing.
+     */
+    protected Mercator(final ParameterValueGroup parameters) throws ParameterNotFoundException {
+        super(parameters);
+        final Collection<GeneralParameterDescriptor> expected = getParameterDescriptors().descriptors();
+        if (expected.contains(AbstractProvider.STANDARD_PARALLEL_1)) {
+            /*
+             * scaleFactor is not a parameter in the Mercator_2SP case and is computed from
+             * the standard parallel.   The super-class constructor should have initialized
+             * 'scaleFactor' to 1. We still use the '*=' operator rather than '=' in case a
+             * user implementation still provides a scale factor for its custom projections.
+             */
+            standardParallel = abs(doubleValue(expected, AbstractProvider.STANDARD_PARALLEL_1, parameters));
+            ensureLatitudeInRange(AbstractProvider.STANDARD_PARALLEL_1, standardParallel, false);
+            if (isSpherical) {
+                scaleFactor *= cos(standardParallel);
+            }  else {
+                scaleFactor *= msfn(sin(standardParallel), cos(standardParallel));
+            }
+            globalScale = scaleFactor * semiMajor;
+        } else {
+            // No standard parallel. Instead, uses the scale factor explicitely provided.
+            standardParallel = Double.NaN;
+        }
+        /*
+         * A correction that allows us to employs a latitude of origin that is not
+         * correspondent to the equator. See Snyder and al. for reference, page 47.
+         * The scale correction is multiplied with the global scale, which allows
+         * MapProjection superclass to merge this correction with the scale factor
+         * in a single multiplication.
+         */
+        final double sinPhi = sin(latitudeOfOrigin);
+        globalScale *= (cos(latitudeOfOrigin) / (sqrt(1 - excentricitySquared * sinPhi * sinPhi)));
+    }
+

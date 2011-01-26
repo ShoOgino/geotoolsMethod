@@ -1,0 +1,49 @@
+    /**
+     * Creates an object {@linkplain CRS#equalsIgnoreMetadata equals, ignoring metadata}, to
+     * the specified object using only the {@linkplain IdentifiedObject#getName name} and
+     * {@linkplain IdentifiedObject#getAlias aliases}. If no such object is found, returns
+     * {@code null}.
+     * <p>
+     * This method may be used with some {@linkplain AuthorityFactory authority factory}
+     * implementations like the one backed by the EPSG database, which are capable to find
+     * an object from its name when the identifier is unknown.
+     * 
+     * @param object The object looked up.
+     * @return The identified object, or {@code null} if not found.
+     * @see #createFromCodes
+     * @see #createFromIdentifiers
+     * @throws FactoryException if an error occured while creating an object.
+     */
+    final IdentifiedObject createFromNames(final IdentifiedObject object) throws FactoryException {
+        IdentifiedObject candidate;
+        try {
+            candidate = getProxy().create(object.getName().getCode());
+            candidate = deriveEquivalent(candidate, object);
+            if (candidate != null) {
+                return candidate;
+            }
+        } catch (FactoryException e) {
+            /*
+             * The identifier was not recognized. No problem, let's go on.
+             * Note: we catch a more generic exception than NoSuchAuthorityCodeException
+             *       because this attempt may fail for various reasons (character string
+             *       not supported by the underlying database for primary key, duplicated
+             *       name found, etc.).
+             */
+        }
+        for (final Iterator it=object.getAlias().iterator(); it.hasNext();) {
+            final GenericName id = (GenericName) it.next();
+            try {
+                candidate = getProxy().create(id.toString());
+            } catch (FactoryException e) {
+                // The name was not recognized. No problem, let's go on.
+                continue;
+            }
+            candidate = deriveEquivalent(candidate, object);
+            if (candidate != null) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+

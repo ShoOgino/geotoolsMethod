@@ -1,0 +1,81 @@
+    /**
+     * Cohen sutherland based segment clipping
+     * @param segment
+     * @return
+     */
+    private double[] clipSegment(double[] segment) {
+        // dump to local variables to avoid the array access check overhead
+        double x0 = segment[0];
+        double y0 = segment[1];
+        double x1 = segment[2];
+        double y1 = segment[3];
+
+        // compute outcodes
+        int outcode0 = computeOutCode(x0, y0, xmin, ymin, xmax, ymax);
+        int outcode1 = computeOutCode(x1, y1, xmin, ymin, xmax, ymax);
+
+        int step = 0;
+        do {
+            if ((outcode0 | outcode1) == 0) {
+                // check if we got a degenerate segment
+                if (x0 == x1 && y0 == y1) {
+                    return null;
+                }
+
+                // both points are inside the clip area
+                segment[0] = x0;
+                segment[1] = y0;
+                segment[2] = x1;
+                segment[3] = y1;
+                return segment;
+            } else if ((outcode0 & outcode1) > 0) {
+                // both points are outside of the clip area,
+                // and on a same side (both top, both bottom, etc)
+                return null;
+            } else {
+                // failed both tests, so calculate the line segment to clip
+                // from an outside point to an intersection with clip edge
+
+                // At least one endpoint is outside the clip rectangle; pick it.
+                int outcodeOut = outcode0 != 0 ? outcode0 : outcode1;
+                // Now find the intersection point;
+                // use formulas y = y0 + slope * (x - x0),
+                // x = x0 + (1/slope) * (y - y0)
+                // depending on which side we're clipping
+                // Note we might end up getting a point that is still outside (touches one side
+                // but out on the other)
+                double x, y;
+                if ((outcodeOut & TOP) > 0) {
+                    x = x0 + (x1 - x0) * (ymax - y0) / (y1 - y0);
+                    y = ymax;
+                } else if ((outcodeOut & BOTTOM) > 0) {
+                    x = x0 + (x1 - x0) * (ymin - y0) / (y1 - y0);
+                    y = ymin;
+                } else if ((outcodeOut & RIGHT) > 0) {
+                    y = y0 + (y1 - y0) * (xmax - x0) / (x1 - x0);
+                    x = xmax;
+                } else { // LEFT
+                    y = y0 + (y1 - y0) * (xmin - x0) / (x1 - x0);
+                    x = xmin;
+                }
+                // We sliced at least one ordinate, recompute the outcode for the end we
+                // modified
+                if (outcodeOut == outcode0) {
+                    x0 = x;
+                    y0 = y;
+                    outcode0 = computeOutCode(x0, y0, xmin, ymin, xmax, ymax);
+                } else {
+                    x1 = x;
+                    y1 = y;
+                    outcode1 = computeOutCode(x1, y1, xmin, ymin, xmax, ymax);
+                }
+            }
+
+            step++;
+        } while (step < 5);
+
+        // we should really never get here, the algorithm must at most clip two ends,
+        // at worst one ordinate at a time, so at most 4 steps
+        throw new RuntimeException("Algorithm did not converge");
+    }
+

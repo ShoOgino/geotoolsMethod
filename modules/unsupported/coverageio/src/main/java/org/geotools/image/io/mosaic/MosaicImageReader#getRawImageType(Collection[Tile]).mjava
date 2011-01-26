@@ -1,0 +1,40 @@
+    /**
+     * Returns an image type which most closely represents the "raw" internal format of the
+     * given set of tiles. If none is found, returns {@code null}.
+     * <p>
+     * If there is more than one supported types, this method will give preference to the type
+     * having transparency. We do that because we have no garantee that a tile exists for every
+     * area in an image to be read, and the empty area typically need to remain transparent.
+     *
+     * @param  tiles The tiles to iterate over.
+     * @return A raw image type specifier acceptable for all tiles, or {@code null} if none.
+     * @throws IOException If an error occurs reading the information from the input source.
+     */
+    private ImageTypeSpecifier getRawImageType(final Collection<Tile> tiles) throws IOException {
+        // Gets the list of every raw image types, with the most frequent type first.
+        final Set<ImageTypeSpecifier> rawTypes = new FrequencySortedSet<ImageTypeSpecifier>(true);
+        final Set<ImageTypeSpecifier> allowed = getImageTypes(tiles, rawTypes);
+        rawTypes.retainAll(allowed);
+        boolean transparent = true;
+        do {
+            Iterator<ImageTypeSpecifier> it = rawTypes.iterator();
+            while (it.hasNext()) {
+                final ImageTypeSpecifier type = it.next();
+                if (!transparent || isTransparent(type)) {
+                    return type;
+                }
+            }
+            // No raw image reader type. Returns the first allowed type even if it is not "raw".
+            it = allowed.iterator();
+            while (it.hasNext()) {
+                final ImageTypeSpecifier type = it.next();
+                if (!transparent || isTransparent(type)) {
+                    return type;
+                }
+            }
+            // If no type was found and if we were looking for a transparent
+            // type, searchs again for a type no matter its transparency.
+        } while ((transparent = !transparent) == false);
+        return null;
+    }
+

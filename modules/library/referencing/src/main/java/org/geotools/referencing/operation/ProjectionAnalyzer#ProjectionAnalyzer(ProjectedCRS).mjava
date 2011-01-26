@@ -1,0 +1,77 @@
+    /**
+     * Constructs a {@code ProjectionAnalyzer} for the specified projected CRS. This constructor
+     * inspects the {@linkplain ProjectedCRS#getConversionFromBase conversion from base} and splits
+     * {@link ConcatenatedTransform} in their {@link #geographicScale}, {@link #projectedScale}
+     * and {@link #transform} components.
+     */
+    private ProjectionAnalyzer(final ProjectedCRS crs) {
+        Matrix geographicScale = null;
+        Matrix  projectedScale = null;
+        projection = crs.getConversionFromBase();
+        MathTransform candidate = projection.getMathTransform();
+        while (candidate instanceof ConcatenatedTransform) {
+            final ConcatenatedTransform ctr = (ConcatenatedTransform) candidate;
+            if (ctr.transform1 instanceof LinearTransform) {
+                if (geographicScale != null) {
+                    // Should never happen with ConcatenatedTransform.create(...) implementation.
+                    throw new IllegalStateException(String.valueOf(candidate));
+                }
+                geographicScale = ((LinearTransform) ctr.transform1).getMatrix();
+                candidate = ctr.transform2;
+                continue;
+            }
+            if (ctr.transform2 instanceof LinearTransform) {
+                if (projectedScale != null) {
+                    // Should never happen with ConcatenatedTransform.create(...) implementation.
+                    throw new IllegalStateException(String.valueOf(candidate));
+                }
+                projectedScale = ((LinearTransform) ctr.transform2).getMatrix();
+                candidate = ctr.transform1;
+                continue;
+            }
+            // Both transforms are non-linear. We can not handle that.
+            candidate = null;
+            break;
+        }
+        //
+        // TODO: We need to handle PassthroughTransform here in some future version
+        //       (when we will want better handling of 3D coordinates).
+        //
+        /*
+         * We should really fetch the parameters from the MathTransform as much as we can, since
+         * this is the most robust source of information (the one which is the most likely to be
+         * an accurate description of the map projection without the above geographic and projected
+         * scale components). However if we are not able to query the math transform, we will query
+         * the Conversion object as a fallback and hope that it describes only the map projection
+         * part, as in Geotools implementation.
+         */
+        ParameterValueGroup group = null;
+        if (candidate instanceof AbstractMathTransform) {
+            group = ((AbstractMathTransform) candidate).getParameterValues();
+        }
+        if (group == null) {
+            /*
+             * Fallback path only if we don't have a Geotools MapProjection implementation.
+             * NOTE: it is uncertain that we should call 'swapAndScaleAxis'. If the CS has
+             * standard axis, it will not hurt since we should get the identity transform.
+             * If the CS doesn't have standard axis, then 'projectedScale' should be non-
+             * null and 'swapAndScaleAxis' is not needed. But if none of the above hold,
+             * then some axis swapping is probably done straight into the unknown 'transform'
+             * implementation and we need to "guess" what it is. Those rules are somewhat
+             * heuristic; the previous "if" branch for Geotools MapProjection implementations
+             * should be more determinist.
+             */
+            group = projection.getParameterValues();
+            if (projectedScale == null) {
+                final CoordinateSystem cs = crs.getCoordinateSystem();
+                projectedScale = AbstractCS.swapAndScaleAxis(AbstractCS.standard(cs), cs);
+            }
+        }
+        if (group != null) {
+            parameters = group.values();
+        }
+        this.geographicScale = geographicScale;
+        this.projectedScale  = projectedScale;
+        this.transform       = candidate;
+    }
+

@@ -1,0 +1,56 @@
+    /**
+     * creates a list of LiteFeatureTypeStyles a) out-of-scale rules removed b)
+     * incompatible FeatureTypeStyles removed
+     * 
+     * 
+     * @param featureStylers
+     * @param features
+     * @throws Exception
+     * @return ArrayList<LiteFeatureTypeStyle>
+     */
+    private ArrayList<LiteFeatureTypeStyle> createLiteFeatureTypeStyles(
+            FeatureTypeStyle[] featureStyles, FeatureType ftype,
+            Graphics2D graphics) throws IOException {
+        if (LOGGER.isLoggable(Level.FINE))
+            LOGGER.fine("creating rules for scale denominator - "
+                    + NumberFormat.getNumberInstance().format(scaleDenominator));
+        ArrayList<LiteFeatureTypeStyle> result = new ArrayList<LiteFeatureTypeStyle>();
+
+        LiteFeatureTypeStyle lfts;
+        for (FeatureTypeStyle fts : featureStyles) {
+            if (isFeatureTypeStyleActive(ftype, fts)) {
+                // DJB: this FTS is compatible with this FT.
+
+                // get applicable rules at the current scale
+                List[] splittedRules = splitRules(fts);
+                List ruleList = splittedRules[0];
+                List elseRuleList = splittedRules[1];
+
+                // if none, skip it
+                if ((ruleList.size() == 0) && (elseRuleList.size() == 0))
+                    continue; 
+
+                // we can optimize this one!
+                if (result.size() == 0 || !isOptimizedFTSRenderingEnabled()) {
+                    lfts = new LiteFeatureTypeStyle(graphics, ruleList,
+                            elseRuleList);
+                } else {
+//                    BufferedImage image = graphics.getDeviceConfiguration().createCompatibleImage(screenSize.width,
+//                            screenSize.height, Transparency.TRANSLUCENT);
+//                    lfts = new LiteFeatureTypeStyle(image, graphics
+//                            .getTransform(), ruleList, elseRuleList,
+//                            java2dHints);
+                    lfts = new LiteFeatureTypeStyle(new DelayedBackbufferGraphic(graphics, screenSize), ruleList, elseRuleList);
+                }
+                if (screenMapEnabled(lfts)) {
+                    lfts.screenMap = new ScreenMap(screenSize.x, screenSize.y, screenSize.width,
+                            screenSize.height);
+                }
+                                                   
+                result.add(lfts);
+            }
+        }
+
+        return result;
+    }
+

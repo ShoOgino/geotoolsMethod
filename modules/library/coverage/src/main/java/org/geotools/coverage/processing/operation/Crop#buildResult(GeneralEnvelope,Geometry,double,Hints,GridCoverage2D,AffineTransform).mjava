@@ -1,0 +1,247 @@
+	/**
+	 * Applies the band select operation to a grid coverage.
+	 *
+	 * @param cropEnvelope the target envelope; always not null
+     * @param cropROI the target ROI shape; nullable
+     * @param roiTolerance; as read from op's params
+     * 
+	 * @param sourceCoverage
+	 *            is the source {@link GridCoverage2D} that we want to crop.
+	 * @param hints
+	 *            A set of rendering hints, or {@code null} if none.
+	 * @param sourceGridToWorldTransform
+	 *            is the 2d grid-to-world transform for the source coverage.
+     *
+	 * @return The result as a grid coverage.
+	 */
+	private static GridCoverage2D buildResult(
+			final GeneralEnvelope cropEnvelope,
+            final Geometry cropROI,
+            final double roiTolerance,
+			final Hints hints,
+			final GridCoverage2D sourceCoverage,
+			final AffineTransform sourceGridToWorldTransform) {
+
+		//
+		// Getting the source coverage and its child geolocation objects
+		//
+		final RenderedImage sourceImage = sourceCoverage.getRenderedImage();
+		final GridGeometry2D sourceGridGeometry = ((GridGeometry2D) sourceCoverage.getGridGeometry());
+		final GridEnvelope2D sourceGridRange = sourceGridGeometry.getGridRange2D();
+
+		//
+		// Now we try to understand if we have a simple scale and translate or a
+		// more elaborated grid-to-world transformation n which case a simple
+		// crop could not be enough, but we may need a more elaborated chain of
+		// operation in order to do a good job. As an instance if we
+        // have a rotation which is not multiple of PI/2 we have to use
+        // the mosaic with a ROI
+		//
+	    final boolean isSimpleTransform = CoverageUtilities.isSimpleGridToWorldTransform(sourceGridToWorldTransform,EPS);
+
+			// Do we need to explode the Palette to RGB(A)?
+		//
+		int actionTaken = 0;
+
+		// //
+		//
+		// Layout
+		//
+		// //
+		final RenderingHints targetHints = new RenderingHints(null);
+		if(hints!=null)
+			targetHints.add(hints);
+		final ImageLayout layout = initLayout(sourceImage, targetHints);
+		targetHints.put(JAI.KEY_IMAGE_LAYOUT, layout);
+
+		//
+		// prepare the processor to use for this operation
+		//
+		final JAI processor = OperationJAI.getJAI(targetHints);
+		final boolean useProvidedProcessor = !processor.equals(JAI.getDefaultInstance());
+
+		try {
+
+            if (cropROI != null) {
+                // replace the cropEnvelope with the envelope of the intersection
+                // of the ROI and the cropEnvelope.
+                // Remember that envelope(intersection(roi,cropEnvelope)) != intersection(cropEnvelope, envelope(roi))
+                final Polygon modelSpaceROI = FeatureUtilities.getPolygon(cropEnvelope, GFACTORY);
+                Geometry intersection =  IntersectUtils.intersection(cropROI, modelSpaceROI);
+                Envelope2D e2d = JTS.getEnvelope2D(intersection.getEnvelopeInternal(), cropEnvelope.getCoordinateReferenceSystem());
+                GeneralEnvelope ge = new GeneralEnvelope((org.opengis.geometry.Envelope)e2d);
+                cropEnvelope.setEnvelope(ge);
+            }
+
+			// //
+			//
+			// Build the new range by keeping into
+			// account translation of grid geometry constructor for respecting
+			// OGC PIXEL-IS-CENTER ImageDatum assumption.
+			//
+			// //
+			final AffineTransform sourceWorldToGridTransform = sourceGridToWorldTransform.createInverse();
+
+			// //
+			//
+            // finalRasterArea will hold the smallest rectangular integer raster area that contains the floating point raster
+			// area which we obtain when applying the world-to-grid transform to the cropEnvelope. Note that we need to intersect
+			// such an area with the area covered by the source coverage in order to be sure we do not try to crop outside the
+			// bounds of the source raster.
+			//
+			// //
+            final Rectangle2D finalRasterAreaDouble = XAffineTransform.transform(sourceWorldToGridTransform, cropEnvelope.toRectangle2D(),null);
+            final Rectangle finalRasterArea = finalRasterAreaDouble.getBounds();
+
+            // intersection with the original range in order to not try to crop outside the image bounds
+            Rectangle.intersect(finalRasterArea, sourceGridRange, finalRasterArea);
+            if(finalRasterArea.isEmpty())
+            	throw new CannotCropException(Errors.format(ErrorKeys.CANT_CROP));
+
+            // //
+            //
+            // It is worth to point out that doing a crop the G2W transform
+            // should not change while the envelope might change as
+            // a consequence of the rounding of the underlying image datum
+            // which uses integer factors or in case the G2W is very
+            // complex. Note that we will always strive to
+            // conserve the original grid-to-world transform.
+            //
+            // //
+
+            // we do not have to crop in this case (should not really happen at
+            // this time)
+            if (finalRasterArea.equals(sourceGridRange) && isSimpleTransform && cropROI==null)
+                    return sourceCoverage;
+
+            // //
+            //
+            // if I get here I have something to crop
+            // using the world-to-grid transform for going from envelope to the
+            // new grid range.
+            //
+            // //
+            final double minX = finalRasterArea.getMinX();
+            final double minY = finalRasterArea.getMinY();
+            final double width = finalRasterArea.getWidth();
+            final double height =finalRasterArea.getHeight();
+
+			// //
+			//
+			// Check if we need to use mosaic or crop
+			//
+			// //
+			final PlanarImage croppedImage;
+			final ParameterBlock pbj = new ParameterBlock();
+			pbj.addSource(sourceImage);
+			java.awt.Polygon rasterSpaceROI=null;
+            String operatioName=null;
+            if (!isSimpleTransform || cropROI!=null) {
+                // /////////////////////////////////////////////////////////////////////
+                //
+                // We don't have a simple scale and translate transform, JAI
+                // crop MAY NOT suffice. Let's decide whether or not we'll use
+                // the Mosaic.
+                //
+                // /////////////////////////////////////////////////////////////////////
+                Polygon modelSpaceROI = FeatureUtilities.getPolygon(cropEnvelope, GFACTORY);
+
+				// //
+				//
+				// Now convert this polygon back into a shape for the source
+				// raster space.
+				//
+				// //
+				final List<Point2D> points = new ArrayList<Point2D>(5);
+				rasterSpaceROI = FeatureUtilities.convertPolygonToPointArray(modelSpaceROI, ProjectiveTransform.create(sourceWorldToGridTransform), points);
+				if(rasterSpaceROI==null||rasterSpaceROI.getBounds().isEmpty())
+		            if(finalRasterArea.isEmpty())
+		            	throw new CannotCropException(Errors.format(ErrorKeys.CANT_CROP));
+				final boolean doMosaic = decideJAIOperation(roiTolerance, rasterSpaceROI.getBounds2D(), points);
+				if (doMosaic || cropROI != null) {
+					// prepare the params for the mosaic
+                    final ROI[] roiarr;
+                    try {
+                        if(cropROI != null) {
+                            final Shape cropRoiLS2 = new LiteShape2(cropROI, ProjectiveTransform.create(sourceWorldToGridTransform), null, false);
+                            final ROIShape cropRS = new ROIShape(cropRoiLS2);
+                            roiarr = new ROI[]{cropRS};
+                        } else {
+                            final ROIShape roi = new ROIShape(rasterSpaceROI);
+                            roiarr = new ROI[]{roi};
+                        }
+                    } catch (FactoryException ex) {
+						throw new CannotCropException(Errors.format(ErrorKeys.CANT_CROP), ex);
+                    }
+					pbj.add(MosaicDescriptor.MOSAIC_TYPE_OVERLAY);
+					pbj.add(null);
+					pbj.add(roiarr);
+					pbj.add(null);
+ 					pbj.add(CoverageUtilities.getBackgroundValues(sourceCoverage));
+
+ 					//prepare the final layout
+					final Rectangle bounds = rasterSpaceROI.getBounds2D().getBounds();
+					Rectangle.intersect(bounds, sourceGridRange, bounds);
+					if(bounds.isEmpty())
+						throw new CannotCropException(Errors.format(ErrorKeys.CANT_CROP));
+
+					// we do not have to crop in this case (should not really happen at
+                    // this time)
+                    if (bounds.getBounds().equals(sourceGridRange) && isSimpleTransform)
+                            return sourceCoverage;
+
+
+        	        // nice trick, we use the layout to do the actual crop
+                    final Rectangle boundsInt=bounds.getBounds();
+					layout.setMinX(boundsInt.x);
+					layout.setWidth(boundsInt.width );
+					layout.setMinY(boundsInt.y);
+					layout.setHeight( boundsInt.height);
+					operatioName = "Mosaic";
+				}
+
+			}
+            
+            //do we still have to set the operation name? If so that means we have to go for crop.
+            if(operatioName==null) {
+                // executing the crop
+                pbj.add((float) minX);
+                pbj.add((float) minY);
+                pbj.add((float) width);
+                pbj.add((float) height);
+                operatioName = "Crop";
+            }
+            // //
+            //
+            // Apply operation
+            //
+            // //
+            if (!useProvidedProcessor) {
+                croppedImage = JAI.create(operatioName, pbj, targetHints);
+            } else {
+                croppedImage = processor.createNS(operatioName, pbj, targetHints);
+            }
+
+		    //conserve the input grid to world transformation
+            return new GridCoverageFactory(hints).create(
+            		sourceCoverage.getName(), 
+            		croppedImage,
+            		new GridGeometry2D(
+		                    new GridEnvelope2D(croppedImage.getBounds()),
+		                    sourceGridGeometry.getGridToCRS2D(PixelOrientation.CENTER),
+		                    sourceCoverage.getCoordinateReferenceSystem()
+		            ),
+                    (GridSampleDimension[]) (actionTaken == 1 ?null :sourceCoverage.getSampleDimensions().clone()),
+                    new GridCoverage[] { sourceCoverage },
+                    rasterSpaceROI != null ?Collections.singletonMap("GC_ROI", rasterSpaceROI) :null
+            
+            );
+      
+		} catch (TransformException e) {
+			throw new CannotCropException(Errors.format(ErrorKeys.CANT_CROP), e);
+		} catch (NoninvertibleTransformException e) {
+			throw new CannotCropException(Errors.format(ErrorKeys.CANT_CROP), e);
+		}
+
+	}
+

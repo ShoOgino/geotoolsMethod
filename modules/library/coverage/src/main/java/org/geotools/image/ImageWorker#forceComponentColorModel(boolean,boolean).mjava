@@ -1,0 +1,138 @@
+    /**
+     * Reformats the {@linkplain ColorModel color model} to a
+     * {@linkplain ComponentColorModel component color model} preserving
+     * transparency. This is used especially in order to go from
+     * {@link PackedColorModel} to {@link ComponentColorModel}, which seems to
+     * be well accepted from {@code PNGEncoder} and {@code TIFFEncoder}.
+     * <p>
+     * This code is adapted from jai-interests mailing list archive.
+     *
+     * @param checkTransparent
+     * @param optimizeGray
+     * 
+     * @return this {@link ImageWorker}.
+     *
+     * @see FormatDescriptor
+     */
+    public final ImageWorker forceComponentColorModel(boolean checkTransparent,boolean optimizeGray) {
+    	final ColorModel cm = image.getColorModel();
+        if (cm instanceof ComponentColorModel) {
+            // Already an component color model - nothing to do.
+            return this;
+        }
+        // shortcut for index color model
+        if (cm instanceof IndexColorModel) {
+            final IndexColorModel icm = (IndexColorModel) cm;
+            final SampleModel sm   = this.image.getSampleModel();
+            final int datatype	   = sm.getDataType();
+            final boolean gray     = ColorUtilities.isGrayPalette(icm, checkTransparent)&optimizeGray;
+            final boolean alpha    = icm.hasAlpha();
+            /*
+             * If the image is grayscale, retain only the needed bands.
+             *
+             */            
+            final int     numDestinationBands = gray?(alpha?2:1):(alpha?4:3);
+            LookupTableJAI lut = null;
+
+            switch (datatype) {
+			case DataBuffer.TYPE_BYTE:
+				{
+		            final byte    data[][] = new byte[numDestinationBands][icm.getMapSize()];
+		            icm.getReds  (data[0]);
+		            if(numDestinationBands>=2)
+		            	// remember to optimize for grayscale images
+		            	if(!gray)
+		            		icm.getGreens(data[1]);
+		            	else
+		            		icm.getAlphas(data[1]);
+		            if(numDestinationBands>=3)
+		            	icm.getBlues (data[2]);
+		            if (numDestinationBands == 4) {
+		                icm.getAlphas(data[3]);
+		            }		
+		            lut = new LookupTableJAI(data);
+
+				}
+				break;
+				
+			case DataBuffer.TYPE_USHORT:
+			{
+				final int mapSize=icm.getMapSize();
+				final short    data[][] = new short[numDestinationBands][mapSize];
+				for(int i=0;i<mapSize;i++)
+				{
+					data[0][i]=(short) icm.getRed(i);
+					if(numDestinationBands>=2)
+		            	// remember to optimize for grayscale images
+		            	if(!gray)
+		            		data[1][i]=(short)icm.getGreen(i);
+		            	else
+		            		data[1][i]=(short)icm.getAlpha(i);
+		            if(numDestinationBands>=3)
+		            	data[2][i]=(short)icm.getBlue(i);
+		            if (numDestinationBands == 4) {
+		            	data[3][i]=(short)icm.getAlpha(i);
+		            }
+				}
+				lut = new LookupTableJAI(data,datatype==DataBuffer.TYPE_USHORT);	
+	            
+	            				
+			}				
+				break;				
+
+			default:
+				throw new IllegalArgumentException(
+								Errors.format(ErrorKeys.ILLEGAL_ARGUMENT_$2,"datatype", datatype));
+			}
+
+            //did we initialized the LUT?
+            if(lut==null)
+            	throw new IllegalStateException(
+						Errors.format(ErrorKeys.NULL_ARGUMENT_$1,"lut"));
+            /*
+             * Get the default hints, which usually contains only informations
+             * about tiling. If the user override the rendering hints with an
+             * explicit color model, keep the user's choice.
+             */
+            final RenderingHints hints = (RenderingHints) getRenderingHints();
+            final ImageLayout layout;
+            final Object candidate = hints.get(JAI.KEY_IMAGE_LAYOUT);
+            if (candidate instanceof ImageLayout) {
+            	layout= (ImageLayout) candidate;
+            }
+            else
+            {
+            	layout= new ImageLayout(image);
+            	hints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT,layout));
+            }
+            
+            int[] bits= new int[numDestinationBands];
+            //bits per component
+            for(int i=0;i<numDestinationBands;i++)
+            	bits[i]=sm.getSampleSize(i);            
+            final ComponentColorModel destinationColorModel=new ComponentColorModel(
+            		numDestinationBands>=3?ColorSpace.getInstance(ColorSpace.CS_sRGB):ColorSpace.getInstance(ColorSpace.CS_GRAY),
+            				bits,
+                    		alpha,
+                    		cm.isAlphaPremultiplied(),
+                    		alpha?Transparency.TRANSLUCENT:Transparency.OPAQUE,
+                    		datatype);
+            final SampleModel destinationSampleModel=destinationColorModel.createCompatibleSampleModel(image.getWidth(), image.getHeight());
+            layout.setColorModel(destinationColorModel);
+            layout.setSampleModel(destinationSampleModel);
+            image = LookupDescriptor.create(image, lut, hints);
+
+        } else {
+            // Most of the code adapted from jai-interests is in 'getRenderingHints(int)'.
+            final int type = (cm instanceof DirectColorModel) ?DataBuffer.TYPE_BYTE : image.getSampleModel().getTransferType();
+            final RenderingHints hints = getRenderingHints(type);
+//            image=ColorConvertDescriptor.create(image, RIFUtil.getImageLayoutHint(hints).getColorModel(null), hints);
+            image = FormatDescriptor.create(image, type, hints);;
+        } 
+        invalidateStatistics();
+
+        // All post conditions for this method contract.
+        assert image.getColorModel() instanceof ComponentColorModel;
+        return this;
+    }
+

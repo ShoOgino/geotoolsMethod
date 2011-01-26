@@ -1,0 +1,59 @@
+    /**
+     * Returns the image type specifier for this palette. This method tries to reuse existing
+     * color model if possible, since it may consume a significant amount of memory.
+     *
+     * @throws  FileNotFoundException If the RGB values need to be read from a file and this file
+     *          (typically inferred from {@linkplain #name name}) is not found.
+     * @throws  IOException  If an other find of I/O error occured.
+     * @throws  IIOException If an other kind of error prevent this method to complete.
+     */
+    public synchronized ImageTypeSpecifier getImageTypeSpecifier() throws IOException {
+        /*
+         * First checks the weak references.
+         */
+        ImageTypeSpecifier its = queryCache();
+        if (its != null) {
+            return its;
+        }
+        /*
+         * Nothing reacheable. Rebuild the specifier.
+         */
+        final int[] ARGB = createARGB();
+        final int bits = ColorUtilities.getBitCount(ARGB.length);
+        final int type = (bits <= 8) ? DataBuffer.TYPE_BYTE : DataBuffer.TYPE_USHORT;
+        final boolean packed = (bits==1 || bits==2 || bits==4);
+        final boolean dense  = (packed || bits==8 || bits==16);
+        if (dense && (1 << bits) == ARGB.length && numBands == 1) {
+            final byte[] A = new byte[ARGB.length];
+            final byte[] R = new byte[ARGB.length];
+            final byte[] G = new byte[ARGB.length];
+            final byte[] B = new byte[ARGB.length];
+            for (int i=0; i<ARGB.length; i++) {
+                int code = ARGB[i];
+                B[i] = (byte) ((code       ) & 0xFF);
+                G[i] = (byte) ((code >>>= 8) & 0xFF);
+                R[i] = (byte) ((code >>>= 8) & 0xFF);
+                A[i] = (byte) ((code >>>= 8) & 0xFF);
+            }
+            its = ImageTypeSpecifier.createIndexed(R,G,B,A, bits, type);
+        } else {
+            /*
+             * The "ImageTypeSpecifier.createIndexed(...)" method is too strict. The IndexColorModel
+             * constructor is more flexible. This block mimic the "ImageTypeSpecifier.createIndexed"
+             * work without the constraints imposed by "createIndexed". Being more flexible consume
+             * less memory for the color palette, since we don't force it to be 64 kb in the USHORT
+             * data type case.
+             */
+            final IndexColorModel colors = ColorUtilities.getIndexColorModel(ARGB, numBands, visibleBand);
+            final SampleModel samples;
+            if (packed) {
+                samples = new MultiPixelPackedSampleModel(type, 1, 1, bits);
+            } else {
+                samples = new PixelInterleavedSampleModel(type, 1, 1, 1, 1, new int[1]);
+            }
+            its = new ImageTypeSpecifier(colors, samples);
+        }
+        cache(its);
+        return its;
+    }
+

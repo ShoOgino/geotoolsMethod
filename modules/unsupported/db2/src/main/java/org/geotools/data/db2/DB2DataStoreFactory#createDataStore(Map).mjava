@@ -1,0 +1,77 @@
+    /**
+     * Constructs a DB2 data store using the params.
+     * 
+     * If the port number is zero we will try to use the JDBC type 2 driver
+     * and if the port number is non-zer, we will try to use the JDBC type 4
+     * driver
+     *
+     * @param params The full set of information needed to construct a live
+     *        data source.  Should have  dbtype equal to DB2, as well as host,
+     *        user, passwd, database, and table schema.
+     *
+     * @return The created DataSource, this may be null if the required
+     *         resource was not found or if insufficent parameters were given.
+     *         Note that canProcess() should have returned false if the
+     *         problem is to do with insuficent parameters.
+     *
+     * @throws IOException See DataSourceException
+     * @throws DataSourceException Thrown if there were any problems creating
+     *         or connecting the datasource.
+     */
+    public DataStore createDataStore(Map params) throws IOException {
+        if (!canProcess(params)) {
+            throw new IOException("Invalid parameters");
+        }
+        if (!isAvailable()) {
+        	throw new IOException("DB2 Driver not available");
+        }
+
+        String host = (String) HOST.lookUp(params);
+        String user = (String) USER.lookUp(params);
+        String passwd = (String) PASSWD.lookUp(params);
+        int port = ((Integer) PORT.lookUp(params)).intValue();
+        String database = (String) DATABASE.lookUp(params);
+        String tabschema = (String) TABSCHEMA.lookUp(params);
+        Integer maxConn = (Integer) MAXCONN.lookUp(params);
+        Integer minConn = (Integer) MINCONN.lookUp(params);
+        Boolean validateConn = (Boolean) VALIDATECONN.lookUp(params);
+        
+        boolean validate = validateConn != null && validateConn.booleanValue();
+        int maxActive = maxConn != null ? maxConn.intValue() : 10;
+        int maxIdle = minConn != null ? minConn.intValue() : 4;
+        String url = getJDBCUrl(host, port, database);
+        DataSource source = getDefaultDataSource(url, user, passwd, maxActive, maxIdle, validate);
+
+        // If the table schema is null or blank, uset the userid for the table schema
+        if (tabschema == null || tabschema.length() == 0) {
+        	tabschema = user;
+        }
+        // if the table schema is not double-quoted, convert it to uppercase.
+        // if it is double-quoted, remove the double quotes.
+        if (tabschema.startsWith("\"")) {
+        	tabschema = tabschema.substring(1,tabschema.length()-1);
+        } else {
+        	tabschema = tabschema.toUpperCase();
+        }
+        // trim trailing blanks - just in case
+        tabschema = tabschema.trim();
+        // Set the namespace and databaseSchemaName both to the table schema name
+        // Set the timeout value to 100 seconds to force FeatureTypeHandler caching
+        JDBCDataStoreConfig config = new JDBCDataStoreConfig(tabschema,
+                tabschema, 10000);
+        DB2DataStore ds;
+
+        try {
+            ds = new DB2DataStore(source, config, url);
+        } catch (IOException e) {
+            LOGGER.info("Create DB2Datastore failed: "
+                    + e);
+            throw new DataSourceException("Could not create DB2DataStore", e);
+        }
+
+        LOGGER.info("Successfully created DB2Datastore for: "
+            + host + ":" + port + "/" + database);
+
+        return ds;
+    }
+

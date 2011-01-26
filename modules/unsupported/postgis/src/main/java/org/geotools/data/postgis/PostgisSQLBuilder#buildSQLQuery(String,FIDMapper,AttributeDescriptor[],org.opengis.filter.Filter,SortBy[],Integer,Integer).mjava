@@ -1,0 +1,41 @@
+    /**
+     * Overrides to support offset and maxFeatures
+     * @see DefaultSQLBuilder#buildSQLQuery(String, FIDMapper, AttributeDescriptor[], org.opengis.filter.Filter, SortBy[], Integer, Integer)
+     */
+    @Override
+    public String buildSQLQuery(String typeName,
+            FIDMapper mapper,
+            AttributeDescriptor[] attrTypes,
+            org.opengis.filter.Filter filter,
+            SortBy[] sortBy,
+            Integer offset,
+            Integer limit) throws SQLEncoderException {
+        
+        if(offset != null){
+            //we need to add the PK as sorting order regardless of the client asking for a specific order or not
+            //so we can ensure a consistent order if the client asks for ordering over an attribute other than the PK
+            List<SortBy> sortAtts = new ArrayList<SortBy>();
+            if(sortBy != null){
+                sortAtts.addAll(Arrays.asList(sortBy));
+            }
+            if(!(sortAtts.contains(SortBy.NATURAL_ORDER) || sortAtts.contains(SortBy.REVERSE_ORDER))){
+                //no natural order contained in the required list, append PK ordering...
+                sortAtts.add(SortBy.NATURAL_ORDER);
+            }
+            sortBy = sortAtts.toArray(new SortBy[sortAtts.size()]);
+        }
+        
+        final String selectStatement = super.buildSQLQuery(typeName, mapper, attrTypes, filter, sortBy, offset, limit);
+        StringBuilder sb = new StringBuilder(selectStatement);
+        
+        if(offset != null){
+            sb.append(" OFFSET ").append(offset);
+        }
+        
+        if(limit != null){
+            sb.append(" LIMIT ").append(limit);
+        }
+        
+        return sb.toString();
+    }
+

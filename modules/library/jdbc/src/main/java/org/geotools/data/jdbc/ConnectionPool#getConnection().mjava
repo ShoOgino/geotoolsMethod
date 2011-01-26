@@ -1,0 +1,53 @@
+    /**
+     * Gets a Connection from the Connection Pool.
+     * 
+     * <p>
+     * If no available connections exist a new connection will be created and added to the pool.
+     * When the returned connection is closed it will be added to the connection pool for other
+     * requests to this method.
+     * </p>
+     *
+     * @return A Connection from the ConnectionPool.
+     *
+     * @throws SQLException If an error occurs getting the connection or if the 
+     * connection pool has been closed by a previous call to close().
+     */
+    public Connection getConnection() throws SQLException {
+        if (closed) {
+            throw new SQLException("The ConnectionPool has been closed.");
+        }
+        
+        Connection conn = null;
+
+        synchronized (mutex) {
+            if (availableConnections.size() > 0) {
+                LOGGER.fine("Getting available connection.");
+
+                ManagedPooledConnection mConn = 
+                    (ManagedPooledConnection) availableConnections.removeFirst();
+
+                conn = mConn.pooledConn.getConnection();
+
+                mConn.lastUsed = System.currentTimeMillis();
+                mConn.inUse = true;
+                usedConnections.add(mConn);
+            } else {
+                LOGGER.fine("No available connections, creating a new one.");
+
+                PooledConnection pConn = cpDataSource.getPooledConnection();
+
+                conn = pConn.getConnection();
+
+                pConn.addConnectionEventListener(listManager);
+
+                ManagedPooledConnection mConn = new ManagedPooledConnection(pConn);
+
+                mConn.inUse = true;
+                mConn.lastUsed = System.currentTimeMillis();
+                usedConnections.add(mConn);
+            }
+        }
+
+        return conn;
+    }
+

@@ -1,0 +1,50 @@
+    /**
+     * Creates the schema, a FeatureType of the attributes.
+     *
+     * @param metaData from the query of the feature table.
+     * @param geoColumn the name of the geometry column in the feature table.
+     *
+     * @return a FeatureType of the attributes.
+     *
+     * @throws SQLException if there was database connectivity issues.
+     * @throws SchemaException if there was problems creating the FeatureType.
+     *
+     * @todo Fix FeatureType name - IanS tasks TODO: put this method
+     *       MysqlGeomColumn or a SchemaFactory.
+     */
+    public static SimpleFeatureType makeSchema(ResultSetMetaData metaData, String geoColumn)
+        throws SQLException, SchemaException {
+        String columnName = null;
+        Class colClass = null;
+        int numCols = metaData.getColumnCount();
+        AttributeDescriptor[] attributes = new AttributeDescriptor[numCols - 1];
+
+        LOGGER.finer("about to loop through cols");
+
+        // loop through all columns except first, as it's the featureID
+        for (int i = 2; i <= numCols; i++) {
+            columnName = metaData.getColumnName(i);
+            LOGGER.finer("reading col: " + i + " named: " + columnName);
+            LOGGER.finer("reading col: " + metaData.getColumnTypeName(i));
+            AttributeTypeBuilder build = new AttributeTypeBuilder();
+            // set column name and type from database
+            //TODO: use MysqlGeomColumn.getGeomType, once it's fully implemented
+            build.setNillable(true);
+            if (columnName.equals(geoColumn)) { //if it is a geomtry column, by name
+            	//build.setCRS(crs); TODO: use CRS's in mysql
+            	build.setBinding(Geometry.class);
+                attributes[i - COLUMN_OFFSET] = build.buildDescriptor(columnName);
+            } else {
+                colClass = (Class) sqlTypeMap.get(metaData.getColumnTypeName(i));
+                build.setBinding(colClass);
+                attributes[i - COLUMN_OFFSET] = build.buildDescriptor(columnName);
+            }
+        }
+
+        // @todo Fix FeatureType name - IanS 
+        SimpleFeatureTypeBuilder b = new SimpleFeatureTypeBuilder();
+        b.setName("mysql-features");
+        b.addAll(attributes);
+        return b.buildFeatureType();
+    }
+

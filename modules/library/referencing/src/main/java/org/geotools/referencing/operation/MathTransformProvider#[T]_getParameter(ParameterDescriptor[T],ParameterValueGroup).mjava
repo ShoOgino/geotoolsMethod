@@ -1,0 +1,47 @@
+    /**
+     * Returns the parameter value for the specified operation parameter.
+     * This convenience method is used by subclasses for initializing
+     * {@linkplain MathTransform math transform} from a set of parameters.
+     *
+     * @param  param The parameter to look for.
+     * @param  group The parameter value group to search into.
+     * @return The requested parameter value.
+     * @throws ParameterNotFoundException if the parameter is not found.
+     */
+    protected static <T> ParameterValue<T> getParameter(final ParameterDescriptor<T> param,
+                                                      final ParameterValueGroup    group)
+            throws ParameterNotFoundException
+    {
+        /*
+         * Search for an identifier matching the group's authority, if any.
+         * This is needed if the parameter values group was created from an
+         * EPSG database for example: we need to use the EPSG names instead
+         * of the OGC ones.
+         */
+        String name = getName(param, group.getDescriptor().getName().getAuthority());
+        if (name == null) {
+            name = param.getName().getCode();
+        }
+        if (param.getMinimumOccurs() != 0) {
+            return Parameters.cast(group.parameter(name), param.getValueClass());
+        }
+        /*
+         * The parameter is optional. We don't want to invokes 'parameter(name)', because we don't
+         * want to create a new parameter is the user didn't supplied one. Search the parameter
+         * ourself (so we don't create any), and returns null if we don't find any.
+         *
+         * TODO: A simplier solution would be to add a 'isDefined' method in GeoAPI,
+         *       or something similar.
+         */
+        final GeneralParameterDescriptor search;
+        search = group.getDescriptor().descriptor(name);
+        if (search instanceof ParameterDescriptor) {
+            for (final GeneralParameterValue candidate : group.values()) {
+                if (search.equals(candidate.getDescriptor())) {
+                    return Parameters.cast((ParameterValue) candidate, param.getValueClass());
+                }
+            }
+        }
+        return null;
+    }
+

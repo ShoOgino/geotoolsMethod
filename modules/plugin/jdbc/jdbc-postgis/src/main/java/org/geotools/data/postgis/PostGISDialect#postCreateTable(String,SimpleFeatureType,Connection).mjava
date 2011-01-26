@@ -1,0 +1,134 @@
+    /**
+     * Creates GEOMETRY_COLUMN registrations and spatial indexes for all
+     * geometry columns
+     */
+    @Override
+    public void postCreateTable(String schemaName,
+            SimpleFeatureType featureType, Connection cx) throws SQLException {
+        schemaName = schemaName != null ? schemaName : "public"; 
+        String tableName = featureType.getName().getLocalPart();
+        
+        Statement st = null;
+        try {
+            st = cx.createStatement();
+
+            // register all geometry columns in the database
+            for (AttributeDescriptor att : featureType
+                    .getAttributeDescriptors()) {
+                if (att instanceof GeometryDescriptor) {
+                    GeometryDescriptor gd = (GeometryDescriptor) att;
+
+                    // lookup or reverse engineer the srid
+                    int srid = -1;
+                    if (gd.getUserData().get(JDBCDataStore.JDBC_NATIVE_SRID) != null) {
+                        srid = (Integer) gd.getUserData().get(
+                                JDBCDataStore.JDBC_NATIVE_SRID);
+                    } else if (gd.getCoordinateReferenceSystem() != null) {
+                        try {
+                            Integer result = CRS.lookupEpsgCode(gd
+                                    .getCoordinateReferenceSystem(), true);
+                            if (result != null)
+                                srid = result;
+                        } catch (Exception e) {
+                            LOGGER.log(Level.FINE, "Error looking up the "
+                                    + "epsg code for metadata "
+                                    + "insertion, assuming -1", e);
+                        }
+                    }
+
+                    // assume 2 dimensions, but ease future customisation
+                    int dimensions = 2;
+
+                    // grab the geometry type
+                    String geomType = CLASS_TO_TYPE_MAP.get(gd.getType()
+                            .getBinding());
+                    if (geomType == null)
+                        geomType = "GEOMETRY";
+
+                    // register the geometry type, first remove and eventual
+                    // leftover, then write out the real one
+                    String sql = 
+                    "DELETE FROM GEOMETRY_COLUMNS"
+                            + " WHERE f_table_catalog=''" //
+                            + " AND f_table_schema = '" + schemaName + "'" //
+                            + " AND f_table_name = '" + tableName + "'" // 
+                            + " AND f_geometry_column = '" + gd.getLocalName() + "'";
+                    
+                    LOGGER.fine( sql );
+                    st.execute( sql );
+                    
+                    sql = "INSERT INTO GEOMETRY_COLUMNS VALUES (''," //
+                            + "'" + schemaName + "'," //
+                            + "'" + tableName + "'," //
+                            + "'" + gd.getLocalName() + "'," //
+                            + dimensions + "," //
+                            + srid + "," //
+                            + "'" + geomType + "')";
+                    LOGGER.fine( sql );
+                    st.execute( sql );
+
+                    // add srid checks
+                    if (srid > -1) {
+                        sql = "ALTER TABLE " //
+                                + "\"" + schemaName + "\"" // 
+                                + "." //
+                                + "\"" + tableName + "\"" //
+                                + " ADD CONSTRAINT \"enforce_srid_" // 
+                                + gd.getLocalName() + "\""// 
+                                + " CHECK (SRID(" //
+                                + "\"" + gd.getLocalName() + "\"" //
+                                + ") = " + srid + ")";
+                        LOGGER.fine( sql );
+                        st.execute(sql);
+                    }
+
+                    // add dimension checks
+                    sql = "ALTER TABLE " //
+                            + "\"" + schemaName + "\"" // 
+                            + "." //
+                            + "\"" + tableName + "\"" //
+                            + " ADD CONSTRAINT \"enforce_dims_" // 
+                            + gd.getLocalName() + "\""// 
+                            + " CHECK (ndims(\"" + gd.getLocalName() + "\")" //
+                            + " = 2)";
+                    LOGGER.fine(sql);
+                    st.execute(sql);
+
+                    // add geometry type checks
+                    if (!geomType.equals("GEOMETRY")) {
+                        sql = "ALTER TABLE " //
+                                + "\"" + schemaName + "\"" // 
+                                + "." //
+                                + "\"" + tableName + "\"" //
+                                + " ADD CONSTRAINT \"enforce_geotype_" //
+                                + gd.getLocalName() + "\""//
+                                + " CHECK (geometrytype(" //
+                                + "\"" + gd.getLocalName() + "\"" //
+                                + ") = '" + geomType + "'::text " + "OR \""
+                                + gd.getLocalName() + "\"" //
+                                + " IS NULL)";
+                        LOGGER.fine(sql);
+                        st.execute(sql);
+                    }
+                    
+                    // add the spatial index
+                    sql = 
+                    "CREATE INDEX \"spatial_" + tableName // 
+                            + "_" + gd.getLocalName().toLowerCase() + "\""// 
+                            + " ON " //
+                            + "\"" + schemaName + "\"" // 
+                            + "." //
+                            + "\"" + tableName + "\"" //
+                            + " USING GIST (" //
+                            + "\"" + gd.getLocalName() + "\"" //
+                            + ")";
+                    LOGGER.fine(sql);
+                    st.execute(sql);
+                }
+            }
+            cx.commit();
+        } finally {
+            dataStore.closeSafe(st);
+        }
+    }
+

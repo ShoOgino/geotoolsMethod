@@ -1,0 +1,58 @@
+    /**
+     * Compares this filter to the specified object.  Returns true  if the
+     * passed in object is the same as this expression.  Checks  to make sure
+     * the expression types are the same as well as the literals.
+     *
+     * @param obj - the object to compare this ExpressionLiteral against.
+     *
+     * @return true if specified object is equal to this expression; false
+     *         otherwise.
+     *
+     * @task REVISIT: missmatched types now considered not equal. This may be a
+     *       problem when comparing Doubles and Integers
+     */
+    public boolean equals(Object obj) {
+        if (obj instanceof LiteralExpressionImpl) {
+            LiteralExpressionImpl expLit = (LiteralExpressionImpl) obj;
+            // This is a problem.  The Expression with type String of "2.0"
+            // should be equals to the Expression with type Integer of "2.0"
+            // Same thing with doubles and integers (as noted in the javadocs)
+
+            if (this.literal == null) {
+                return expLit.literal == null;
+            }
+            if (this.expressionType == expLit.expressionType) {
+                if(this.literal.equals(expLit.literal)) {
+                    return true;
+                } else if(expressionType == LITERAL_GEOMETRY && this.literal instanceof Geometry &&
+                        expLit.literal instanceof Geometry) {
+                    // deal with JTS stupid equal implementation
+                    if(((Geometry) literal).equals((Geometry) expLit.literal)) {
+                        return true;
+                    }
+                }
+            }
+
+            if (expressionType == LITERAL_GEOMETRY) {
+                return ((Geometry) this.literal).equals((Geometry) expLit.evaluate(null, Geometry.class));
+            } else if (expressionType == LITERAL_INTEGER) {
+                return ((Integer) this.literal).equals((Integer) expLit.evaluate(null, Integer.class));
+            } else if (expressionType == LITERAL_STRING) {
+                return ((String) this.literal).equals((String) expLit.evaluate(null, String.class));
+            } else if (expressionType == LITERAL_DOUBLE) {
+                return ((Double) this.literal).equals((Double) expLit.evaluate(null, Double.class));
+            } else if (expressionType == LITERAL_LONG) {
+                return ((Long) this.literal).equals((Long) expLit.evaluate(null, Long.class));                
+            } else {
+                return true;
+            }
+        }
+        else if (obj instanceof Literal) {
+            // some other Literal implementation like ConstantExpression
+            Literal other = (Literal) obj;
+            return equals( new LiteralExpressionImpl( other.getValue() ) );
+        } else {
+            return false;
+        }
+    }
+

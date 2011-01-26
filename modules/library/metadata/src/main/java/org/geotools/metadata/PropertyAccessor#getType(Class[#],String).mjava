@@ -1,0 +1,45 @@
+    /**
+     * Returns the metadata interface implemented by the specified implementation.
+     * Only one metadata interface can be implemented.
+     *
+     * @param  metadata The metadata implementation to wraps.
+     * @param  interfacePackage The root package for metadata interfaces.
+     * @return The single interface, or {@code null} if none where found.
+     */
+    static Class<?> getType(Class<?> implementation, final String interfacePackage) {
+        if (implementation != null && !implementation.isInterface()) {
+            /*
+             * Gets every interfaces from the supplied package in declaration order,
+             * including the ones declared in the super-class.
+             */
+            final Set<Class<?>> interfaces = new LinkedHashSet<Class<?>>();
+            do {
+                getInterfaces(implementation, interfacePackage, interfaces);
+                implementation = implementation.getSuperclass();
+            } while (implementation != null);
+            /*
+             * If we found more than one interface, removes the
+             * ones that are sub-interfaces of the other.
+             */
+            for (final Iterator<Class<?>> it=interfaces.iterator(); it.hasNext();) {
+                final Class<?> candidate = it.next();
+                for (final Class<?> child : interfaces) {
+                    if (candidate != child && candidate.isAssignableFrom(child)) {
+                        it.remove();
+                        break;
+                    }
+                }
+            }
+            final Iterator<Class<?>> it=interfaces.iterator();
+            if (it.hasNext()) {
+                final Class<?> candidate = it.next();
+                if (!it.hasNext()) {
+                    return candidate;
+                }
+                // Found more than one interface; we don't know which one to pick.
+                // Returns 'null' for now; the caller will thrown an exception.
+            }
+        }
+        return null;
+    }
+
