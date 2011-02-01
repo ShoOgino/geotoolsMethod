@@ -1,0 +1,48 @@
+    /**
+     * Get the maching built features that are stored in this mapping using a supplied link value
+     * 
+     * @param foreignKeyValue
+     * @param reprojection
+     *            Reprojected CRS or null
+     * @return The matching simple features
+     * @throws IOException
+     */
+    public List<Feature> getFeatures(Object foreignKeyValue,
+            CoordinateReferenceSystem reprojection, Object feature) throws IOException {
+        if (isSameSource()) {
+            // if linkField is null, this method shouldn't be called because the mapping
+            // should use the same table, and handles it differently
+            throw new UnsupportedOperationException(
+                    "Link field is missing from feature chaining mapping!");
+        }
+
+        FeatureSource<FeatureType, Feature> fSource = getMappingSource(feature);
+        if (fSource == null) {
+            return null;
+        }       
+
+        ArrayList<Feature> matchingFeatures = new ArrayList<Feature>();
+        
+        Query query = new Query();
+        query.setCoordinateSystemReproject(reprojection);
+        
+        Filter filter;
+        PropertyName propertyName = filterFac.property(this.nestedTargetXPath.toString());
+        filter = filterFac.equals(propertyName, filterFac.literal(foreignKeyValue));              
+        query.setFilter(filter);
+
+
+        // get all the mapped nested features based on the link values
+        FeatureCollection<FeatureType, Feature> fCollection = fSource.getFeatures(query);
+        if (fCollection instanceof MappingFeatureCollection) {
+            FeatureIterator<Feature> iterator = fCollection.features();
+            while (iterator.hasNext()) {
+                matchingFeatures.add(iterator.next());
+            }
+            iterator.close();
+        }
+
+
+        return matchingFeatures;
+    }
+
