@@ -1,42 +1,26 @@
-    @Override
-    protected void setClientProperties(final Attribute target, final Object xpathPrefix,
+    protected void setClientProperties(final Attribute target, final Object source,
             final Map<Name, Expression> clientProperties) {
-        if (target == null) {
+        if (clientProperties.size() == 0) {
             return;
         }
-
-        // NC - first calculate target attributes
         final Map<Name, Object> targetAttributes = new HashMap<Name, Object>();
-        if (target.getUserData().containsValue(Attributes.class)) {
-            targetAttributes.putAll((Map<? extends Name, ? extends Object>) target.getUserData()
-                    .get(Attributes.class));
-        }        
         for (Map.Entry<Name, Expression> entry : clientProperties.entrySet()) {
             Name propName = entry.getKey();
-            Object propExpr = entry.getValue();
-            Object propValue;
-            if (propExpr instanceof Expression) {
-                propValue = getValue(String.valueOf(xpathPrefix), (Expression)propExpr, target);
-            } else {
-                propValue = propExpr;
+            Expression propExpr = entry.getValue();
+            String propValue = "";
+
+            List<String> ls = getValue(propExpr, source);
+            if (!ls.isEmpty()) {
+                propValue = ls.get(0);
             }
-            if (propValue != null) {
-                if (propValue instanceof Collection) {
-                    if (!((Collection)propValue).isEmpty()) {                
-                        propValue = ((Collection)propValue).iterator().next();
-                        targetAttributes.put(propName, propValue);
-                    }
-                } else {
-                    targetAttributes.put(propName, propValue);
-                }
-            } 
+
+            if (LOGGER.isLoggable(Level.FINER)) {
+                LOGGER.finer("setting target=" + target.getName() + ", property Name=" + propName
+                        + ", value=" + propValue);
+            }
+            targetAttributes.put(propName, propValue);
         }
-        // FIXME should set a child Property.. but be careful for things that
-        // are smuggled in there internally and don't exist in the schema, like
-        // XSDTypeDefinition, CRS etc.
-        if (targetAttributes.size() > 0) {
-            target.getUserData().put(Attributes.class, targetAttributes);
-        }
-        setGeometryUserData(target, targetAttributes);
+        // FIXME should set a child Property
+        target.getUserData().put(Attributes.class, targetAttributes);
     }
 

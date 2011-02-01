@@ -5,43 +5,29 @@
         Set<FeatureTypeMapping> featureTypeMappings = new HashSet<FeatureTypeMapping>();
 
         for (Iterator it = mappingsConfigs.iterator(); it.hasNext();) {
-            TypeMapping dto = (TypeMapping) it.next();            
-            try {
-                FeatureSource featureSource = getFeatureSource(dto, sourceDataStores);
-                // get CRS from underlying feature source and pass it on
-                CoordinateReferenceSystem crs;
-                try {
-                    crs = featureSource.getSchema().getCoordinateReferenceSystem();
-                } catch (UnsupportedOperationException e) {
-                    // web service back end doesn't support getSchema
-                    crs = null;
-                }
-                AttributeDescriptor target = getTargetDescriptor(dto, crs);
+            TypeMapping dto = (TypeMapping) it.next();
 
-                // set original schema locations for encoding
-                target.getType().getUserData().put("schemaURI", schemaURIs);
+            FeatureSource featureSource = getFeatureSource(dto, sourceDataStores);
+            // get CRS from underlying feature source and pass it on
+            AttributeDescriptor target = getTargetDescriptor(dto, featureSource.getSchema()
+                    .getCoordinateReferenceSystem());
 
-                List attMappings = getAttributeMappings(target, dto.getAttributeMappings(), dto
-                        .getItemXpath());
+            // set original schema locations for encoding
+            target.getType().getUserData().put("schemaURI", schemaURIs);
+            
+            List attMappings = getAttributeMappings(target, dto.getAttributeMappings(), dto.getItemXpath());
 
-                FeatureTypeMapping mapping;
+            FeatureTypeMapping mapping;
 
-                mapping = FeatureTypeMappingFactory.getInstance(featureSource, target, attMappings,
-                        namespaces, dto.getItemXpath(), dto.isXmlDataStore());
-
-                String mappingName = dto.getMappingName();
-                if (mappingName != null) {
-                    mapping.setName(Types.degloseName(mappingName, namespaces));
-                }
-                featureTypeMappings.add(mapping);
-            } catch (Exception e) {
-                LOGGER
-                        .warning("Error creating app-schema data store for '"
-                                + dto.getMappingName() != null ? dto.getMappingName() : dto
-                                .getTargetElementName()
-                                + "', caused by: " + e.getMessage());
-                throw new IOException(e.getMessage());
+            mapping = FeatureTypeMappingFactory.getInstance(featureSource, target, attMappings, namespaces,
+                    dto.getItemXpath(), dto.isXmlDataStore());
+            
+            String mappingName = dto.getMappingName();
+            if (mappingName != null) {
+                mapping.setName(Types.degloseName(mappingName, namespaces));
             }
+
+            featureTypeMappings.add(mapping);
         }
         return featureTypeMappings;
     }

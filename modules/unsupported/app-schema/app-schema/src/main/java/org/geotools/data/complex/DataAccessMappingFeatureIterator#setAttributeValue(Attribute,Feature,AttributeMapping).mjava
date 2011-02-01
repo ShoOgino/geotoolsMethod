@@ -1,0 +1,144 @@
+    /**
+     * Sets the values of grouping attributes.
+     * 
+     * @param sourceFeature
+     * @param groupingMappings
+     * @param targetFeature
+     * 
+     * @return Feature. Target feature sets with simple attributes
+     */
+    protected void setAttributeValue(Attribute target, final Feature source,
+            final AttributeMapping attMapping) throws IOException {
+
+        final Expression sourceExpression = attMapping.getSourceExpression();
+        final AttributeType targetNodeType = attMapping.getTargetNodeInstance();
+        final StepList xpath = attMapping.getTargetXPath();
+        Map<Name, Expression> clientPropsMappings = attMapping.getClientProperties();
+        boolean isNestedFeature = attMapping.isNestedAttribute();
+        String id = null;
+        if (Expression.NIL != attMapping.getIdentifierExpression()) {
+            id = extractIdForAttribute(attMapping.getIdentifierExpression(), source);
+        }
+        if (attMapping.isNestedAttribute()) {
+            NestedAttributeMapping nestedMapping = ((NestedAttributeMapping) attMapping);
+            Object mappingName = nestedMapping.getNestedFeatureType(source);
+            if (mappingName != null) {
+                if (nestedMapping.isSameSource() && mappingName instanceof Name) {
+                    // data type polymorphism mapping
+                    setPolymorphicValues((Name) mappingName, target, id, nestedMapping, source,
+                            xpath, clientPropsMappings);
+                    return;
+                } else if (mappingName instanceof Hints) {
+                    // referential polymorphism mapping
+                    setPolymorphicReference((Hints) mappingName, clientPropsMappings, target,
+                            xpath, targetNodeType);
+                    return;
+                }
+            } else {
+                // polymorphism could result in null, to skip the attribute
+                return;
+            }
+        }
+        Object value = getValues(attMapping.isMultiValued(), sourceExpression, source);
+        boolean isHRefLink = isByReference(clientPropsMappings, isNestedFeature);
+        if (isNestedFeature) {
+            // get built feature based on link value
+            if (value instanceof Collection) {
+                ArrayList<Feature> nestedFeatures = new ArrayList<Feature>(((Collection) value)
+                        .size());
+                for (Object val : (Collection) value) {
+                    if (val instanceof Attribute) {
+                        val = ((Attribute) val).getValue();
+                        if (val instanceof Collection) {
+                            val = ((Collection) val).iterator().next();
+                        }
+                        while (val instanceof Attribute) {
+                            val = ((Attribute) val).getValue();
+                        }
+                    }
+                    if (isHRefLink) {
+                        // get the input features to avoid infinite loop in case the nested
+                        // feature type also have a reference back to this type
+                        // eg. gsml:GeologicUnit/gsml:occurence/gsml:MappedFeature
+                        // and gsml:MappedFeature/gsml:specification/gsml:GeologicUnit
+                        nestedFeatures.addAll(((NestedAttributeMapping) attMapping)
+                                .getInputFeatures(val, source));
+                    } else {
+                        nestedFeatures.addAll(((NestedAttributeMapping) attMapping).getFeatures(
+                                val, reprojection, source));
+                    }
+                }
+                value = nestedFeatures;
+            } else if (isHRefLink) {
+                // get the input features to avoid infinite loop in case the nested
+                // feature type also have a reference back to this type
+                // eg. gsml:GeologicUnit/gsml:occurence/gsml:MappedFeature
+                // and gsml:MappedFeature/gsml:specification/gsml:GeologicUnit
+                value = ((NestedAttributeMapping) attMapping).getInputFeatures(value, source);
+            } else {
+                value = ((NestedAttributeMapping) attMapping).getFeatures(value, reprojection,
+                        source);
+            }
+            if (isHRefLink) {
+                // only need to set the href link value, not the nested feature properties
+                setXlinkReference(target, clientPropsMappings, value, xpath, targetNodeType);
+                return;
+            }
+        }
+        if (isNestedFeature) {
+            if (value == null) {
+                // polymorphism use case, if the value doesn't match anything, don't encode
+                return;
+            }
+        }
+        if (value instanceof Collection) {
+            // nested feature type could have multiple instances as the whole purpose
+            // of feature chaining is to cater for multi-valued properties
+            Map<Object, Object> userData;
+            Map<Name, Expression> valueProperties = new HashMap<Name, Expression>();
+            for (Object singleVal : (Collection) value) {
+                ArrayList valueList = new ArrayList();
+                // copy client properties from input features if they're complex features
+                // wrapped in app-schema data access
+                if (singleVal instanceof Attribute) {
+                    // copy client properties from input features if they're complex features
+                    // wrapped in app-schema data access
+                    valueProperties = getClientProperties((Attribute) singleVal);
+                    if (!valueProperties.isEmpty()) {
+                        valueProperties.putAll(clientPropsMappings);
+                    }
+                }
+                if (!isNestedFeature) {
+                    if (singleVal instanceof Attribute) {
+                        singleVal = ((Attribute) singleVal).getValue();
+                        if (singleVal instanceof Collection) {
+                            valueList.addAll((Collection) singleVal);
+                        } else {
+                            valueList.add(singleVal);
+                        }
+                    }
+                } else {
+                    valueList.add(singleVal);
+                }
+                Attribute instance = xpathAttributeBuilder.set(target, xpath, valueList, id,
+                        targetNodeType, false, sourceExpression);
+                setClientProperties(instance, source, valueProperties);
+            }
+        } else {
+            if (value instanceof Attribute) {
+                // copy client properties from input features if they're complex features
+                // wrapped in app-schema data access
+                Map<Name, Expression> newClientProps = getClientProperties((Attribute) value);
+                if (!newClientProps.isEmpty()) {
+                    newClientProps.putAll(clientPropsMappings);
+                    clientPropsMappings = newClientProps;
+                }
+                value = ((Attribute) value).getValue();
+            }
+            Attribute instance = xpathAttributeBuilder.set(target, xpath, value, id,
+                    targetNodeType, false, sourceExpression);
+            setClientProperties(instance, source, clientPropsMappings);
+
+        }
+    }
+
