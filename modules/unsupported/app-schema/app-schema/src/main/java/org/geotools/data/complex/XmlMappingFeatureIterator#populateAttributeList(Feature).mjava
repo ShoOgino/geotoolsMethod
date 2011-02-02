@@ -1,27 +1,29 @@
-    private PathAttributeList populateAttributeList(Feature target) {
+    private PathAttributeList populateAttributeList(Feature target) throws IOException {
         PathAttributeList elements = new PathAttributeList();
-        elements.put(rootAttribute.getLabel(), createIndexedItemXpathString(), target);
+        String rootPrefix = createIndexedItemXpathString();
+        elements.put(((XmlFeatureTypeMapping)mapping).rootAttribute.getLabel(), rootPrefix, target);
+        
+        setClientProperties(target, rootPrefix, ((XmlFeatureTypeMapping)mapping).rootAttribute.getClientProperties());
 
         // iterator returns the attribute mappings starting from the root of the tree.
         // parents are always returned before children elements.
-        Iterator<TreeAttributeMapping> it = attOrderedTypeList.iterator();
+        Iterator<AttributeMapping> it = attOrderedTypeList.iterator();
         while (it.hasNext()) {
-            TreeAttributeMapping attMapping = it.next();
+            AttributeMapping attMapping = it.next();
             final Expression sourceExpression = attMapping.getIdentifierExpression();
 
             List<Pair> ls = elements.get(attMapping.getParentLabel());
             if (ls != null) {
                 for (int i = 0; i < ls.size(); i++) {
                     Pair parentAttribute = ls.get(i);
-                    int count = 1;
-                    String countXpath = null;
-                    // if instance path not set, then element exists, with one instance
+                    String countXpath = parentAttribute.getXpath();
+                    // if instance path not set, then only count the root node
                     if (attMapping.getInstanceXpath() != null) {
-                        countXpath = parentAttribute.getXpath() + XPATH_SEPARATOR
-                                + attMapping.getInstanceXpath();
-                        count = XmlXpathUtilites.countXPathNodes(mapping.getNamespaces(),
-                                countXpath, xmlResponse.getDoc());
+                        countXpath += XPATH_SEPARATOR + attMapping.getInstanceXpath();                        
                     }
+                    int count = XmlXpathUtilites.countXPathNodes(mapping.getNamespaces(),
+                            countXpath, xmlResponse.getDoc());
+                    
                     createSubFeaturesAndAddToAttributeList(elements, attMapping, sourceExpression,
                             parentAttribute, count, countXpath);
                 }
