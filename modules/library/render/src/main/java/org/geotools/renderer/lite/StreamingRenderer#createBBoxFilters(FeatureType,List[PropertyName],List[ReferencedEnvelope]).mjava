@@ -16,31 +16,32 @@
      * @throws IllegalFilterException
      *             if something goes wrong creating the filter
      */
-    private Filter createBBoxFilters(FeatureType schema, String[] attributes,
+    private Filter createBBoxFilters(FeatureType schema, List<PropertyName> attributes,
             List<ReferencedEnvelope> bboxes) throws IllegalFilterException {
         Filter filter = Filter.INCLUDE;
-        final int length = attributes.length;
-        PropertyDescriptor attType;
+        final int length = attributes.size();
+        Object attType;
 
         for (int j = 0; j < length; j++) {
-            attType = schema.getDescriptor(attributes[j]);
+            //NC - support nested attributes -> use evaluation for getting descriptor
+            //result is not necessary a descriptor, is Name in case of @attribute
+            attType =  attributes.get(j).evaluate(schema);
 
             // DJB: added this for better error messages!
             if (attType == null) {
                 if (LOGGER.isLoggable(Level.FINE))
                     LOGGER.fine(new StringBuffer("Could not find '").append(
-                            attributes[j]).append("' in the FeatureType (")
+                            attributes.get(j)).append("' in the FeatureType (")
                             .append(schema.getName()).append(")")
                             .toString());
                 throw new IllegalFilterException(new StringBuffer(
                 "Could not find '").append(
-                        attributes[j] + "' in the FeatureType (").append(
+                        attributes.get(j) + "' in the FeatureType (").append(
                                 schema.getName()).append(")").toString());
             }
 
             if (attType instanceof GeometryDescriptor) {
-                String localName = ((GeometryDescriptor) attType).getLocalName();
-                Filter gfilter = new FastBBOX(localName, bboxes.get(0), filterFactory);
+                Filter gfilter = new FastBBOX(attributes.get(j), bboxes.get(0), filterFactory);
 
                 if (filter == Filter.INCLUDE) {
                     filter = gfilter;
@@ -50,7 +51,8 @@
 
                 if(bboxes.size() > 0) {
                     for (int k = 1; k < bboxes.size(); k++) {
-                        filter = filterFactory.or( filter, new FastBBOX(localName, bboxes.get(k), filterFactory) );
+                        //filter = filterFactory.or( filter, new FastBBOX(localName, bboxes.get(k), filterFactory) );
+                        filter = filterFactory.or( filter, new FastBBOX(attributes.get(j), bboxes.get(k), filterFactory) );
                     }
                 }
             }
