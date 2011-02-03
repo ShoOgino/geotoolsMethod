@@ -1,22 +1,25 @@
     public AbstractMappingFeatureIterator(AppSchemaDataAccess store, FeatureTypeMapping mapping,
-            Query query, boolean isQueryUnrolled) throws IOException {
+            Query query, Query unrolledQuery) throws IOException {
         this.store = store;
         this.attf = new AppSchemaFeatureFactoryImpl();
 
-        Name name = mapping.getTargetFeature().getName();
-        
-        propertyNames = query.getPropertyNames()==null? null: new HashSet<String>(Arrays.asList(query.getPropertyNames()));
-
         this.mapping = mapping;
+        
+        //NC - property names
+        if (query != null && query.getProperties()!= null) {
+            setPropertyNames(query.getProperties());
+        } else { 
+            setPropertyNames(null); // we need the actual property names (not surrogates) to do this... otherwise need to set manually
+        }
         
         this.maxFeatures = query.getMaxFeatures();
                 
-        if (!isQueryUnrolled) {
-            query = getUnrolledQuery(query);
+        if (unrolledQuery==null) {
+            unrolledQuery = getUnrolledQuery(query);
         }
         xpathAttributeBuilder = new XPath();
         xpathAttributeBuilder.setFeatureFactory(attf);
-        initialiseSourceFeatures(mapping, query);
+        initialiseSourceFeatures(mapping, unrolledQuery);
         namespaces = mapping.getNamespaces();
         namespaceAwareFilterFactory = new FilterFactoryImplNamespaceAware(namespaces);
         xpathAttributeBuilder.setFilterFactory(namespaceAwareFilterFactory);

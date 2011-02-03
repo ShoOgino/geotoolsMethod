@@ -6,18 +6,19 @@
      *         needed surrogate attributes to satisfy the mapping of prorperties in
      *         <code>mappingProperties</code>
      */
-    private List<String> getSurrogatePropertyNames(String[] mappingProperties,
-            FeatureTypeMapping mapping) {
-        List<String> propNames = null;
-        if (mappingProperties != null && mappingProperties.length > 0) {
-            Set<String> requestedSurrogateProperties = new HashSet<String>();
+    private List<PropertyName> getSurrogatePropertyNames(List<PropertyName> requestedProperties,
+            FeatureTypeMapping mapping) {        
+        List<PropertyName> propNames = null;
+        final AttributeDescriptor targetDescriptor = mapping.getTargetFeature();
+        if (requestedProperties != null && requestedProperties.size() > 0) {
+            requestedProperties = new ArrayList<PropertyName>(requestedProperties);
+            Set<PropertyName> requestedSurrogateProperties = new HashSet<PropertyName>();
             // add all surrogate attributes involved in mapping of the requested
             // target schema attributes
             List<AttributeMapping> attMappings = mapping.getAttributeMappings();
-            List<String> requestedProperties = new ArrayList<String>( Arrays.asList(mappingProperties));
             //NC - add feature to list, to include its ID expression
-            requestedProperties.add(mapping.getTargetFeature().getName().getLocalPart());
-            
+            requestedProperties.add(filterFac.property(mapping.getTargetFeature().getName()));
+                 
             //get source type
             AttributeType mappedType;
             try {
@@ -27,15 +28,13 @@
                 mappedType = null;
             }
             
-            for (String requestedProperty : requestedProperties) {
+            for (PropertyName requestedProperty : requestedProperties) {
+                StepList requestedPropertySteps = requestedProperty.getNamespaceContext()==null? null:
+                    XPath.steps(targetDescriptor, requestedProperty.getPropertyName(), requestedProperty.getNamespaceContext()); 
                 for (final AttributeMapping entry : attMappings) {
-                    final StepList targetSteps = entry.getTargetXPath();
-                    // i.e.: requested "measurement", found mapping of
-                    // "measurement/result".
-                    // "result" must be included to create "measurement"
-                    //NC - requested Properties are only top level nodes, get all mappings inside node
-                    if (targetSteps.get(0).getName().getLocalPart().equals(requestedProperty) ) {
-                        
+                    final StepList targetSteps = entry.getTargetXPath();                           
+                    if (requestedPropertySteps==null? matchProperty(requestedProperty.getPropertyName(), targetSteps) : 
+                                                      matchProperty(requestedPropertySteps, targetSteps)) {                                          
                         final Expression sourceExpression = entry.getSourceExpression();
                         final Expression idExpression = entry.getIdentifierExpression();
                         //NC - include client properties
@@ -52,16 +51,16 @@
                         
                         for (String mappedAtt : exprAtts) {
                             if (!mappedAtt.equals("Expression.NIL")) { //NC - ignore Nil Expression
-                               PropertyName propExpr = filterFac.property(mappedAtt);
                                if (mappedType == null) {
                                     // web service backend.. no underlying simple feature
                                     // so just assume that it exists..
-                                    requestedSurrogateProperties.add(mappedAtt);
-                                } else {
+                                    requestedSurrogateProperties.add(filterFac.property(mappedAtt));
+                               } else {
+                                   PropertyName propExpr = filterFac.property(mappedAtt);                                   
                                     Object object = propExpr.evaluate(mappedType);
                                     AttributeDescriptor mappedAttribute = (AttributeDescriptor) object;
                                     if (mappedAttribute != null) {
-                                        requestedSurrogateProperties.add(mappedAtt);
+                                        requestedSurrogateProperties.add(filterFac.property(mappedAtt));
                                     } else {
                                         LOGGER.info("mapped type does not contains property "
                                                 + mappedAtt);
@@ -73,7 +72,7 @@
                     }
                 }
             }
-            propNames = new ArrayList<String>(requestedSurrogateProperties);
+            propNames = new ArrayList<PropertyName>(requestedSurrogateProperties);
         }
         return propNames;
     }

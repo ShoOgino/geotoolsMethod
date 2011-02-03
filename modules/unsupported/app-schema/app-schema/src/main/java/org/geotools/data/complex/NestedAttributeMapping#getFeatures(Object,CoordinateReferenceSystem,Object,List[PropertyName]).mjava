@@ -4,11 +4,13 @@
      * @param foreignKeyValue
      * @param reprojection
      *            Reprojected CRS or null
+     * @param selectedProperties list of properties to get
      * @return The matching simple features
      * @throws IOException
      */
     public List<Feature> getFeatures(Object foreignKeyValue,
-            CoordinateReferenceSystem reprojection, Object feature) throws IOException {
+            CoordinateReferenceSystem reprojection, Object feature, List<PropertyName> selectedProperties) throws IOException {
+
         if (isSameSource()) {
             // if linkField is null, this method shouldn't be called because the mapping
             // should use the same table, and handles it differently
@@ -20,8 +22,6 @@
         if (fSource == null) {
             return null;
         }       
-
-        ArrayList<Feature> matchingFeatures = new ArrayList<Feature>();
         
         Query query = new Query();
         query.setCoordinateSystemReproject(reprojection);
@@ -30,8 +30,16 @@
         PropertyName propertyName = filterFac.property(this.nestedTargetXPath.toString());
         filter = filterFac.equals(propertyName, filterFac.literal(foreignKeyValue));              
         query.setFilter(filter);
+        
+        if (selectedProperties!=null) {
+            selectedProperties = new ArrayList<PropertyName>(selectedProperties);
+            selectedProperties.add(propertyName);
+        }
+        
+        query.setProperties(selectedProperties);
 
-
+        ArrayList<Feature> matchingFeatures = new ArrayList<Feature>();
+        
         // get all the mapped nested features based on the link values
         FeatureCollection<FeatureType, Feature> fCollection = fSource.getFeatures(query);
         if (fCollection instanceof MappingFeatureCollection) {
