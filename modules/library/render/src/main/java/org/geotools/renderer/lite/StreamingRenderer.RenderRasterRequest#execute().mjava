@@ -21,64 +21,14 @@
                 // //
                 // It is a grid coverage
                 // //
-                if (grid instanceof GridCoverage)
+                if (grid instanceof GridCoverage) {
                     gcr.paint(graphics, (GridCoverage2D) grid, symbolizer);
-                else if (grid instanceof AbstractGridCoverage2DReader) {
-
-                    // //
-                    // It is an AbstractGridCoverage2DReader, let's use parameters
-                    // if we have any supplied by a user.
-                    // //
-                    // first I created the correct ReadGeometry
-                    final Parameter<GridGeometry2D> readGG = new Parameter<GridGeometry2D>(AbstractGridFormat.READ_GRIDGEOMETRY2D);
-                    readGG.setValue(new GridGeometry2D(new GridEnvelope2D(screenSize), mapExtent));
-                    final AbstractGridCoverage2DReader reader = (AbstractGridCoverage2DReader) grid;
-                    // then I try to get read parameters associated with this
-                    // coverage if there are any.
+                } else if (grid instanceof AbstractGridCoverage2DReader) {
                     final Object params = paramsPropertyName.evaluate(content);
-                    if (params != null) {
-                        // //
-                        //
-                        // Getting parameters to control how to read this coverage.
-                        // Remember to check to actually have them before forwarding
-                        // them to the reader.
-                        //
-                        // //
-                        GeneralParameterValue[] readParams = (GeneralParameterValue[]) params;
-                        final int length = readParams.length;
-                        if (length > 0) {
-                            // we have a valid number of parameters, let's check if
-                            // also have a READ_GRIDGEOMETRY2D. In such case we just
-                            // override it with the one we just build for this
-                            // request.
-                            final String name = AbstractGridFormat.READ_GRIDGEOMETRY2D
-                            .getName().toString();
-                            int i = 0;
-                            for (; i < length; i++)
-                                if (readParams[i].getDescriptor().getName()
-                                        .toString().equalsIgnoreCase(name))
-                                    break;
-                            // did we find anything?
-                            if (i < length) {
-                                //we found another READ_GRIDGEOMETRY2D, let's override it.
-                                ((Parameter) readParams[i]).setValue(readGG);
-                                coverage = (GridCoverage2D) reader.read(readParams);
-                            } else {
-                                // add the correct read geometry to the supplied
-                                // params since we did not find anything
-                                GeneralParameterValue[] readParams2 = new GeneralParameterValue[length + 1];
-                                System.arraycopy(readParams, 0, readParams2, 0,length);
-                                readParams2[length] = readGG;
-                                coverage = (GridCoverage2D) reader.read(readParams2);
-                            }
-                        } else
-                            // we have no parameters hence we just use the read grid
-                            // geometry to get a coverage
-                            coverage = (GridCoverage2D) reader.read(new GeneralParameterValue[] { readGG });
-                    } else {
-                        coverage = (GridCoverage2D) reader.read(new GeneralParameterValue[] { readGG });
-                    }
-                    try{
+                    GridGeometry2D readGG = new GridGeometry2D(new GridEnvelope2D(screenSize), mapExtent);
+                    AbstractGridCoverage2DReader reader = (AbstractGridCoverage2DReader) grid;
+                    coverage = readCoverage(reader, params, readGG);
+                    try {
                         if(coverage!=null)
                             gcr.paint(graphics, coverage, symbolizer);
                     }
