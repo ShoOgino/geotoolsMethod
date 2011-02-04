@@ -27,23 +27,37 @@
         // either multiband or indexed. It could also be 16 bits indexed!!!!
         
         final RenderedImage finalImage = couple.getGridCoverage().getRenderedImage();
-        final AffineTransform clonedFinalWorldToGrid = couple.getTransform();
+        final AffineTransform finalRaster2Model = couple.getTransform();
+        
+        //paranoiac check to avoid that JAI freaks out when computing its internal layouT on images that are too small
+        Rectangle2D finalLayout= layoutHelper(
+                        finalImage, 
+                        (float)finalRaster2Model.getScaleX(), 
+                        (float)finalRaster2Model.getScaleY(), 
+                        (float)finalRaster2Model.getTranslateX(), 
+                        (float)finalRaster2Model.getTranslateY(), 
+                        interpolation);
+        if(finalLayout.isEmpty()){
+                if(LOGGER.isLoggable(java.util.logging.Level.FINE))
+                        LOGGER.fine("Unable to create a granuleDescriptor "+this.toString()+ " due to jai scale bug");
+                return null;
+        }
 
         // TODO: optimize translate/scale transformations
         // TODO: use mosaic to merge with a background respecting alpha and transparency
         // TODO: check tolerance value
         // TODO: do we need to pass in any hints?
         
-        boolean hasScaleX=!(Math.abs(clonedFinalWorldToGrid.getScaleX()-1) < 1E-2/(finalImage.getWidth()+1-finalImage.getMinX()));
-        boolean hasScaleY=!(Math.abs(clonedFinalWorldToGrid.getScaleY()-1) < 1E-2/(finalImage.getHeight()+1-finalImage.getMinY()));
-        boolean hasShearX=!(clonedFinalWorldToGrid.getShearX() == 0.0);
-        boolean hasShearY=!(clonedFinalWorldToGrid.getShearY() == 0.0);
-        boolean hasTranslateX=!(Math.abs(clonedFinalWorldToGrid.getTranslateX()) <  1E-2);
-        boolean hasTranslateY=!(Math.abs(clonedFinalWorldToGrid.getTranslateY()) <  1E-2);
-        boolean isTranslateXInt=!(Math.abs(clonedFinalWorldToGrid.getTranslateX() - (int) clonedFinalWorldToGrid.getTranslateX()) <  1E-2);
-        boolean isTranslateYInt=!(Math.abs(clonedFinalWorldToGrid.getTranslateY() - (int) clonedFinalWorldToGrid.getTranslateY()) <  1E-2);
+        boolean hasScaleX=!(Math.abs(finalRaster2Model.getScaleX()-1) < 1E-2/(finalImage.getWidth()+1-finalImage.getMinX()));
+        boolean hasScaleY=!(Math.abs(finalRaster2Model.getScaleY()-1) < 1E-2/(finalImage.getHeight()+1-finalImage.getMinY()));
+        boolean hasShearX=!(finalRaster2Model.getShearX() == 0.0);
+        boolean hasShearY=!(finalRaster2Model.getShearY() == 0.0);
+        boolean hasTranslateX=!(Math.abs(finalRaster2Model.getTranslateX()) <  1E-2);
+        boolean hasTranslateY=!(Math.abs(finalRaster2Model.getTranslateY()) <  1E-2);
+        boolean isTranslateXInt=!(Math.abs(finalRaster2Model.getTranslateX() - (int) finalRaster2Model.getTranslateX()) <  1E-2);
+        boolean isTranslateYInt=!(Math.abs(finalRaster2Model.getTranslateY() - (int) finalRaster2Model.getTranslateY()) <  1E-2);
         
-        boolean isIdentity = clonedFinalWorldToGrid.isIdentity() && !hasScaleX&&!hasScaleY &&!hasTranslateX&&!hasTranslateY;
+        boolean isIdentity = finalRaster2Model.isIdentity() && !hasScaleX&&!hasScaleY &&!hasTranslateX&&!hasTranslateY;
         boolean isScale = hasScaleX&&hasScaleY &&!hasShearX&&!hasShearY;
         
         // TODO how can we check that the a skew is harmless????
@@ -73,8 +87,8 @@
             // It's a integer translate
             return new TranslateIntOpImage(finalImage,
             								hints,
-                                           (int) clonedFinalWorldToGrid.getShearX(),
-                                           (int) clonedFinalWorldToGrid.getShearY());
+                                           (int) finalRaster2Model.getShearX(),
+                                           (int) finalRaster2Model.getShearY());
         }                                
                           
         // final transformation
@@ -91,17 +105,17 @@
     		// scale ?
     		if (isScale){
     			im=ScaleDescriptor.create(	finalImage, 
-    									(float) clonedFinalWorldToGrid.getScaleX(),
-    									(float) clonedFinalWorldToGrid.getScaleY(),
-    									(float) clonedFinalWorldToGrid.getTranslateX(), 
-    									(float) clonedFinalWorldToGrid.getTranslateY(), 
+    									(float) finalRaster2Model.getScaleX(),
+    									(float) finalRaster2Model.getScaleY(),
+    									(float) finalRaster2Model.getTranslateX(), 
+    									(float) finalRaster2Model.getTranslateY(), 
     									interpolation, 
     									hints);
     		}else{
                     // use more general affine (slower)
                     im = AffineDescriptor.create(
                             finalImage, 
-                            clonedFinalWorldToGrid, 
+                            finalRaster2Model, 
                             interpolation,
                             null, 
                             hints);
