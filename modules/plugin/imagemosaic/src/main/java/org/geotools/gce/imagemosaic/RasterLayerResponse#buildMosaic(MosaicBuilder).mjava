@@ -8,44 +8,91 @@
 	 */
 	private RenderedImage buildMosaic(final MosaicBuilder visitor) throws IOException  {
 
+	    // build final layout and use it for cropping purposes
 		final ImageLayout layout = new ImageLayout(
 				rasterBounds.x,
 				rasterBounds.y,
 				rasterBounds.width,
 				rasterBounds.height);
-		//tiling
-		final Dimension tileDimensions=request.getTileDimensions();
-		if(tileDimensions!=null)
-			layout.setTileHeight(tileDimensions.width).setTileWidth(tileDimensions.height);
-		final RenderingHints localHints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT,layout);
-		if (hints != null && !hints.isEmpty()){
-		    if (hints.containsKey(JAI.KEY_TILE_CACHE)){
-		        final Object tc = hints.get(JAI.KEY_TILE_CACHE);
-		        if (tc != null && tc instanceof TileCache)
-		            localHints.add(new RenderingHints(JAI.KEY_TILE_CACHE, (TileCache) tc));
-		    }
-		    boolean addBorderExtender = true;
-		    if (hints != null && hints.containsKey(JAI.KEY_BORDER_EXTENDER)){
+		
+                //prepare hints
+                final Dimension tileDimensions=request.getTileDimensions();
+                if(tileDimensions!=null)
+                        layout.setTileHeight(tileDimensions.width).setTileWidth(tileDimensions.height);
+                final RenderingHints localHints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT,layout);
+                if (hints != null && !hints.isEmpty()){
+                    if (hints.containsKey(JAI.KEY_TILE_CACHE)){
+                        final Object tc = hints.get(JAI.KEY_TILE_CACHE);
+                        if (tc != null && tc instanceof TileCache)
+                            localHints.add(new RenderingHints(JAI.KEY_TILE_CACHE, (TileCache) tc));
+                    }
+                    boolean addBorderExtender = true;
+                    if (hints != null && hints.containsKey(JAI.KEY_BORDER_EXTENDER)){
                         final Object extender = hints.get(JAI.KEY_BORDER_EXTENDER);
                         if (extender != null && extender instanceof BorderExtender) {
                             localHints.add(new RenderingHints(JAI.KEY_BORDER_EXTENDER, (BorderExtender) extender));
                             addBorderExtender = false;
                         }
                     }
-		    if (addBorderExtender){
-		        localHints.add(ImageUtilities.BORDER_EXTENDER_HINTS);
-		    }
-		    if (hints.containsKey(JAI.KEY_TILE_SCHEDULER)){
+                    if (addBorderExtender){
+                        localHints.add(ImageUtilities.BORDER_EXTENDER_HINTS);
+                    }
+                    if (hints.containsKey(JAI.KEY_TILE_SCHEDULER)){
                         final Object ts = hints.get(JAI.KEY_TILE_SCHEDULER);
                         if (ts != null && ts instanceof TileScheduler)
                             localHints.add(new RenderingHints(JAI.KEY_TILE_SCHEDULER, (TileScheduler) ts));
                     }
+                }	
+                
+		//
+		// SPECIAL CASE
+		// 1 single tile, we try not do a mosaic.
+		if(visitor.granulesNumber==1){
+		    // the roi is exactly equal to the 
+		    final ROI roi = visitor.rois.get(0);
+		    if(roi instanceof ROIShape){
+		        final ROIShape roiShape= (ROIShape) roi;
+		        final Shape shape= roiShape.getAsShape();
+		        if(shape instanceof Rectangle){
+		            final Rectangle bounds = (Rectangle) shape;
+		            final RenderedImage image= visitor.getSourcesAsArray()[0];
+		            final Rectangle imageBounds= PlanarImage.wrapRenderedImage(image).getBounds();
+		            if(imageBounds.equals(bounds)){
+		                
+		                // do we need to crop
+		                if(!imageBounds.equals(rasterBounds)){
+		                    // we have to crop
+		                    //D.R. rasterBounds... was bounds
+		                    XRectangle2D.intersect(imageBounds, rasterBounds, imageBounds);
+		                    
+		                    if(imageBounds.isEmpty()){
+		                        // return back a constant image
+		                        return null;
+		                    }
+		                    // crop
+		                    return CropDescriptor.create(
+		                            image, 
+		                            new Float(imageBounds.x), 
+		                            new Float(imageBounds.y), 
+		                            new Float(imageBounds.width), 
+		                            new Float(imageBounds.height), 
+		                            localHints);
+		                }
+		                return image;
+		            }
+		        }
+		    }
 		}
 
+
 		final ROI[] sourceRoi = visitor.sourceRoi;
-		final RenderedImage mosaic = MosaicDescriptor.create(visitor.getSourcesAsArray(), 
-		        request.isBlend()? MosaicDescriptor.MOSAIC_TYPE_BLEND: MosaicDescriptor.MOSAIC_TYPE_OVERLAY
-		        , (alphaIn || visitor.doInputTransparency) ? visitor.alphaChannels : null, sourceRoi, visitor.sourceThreshold, backgroundValues, localHints);
+		final RenderedImage mosaic = MosaicDescriptor.create(
+		        visitor.getSourcesAsArray(), 
+		        request.isBlend()? MosaicDescriptor.MOSAIC_TYPE_BLEND: MosaicDescriptor.MOSAIC_TYPE_OVERLAY, 
+		        (alphaIn || visitor.doInputTransparency) ? visitor.alphaChannels : null, sourceRoi, 
+		        visitor.sourceThreshold, 
+		        backgroundValues, 
+		        localHints);
 		
 		if (setRoiProperty) {
 		    
@@ -64,7 +111,7 @@
 		}
 
 		if (LOGGER.isLoggable(Level.FINE))
-			LOGGER.fine(new StringBuffer("Mosaic created ").toString());
+			LOGGER.fine("Mosaic created ");
 
 
 		// create the coverage

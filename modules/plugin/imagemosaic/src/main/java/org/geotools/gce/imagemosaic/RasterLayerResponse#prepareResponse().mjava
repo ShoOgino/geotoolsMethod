@@ -51,31 +51,26 @@
 						
 			//compute final world to grid
 			// base grid to world for the center of pixels
-			
-			
 			final AffineTransform g2w;
-
 			final OverviewLevel baseLevel = rasterManager.overviewsController.resolutionsLevels
 					.get(0);
+			final OverviewLevel selectedLevel = rasterManager.overviewsController.resolutionsLevels.get(imageChoice);
 			final double resX = baseLevel.resolutionX;
 			final double resY = baseLevel.resolutionY;
 			final double[] requestRes = request.getRequestedResolution();
-			if ((requestRes[0] < resX || requestRes[1] < resY) && !needsReprojection) {
-				// Using the best available resolution
-				oversampledRequest = true;
-				g2w = new AffineTransform((AffineTransform) baseGridToWorld);
-				g2w.concatenate(CoverageUtilities.CENTER_TO_CORNER);
+
+                        g2w = new AffineTransform((AffineTransform) baseGridToWorld);
+                        g2w.concatenate(CoverageUtilities.CENTER_TO_CORNER);
+                        
+			if ((requestRes[0] < resX || requestRes[1] < resY) ) {
+			    // Using the best available resolution
+			    oversampledRequest = true;
 			} else {
-				if (!needsReprojection) {
-					g2w = new AffineTransform(request.getRequestedGridToWorld());
-					g2w.concatenate(CoverageUtilities.CENTER_TO_CORNER);
-				} else {
-					GridToEnvelopeMapper mapper = new GridToEnvelopeMapper(
-							new GridEnvelope2D(request.getRequestedRasterArea()),
-							mosaicBBox);
-					mapper.setPixelAnchor(PixelInCell.CELL_CORNER);
-					g2w = mapper.createAffineTransform();
-				}
+				
+			    // SG going back to working on a per level basis to do the composition
+			    // g2w = new AffineTransform(request.getRequestedGridToWorld());
+			    g2w.concatenate(AffineTransform.getScaleInstance(selectedLevel.scaleFactor,selectedLevel.scaleFactor));
+			    g2w.concatenate(AffineTransform.getScaleInstance(baseReadParameters.getSourceXSubsampling(), baseReadParameters.getSourceYSubsampling()));
 			}
 
 			// move it to the corner
@@ -83,15 +78,23 @@
 			finalWorldToGridCorner = finalGridToWorldCorner.inverse();// compute raster bounds
 			final GeneralEnvelope tempRasterBounds = CRS.transform(finalWorldToGridCorner, mosaicBBox);
 			rasterBounds=tempRasterBounds.toRectangle2D().getBounds();
+			
+			
 			// SG using the above may lead to problems since the reason is that  may be a little (1 px) bigger
 			// than what we need. The code below is a bit better since it uses a proper logic (see GridEnvelope
 			// Javadoc)
-			//rasterBounds = new GridEnvelope2D(new Envelope2D(tempRasterBounds), PixelInCell.CELL_CORNER);
+//			rasterBounds = new GridEnvelope2D(new Envelope2D(tempRasterBounds), PixelInCell.CELL_CORNER);
 			if (rasterBounds.width == 0)
 			    rasterBounds.width++;
 			if (rasterBounds.height == 0)
 			    rasterBounds.height++;
+			if(oversampledRequest)
+			    rasterBounds.grow(2, 2);
 			
+                        // make sure we do not go beyond the raster dimensions for this layer
+                        final GeneralEnvelope levelRasterArea_ = CRS.transform(finalWorldToGridCorner, rasterManager.spatialDomainManager.coverageBBox);
+                        final GridEnvelope2D levelRasterArea = new GridEnvelope2D(new Envelope2D(levelRasterArea_), PixelInCell.CELL_CORNER);
+                        XRectangle2D.intersect(levelRasterArea, rasterBounds, rasterBounds);
 			
 			// create the index visitor and visit the feature
 			final MosaicBuilder visitor = new MosaicBuilder();
@@ -197,6 +200,7 @@
 			// or we had some problem with missing tiles, therefore it might
 			// happen that for some bboxes we don't have anything to load.
 			//
+			RenderedImage returnValue=null;
 			if (visitor.granulesNumber>=1) {
 
 				//
@@ -204,33 +208,32 @@
 				// managing the transparent color if applicable. Be aware that
 				// management of the transparent color involves removing
 				// transparency information from the input images.
-				// 
-				if (LOGGER.isLoggable(Level.FINER))
-					LOGGER.finer(new StringBuilder("Loaded bbox ").append(
-							mosaicBBox.toString()).append(" while crop bbox ")
-							.append(request.getCropBBox().toString())
-							.toString());
-				
-				
-				return buildMosaic(visitor);				
+				// 			
+				returnValue= buildMosaic(visitor);
+				if(returnValue!=null){
+				    if (LOGGER.isLoggable(Level.FINE))
+				        LOGGER.fine("Loaded bbox "+mosaicBBox.toString()+" while crop bbox "+request.getCropBBox().toString());
+				    return returnValue;
+				}
 			
 			}
-			else{
-				// if we get here that means that we do not have anything to load
-				// but still we are inside the definition area for the mosaic,
-				// therefore we create a fake coverage using the background values,
-				// if provided (defaulting to 0), as well as the compute raster
-				// bounds, envelope and grid to world.
-				
-			        final Number[] values = Utils.getBackgroundValues(rasterManager.defaultSM, backgroundValues);
-				
-				// create a constant image with a proper layout
-				return ConstantDescriptor.create(
-						Float.valueOf(rasterBounds.width), 
-						Float.valueOf(rasterBounds.height),
-						values,
-						rasterManager.defaultImageLayout!=null?new RenderingHints(JAI.KEY_IMAGE_LAYOUT,rasterManager.defaultImageLayout):null);
-			}
+                        if (LOGGER.isLoggable(Level.FINE))
+                            LOGGER.fine("Creating constant image for area with no data");
+                        
+                        // if we get here that means that we do not have anything to load
+                        // but still we are inside the definition area for the mosaic,
+                        // therefore we create a fake coverage using the background values,
+                        // if provided (defaulting to 0), as well as the compute raster
+                        // bounds, envelope and grid to world.
+
+                        final Number[] values = Utils.getBackgroundValues(rasterManager.defaultSM, backgroundValues);
+                        // create a constant image with a proper layout
+                        return ConstantDescriptor.create(
+                                Float.valueOf(rasterBounds.width),
+                                Float.valueOf(rasterBounds.height),
+                                values,
+                                rasterManager.defaultImageLayout!=null?new RenderingHints(JAI.KEY_IMAGE_LAYOUT,rasterManager.defaultImageLayout):null);
+			
 
 		} catch (IOException e) {
 			throw new DataSourceException("Unable to create this mosaic", e);
