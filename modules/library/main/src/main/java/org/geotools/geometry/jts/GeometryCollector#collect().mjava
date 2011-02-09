@@ -1,0 +1,39 @@
+    /**
+     * Returns a geometry collection containing all of the geometries collected in the process
+     * 
+     * @return
+     */
+    public GeometryCollection collect() {
+        // empty case, we return an empty collection (it's what JTS returns when a geometry
+        // operation returns an empty result)
+        if (geometries.isEmpty()) {
+            return new GeometryCollection(null, factory == null ? new GeometryFactory() : factory);
+        }
+
+        // use or guess the geometry factory
+        GeometryFactory gf = factory;
+        if (gf == null) {
+            gf = geometries.get(0).getFactory();
+        }
+        if (gf == null) {
+            gf = new GeometryFactory();
+        }
+
+        // build the final collection
+        Class collectionClass = guessCollectionType();
+        if (collectionClass == MultiPoint.class) {
+            Point[] array = (Point[]) geometries.toArray(new Point[geometries.size()]);
+            return gf.createMultiPoint(array);
+        } else if (collectionClass == MultiPolygon.class) {
+            Polygon[] array = (Polygon[]) geometries.toArray(new Polygon[geometries.size()]);
+            return gf.createMultiPolygon(array);
+        } else if (collectionClass == MultiLineString.class) {
+            LineString[] array = (LineString[]) geometries
+                    .toArray(new LineString[geometries.size()]);
+            return gf.createMultiLineString(array);
+        } else {
+            Geometry[] array = (Geometry[]) geometries.toArray(new Geometry[geometries.size()]);
+            return gf.createGeometryCollection(array);
+        }
+    }
+
