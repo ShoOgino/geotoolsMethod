@@ -13,8 +13,22 @@
         HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
         urlConnection.setRequestProperty("Accept-Encoding", "gzip");
         
+        // if we have username/password use them to setup basic auth
+        if(user != null && password != null) {
+            String combined = nullToEmpty(user) + ":" + nullToEmpty(password);
+            byte[] authBytes = combined.getBytes("US-ASCII");
+            String encoded = new String(Base64.encodeBase64(authBytes));
+            urlConnection.setRequestProperty("Authorization",  "Basic " + encoded);
+        }
+        
+        // enforce the timeout if we have one
+        if(timeout > 0) {
+            urlConnection.setConnectTimeout(timeout);
+            urlConnection.setReadTimeout(timeout);
+        }
+        
         urlConnection.setDoInput(true);
-        if(postData != null) {
+        if(postData != null && !"".equals(postData.trim())) {
             urlConnection.setRequestMethod("POST");
             urlConnection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
             urlConnection.setDoOutput(true);
@@ -37,7 +51,7 @@
         /* Get the response from the server*/
         if(urlConnection.getResponseCode() != 200) {
             throw new IOException("Server reported and error with code " + 
-                    urlConnection.getResponseCode() + ": " + urlConnection.getResponseMessage());
+                    urlConnection.getResponseCode() + ": " + urlConnection.getResponseMessage() + " accessing resource " + url.toExternalForm());
         } else {
             InputStream is = urlConnection.getInputStream();
             String encoding = urlConnection.getContentEncoding();
