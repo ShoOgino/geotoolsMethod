@@ -1,12 +1,9 @@
         @Override
         void execute() {
-            final Object grid = gridPropertyName.evaluate(content);
-            if (LOGGER.isLoggable(Level.FINE))
-                LOGGER.fine(new StringBuffer("rendering Raster for feature ")
-                .append(content.toString()).append(" - ").append(
-                        grid).toString());
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine("Rendering Raster " + coverage);
+            }
 
-            GridCoverage2D coverage=null;
             try {
                 // /////////////////////////////////////////////////////////////////
                 //
@@ -15,32 +12,21 @@
                 // rely on the gridocerage renderer itself.
                 //
                 // /////////////////////////////////////////////////////////////////
-                final GridCoverageRenderer gcr = new GridCoverageRenderer(
-                        destinationCRS, originalMapExtent, screenSize, worldToScreen,java2dHints);
+                final GridCoverageRenderer gcr = new GridCoverageRenderer(destinationCRS,
+                        originalMapExtent, screenSize, worldToScreen, java2dHints);
 
-                // //
-                // It is a grid coverage
-                // //
-                if (grid instanceof GridCoverage) {
-                    gcr.paint(graphics, (GridCoverage2D) grid, symbolizer);
-                } else if (grid instanceof AbstractGridCoverage2DReader) {
-                    final Object params = paramsPropertyName.evaluate(content);
-                    GridGeometry2D readGG = new GridGeometry2D(new GridEnvelope2D(screenSize), mapExtent);
-                    AbstractGridCoverage2DReader reader = (AbstractGridCoverage2DReader) grid;
-                    coverage = readCoverage(reader, params, readGG);
-                    try {
-                        if(coverage!=null)
-                            gcr.paint(graphics, coverage, symbolizer);
-                    }
-                    finally {
-
-                        //we need to try and dispose this coverage since it was created on purpose for rendering 
-                        if(coverage!=null)
-                            coverage.dispose(true);
-                    }
+                try {
+                    gcr.paint(graphics, coverage, symbolizer);
+                } finally {
+                    // we need to try and dispose this coverage if was created on purpose for
+                    // rendering
+                    if (coverage != null && disposeCoverage)
+                        coverage.dispose(true);
                 }
-                if (LOGGER.isLoggable(Level.FINE))
+                
+                if (LOGGER.isLoggable(Level.FINE)) {
                     LOGGER.fine("Raster rendered");
+                }
 
             } catch (FactoryException e) {
                 LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
@@ -54,11 +40,6 @@
             } catch (IllegalArgumentException e) {
                 LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
                 fireErrorEvent(e);
-            } catch (IOException e) {
-                LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
-                fireErrorEvent(e);
             }
-
-
         }
 
