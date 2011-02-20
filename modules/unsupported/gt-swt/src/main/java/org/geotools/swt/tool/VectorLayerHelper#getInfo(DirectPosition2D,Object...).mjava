@@ -1,0 +1,49 @@
+    /*
+     * Get feature data at the given position.
+     *
+     * @param pos the location to query
+     *
+     *
+     */
+    /**
+     * {@inheritDoc}
+     *
+     * @param params a {@code Double} value for the search radius to use with
+     *        point or line features
+     *
+     * @return the features that lie within the search radius of {@code pos}; if
+     *         this helper is not valid an empty collection will be returned
+     *
+     * @throws IOException if the feature source for the layer cannot be accessed
+     */
+    public SimpleFeatureCollection getInfo( DirectPosition2D pos, Object... params ) throws IOException {
+
+        SimpleFeatureCollection collection = null;
+        MapLayer layer = layerRef.get();
+
+        if (layer != null) {
+            Filter filter = null;
+            if (isPolygonGeometry) {
+                /*
+                 * Polygon features - use an intersects filter
+                 */
+                Geometry posGeom = createSearchPos(pos);
+                filter = filterFactory.intersects(filterFactory.property(attrName), filterFactory.literal(posGeom));
+
+            } else {
+                /*
+                 * Line or point features - use a bounding box filter
+                 */
+                double radius = ((Number) params[0]).doubleValue();
+                ReferencedEnvelope env = createSearchEnv(pos, radius);
+                filter = filterFactory.bbox(filterFactory.property(attrName), env);
+            }
+
+            DefaultQuery query = new DefaultQuery(null, filter);
+            query.setCoordinateSystemReproject(getMapContext().getCoordinateReferenceSystem());
+            collection = (SimpleFeatureCollection) layer.getFeatureSource().getFeatures(query);
+        }
+
+        return collection;
+    }
+

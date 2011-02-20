@@ -1,0 +1,56 @@
+    /**
+     * Constructor - creates an instance of JMapPane with the given
+     * renderer and map context.
+     *
+     * @param renderer a renderer object
+     * @param context an instance of MapContext
+     */
+    public SwtMapPane( Composite parent, int style, GTRenderer renderer, MapContext context ) {
+        super(parent, style);
+
+        addListener(SWT.Paint, this);
+        addListener(SWT.MouseDown, this);
+        addListener(SWT.MouseUp, this);
+
+        imageOrigin = new Point(0, 0);
+
+        acceptRepaintRequests = true;
+        redrawBaseImage = true;
+        baseImageMoved = false;
+        clearLabelCache = false;
+
+        setRenderer(renderer);
+        setMapContext(context);
+
+        toolManager = new MapToolManager(this);
+
+        this.addMouseListener(toolManager);
+        this.addMouseMoveListener(toolManager);
+        this.addMouseWheelListener(toolManager);
+
+        /*
+         * Listen for mouse entered events to (re-)set the
+         * current tool cursor, otherwise the cursor seems to
+         * default to the standard cursor sometimes (at least
+         * on OSX)
+         */
+        this.addMouseMoveListener(new MouseMoveListener(){
+            public void mouseMove( MouseEvent event ) {
+                if (mouseDown) {
+                    endX = event.x;
+                    endY = event.y;
+                    isDragging = true;
+                    redraw();
+                }
+            }
+        });
+
+        addControlListener(new ControlAdapter(){
+            public void controlResized( ControlEvent e ) {
+                curPaintArea = getVisibleRect();
+                doSetDisplayArea(SwtMapPane.this.context.getAreaOfInterest());
+            }
+        });
+
+    }
+

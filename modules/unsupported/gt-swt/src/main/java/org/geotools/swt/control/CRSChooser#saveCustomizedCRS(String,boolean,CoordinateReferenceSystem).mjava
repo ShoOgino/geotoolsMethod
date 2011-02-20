@@ -1,0 +1,51 @@
+    /**
+     * @param text
+     * @param createdCRS
+     * @throws CoreException
+     * @throws IOException
+     * @throws BackingStoreException
+     */
+    private CoordinateReferenceSystem saveCustomizedCRS( String text, boolean processWKT, CoordinateReferenceSystem createdCRS )
+            throws CoreException, IOException, BackingStoreException {
+        Preferences root = Preferences.userRoot();
+        Preferences node = root.node(CUSTOM_ID);
+        int lastID;
+        String code;
+        String name;
+        String newWKT;
+        if (processWKT) {
+            lastID = Integer.parseInt(node.get(LAST_ID, "0")); //$NON-NLS-1$
+            code = "UDIG:" + lastID; //$NON-NLS-1$
+            name = createdCRS.getName().toString() + "(" + code + ")";//$NON-NLS-1$ //$NON-NLS-2$
+            lastID++;
+            node.putInt(LAST_ID, lastID);
+            newWKT = processingWKT(text, lastID);
+        } else {
+            Set<ReferenceIdentifier> ids = createdCRS.getIdentifiers();
+            if (!ids.isEmpty()) {
+                Identifier id = ids.iterator().next();
+                code = id.toString();
+                name = createdCRS.getName().getCode() + " (" + code + ")"; //$NON-NLS-1$ //$NON-NLS-2$
+            } else {
+                name = code = createdCRS.getName().getCode();
+            }
+
+            newWKT = text;
+        }
+
+        Preferences child = node.node(code);
+        child.put(NAME_ID, name);
+        child.put(WKT_ID, newWKT);
+        String[] keywords = keywordsText.getText().split(","); //$NON-NLS-1$
+        if (keywords.length > 0) {
+            Preferences keyworkNode = child.node(ALIASES_ID);
+            for( String string : keywords ) {
+                string = string.trim().toUpperCase();
+                keyworkNode.put(string, string);
+            }
+        }
+        node.flush();
+
+        return createdCRS;
+    }
+
