@@ -10,8 +10,12 @@
         ResultSet rs = null;
 
         List<ReferencedEnvelope> result = new ArrayList<ReferencedEnvelope>();
+        Savepoint savePoint = null;
         try {
             st = cx.createStatement();
+            if(!cx.getAutoCommit()) {
+                savePoint = cx.setSavepoint();
+            }
 
             for (AttributeDescriptor att : featureType.getAttributeDescriptors()) {
                 if (att instanceof GeometryDescriptor) {
@@ -43,9 +47,15 @@
                 }
             }
         } catch(SQLException e) {
+            if(savePoint != null) {
+                cx.rollback(savePoint);
+            }
             LOGGER.log(Level.WARNING, "Failed to use ST_Estimated_Extent, falling back on envelope aggregation", e);
             return null;
         } finally {
+            if(savePoint != null) {
+                cx.releaseSavepoint(savePoint);
+            }
             dataStore.closeSafe(rs);
             dataStore.closeSafe(st);
         } 
