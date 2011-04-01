@@ -1,0 +1,52 @@
+    /**
+     * Adds a new attribute w/ provided name and class.
+     * 
+     * <p>
+     * The provided class is used to locate an attribute type binding previously specified by
+     * {@link #addBinding(AttributeType)},{@link #addBindings(Schema)}, or
+     * {@link #setBindings(Schema)}.
+     * </p>
+     * <p>
+     * If not such binding exists then an attribute type is created on the fly.
+     * </p>
+     * 
+     * @param name
+     *            The name of the attribute.
+     * @param bind
+     *            The class the attribute is bound to.
+     * 
+     */
+    public void add(String name, Class<?> binding) {
+
+        AttributeDescriptor descriptor = null;
+
+        attributeBuilder.setBinding(binding);
+        attributeBuilder.setName(name);
+
+        // check if this is the name of the default geometry, in that case we
+        // better make it a geometry type
+        // also check for jts geometry, if we ever actually get to a point where a
+        // feature can be backed by another geometry model (like iso), we need
+        // to remove this check
+        //
+        if ((defaultGeometry != null && defaultGeometry.equals(name))
+                || Geometry.class.isAssignableFrom(binding)) {
+
+            // if no crs was set, set to defaultCRS
+            if (!attributeBuilder.isCRSSet()) {
+                if( defaultCrs == null ){
+                    LOGGER.warning("Creating "+name+" with null CoordinateReferenceSystem - did you mean to setCRS?");
+                }
+                attributeBuilder.setCRS(defaultCrs);
+            }
+
+            GeometryType type = attributeBuilder.buildGeometryType();
+            descriptor = attributeBuilder.buildDescriptor(name, type);
+        } else {
+            AttributeType type = attributeBuilder.buildType();
+            descriptor = attributeBuilder.buildDescriptor(name, type);
+        }
+
+        attributes().add(descriptor);
+    }
+
