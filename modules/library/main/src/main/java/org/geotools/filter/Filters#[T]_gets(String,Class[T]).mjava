@@ -1,0 +1,80 @@
+    /**
+     * Used to upcovnert a "Text Value" into the provided TYPE.
+     * <p>
+     * Used to tread softly on the Java typing system, because
+     * Filter/Expression is not strongly typed. Values in in
+     * Expression land are often not the the real Java Objects
+     * we wish they were - it is reall a small, lax, query
+     * language and Java objects need a but of help getting
+     * through.
+     * <p>
+     * </p>
+     * A couple notes:
+     * <ul>
+     * <li>Usual trick of reflection for a Constructors that
+     *     supports a String parameter is used as a last ditch effort.
+     *     </li>
+     * <li>will do its best to turn Object into the indicated Class
+     * <li>will be used for ordering literals against attribute values
+     *     are calculated at runtime (like Date.)
+     * </ul>
+     * Remember Strong typing is for whimps who know what they are
+     * doing ahead of time. Real programmers let their program
+     * learn at runtime... :-)
+     * </p>
+     * 
+     * @param text
+     * @param TYPE
+     * @throws open set of Throwable reflection for TYPE( String )
+     */
+    public static <T> T gets(String text, Class<T> TYPE) throws Throwable {
+        if (text == null) {
+            return null;
+        }
+        if (TYPE == String.class) {
+            return TYPE.cast(text);
+        }
+        if (TYPE == Integer.class) {
+            return TYPE.cast(Integer.decode(text));
+        }
+        if (TYPE == Double.class) {
+            return TYPE.cast(Double.valueOf(text));
+        }
+        if (TYPE == Number.class) {
+            try {
+                return TYPE.cast(Double.valueOf(text));
+            } catch (NumberFormatException ignore) {
+            }
+            return TYPE.cast(Integer.decode(text));
+        }
+        if (TYPE == Color.class) {
+            return TYPE.cast(new Color(Integer.decode(text).intValue()));
+        }
+        // fallback try converters
+        Object value = Converters.convert(text, TYPE);
+        if (value != null) {
+            return TYPE.cast(value);
+        }
+        // Original fall back position of reflection against constructor
+        try {
+            Constructor<T> create = TYPE.getConstructor(new Class[] { String.class });
+            return create.newInstance(new Object[] { text });
+        } catch (SecurityException e) {
+            // hates you
+        } catch (NoSuchMethodException e) {
+            // nope
+        } catch (IllegalArgumentException e) {
+            // should not occur
+        } catch (InstantiationException e) {
+            // should not occur, perhaps the class was abstract?
+            // eg. Number.class is a bad idea
+        } catch (IllegalAccessException e) {
+            // hates you
+        } catch (InvocationTargetException e) {
+            // should of worked but we got a real problem,
+            // an actual problem
+            throw e.getCause();
+        }
+        return null; // give up
+    }
+
