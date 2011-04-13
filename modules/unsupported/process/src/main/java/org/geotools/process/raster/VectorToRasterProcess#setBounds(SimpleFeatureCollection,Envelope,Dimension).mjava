@@ -25,28 +25,27 @@
                 trEnv = inputBounds;
             }
 
-            com.vividsolutions.jts.geom.Envelope common = trEnv.intersection(features.getBounds());
-            if (common == null || common.isNull()) {
-                throw new VectorToRasterException(
-                        "Features do not lie within the requested rasterizing bounds");
+            // If the provided bounds cover the feature bounds, use them
+            if (trEnv.covers(features.getBounds())) {
+                extent = trEnv;
+                
+            } else {
+                // If the provided bounds partially overlap the feature bounds
+                // use the intersection
+                com.vividsolutions.jts.geom.Envelope common = trEnv.intersection(features.getBounds());
+                if (common == null || common.isNull()) {
+                    throw new VectorToRasterException(
+                            "Features do not lie within the requested rasterizing bounds");
+                }
+                extent = new ReferencedEnvelope(common, featuresCRS);
             }
 
-            extent = new ReferencedEnvelope(common, featuresCRS);
-
         } else {
-
-            /*
-             * The bounds arg was null - interpreted as set bounds to
-             * those of the FeatureCollection
-             */
+            // No bounds provided - use feature bounds
             extent = featureBounds;
         }
 
         GeometryFactory gf = new GeometryFactory();
         extentGeometry = gf.toGeometry(extent);
-
-        double xInterval = extent.getWidth() / gridDim.getWidth();
-        double yInterval = extent.getHeight() / gridDim.getHeight();
-        cellsize = Math.max(xInterval, yInterval);
     }
 
