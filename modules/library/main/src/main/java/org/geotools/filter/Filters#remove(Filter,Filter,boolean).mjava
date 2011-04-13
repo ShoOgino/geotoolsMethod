@@ -1,0 +1,98 @@
+    /**
+     * Removes the targetFilter from the baseFilter if the baseFilter is a group filter (And or Or).  See
+     * {@link #removeFilter(org.opengis.filter.Filter, org.opengis.filter.Filter)} for details, except this method
+     * includes the option to not recurse into child filters.
+     * @param baseFilter
+     * @param targetFilter
+     * @param recurse true if the method should descend into child group filters looking for the target
+     * @return
+     */
+    public Filter remove(Filter baseFilter, final Filter targetFilter, boolean recurse) {
+        if (baseFilter == null){
+            //return null if nothing to start with
+            return baseFilter;
+        }
+        if (targetFilter == null){
+            //similarly, just return the existing one if the target is null
+            return baseFilter;
+        }
+        if (baseFilter == targetFilter){
+            //if they are the same filter, return null to signify no filters left
+            return null;
+        }
+        if( !(baseFilter instanceof BinaryLogicOperator)){
+            return baseFilter; // nothing to traverse
+        }
+        if (recurse) {
+            DuplicatingFilterVisitor remove = new DuplicatingFilterVisitor() {
+                public Object visit(Or filter, Object extraData) {
+                    List<Filter> children = filter.getChildren();
+                    List<Filter> newChildren = new ArrayList<Filter>();
+                    for (Iterator<Filter> iter = children.iterator(); iter.hasNext();) {
+                        Filter child = iter.next();
+                        if( targetFilter.equals(child)){
+                            continue; // skip this one
+                        }
+                        if (child != null) {
+                            Filter newChild = (Filter) child.accept(this, extraData);
+                            newChildren.add(newChild);
+                        }
+                    }
+                    if( newChildren.size() == 1 ){
+                        return newChildren.get(0);
+                    }
+                    return getFactory(extraData).or(newChildren);
+                }
+                public Object visit(And filter, Object extraData) {
+                    List<Filter> children = filter.getChildren();
+                    List<Filter> newChildren = new ArrayList<Filter>();
+                    for (Iterator<Filter> iter = children.iterator(); iter.hasNext();) {
+                        Filter child = iter.next();
+                        if( targetFilter.equals(child)){
+                            continue; // skip this one
+                        }
+                        if (child != null) {
+                            Filter newChild = (Filter) child.accept(this, extraData);
+                            newChildren.add(newChild);
+                        }
+                    }
+                    if( newChildren.size() == 1 ){
+                        return newChildren.get(0);
+                    }
+                    return getFactory(extraData).and(newChildren);
+                }
+            };
+            return (Filter) baseFilter.accept(remove, ff);
+        }
+        else {
+            BinaryLogicOperator blo = (BinaryLogicOperator) baseFilter;
+            List<Filter> children = blo.getChildren();
+            if (children == null ){
+                children = Collections.emptyList();
+            }
+            
+            List<Filter> copy = new ArrayList<Filter>( children.size() );
+            for( Filter filter : children ){
+                if( targetFilter.equals(filter) ){
+                    continue; // skip this one
+                }
+                copy.add( filter );
+            }
+            if( copy.isEmpty() ){
+                return Filter.EXCLUDE;
+            }
+            else if (copy.size() == 1){
+                return copy.get(0); 
+            }
+            else if (baseFilter instanceof And){
+                return ff.and( children );
+            }
+            else if (baseFilter instanceof Or){
+                return ff.or( children );
+            }
+            else {
+                return Filter.EXCLUDE;
+            }
+        }
+    }
+
