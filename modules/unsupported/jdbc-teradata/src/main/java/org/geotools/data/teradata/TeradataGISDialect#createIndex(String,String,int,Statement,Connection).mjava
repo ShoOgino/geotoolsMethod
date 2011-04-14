@@ -1,29 +1,46 @@
-    protected void createIndex(int id, Statement stmt) throws SQLException {
-        if (mLastTableName == null) {
+    protected void createIndex(String schemaName, String tableName, int id, Statement stmt,
+            Connection cx) throws SQLException {
+        if (tableName == null) {
             return;
         }
-        String key = getPrimaryKeyName(mLastSchemaName, mLastTableName);
+        String key = getPrimaryKeyName(schemaName, tableName, cx);
 
         StringBuffer sb = new StringBuffer();
-        if (!mLastSchemaName.equals("")) {
-            encodeSchemaName(mLastSchemaName, sb);
+        if (schemaName != null && !schemaName.equals("")) {
+            encodeSchemaName(schemaName, sb);
             sb.append(".");
         }
-        encodeTableName(mLastTableName, sb);
+        encodeTableName(tableName, sb);
         String encodedTableName = sb.toString();
+        
+        String geomColumn = null;
+        ResultSet rs = cx.getMetaData().getColumns("", schemaName, tableName, "%");
+        try {
+            while (rs.next()) {
+                String type = rs.getString(6);
+                if ("SYSUDTLIB.ST_GEOMETRY".equals(type) || "SYSUDTLIB.ST_POINT".equals(type)) {
+                    geomColumn = rs.getString(4);
+                    break;
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
 
-        for (String geomColumn : mLastGeomColumns) {
+        if (geomColumn != null) {
+
             sb = new StringBuffer();
-            if (!mLastSchemaName.equals("")) {
-                encodeSchemaName(mLastSchemaName, sb);
+            if (schemaName != null && !schemaName.equals("")) {
+                encodeSchemaName(schemaName, sb);
                 sb.append(".");
             }
-            String indexTableName = mLastTableName + "_" + geomColumn + "_idx";
+            String indexTableName = tableName + "_" + geomColumn + "_idx";
             encodeTableName(indexTableName, sb);
             String encodedIdxTableName = sb.toString();
 
-            if (mIndexTables.contains(indexTableName)) {
-                try {
+            rs = cx.getMetaData().getTables(null, schemaName, indexTableName, new String[]{"TABLE"});
+            try {
+                if (rs.next()) {
                     String sql = MessageFormat.format(
                             "DELETE FROM {0} WHERE \"{1}\" = {2,number,0};", encodedIdxTableName,
                             key, id);
@@ -40,16 +57,15 @@
                                             + "      {3,number,0.0#}, {4,number,0.0#}, {5,number,0.0#}, {6,number,0.0#}, "
                                             + "      {7,number,0}, {8,number,0}, {9,number,0}, {10,number,0.0#}, {11,number,0})"
                                             + "    FROM {12} WHERE \"{2}\" = {14,number,0};"
-                                            + "  ) " + "END", mLastTableName, geomColumn, key,
+                                            + "  ) " + "END", tableName, geomColumn, key,
                                     u_xmin, u_ymin, u_xmax, u_ymax, g_nx, g_ny, levels, scale,
                                     shift, encodedTableName, encodedIdxTableName, id);
 
                     stmt.executeUpdate(sql);
-                } catch (SQLException e) {
-                    // geometry is probably null.
                 }
+            } catch (SQLException e) {
+                // geometry is probably null.
             }
         }
-        mLastGeomColumns = null;
     }
 
