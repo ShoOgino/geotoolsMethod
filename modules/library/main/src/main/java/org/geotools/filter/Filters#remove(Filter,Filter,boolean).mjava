@@ -16,9 +16,9 @@
             //similarly, just return the existing one if the target is null
             return baseFilter;
         }
-        if (baseFilter == targetFilter){
-            //if they are the same filter, return null to signify no filters left
-            return null;
+        if (baseFilter.equals(targetFilter)){
+            //if they are the same filter, return Filter.INCLUDE to signify no filters left
+            return Filter.INCLUDE;
         }
         if( !(baseFilter instanceof BinaryLogicOperator)){
             return baseFilter; // nothing to traverse
@@ -26,24 +26,31 @@
         if (recurse) {
             DuplicatingFilterVisitor remove = new DuplicatingFilterVisitor() {
                 public Object visit(Or filter, Object extraData) {
-                    List<Filter> children = filter.getChildren();
-                    List<Filter> newChildren = new ArrayList<Filter>();
-                    for (Iterator<Filter> iter = children.iterator(); iter.hasNext();) {
-                        Filter child = iter.next();
-                        if( targetFilter.equals(child)){
-                            continue; // skip this one
-                        }
-                        if (child != null) {
-                            Filter newChild = (Filter) child.accept(this, extraData);
-                            newChildren.add(newChild);
-                        }
-                    }
-                    if( newChildren.size() == 1 ){
+                    List<Filter> newChildren = children(filter, targetFilter, extraData);
+                    if (newChildren.isEmpty()) {
+                        // every time you remove a filter from an Or
+                        // expression you get less stuff, so removing the last is ...
+                        return Filter.EXCLUDE;
+                    } else if (newChildren.size() == 1) {
                         return newChildren.get(0);
+                    } else {
+                        return getFactory(extraData).or(newChildren);
                     }
-                    return getFactory(extraData).or(newChildren);
                 }
                 public Object visit(And filter, Object extraData) {
+                    List<Filter> newChildren = children(filter, targetFilter, extraData);
+                    if (newChildren.isEmpty()) {
+                        // every time you remove a filter from an And
+                        // filter you get more stuff, so removing the last is ...
+                        return Filter.INCLUDE;
+                    } else if (newChildren.size() == 1) {
+                        return newChildren.get(0);
+                    } else {
+                        return getFactory(extraData).and(newChildren);
+                    }
+                }
+                private List<Filter> children(BinaryLogicOperator filter,
+                        final Filter targetFilter, Object extraData) {
                     List<Filter> children = filter.getChildren();
                     List<Filter> newChildren = new ArrayList<Filter>();
                     for (Iterator<Filter> iter = children.iterator(); iter.hasNext();) {
@@ -56,10 +63,7 @@
                             newChildren.add(newChild);
                         }
                     }
-                    if( newChildren.size() == 1 ){
-                        return newChildren.get(0);
-                    }
-                    return getFactory(extraData).and(newChildren);
+                    return newChildren;
                 }
             };
             return (Filter) baseFilter.accept(remove, ff);
@@ -79,7 +83,19 @@
                 copy.add( filter );
             }
             if( copy.isEmpty() ){
-                return Filter.EXCLUDE;
+                if( baseFilter instanceof And){
+                    // every time you remove a filter from an And
+                    // filter you get more stuff, so removing the last is ...
+                    return Filter.INCLUDE;
+                }
+                else if( baseFilter instanceof Or){
+                    // every time you remove a filter from an Or
+                    // expression you get less stuff, so removing the last is ...
+                    return Filter.EXCLUDE;
+                }
+                else {
+                    return Filter.EXCLUDE;
+                }
             }
             else if (copy.size() == 1){
                 return copy.get(0); 
@@ -91,7 +107,7 @@
                 return ff.or( children );
             }
             else {
-                return Filter.EXCLUDE;
+                return Filter.INCLUDE;
             }
         }
     }
