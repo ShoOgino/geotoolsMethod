@@ -3,17 +3,25 @@
 
         if (srsName == null) {
             // initialize from first layer
-            if (layer.getBoundingBoxes().size() > 0) {
-                // we assume the layer is declared in its native bounding box
-                CRSEnvelope envelope = layer.getBoundingBoxes().get(
-                        layer.getBoundingBoxes().keySet().iterator().next());
-                srsName = envelope.getEPSGCode();
-            } else if (layer.getSrs().contains("EPSG:4326")) {
-                // otherwise we try 4326
-                srsName = "EPSG:4326";
-            } else {
-                // if not even that works we just take the first...
-                srsName = (String) layer.getSrs().iterator().next();
+            for(String srs : layer.getBoundingBoxes().keySet()) {
+                try {
+                    // check it's valid, if not we crap out and move to the next
+                    CRS.decode(srs);
+                    srsName = srs;
+                    break;
+                } catch(Exception e) {
+                    // it's fine, we could not decode that code
+                }
+            }
+            
+            if(srsName == null) {
+                if (layer.getSrs().contains("EPSG:4326")) {
+                    // otherwise we try 4326
+                    srsName = "EPSG:4326";
+                } else {
+                    // if not even that works we just take the first...
+                    srsName = (String) layer.getSrs().iterator().next();
+                }
             }
             validSRS = layer.getSrs();
         } else {
