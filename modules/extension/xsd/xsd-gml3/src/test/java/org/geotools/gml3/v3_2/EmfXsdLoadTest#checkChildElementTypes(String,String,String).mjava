@@ -1,0 +1,43 @@
+    /**
+     * Check that a type found by loading a top-level schema has children whose types are not null.
+     * 
+     * @param filename
+     *            top-level schema file
+     * @param namespace
+     *            namespace of type to check
+     * @param name
+     *            local name of type to check
+     */
+    @SuppressWarnings("unchecked")
+    private static void checkChildElementTypes(String filename, String namespace, String name) {
+        ResourceSet resourceSet = XSDSchemaImpl.createResourceSet();
+        XSDResourceImpl resource = (XSDResourceImpl) resourceSet.getResource(
+                URI.createURI(EmfXsdLoadTest.class.getResource(filename).toString()), true);
+        XSDSchema schema = resource.getSchema();
+        Assert.assertNotNull(schema);
+        SchemaIndex index = null;
+        XSDTypeDefinition type = null;
+        try {
+            index = new SchemaIndexImpl(new XSDSchema[] { schema });
+            type = index.getTypeDefinition(new QName(namespace, name));
+        } finally {
+            if (index != null) {
+                index.destroy();
+            }
+        }
+        Assert.assertNotNull(type);
+        System.err.println("Child element declaration types for " + name + " :");
+        List<XSDElementDeclaration> children = Schemas.getChildElementDeclarations(type);
+        boolean foundNull = false;
+        for (XSDElementDeclaration child : children) {
+            System.err.println("QName: " + child.getQName() + " URI: " + child.getURI() + " Type: "
+                    + child.getTypeDefinition()
+                    + (child.getTypeDefinition() == null ? " <<< FAILURE" : ""));
+            if (child.getTypeDefinition() == null) {
+                foundNull = true;
+            }
+        }
+        System.err.println();
+        Assert.assertFalse("Unexpected child element declaration with null type", foundNull);
+    }
+
