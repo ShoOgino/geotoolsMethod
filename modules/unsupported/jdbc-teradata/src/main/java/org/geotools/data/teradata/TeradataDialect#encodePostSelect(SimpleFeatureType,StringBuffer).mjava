@@ -1,0 +1,19 @@
+    @Override
+    public void encodePostSelect(SimpleFeatureType featureType, StringBuffer sql) {
+        //Since geometries are stored as LOB's in teradata reading a geometry value in TD requires
+        // as second trip to the database. Since this is expensive we attempt to cast the geometry
+        // into a 64K byte string which is the limit of what TD will include inline. For large 
+        // geometries we will have to check and fall back onto readin the Blob, but for smaller 
+        // geometries this will save us the second trip
+        // see decodeGeometryValue()
+       
+        for (AttributeDescriptor att : featureType.getAttributeDescriptors()) {
+            if (att instanceof GeometryDescriptor) {
+                sql.append(", CAST(");
+                encodeColumnName(att.getLocalName(), sql);
+                sql.append(".ST_AsBinary() AS VARBYTE(16000))");
+                encodeColumnAlias(att.getLocalName() + "_inline", sql);
+            }
+        }
+    }
+
