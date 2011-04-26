@@ -6,14 +6,19 @@
             if (wkb != null) {
                 return new WKBReader(factory).read(wkb);
             }
+            
+            //in "locator" form the geometry comes across as text
+            Clob clob = rs.getClob(column);
+            InputStream in = clob.getAsciiStream();
+            try {
+                return new WKTReader(factory).read(new InputStreamReader(in));
+            }
+            finally {
+                if (in != null) in.close();
+            }
         }
-        catch(SQLException e) {
-            //ok, just fall back to reading blob
-        } 
         catch (ParseException e) {
-            throw (IOException) new IOException("Error parsing well known binary").initCause(e);
+            throw (IOException) new IOException("Error parsing geometry").initCause(e);
         }
-        
-        return getWkbReader(factory).read(rs, column);
     }
 
