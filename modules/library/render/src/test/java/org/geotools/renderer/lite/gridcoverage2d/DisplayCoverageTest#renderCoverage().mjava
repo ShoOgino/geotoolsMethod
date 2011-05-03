@@ -1,0 +1,52 @@
+    /**
+     * This test was added after changes to the render module broke direct
+     * rendering of GridCoverage2D objects in GridCoverageLayers. 
+     * 
+     * It does not compare the rendering to the coverage data. Rather it just
+     * checks that rendering is done without error.
+     * 
+     * The test is skipped in a headless build.
+     */
+    @Test
+    public void renderCoverage() {
+        System.out.println("   render grid coverage");
+        if (headless) {
+            System.out.println("      Skipping test in headless build");
+            return;
+        }
+
+        GridCoverage2D coverage = createCoverage();
+        Style style = createCoverageStyle("1");
+
+        MapContext context = new MapContext();
+        context.addLayer(coverage, style);
+        StreamingRenderer renderer = new StreamingRenderer();
+        renderer.setContext(context);
+
+        RenderListener listener = new RenderListener() {
+            public void featureRenderer(SimpleFeature feature) {}
+
+            public void errorOccurred(Exception e) {
+                fail("Failed to render coverage");
+            }
+        };
+
+        renderer.addRenderListener(listener);
+
+        BufferedImage image = new BufferedImage(WIDTH, WIDTH, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2D = image.createGraphics();
+
+        /*
+         * Turn off logging and try to render the coverage
+         */
+        Logger logger = Logger.getLogger(LOGGER_NAME);
+        final Level savedLevel = logger.getLevel();
+        logger.setLevel(Level.OFF);
+
+        try {
+            renderer.paint(g2D, bounds, env);
+        } finally {
+            logger.setLevel(savedLevel);
+        }
+    }
+
