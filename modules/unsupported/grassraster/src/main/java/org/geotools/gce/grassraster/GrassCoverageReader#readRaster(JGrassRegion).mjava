@@ -27,8 +27,7 @@
         /*
          * retrieve original map region and crs
          */
-        HashMap<String, String> metaDataTable = ((GrassBinaryImageMetadata) imageReader
-                .getImageMetadata(0)).toHashMap();
+        HashMap<String, String> metaDataTable = ((GrassBinaryImageMetadata) imageReader.getImageMetadata(0)).toHashMap();
         double fileNorth = Double.parseDouble(metaDataTable.get(GrassBinaryImageMetadata.NORTH));
         double fileSouth = Double.parseDouble(metaDataTable.get(GrassBinaryImageMetadata.SOUTH));
         double fileEast = Double.parseDouble(metaDataTable.get(GrassBinaryImageMetadata.EAST));
@@ -102,7 +101,7 @@
              */
             double scaleX = fileCols / (fileEast - fileWest);
             double scaleY = fileRows / (fileNorth - fileSouth);
-            double EPS = 0.0;// 1E-6;
+            double EPS = 1E-7;
 
             // awt space seen in the world view (north is ymax)
             int xmin = (int) Math.floor((requestedWest - fileWest) * scaleX + EPS);
@@ -130,8 +129,8 @@
              * is always 0,0, we can continue to see this in world view.
              */
             sourceRegion = new Rectangle(xmin, ymin, (xmax - xmin), ymax - ymin);
-            requestedRegionEnvelope = new Envelope2D(crs, requestedWest, requestedSouth,
-                    requestedEast - requestedWest, requestedNorth - requestedSouth);
+            requestedRegionEnvelope = new Envelope2D(crs, requestedWest, requestedSouth, requestedEast - requestedWest,
+                    requestedNorth - requestedSouth);
 
             /*
              * the real world deltas
@@ -164,10 +163,8 @@
                 JGrassRegion tmpRegion = new JGrassRegion(region);
                 tmpRegion.setWEResolution((fileEast - fileWest) / (double) fileCols);
                 tmpRegion.setNSResolution((fileNorth - fileSouth) / (double) fileRows);
-                subSamplingX = (int) Math.floor((double) tmpRegion.getCols()
-                        / (double) requestedCols);
-                subSamplingY = (int) Math.floor((double) tmpRegion.getRows()
-                        / (double) requestedRows);
+                subSamplingX = (int) Math.floor((double) tmpRegion.getCols() / (double) requestedCols);
+                subSamplingY = (int) Math.floor((double) tmpRegion.getRows() / (double) requestedRows);
                 if (subSamplingX == 0)
                     subSamplingX = 1;
                 if (subSamplingY == 0)
@@ -186,10 +183,8 @@
                  * resolution from the given boundaries.
                  */
 
-                double sourceCols = (requestedEast - requestedWest)
-                        / (1 + (xPaddingSx / (xmax - xmin))) / requestedXres;
-                double sourceRows = (requestedNorth - requestedSouth)
-                        / (1 + (yPaddingTop / (ymax - ymin))) / requestedYres;
+                double sourceCols = (requestedEast - requestedWest) / (1 + (xPaddingSx / (xmax - xmin))) / requestedXres;
+                double sourceRows = (requestedNorth - requestedSouth) / (1 + (yPaddingTop / (ymax - ymin))) / requestedYres;
                 /*
                  * the padding has to be removed since inside the reader
                  * the padding is ignored and non present in the sourceRegion that
@@ -227,8 +222,8 @@
             int ymin = (int) Math.floor((fileNorth - requestedNorth) * scaleY + EPS);
             int ymax = (int) Math.ceil((fileNorth - requestedSouth) * scaleY - EPS);
             sourceRegion = new Rectangle(xmin, ymin, (xmax - xmin), ymax - ymin);
-            requestedRegionEnvelope = new Envelope2D(crs, requestedWest, requestedSouth,
-                    requestedEast - requestedWest, requestedNorth - requestedSouth);
+            requestedRegionEnvelope = new Envelope2D(crs, requestedWest, requestedSouth, requestedEast - requestedWest,
+                    requestedNorth - requestedSouth);
 
             /*
              * define the subsampling values. This done starting from the
@@ -255,14 +250,13 @@
         imageReadParam.setSourceSubsampling(subSamplingX, subSamplingY, 0, 0);
         RenderedImage finalImage = null;
 
-        BufferedImage image = imageReader.read(0, imageReadParam,
-                useSubSamplingAsRequestedColsRows, castDoubleToFloating, monitor);
+        BufferedImage image = imageReader.read(0, imageReadParam, useSubSamplingAsRequestedColsRows, castDoubleToFloating,
+                monitor);
         imageReader.dispose();
-        
+
         int imageWidth = image.getWidth();
         int imageHeight = image.getHeight();
-        if (requestedSouth < fileSouth || requestedWest < fileWest || requestedEast > fileEast
-                || requestedNorth > fileNorth) {
+        if (requestedSouth < fileSouth || requestedWest < fileWest || requestedEast > fileEast || requestedNorth > fileNorth) {
             double totalHeigth = (requestedNorth - tmpDyN) - (requestedSouth - tmpDyS);
 
             int xPaddingDx = 0;
@@ -274,16 +268,15 @@
             if (yDeltaS < 0) {
                 yPaddingBottom = (int) Math.round(yDeltaS * (double) imageHeight / (totalHeigth));
             }
-            RenderedImage translatedImage = setPadding(xPaddingSx, xPaddingDx, yPaddingTop,
-                    yPaddingBottom, image);
+            RenderedImage translatedImage = setPadding(xPaddingSx, xPaddingDx, yPaddingTop, yPaddingBottom, image);
 
             if (requestedRows != imageHeight || requestedCols != imageWidth) {
-                finalImage = scaleJAIImage(requestedCols, requestedRows, translatedImage);;
+                finalImage = JGrassUtilities.scaleJAIImage(requestedCols, requestedRows, translatedImage, interpolation);
             } else {
                 finalImage = translatedImage;
             }
         } else if (requestedRows != imageHeight || requestedCols != imageWidth) {
-            finalImage = scaleJAIImage(requestedCols, requestedRows, image);
+            finalImage = JGrassUtilities.scaleJAIImage(requestedCols, requestedRows, image, interpolation);
         } else {
             finalImage = image;
         }
