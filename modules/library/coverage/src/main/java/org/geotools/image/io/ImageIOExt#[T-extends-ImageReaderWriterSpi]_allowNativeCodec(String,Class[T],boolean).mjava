@@ -12,11 +12,33 @@
      * @param category {@code ImageReaderSpi.class} to set the reader, or
      *        {@code ImageWriterSpi.class} to set the writer.
      * @param allowed {@code false} to disallow native acceleration.
-     * @deprecated Use {@link ImageIOExt#allowNativeCodec(String, Class, boolean)} instead
      */
     public static synchronized <T extends ImageReaderWriterSpi> void allowNativeCodec(
             final String format, final Class<T> category, final boolean allowed)
     {
-        ImageIOExt.allowNativeCodec(format, category, allowed);
+        T standard = null;
+        T codeclib = null;
+        final IIORegistry registry = IIORegistry.getDefaultInstance();
+        for (final Iterator<T> it = registry.getServiceProviders(category, false); it.hasNext();) {
+            final T provider = it.next();
+            final String[] formats = provider.getFormatNames();
+            for (int i=0; i<formats.length; i++) {
+                if (formats[i].equalsIgnoreCase(format)) {
+                    if (Classes.getShortClassName(provider).startsWith("CLib")) {
+                        codeclib = provider;
+                    } else {
+                        standard = provider;
+                    }
+                    break;
+                }
+            }
+        }
+        if (standard!=null && codeclib!=null) {
+            if (allowed) {
+                registry.setOrdering(category, codeclib, standard);
+            } else {
+                registry.setOrdering(category, standard, codeclib);
+            }
+        }
     }
 
