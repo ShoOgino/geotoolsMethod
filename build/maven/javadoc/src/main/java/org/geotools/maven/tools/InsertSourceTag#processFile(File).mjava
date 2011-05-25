@@ -22,12 +22,12 @@
 
             String repoURL = Source.SVN_REPO_URL;
             StringBuilder sb = new StringBuilder(" * @source ");
-            if (addSVNKeyword) {
+            if (optionSVNDelims) {
                 sb.append("$URL: ");
             }
             sb.append(Source.SVN_REPO_URL);
             sb.append(file.getAbsolutePath().substring(pos));
-            if (addSVNKeyword) {
+            if (optionSVNDelims) {
                 sb.append(" $");
             }
             sourceTagText = sb.toString();
@@ -91,7 +91,7 @@
             // Guard against nested or following classes and mention of classes in
             // comment blocks
             } else if (!inJavadocBlock && !inCommentBlock && !classFound) {
-                if (processAnyClass) {
+                if (optionAnyClass) {
                     matcher = findClass.matcher(text);
                 } else {
                     matcher = findPublicClass.matcher(text);
@@ -122,8 +122,9 @@
                      * Check if the source tag already exists. If it does, and
                      * the replace tag option is false, skip this file.
                      */
-                    for (int i = javadocStartLine; i <= javadocEndLine; i++) {
-                        String commentText = buffer.get(i);
+                    for (int blockLineNo = javadocStartLine; 
+                            blockLineNo <= javadocEndLine; blockLineNo++) {
+                        String commentText = buffer.get(blockLineNo);
                         matcher = findSourceTag.matcher(commentText);
                         if (matcher.find()) {
                             /* 
@@ -133,16 +134,37 @@
                              */
                             matcher = findCompleteSourceTag.matcher(commentText);
                             if (!matcher.find()) {
-                                System.out.println("   *** Incomplete source tag detected"
-                                        + "- skipping this file ***");
-                                System.out.println();
-                                return false;
+                                if (optionFixBreaks) {
+                                    matcher = findCompletePath.matcher(buffer.get(blockLineNo + 1));
+                                    if (matcher.find()) {
+                                        buffer.remove(blockLineNo + 1);
+                                        buffer.remove(blockLineNo);
+                                        sourceTagLine = blockLineNo;
+                                        if (!optionReplace) {
+                                            // Make the new tag text the old lines joined together.
+                                            // 
+                                            String http = matcher.group();
+                                            int start = http.indexOf("$URL");
+                                            if (start < 0) start = http.indexOf("http"); 
+                                            http = http.substring(start, http.length());
+                                            sourceTagText = commentText + http;
+                                        }
+                                        System.out.println("   *** Fixing broken source tag ***");
+                                        break;
+                                    }
+                                } else {
+                                    // Just report the broken tag and skip this file
+                                    System.out.println("   *** Incomplete source tag detected"
+                                            + "- skipping this file ***");
+                                    System.out.println();
+                                    return false;
+                                }
                             }
 
-                            if (replaceExistingTag) {
-                                sourceTagLine = i;
+                            if (optionReplace) {
+                                sourceTagLine = blockLineNo;
                                 // delete the original tag from the buffer
-                                buffer.remove(i);
+                                buffer.remove(blockLineNo);
                                 break;
                             } else {
                                 return false;
