@@ -1,0 +1,180 @@
+    /**
+     * Generates a 'SELECT p1, p2, ... FROM ... WHERE ...' prepared statement.
+     * 
+     * @param featureType
+     *            the feature type that the query must return (may contain less attributes than the
+     *            native one)
+     * @param attributes
+     *            the properties queried, or {@link Query#ALL_NAMES} to gather all of them
+     * @param query
+     *            the query to be run. The type name and property will be ignored, as they are
+     *            supposed to have been already embedded into the provided feature type
+     * @param cx
+     *            The database connection to be used to create the prepared statement
+     * @throws SQLException 
+     * @throws IOException 
+     * @throws FilterToSQLException
+     */
+    protected String selectSQL(SimpleFeatureType featureType, JoiningQuery query, AtomicReference<PreparedFilterToSQL> toSQLref) throws IOException, SQLException, FilterToSQLException {
+        StringBuffer sql = new StringBuffer();
+        sql.append("SELECT ");
+
+        // primary key
+        PrimaryKey key = null;
+
+        try {
+            key = getDataStore().getPrimaryKey(featureType);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        Set<String> pkColumnNames = getDataStore().getColumnNames(key);
+
+        for ( PrimaryKeyColumn col : key.getColumns() ) {
+            encodeColumnName(col.getName(), featureType.getTypeName(), sql, query.getHints());
+            sql.append(",");
+        }
+        
+        //other columns
+        for (AttributeDescriptor att : featureType.getAttributeDescriptors()) {
+            // skip the eventually exposed pk column values
+            String columnName = att.getLocalName();
+            if(pkColumnNames.contains(columnName))
+                continue;
+            
+            if (att instanceof GeometryDescriptor) {
+                //encode as geometry
+                encodeGeometryColumn((GeometryDescriptor) att, featureType.getTypeName(), sql, query.getHints());
+
+                //alias it to be the name of the original geometry
+                getDataStore().dialect.encodeColumnAlias(columnName, sql);
+            } else {
+                encodeColumnName(columnName, featureType.getTypeName(), sql, query.getHints());
+                
+            }
+
+            sql.append(",");
+        }
+
+        sql.setLength(sql.length() - 1);
+
+        sql.append(" FROM ");
+        
+        getDataStore().encodeTableName(featureType.getTypeName(), sql, query.getHints());
+                
+        //joining
+        Set<String> tableNames = new HashSet<String>();
+        
+        String lastTypeName = featureType.getTypeName();
+        String curTypeName = lastTypeName;
+        
+        String[] aliases = null;
+               
+        if (query.getJoins() != null) {
+            
+            aliases = new String[query.getJoins().size()];
+            
+            for (int i=0; i< query.getJoins().size(); i++) {
+                JoiningQuery.Join join = query.getJoins().get(i);
+                sql.append(" INNER JOIN ");
+                String alias = null;
+                
+                FilterToSQL toSQL1 = createFilterToSQL(getDataStore().getSchema(lastTypeName));
+                FilterToSQL toSQL2 = createFilterToSQL(getDataStore().getSchema(join.getJoiningTypeName()));
+            
+                tableNames.add(curTypeName);                
+                if (tableNames.contains(join.getJoiningTypeName()) ) {
+                   int index =0;
+                    do {
+                        alias = join.getJoiningTypeName() + "_" + ++index;
+                    } while (tableNames.contains(alias));
+
+                    aliases[i] = alias;
+                    
+                    getDataStore().encodeTableName(join.getJoiningTypeName(), sql, query.getHints());
+                    sql.append(" " + alias);
+                    sql.append(" ON ( ");
+                    
+                    toSQL2.setFieldEncoder(new JoiningFieldEncoder(alias));                 
+                    sql.append(toSQL2.encodeToString(join.getForeignKeyName()));
+                   // encodeColumnName(join.getForeignKeyName(), alias, sql, query.getHints());
+                    
+                } else {
+                    aliases[i] = null;
+                    getDataStore().encodeTableName(join.getJoiningTypeName(), sql, query.getHints());
+                    sql.append(" ON ( ");
+                    toSQL2.setFieldEncoder(new JoiningFieldEncoder(join.getJoiningTypeName()));                 
+                    sql.append(toSQL2.encodeToString(join.getForeignKeyName()));
+                    //encodeColumnName(join.getForeignKeyName(), join.getJoiningTypeName(), sql, query.getHints());                    
+                }
+                sql.append(" = ");
+                toSQL1.setFieldEncoder(new JoiningFieldEncoder(curTypeName));                 
+                sql.append(toSQL1.encodeToString(join.getJoiningKeyName()));
+                //encodeColumnName(join.getJoiningKeyName(), curTypeName, sql, query.getHints());
+                sql.append(") ");      
+                lastTypeName = join.getJoiningTypeName();
+                curTypeName = alias == null ? lastTypeName : alias;
+            }
+        }
+        
+        //filtering
+        FilterToSQL toSQL = null;
+        Filter filter = query.getFilter();
+        if (filter != null && !Filter.INCLUDE.equals(filter)) {
+            //encode filter
+            try {
+                // grab the full feature type, as we might be encoding a filter
+                // that uses attributes that aren't returned in the results
+                SortBy[] lastSortBy = query.getJoins() == null || query.getJoins().size()== 0 ? query.getSortBy() :
+                                      query.getJoins().get(query.getJoins().size()-1).getSortBy();
+                
+                String lastTableName = query.getJoins() == null || query.getJoins().size()== 0 ? query.getTypeName() :
+                    query.getJoins().get(query.getJoins().size()-1).getJoiningTypeName();
+                
+                toSQL = createFilterToSQL(getDataStore().getSchema(lastTableName));
+                
+                if (lastSortBy != null) {
+                    //we will use another join for the filter
+                    //assuming that the last sort by specifies the ID of the parent feature                   
+                    //this way we will ensure that if the table is denormalized, that all rows
+                    //with the same ID are included (for multi-valued features)
+                    
+                    sql.append(" INNER JOIN ( SELECT ");
+                    for (int i=0; i < lastSortBy.length; i++) {
+                         getDataStore().dialect.encodeColumnName(lastSortBy[i].getPropertyName().getPropertyName(), sql);
+                         if (i < lastSortBy.length-1) sql.append(",");
+                    }
+                    sql.append(" FROM ");
+                    getDataStore().encodeTableName(lastTableName, sql, query.getHints());                                        
+                    sql.append(" ").append(toSQL.encodeToString(filter));
+                    sql.append(" ) " + TEMP_FILTER_ALIAS);
+                    sql.append(" ON ( ");
+                    for (int i=0; i < lastSortBy.length; i++) {
+                        encodeColumnName(lastSortBy[i].getPropertyName().getPropertyName(), lastTableName , sql, null);            
+                        sql.append(" = ");
+                        encodeColumnName2(lastSortBy[i].getPropertyName().getPropertyName(), TEMP_FILTER_ALIAS , sql, null);
+                        if (i < lastSortBy.length-1) sql.append(" AND ");
+                    }
+                    sql.append(" )");                    
+                }
+                else {
+                    toSQL.setFieldEncoder(new JoiningFieldEncoder(curTypeName));                    
+                    sql.append(" ").append(toSQL.encodeToString(filter));
+                }
+            } catch (FilterToSQLException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        //sorting
+        sort(query, sql, aliases);
+        
+        // finally encode limit/offset, if necessary
+        getDataStore().applyLimitOffset(sql, query);
+        
+        if (toSQLref != null && toSQL instanceof PreparedFilterToSQL) {
+            toSQLref.set((PreparedFilterToSQL) toSQL);
+        }
+        
+        return sql.toString();
+    }
+

@@ -1,0 +1,59 @@
+    /**
+     * Get the maching built features that are stored in this mapping using a supplied link value
+     * 
+     * @param foreignKeyValue
+     * @param reprojection
+     *            Reprojected CRS or null
+     * @param selectedProperties list of properties to get
+     * @return The matching simple features
+     * @throws IOException
+     */
+    public List<Feature> getFeatures(Object caller, Object foreignKeyValue,
+            CoordinateReferenceSystem reprojection, Object feature, List<PropertyName> selectedProperties, boolean includeMandatory) throws IOException {
+
+        if (isSameSource()) {
+            // if linkField is null, this method shouldn't be called because the mapping
+            // should use the same table, and handles it differently
+            throw new UnsupportedOperationException(
+            "Link field is missing from feature chaining mapping!");
+        }        
+
+        Instance instance = instances.get(caller);
+        if (instance == null) {
+            throw new IllegalArgumentException ("Trying to read Joining Nested Attribute Mapping that is not open.");            
+        }
+
+        Object featureTypeName = getNestedFeatureType(feature);
+        if (featureTypeName == null || !(featureTypeName instanceof Name)) {
+            throw new IllegalArgumentException ("Something is wrong!!");
+        }
+        DataAccessMappingFeatureIterator featureIterator = instance.featureIterators.get((Name)featureTypeName);
+        if (featureIterator == null) {
+            featureIterator = initSourceFeatures (instance, (Name)featureTypeName, reprojection, selectedProperties, includeMandatory);
+        }
+        Expression nestedSourceExpression = instance.nestedSourceExpressions.get((Name)featureTypeName);
+        if (nestedSourceExpression == null) {
+            throw new IllegalArgumentException ("Internal error: nested source expression expected but found " + featureTypeName);
+        }
+
+        ArrayList<Feature> matchingFeatures = new ArrayList<Feature>();
+
+        if (featureIterator!= null) {
+            while (featureIterator.hasNext() && featureIterator.peekNextValue(nestedSourceExpression).equals(foreignKeyValue)) {
+                matchingFeatures.add(featureIterator.next());
+            }
+        }
+
+        //skip all others
+        for ( DataAccessMappingFeatureIterator fIt : instance.featureIterators.values()) {
+            if (fIt != featureIterator) {
+                while (fIt.hasNext() && fIt.peekNextValue(nestedSourceExpression).equals(foreignKeyValue)) {
+                    fIt.skip();
+                }
+            }
+        }
+        instance.skipped.add(foreignKeyValue);
+
+        return matchingFeatures;
+    }
+
