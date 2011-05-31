@@ -16,9 +16,86 @@
      * @throws FilterToSQLException
      */
     protected String selectSQL(SimpleFeatureType featureType, JoiningQuery query, AtomicReference<PreparedFilterToSQL> toSQLref) throws IOException, SQLException, FilterToSQLException {
+        
+        // first we create from clause, for aliases
+        
+        StringBuffer fromclause = new StringBuffer();
+        getDataStore().encodeTableName(featureType.getTypeName(), fromclause, query.getHints());
+        
+        //joining
+        Set<String> tableNames = new HashSet<String>();
+        
+        String lastTypeName = featureType.getTypeName();
+        String curTypeName = lastTypeName;
+        
+        String[] aliases = null;
+        
+        if (query.getJoins() != null) {
+            
+            if (query.getSortBy()!= null && query.getSortBy().length > 0) {
+                fromclause.append(" INNER JOIN ");
+                getDataStore().encodeTableName(curTypeName, fromclause, query.getHints());
+                fromclause.append(" ").append(TEMP_JOIN_ALIAS);
+                fromclause.append(" ON (");
+                
+                for (int i=0; i < query.getSortBy().length; i++) {
+                    encodeColumnName(query.getSortBy()[i].getPropertyName().getPropertyName(), curTypeName , fromclause, null);            
+                    fromclause.append(" = ");
+                    encodeColumnName2(query.getSortBy()[i].getPropertyName().getPropertyName(), TEMP_JOIN_ALIAS , fromclause, null);
+                    if (i < query.getSortBy().length-1) fromclause.append(" AND ");
+                }
+                fromclause.append(" ) ");
+                
+                tableNames.add(curTypeName);         
+                curTypeName = TEMP_JOIN_ALIAS; 
+            }
+            
+            aliases = new String[query.getJoins().size()];
+            
+            for (int i=0; i< query.getJoins().size(); i++) {
+                JoiningQuery.Join join = query.getJoins().get(i);
+                fromclause.append(" INNER JOIN ");
+                String alias = null;
+                
+                FilterToSQL toSQL1 = createFilterToSQL(getDataStore().getSchema(lastTypeName));
+                FilterToSQL toSQL2 = createFilterToSQL(getDataStore().getSchema(join.getJoiningTypeName()));
+            
+                tableNames.add(curTypeName);                
+                if (tableNames.contains(join.getJoiningTypeName()) ) {
+                   int index =0;
+                    do {
+                        alias = join.getJoiningTypeName() + "_" + ++index;
+                    } while (tableNames.contains(alias));
+
+                    aliases[i] = alias;
+                    
+                    getDataStore().encodeTableName(join.getJoiningTypeName(), fromclause, query.getHints());
+                    fromclause.append(" " + alias);
+                    fromclause.append(" ON ( ");
+                    
+                    toSQL2.setFieldEncoder(new JoiningFieldEncoder(alias));                 
+                    fromclause.append(toSQL2.encodeToString(join.getForeignKeyName()));
+                    
+                } else {
+                    aliases[i] = null;
+                    getDataStore().encodeTableName(join.getJoiningTypeName(), fromclause, query.getHints());
+                    fromclause.append(" ON ( ");
+                    toSQL2.setFieldEncoder(new JoiningFieldEncoder(join.getJoiningTypeName()));                 
+                    fromclause.append(toSQL2.encodeToString(join.getForeignKeyName()));                    
+                }
+                fromclause.append(" = ");
+                toSQL1.setFieldEncoder(new JoiningFieldEncoder(curTypeName));                 
+                fromclause.append(toSQL1.encodeToString(join.getJoiningKeyName()));
+                fromclause.append(") ");      
+                lastTypeName = join.getJoiningTypeName();
+                curTypeName = alias == null ? lastTypeName : alias;
+            }
+        }
+        
+        //begin sql
         StringBuffer sql = new StringBuffer();
         sql.append("SELECT ");
-
+        
         // primary key
         PrimaryKey key = null;
 
@@ -54,67 +131,22 @@
 
             sql.append(",");
         }
-
-        sql.setLength(sql.length() - 1);
+        
+        if (query.getJoins() != null && query.getJoins().size() > 0) {
+            for (int i=0; i<query.getJoins().size(); i++) {
+                for (int j=0; j<query.getJoins().get(i).getSortBy().length; j++) {
+                    encodeColumnName(query.getJoins().get(i).getSortBy()[j].getPropertyName().getPropertyName(), 
+                            query.getJoins().get(i).getJoiningTypeName(), sql, query.getHints());
+                    sql.append(" ").append(FOREIGN_ID + "_" + i + "_" + j).append(",");                    
+                }
+            }
+        }
+        
+        sql.setLength(sql.length() - 1);        
 
         sql.append(" FROM ");
         
-        getDataStore().encodeTableName(featureType.getTypeName(), sql, query.getHints());
-                
-        //joining
-        Set<String> tableNames = new HashSet<String>();
-        
-        String lastTypeName = featureType.getTypeName();
-        String curTypeName = lastTypeName;
-        
-        String[] aliases = null;
-               
-        if (query.getJoins() != null) {
-            
-            aliases = new String[query.getJoins().size()];
-            
-            for (int i=0; i< query.getJoins().size(); i++) {
-                JoiningQuery.Join join = query.getJoins().get(i);
-                sql.append(" INNER JOIN ");
-                String alias = null;
-                
-                FilterToSQL toSQL1 = createFilterToSQL(getDataStore().getSchema(lastTypeName));
-                FilterToSQL toSQL2 = createFilterToSQL(getDataStore().getSchema(join.getJoiningTypeName()));
-            
-                tableNames.add(curTypeName);                
-                if (tableNames.contains(join.getJoiningTypeName()) ) {
-                   int index =0;
-                    do {
-                        alias = join.getJoiningTypeName() + "_" + ++index;
-                    } while (tableNames.contains(alias));
-
-                    aliases[i] = alias;
-                    
-                    getDataStore().encodeTableName(join.getJoiningTypeName(), sql, query.getHints());
-                    sql.append(" " + alias);
-                    sql.append(" ON ( ");
-                    
-                    toSQL2.setFieldEncoder(new JoiningFieldEncoder(alias));                 
-                    sql.append(toSQL2.encodeToString(join.getForeignKeyName()));
-                   // encodeColumnName(join.getForeignKeyName(), alias, sql, query.getHints());
-                    
-                } else {
-                    aliases[i] = null;
-                    getDataStore().encodeTableName(join.getJoiningTypeName(), sql, query.getHints());
-                    sql.append(" ON ( ");
-                    toSQL2.setFieldEncoder(new JoiningFieldEncoder(join.getJoiningTypeName()));                 
-                    sql.append(toSQL2.encodeToString(join.getForeignKeyName()));
-                    //encodeColumnName(join.getForeignKeyName(), join.getJoiningTypeName(), sql, query.getHints());                    
-                }
-                sql.append(" = ");
-                toSQL1.setFieldEncoder(new JoiningFieldEncoder(curTypeName));                 
-                sql.append(toSQL1.encodeToString(join.getJoiningKeyName()));
-                //encodeColumnName(join.getJoiningKeyName(), curTypeName, sql, query.getHints());
-                sql.append(") ");      
-                lastTypeName = join.getJoiningTypeName();
-                curTypeName = alias == null ? lastTypeName : alias;
-            }
-        }
+        sql.append(fromclause);
         
         //filtering
         FilterToSQL toSQL = null;
@@ -138,7 +170,7 @@
                     //this way we will ensure that if the table is denormalized, that all rows
                     //with the same ID are included (for multi-valued features)
                     
-                    sql.append(" INNER JOIN ( SELECT ");
+                    sql.append(" INNER JOIN ( SELECT DISTINCT ");
                     for (int i=0; i < lastSortBy.length; i++) {
                          getDataStore().dialect.encodeColumnName(lastSortBy[i].getPropertyName().getPropertyName(), sql);
                          if (i < lastSortBy.length-1) sql.append(",");
@@ -154,7 +186,7 @@
                         encodeColumnName2(lastSortBy[i].getPropertyName().getPropertyName(), TEMP_FILTER_ALIAS , sql, null);
                         if (i < lastSortBy.length-1) sql.append(" AND ");
                     }
-                    sql.append(" )");                    
+                    sql.append(" ) ");                    
                 }
                 else {
                     toSQL.setFieldEncoder(new JoiningFieldEncoder(curTypeName));                    

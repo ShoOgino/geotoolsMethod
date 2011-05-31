@@ -15,26 +15,12 @@
         // Build the feature type returned by this query. Also build an eventual extra feature type
         // containing the attributes we might need in order to evaluate the post filter
         SimpleFeatureType querySchema;
-        SimpleFeatureType returnedSchema;
         if(query.getPropertyNames() == Query.ALL_NAMES) {
-            returnedSchema = querySchema = getSchema();
+            querySchema = getSchema();
         } else {
-            returnedSchema = SimpleFeatureTypeBuilder.retype(getSchema(), query.getPropertyNames());
-            FilterAttributeExtractor extractor = new FilterAttributeExtractor(getSchema());
-            postFilter.accept(extractor, null);
-            String[] extraAttributes = extractor.getAttributeNames();
-            if(extraAttributes == null || extraAttributes.length == 0) {
-                querySchema = returnedSchema;
-            } else {
-                List<String> allAttributes = new ArrayList<String>(Arrays.asList(query.getPropertyNames())); 
-                for (String extraAttribute : extraAttributes) {
-                    if(!allAttributes.contains(extraAttribute))
-                        allAttributes.add(extraAttribute);
-                }
-                String[] allAttributeArray =  (String[]) allAttributes.toArray(new String[allAttributes.size()]);
-                querySchema = SimpleFeatureTypeBuilder.retype(getSchema(), allAttributeArray);
-            }
+            querySchema = SimpleFeatureTypeBuilder.retype(getSchema(), query.getPropertyNames());            
         }
+        SimpleFeatureType fullSchema = query.getJoins() == null? querySchema : getFeatureType(querySchema, query);
         
         //grab connection
         Connection cx = getDataStore().getConnection(getState());
@@ -51,13 +37,13 @@
             SQLDialect dialect = getDataStore().getSQLDialect();
             if ( dialect instanceof PreparedStatementSQLDialect ) {
                 PreparedStatement ps = selectSQLPS(querySchema, preQuery, cx);
-                reader = new JDBCFeatureReader( ps, cx, this, querySchema, query.getHints() );
+                reader = new JDBCFeatureReader( ps, cx, this, fullSchema, query.getHints() );
             } else {
                 //build up a statement for the content
                 String sql = selectSQL(querySchema, preQuery, null);
                 getDataStore().getLogger().fine(sql);
     
-                reader = new JDBCFeatureReader( sql, cx, this, querySchema, query.getHints() );
+                reader = new JDBCFeatureReader( sql, cx, this, fullSchema, query.getHints() );
             }
         } catch (Exception e) {
             // close the connection 
