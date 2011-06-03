@@ -1,7 +1,13 @@
     /**
-     * Gathers up and groups the parameters to the function based on the declared parameters. 
+     * Gathers up and groups the parameters to the function based on the declared parameters.
+     * <p>
+     * This method calls {@link #validateArguments()} which enforces java style argument conventions
+     * for multi valued parameters. Basically enforcing that only teh last argument in a function 
+     * can be variable.
+     * </p>
+     *
      */
-    protected LinkedHashMap<String, Object> prepArguments(Object obj) {
+    protected LinkedHashMap<String, Object> dispatchArguments(Object obj) {
         LinkedHashMap<String, Object> prepped = new LinkedHashMap<String, Object>();
         
         List<Parameter<?>> args = getFunctionName().getArguments();
@@ -20,9 +26,15 @@
             Parameter<?> arg = args.get(Math.min(i, args.size()-1));
             String argName = arg.getName().toString();
 
-            Object o = expr.get(i).evaluate(obj);
-            
-            //TODO: check the argument type and convert if necessary
+            Object o = expr.get(i).evaluate(obj, arg.getType());
+            if (o == null) {
+                if (expr.get(i).evaluate(obj) != null) {
+                    //conversion error
+                    throw new IllegalArgumentException(String.format("Failure converting value for "+
+                      "argument %s. %s could not be converted to %s", arg.getName(), obj.toString(),
+                      arg.getType().getName()));
+                }
+            }
             if (prepped.containsKey(argName)) {
                 if (arg.getMaxOccurs() == 1) {
                     throw new IllegalArgumentException(String.format("Multiple values specified for " +
