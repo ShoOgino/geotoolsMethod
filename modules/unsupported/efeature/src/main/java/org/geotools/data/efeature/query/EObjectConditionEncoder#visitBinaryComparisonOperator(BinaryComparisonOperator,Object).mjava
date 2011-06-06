@@ -1,0 +1,112 @@
+    /**
+     * Common implementation for {@link BinaryComparisonOperator binary comparison operator}
+     * filters. This way they're all handled centrally.
+     * <p>
+     * This method iterate over all filter children, concatenating them into a single EMF Query
+     * {@link Condition logical comparison condition} and push it to {@link EObjectCondition} stack.
+     * <p>
+     * Only {@link EAttributeValueIsEqual EQ (==)}, {@link EAttributeValueIsNotEqual NE (>)},
+     * {@link EAttributeValueIsLessThan LT (<)}, {@link EAttributeValueIsLessThan LE (<=)},
+     * {@link EAttributeValueIsGreaterThan GT (>)} and {@link EAttributeValueIsLessThan GE (>=)}
+     * logical comparison filters are supported. Any other {@link BinaryLogicOperator binary logic
+     * operator} filter instance will throw a {@link RuntimeException}.
+     * </p>
+     * 
+     * @param filter - the logic statement.
+     * @param extraData - extra filter data. Not modified directly by this method.
+     * 
+     * @return a {@link Condition} instance
+     * 
+     * @throws RuntimeException If one or more expressions are not supported
+     * 
+     */
+    protected Condition visitBinaryComparisonOperator(BinaryComparisonOperator filter,
+            Object extraData) throws RuntimeException {
+        // LOGGER.finer("exporting SQL ComparisonFilter");
+
+        // Initialize
+        //
+        Literal value = null;
+        PropertyName name = null;
+        Condition eCondition = null;
+
+        // Get left and right expression
+        //
+        Expression left = filter.getExpression1();
+        Expression right = filter.getExpression2();
+
+        // Detect implicit inner join
+        //
+        if (left instanceof PropertyName && right instanceof PropertyName) {
+            throw new IllegalArgumentException("Implicit inner joint predicates not supported");
+        }
+
+        // Verify left expression
+        //
+        if (left instanceof PropertyName) {
+            name = (PropertyName) left;
+        } else if (left instanceof Literal) {
+            value = (Literal) left;
+        } else {
+            throw new IllegalArgumentException("Left argument must be a Literal");
+        }
+
+        // Verify right expression
+        //
+        if (right instanceof PropertyName) {
+            name = (PropertyName) right;
+        } else if (left instanceof Literal) {
+            value = (Literal) right;
+        } else {
+            throw new IllegalArgumentException("Right argument must be a Literal");
+        }
+
+        // Get EAttribute instance from definition
+        //
+        EAttribute eAttribute = eFeatureInfo.getEAttribute(name.getPropertyName());
+
+        // Found attribute?
+        //
+        if (eAttribute == null) {
+            throw new IllegalArgumentException("EAttribute " + name.getPropertyName()
+                    + " not found");
+        }
+
+        // Get comparator
+        //
+        String comparator = (String) extraData;
+
+        try {
+            // Create comparator condition
+            //
+            if (PropertyIsEqualTo.NAME.equals(comparator)) {
+                eCondition = new EAttributeValueIsEqual(eAttribute, value);
+            } else if (PropertyIsLessThan.NAME.equals(comparator)) {
+                eCondition = new EAttributeValueIsEqual(eAttribute, value);
+            } else if (PropertyIsLessThanOrEqualTo.NAME.equals(comparator)) {
+                eCondition = new EAttributeValueIsEqual(eAttribute, value);
+            } else if (PropertyIsGreaterThan.NAME.equals(comparator)) {
+                eCondition = new EAttributeValueIsEqual(eAttribute, value);
+            } else if (PropertyIsGreaterThanOrEqualTo.NAME.equals(comparator)) {
+                eCondition = new EAttributeValueIsEqual(eAttribute, value);
+            } else if (PropertyIsNotEqualTo.NAME.equals(comparator)) {
+                eCondition = new EAttributeValueIsEqual(eAttribute, value);
+            } else {
+                throw new IllegalArgumentException("Comparator " + comparator + " not supported");
+            }
+        } catch (EFeatureEncoderException e) {
+            String msg = "Failed to create " + "EObjectCondition (" + comparator + ")";
+            LOGGER.warning(msg);
+            throw new IllegalArgumentException(msg, e);
+        }
+
+        // Push concatenated condition to stack
+        //
+        eConditionStack.push(eCondition);
+
+        // Finished
+        //
+        return eCondition;
+
+    }
+

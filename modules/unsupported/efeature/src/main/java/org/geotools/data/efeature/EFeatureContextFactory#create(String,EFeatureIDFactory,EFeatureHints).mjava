@@ -1,0 +1,73 @@
+    /**
+     * Create a {@link EFeatureContextInfo} instance from given 
+     * {@link EFeatureContext} instance and cache both instances.
+     * <p>
+     * If instance has already joined this factory, this method returns the cached 
+     * {@link EFeatureContextInfo} instance. 
+     * </p>
+     * @param eContextID
+     * @param eIDFactory
+     * @param eHints - {@link EFeatureHints} instance
+     * @return a {@link EFeatureContextInfo} instance.
+     * @throws IllegalArgumentException If an another instance with 
+     * same eContextID already exist. 
+     * {@link EFeatureContext instance}. 
+     */
+    public EFeatureContext create(String eContextID, EFeatureIDFactory eIDFactory, EFeatureHints eHints) throws IllegalArgumentException
+    {
+        try {
+            //
+            // Use default factory?
+            //
+            if(eIDFactory==null) eIDFactory = new EFeatureIDFactoryImpl();
+            //
+            // Use default hints?
+            //
+            if(eHints==null) eHints = new EFeatureHints();
+            //
+            // Another instance already registered with given ID?
+            //
+            EFeatureContextInfo eContextInfo = eContextInfoMap.get(eContextID);
+            if(eContextInfo != null)
+            {
+                throw new IllegalArgumentException(
+                        "EFeatureContext " + eContextID + "' already exists");
+            }
+            //
+            // All OK, go ahead and create context and structure.
+            //
+            EFeatureContext eContext = new EFeatureContextImpl(this, eContextID, eIDFactory);
+            //
+            // Map context to id (required by subsequent create methods)
+            //
+            eContextMap.put(eContextID, eContext);
+            //
+            // Create structure info object
+            //
+            eContextInfo = EFeatureContextInfo.create(this,eContextID, null);
+            //
+            // Map structure to id
+            //
+            eContextInfoMap.put(eContextID, eContextInfo);
+            //
+            // Success!
+            //
+            return eContext;
+        } 
+        catch (IllegalArgumentException e) {
+            //
+            // Remove context and structure from cache
+            //
+            eContextMap.remove(eContextID);
+            eContextInfoMap.remove(eContextID);
+            //
+            // Log the error
+            //
+            LOGGER.throwing(getClass().getName(), "create(EFeatureContext)", e);
+            //
+            // Notify again
+            //
+            throw e;
+        }
+    }
+

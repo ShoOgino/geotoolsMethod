@@ -1,0 +1,77 @@
+        @Override
+        public void notifyChanged(Notification msg) {
+            //
+            // Get ID factory
+            //
+            EFeatureIDFactory eIDFactory = eIDFactory();
+            //
+            // Does this context generate IDs?
+            //
+            if( !(eIDFactory instanceof EFeatureVoidIDFactory) ) {
+                //
+                // Is added or removed?
+                //
+                if( msg.getEventType() == Notification.ADD ) {
+                    Object value = msg.getNewValue();
+                    if(value instanceof EFeature) {
+                        //
+                        // Cast to EFeature
+                        //
+                        EFeature eFeature = (EFeature)value;
+                        //
+                        // ----------------------------------------------------------
+                        //  Claim given EFeature (does nothing if already in context)
+                        // ----------------------------------------------------------
+                        //  This is a very important step: It's part of the context
+                        //  startup problem solution (see EFeatureContextHelper), 
+                        //  and ensures that context-unaware objects become 
+                        //  aware of the context they are added to. Without this 
+                        //  step, EFeature stays context-unaware, preventing 
+                        //  EFeatureReaders from reading them using a context ID
+                        //  known by client code.
+                        // ----------------------------------------------------------
+                        //
+                        eAdapt(eFeature, true);
+                        //
+                        // Get current ID
+                        //
+                        String eID = eFeature.getID();
+                        //
+                        // Resolve unique ID
+                        //
+                        String eNewID;
+                        if( !( eID==null || eID.length()==0 ) ) {
+                            eNewID = eIDFactory.useID(eFeature, eID);
+                        } else {
+                            eNewID = eIDFactory.createID(eFeature);
+                        }
+                        //
+                        // Set new index (not set or was not unique)
+                        //
+                        if(!eNewID.equals(eID)) {
+                            eFeature.setID(eNewID);
+                        }
+                    }
+                    else if(value instanceof Resource) {
+                        ((Resource)value).eAdapters().add(this);
+                    }                
+                } else if( msg.getEventType() == Notification.REMOVE ) {
+                    Object value = msg.getOldValue();
+                    if(value instanceof EFeature) {
+                        //
+                        // Cast to EFeature
+                        //
+                        //EFeature eFeature = (EFeature)value;
+                        // 
+                        // Detach from this context
+                        //
+                        //eIDFactory.disposeID(eFeature.getID());
+                    }
+                    else if(value instanceof Resource) {
+                        ((Resource)value).eAdapters().remove(this);
+                    }                                
+                }
+            } else
+                System.out.println();
+        }
+
