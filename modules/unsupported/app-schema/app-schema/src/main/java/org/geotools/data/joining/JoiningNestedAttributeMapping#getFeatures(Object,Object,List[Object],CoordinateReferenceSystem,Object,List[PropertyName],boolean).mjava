@@ -1,12 +1,16 @@
     /**
-     * Get matching input features that are stored in this mapping using a supplied link value.
+     * Get the maching built features that are stored in this mapping using a supplied link value
      *
      * @param foreignKeyValue
-     * @return The matching input feature
-     * @throws IOException
+     * @param reprojection
+     *            Reprojected CRS or null
+     * @param selectedProperties list of properties to get
+     * @return The matching simple features
      * @throws IOException
      */
-    public List<Feature> getInputFeatures(Object caller, Object foreignKeyValue, Object feature,  CoordinateReferenceSystem reprojection, List<PropertyName> selectedProperties, boolean includeMandatory) throws IOException {
+    @Override
+    public List<Feature> getFeatures(Object caller, Object foreignKeyValue, List<Object> idValues,
+            CoordinateReferenceSystem reprojection, Object feature, List<PropertyName> selectedProperties, boolean includeMandatory) throws IOException {
 
         if (isSameSource()) {
             // if linkField is null, this method shouldn't be called because the mapping
@@ -22,7 +26,7 @@
 
         Object featureTypeName = getNestedFeatureType(feature);
         if (featureTypeName == null || !(featureTypeName instanceof Name)) {
-            throw new IllegalArgumentException ("Internal error: Feature type name expected but found " + featureTypeName);
+            throw new IllegalArgumentException ("Something is wrong!!");
         }
         DataAccessMappingFeatureIterator featureIterator = instance.featureIterators.get((Name)featureTypeName);
         if (featureIterator == null) {
@@ -36,26 +40,20 @@
         ArrayList<Feature> matchingFeatures = new ArrayList<Feature>();
 
         if (featureIterator!= null) {
-            if (featureIterator.hasNext() && featureIterator.peekNextValue(nestedSourceExpression).equals(foreignKeyValue)) {
-                List<Object> foreignIdValues = featureIterator.getForeignIdValues();
-                
-                matchingFeatures.addAll(featureIterator.skip());
-
-                while (featureIterator.hasNext() && featureIterator.peekNextValue(nestedSourceExpression).equals(foreignKeyValue)
-                        && featureIterator.checkForeignIdValues(foreignIdValues)) {
-                    matchingFeatures.addAll(featureIterator.skip());
-                }                
-            }     
+            while (featureIterator.hasNext() && featureIterator.peekNextValue(nestedSourceExpression).equals(foreignKeyValue)
+                    && featureIterator.checkForeignIdValues(idValues)) {
+                matchingFeatures.add(featureIterator.next());
+            }         
         }
 
         //skip all others
         for ( Name name : instance.featureIterators.keySet()) {
-            DataAccessMappingFeatureIterator fIt = instance.featureIterators.get(name);
-            if (fIt != featureIterator) {
-                skipFeatures(fIt, instance.nestedSourceExpressions.get(name), foreignKeyValue);
-             }
-         }
-        instance.skipped.add(foreignKeyValue);
+           DataAccessMappingFeatureIterator fIt = instance.featureIterators.get(name);
+           if (fIt != featureIterator) {
+               skipFeatures(fIt, instance.nestedSourceExpressions.get(name), foreignKeyValue, idValues);
+            }
+        }
+        instance.skipped.add(new Instance.Skip(foreignKeyValue, idValues));
 
         return matchingFeatures;
     }
