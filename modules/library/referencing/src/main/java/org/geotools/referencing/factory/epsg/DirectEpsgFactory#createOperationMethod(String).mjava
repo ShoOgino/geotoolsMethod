@@ -34,10 +34,22 @@
                 final int sourceDimensions = encoded >>> 16;
                 final int targetDimensions = encoded & 0xFFFF;
                 final ParameterDescriptor[] descriptors = createParameterDescriptors(epsg);
-                final Map<String,Object> properties = createProperties(name, epsg, remarks);
+                
+                // see if we have any alias for this operation, if so add them
+                GenericName[] aliases = null;
+                try {
+                    ParameterValueGroup pvg = factories.getMathTransformFactory().getDefaultParameters(name);
+                    if(pvg != null && pvg.getDescriptor() != null && pvg.getDescriptor().getAlias() != null) {
+                        aliases = (GenericName[]) pvg.getDescriptor().getAlias().toArray(new GenericName[pvg.getDescriptor().getAlias().size()]);
+                    }
+                } catch(NoSuchIdentifierException e) {
+                    // lookup for aliases failed, no problem
+                }
+                Map<String,Object> properties = addAliases(createProperties(name, epsg, remarks), aliases);
                 if (formula != null) {
                     properties.put(OperationMethod.FORMULA_KEY, formula);
                 }
+                
                 method = new DefaultOperationMethod(properties, sourceDimensions, targetDimensions,
                          new DefaultParameterDescriptorGroup(properties, descriptors));
                 returnValue = ensureSingleton(method, returnValue, code);
