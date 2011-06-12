@@ -1,8 +1,27 @@
     void visitComparisonSpatialOperator(BinarySpatialOperator filter,
             PropertyName property, Literal geometry, boolean swapped, Object extraData)
             throws IOException {
+
+        // if geography case, sanitize geometry first
+        if(isCurrentGeography()) {
+            geometry = clipToWorld(geometry);
+            if(isWorld(geometry)) {
+                // nothing to filter in this case
+                out.write(" TRUE ");
+                return;
+            } else if(isEmpty(geometry)) {
+                if(!(filter instanceof Disjoint)) {
+                    out.write(" FALSE ");       
+                } else {
+                    out.write(" TRUE ");
+                }
+                return;
+            }
+        }
         
+        // add && filter if possible
         if(!(filter instanceof Disjoint)) {
+            
             property.accept(delegate, extraData);
             out.write(" && ");
             geometry.accept(delegate, extraData);
@@ -48,6 +67,5 @@
         geometry.accept(delegate, extraData);
 
         out.write(closingParenthesis);
-
     }
 
