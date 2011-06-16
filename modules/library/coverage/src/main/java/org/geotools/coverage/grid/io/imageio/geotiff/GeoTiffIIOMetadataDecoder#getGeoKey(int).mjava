@@ -13,32 +13,28 @@
 	public String getGeoKey(final int keyID) {
 
 		final GeoKeyEntry rec = getGeoKeyRecord(keyID);
-		if (rec == null)
+		if (rec == null){
 			return null;
-		if (rec.getTiffTagLocation() == 0)
+		}
+		if (rec.getTiffTagLocation() == 0){
 			// value is stored directly in the GeoKey record
 			return String.valueOf(rec.getValueOffset());
+		}
 
 		// value is stored externally
 		// get the TIFF field where the data is actually stored
-		final IIOMetadataNode field = getTiffField(rec.getTiffTagLocation());
-
-		if (field != null) {
-			final Node sequence = field.getFirstChild();
-			if (sequence != null) {
-				if (sequence.getNodeName().equals(
-						GeoTiffConstants.GEOTIFF_ASCIIS_TAG)) {
-					// TIFFAscii values are handled specially
-					return getTiffAscii((IIOMetadataNode) sequence, rec
-							.getValueOffset(), rec.getCount());
-				} else {
-					// value is numeric
-					return getValueAttribute(sequence.getChildNodes().item(
-							rec.getValueOffset()));
-				}
-			}
+		final IIOMetadataNode field = getTiffField(getRootNode(), rec.getTiffTagLocation());
+		if (field == null){
+		    return null;
 		}
 
-		return null;
+    final Node sequence = field.getFirstChild();
+    if (sequence == null){
+        return null;
+    }
+
+    return sequence.getNodeName().equals(GeoTiffConstants.GEOTIFF_ASCIIS_TAG) ?
+        getTiffAscii((IIOMetadataNode) sequence, rec.getValueOffset(), rec.getCount()) :
+        getValueAttribute(sequence.getChildNodes().item(rec.getValueOffset()));
 	}
 

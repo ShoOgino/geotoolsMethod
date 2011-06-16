@@ -6,27 +6,37 @@
 	 *            The image metadata
 	 */
 	public GeoTiffIIOMetadataDecoder(final IIOMetadata imageMetadata) {
-	    if(imageMetadata==null)
+	    if (imageMetadata == null){
 	        throw new NullPointerException(Errors.format(ErrorKeys.NULL_ARGUMENT_$1,"imageMetadata"));
-	    
+	    }
+	  iioMetadata = imageMetadata;
 		// getting the image metadata root node.
-		rootNode = (IIOMetadataNode) imageMetadata.getAsTree(imageMetadata.getNativeMetadataFormatName());
+    Node rootNode = getRootNode();
 		if (rootNode == null) {
-			throw new IllegalArgumentException(
-					"Unable to retrieve metadata");
+			throw new NullPointerException("Unable to retrieve metadata");
 		}
-		tiffTagsEntries = (IIOMetadataNode) rootNode.getFirstChild().getChildNodes();
-		if (tiffTagsEntries == null) {
-			throw new IllegalArgumentException(
-					"Unable to retrieve metadata");
-		}
-		numTiffTasEntries = tiffTagsEntries.getLength();
-		// getting the geokey ddirectory
-		geoKeyDir = getTiffField(GeoTIFFTagSet.TAG_GEO_KEY_DIRECTORY);
-		if (geoKeyDir != null) {
 
-        		// getting all the entries and its nunber
-        		geoKeyDirEntries = geoKeyDir.getFirstChild().getChildNodes();
+    pixelScale = calculateModelPixelScales(rootNode);
+    tiePoints = calculateTiePoints(rootNode);
+    noData = calculateNoData(rootNode);
+    modelTransformation = calculateModelTransformation(rootNode);
+
+		// getting the geokey ddirectory
+    IIOMetadataNode geoKeyDir = getTiffField(rootNode, GeoTIFFTagSet.TAG_GEO_KEY_DIRECTORY);
+    geoKeys = new HashMap<Integer, GeoKeyEntry>();
+		if (geoKeyDir != null) {
+        		NodeList geoKeyDirEntries = geoKeyDir.getFirstChild().getChildNodes();
+        		for (int i = 4; i < geoKeyDirEntries.getLength(); i += 4) {
+              int keyID = getIntValueAttribute(geoKeyDirEntries.item(i));
+              GeoKeyEntry key = new GeoKeyEntry(keyID,// key
+			  			    getIntValueAttribute(geoKeyDirEntries.item(i + 1)),// location
+	  		  		  	getIntValueAttribute(geoKeyDirEntries.item(i + 2)),// count
+  	  		    		getIntValueAttribute(geoKeyDirEntries.item(i + 3)));// offset
+
+              if (!geoKeys.containsKey(keyID)) { 
+                  geoKeys.put( keyID, key);
+              }
+            }
         		// GeoKeyDirVersion and the other parameters
         		geoKeyDirVersion = getTiffShort(geoKeyDir,GeoTiffGCSCodes.GEO_KEY_DIRECTORY_VERSION_INDEX);
         		geoKeyRevision = getTiffShort(geoKeyDir,GeoTiffGCSCodes.GEO_KEY_REVISION_INDEX);
@@ -36,16 +46,10 @@
         			// revision numbers blocking us.
         			// throw new UnsupportedOperationException("Unsupported revision");
         		}
-        		geoKeyMinorRevision = getTiffShort(geoKeyDir,
-        				GeoTiffGCSCodes.GEO_KEY_MINOR_REVISION_INDEX);
+        		geoKeyMinorRevision = getTiffShort(geoKeyDir,	GeoTiffGCSCodes.GEO_KEY_MINOR_REVISION_INDEX);
         		// loading the number of geokeys inside the geokeydirectory
-        		geoKeyDirTagsNum = getTiffShort(geoKeyDir,
-        				GeoTiffGCSCodes.GEO_KEY_NUM_KEYS_INDEX);
-        		// each geokey has 4 entries
-        		geoKeyDirEntriesNum = geoKeyDirEntries.getLength();
+        		geoKeyDirTagsNum = getTiffShort(geoKeyDir, GeoTiffGCSCodes.GEO_KEY_NUM_KEYS_INDEX);
 		}
-		geoKeyDoubleParams = getTiffField(GeoTIFFTagSet.TAG_GEO_DOUBLE_PARAMS);
-		geoKeyAsciiParams = getTiffField(GeoTIFFTagSet.TAG_GEO_ASCII_PARAMS);
 
 	}
 
