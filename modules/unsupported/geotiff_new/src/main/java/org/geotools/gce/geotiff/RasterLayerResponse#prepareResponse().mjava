@@ -11,7 +11,7 @@
 			//
 			// prepare the params for executing a mosaic operation.
 			//
-//			final double[] backgroundValues = request.getBackgroundValues();
+			final double[] backgroundValues = request.getBackgroundValues();
 
 			// select the relevant overview, notice that at this time we have
 			// relaxed a bit the requirement to have the same exact resolution
@@ -43,7 +43,7 @@
 			// base grid to world for the center of pixels
 			final AffineTransform g2w = new AffineTransform((AffineTransform) baseGridToWorld);
 			// move it to the corner
-			g2w.concatenate(Utils.CENTER_TO_CORNER);
+			g2w.concatenate(CoverageUtilities.CENTER_TO_CORNER);
 			
 			//keep into account overviews and subsampling
 			final OverviewLevel level = rasterManager.overviewsController.resolutionsLevels.get(imageChoice);
@@ -93,27 +93,35 @@
 				// if provided (defaulting to 0), as well as the compute raster
 				// bounds, envelope and grid to world.
 				
+			    // create proper layout hint
+			    final ImageLayout2 il= new ImageLayout2();
+			    il.setSampleModel(rasterManager.baseImageType.getSampleModel()).setColorModel(rasterManager.baseImageType.getColorModel());
+			    
+			    final Hints hints = new Hints(rasterManager.getHints());
+			    hints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, il));
+			    
 	
-//				if (backgroundValues == null)
+				if (backgroundValues == null)
 					
 					//we don't have background values available
+				    // TODO use code to suggest NO Data Value
 					return ConstantDescriptor.create(
 									Float.valueOf(rasterBounds.width), 
 									Float.valueOf(rasterBounds.height),
-									new Byte[] { 0 },
-									this.rasterManager.getHints());
-//				else {
-//					
-//					//we have background values available
-//					final Double[] values = new Double[backgroundValues.length];
-//					for (int i = 0; i < values.length; i++)
-//						values[i] = backgroundValues[i];
-//					return ConstantDescriptor.create(
-//									Float.valueOf(rasterBounds.width), 
-//									Float.valueOf(rasterBounds.height),
-//									values, 
-//									this.rasterManager.getHints());
-//				}
+									new Number[]{CoverageUtilities.suggestNoDataValue(rasterManager.baseImageType.getSampleModel().getDataType())},
+									hints);
+				else {
+					
+					//we have background values available
+					final Double[] values = new Double[backgroundValues.length];
+					for (int i = 0; i < values.length; i++)
+						values[i] = backgroundValues[i];
+					return ConstantDescriptor.create(
+									Float.valueOf(rasterBounds.width), 
+									Float.valueOf(rasterBounds.height),
+									values, 
+									hints);
+				}
 			}
 
 		} catch (IOException e) {
