@@ -23,18 +23,24 @@
     protected Condition visitBinaryComparisonOperator(BinaryComparisonOperator filter,
             Object extraData) throws RuntimeException {
         // LOGGER.finer("exporting SQL ComparisonFilter");
-
+        //
         // Initialize
         //
         Literal value = null;
-        PropertyName name = null;
+        String name = null;
         Condition eCondition = null;
-
+        //
         // Get left and right expression
         //
         Expression left = filter.getExpression1();
         Expression right = filter.getExpression2();
-
+        //
+        // Detect functions
+        //
+        if(left instanceof Function || right instanceof Function) {
+            throw new IllegalArgumentException("Functions are not supported");            
+        }
+        //
         // Detect implicit inner join
         //
         if (left instanceof PropertyName && right instanceof PropertyName) {
@@ -44,18 +50,22 @@
         // Verify left expression
         //
         if (left instanceof PropertyName) {
-            name = (PropertyName) left;
+            name = ((PropertyName) left).getPropertyName();
+        } else if (left instanceof PropertyExistsFunction) {
+            name = ((PropertyExistsFunction) left).getParameters().get(0).toString();
         } else if (left instanceof Literal) {
             value = (Literal) left;
         } else {
             throw new IllegalArgumentException("Left argument must be a Literal");
         }
-
+        //
         // Verify right expression
         //
         if (right instanceof PropertyName) {
-            name = (PropertyName) right;
-        } else if (left instanceof Literal) {
+            name = ((PropertyName) right).getPropertyName();
+        } else if (right instanceof PropertyExistsFunction) {
+            name = ((PropertyExistsFunction) right).getParameters().get(0).toString();
+        } else if (right instanceof Literal) {
             value = (Literal) right;
         } else {
             throw new IllegalArgumentException("Right argument must be a Literal");
@@ -63,13 +73,12 @@
 
         // Get EAttribute instance from definition
         //
-        EAttribute eAttribute = eFeatureInfo.getEAttribute(name.getPropertyName());
+        EAttribute eAttribute = eFeatureInfo.eGetAttribute(name);
 
         // Found attribute?
         //
         if (eAttribute == null) {
-            throw new IllegalArgumentException("EAttribute " + name.getPropertyName()
-                    + " not found");
+            throw new IllegalArgumentException("EAttribute " + name + " not found");
         }
 
         // Get comparator
