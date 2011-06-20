@@ -1,0 +1,35 @@
+    private Expression setAsXpathParam(Function func, AttributeMapping mapping) {
+        if (func.getName().equals(AS_XPATH_FUNCTION)) {
+            // get original filter xpath
+            Expression queryXpath = func.getParameters().get(0);
+            // get the attribute mapping full xpath and append to the function param
+            String prefix;
+            String parentLabel = mapping.getParentLabel();
+            if (parentLabel == null) {
+                // must be root
+                prefix = elements.getPath(rootAttribute.getLabel());
+            } else {
+                prefix = elements.getPath(parentLabel);
+                String instancePath = mapping.getInstanceXpath();
+                if (instancePath != null) {
+                    prefix += XPATH_SEPARATOR + instancePath;
+                }
+            }
+            Expression fullXpath = CommonFactoryFinder.getFilterFactory(null).literal(
+                    prefix + XPATH_SEPARATOR + queryXpath);
+            return fullXpath;
+        } else {  
+            List<Expression> params = func.getParameters();
+            for (int i = 0; i < params.size(); i++) {
+                Expression param = params.get(0);
+                if (param instanceof Function) {
+                    Expression exp = setAsXpathParam((Function) param, mapping);
+                    if (exp instanceof LiteralExpressionImpl) {
+                        params.add(i, exp);
+                    }
+                }
+            }
+            return func;
+        }
+    }
+
