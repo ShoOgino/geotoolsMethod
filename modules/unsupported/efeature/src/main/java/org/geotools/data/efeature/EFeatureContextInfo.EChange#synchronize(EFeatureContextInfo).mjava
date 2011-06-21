@@ -2,62 +2,67 @@
          * Synchronize given {@link EFeatureContextInfo structure}  
          * with it's {@link EFeatureContextFactory factory} counterpart.
          * <p> 
-         * This is required since {@link EditingDomain editing domains} are 
+         * This is required since {@link EPackage packages} are 
          * allowed to be added to and removed from the context.
          * </p>
          * @param eContextInfo - {@link EFeatureContextInfo structure}
          * @return a {@link Map} from {@link EFeatureContextInfo#eContextID() eContexID} to 
          * {@link EFeatureContextInfo} instances.
          */    
-        public final Map<String, EFeatureDomainInfo> synchronize(EFeatureContextInfo eContextInfo)
+        public final Map<String, EFeaturePackageInfo> synchronize(EFeatureContextInfo eContextInfo)
         {
             //
-            // Ensure thread safe access to domain map 
+            // Ensure thread safe access to package map 
             //
-            synchronized(eContextInfo.eDomainMap) {
+            synchronized(eContextInfo.ePackageMap) {
                 //
-                // Get copy of current domain structure map
+                // Get information
                 //
-                eMap = new HashMap<String, EFeatureDomainInfo>(eContextInfo.eDomainMap);
+                eMap = eContextInfo.ePackageMap;
+                //
+                // Get factory instance and context id 
+                //
+                EFeatureContextFactory eFactory = eContextInfo.eFactory(false);
                 //
                 // Get context instance
                 //
                 EFeatureContext eContext = eContextInfo.eContext(false);
                 //
-                // Get current set of editing domains
+                // Get current set of EPackage NsURIs 
                 //
-                List<String> eDomainIDs = eContext.eDomainIDs();
-                //
-                // Initialize
-                //
-                HashMap<String, EFeatureDomainInfo> 
-                    eNewMap = new HashMap<String, EFeatureDomainInfo>(eDomainIDs.size());           
+                List<String> eNsURIs = eContext.eNsURIs();
                 
-                // Add all domains 
+                // Initialize map of new store structures
                 //
-                for(String eDomainID : eDomainIDs)
+                Map<String, EFeaturePackageInfo> 
+                    eNewMap = new HashMap<String, EFeaturePackageInfo>(eNsURIs.size());        
+                
+                // Add all packages 
+                //
+                for(String eNsURI : eNsURIs)
                 {
                     // Get structure information
                     //
-                    EFeatureDomainInfo eDomainInfo = eMap.get(eDomainID);
+                    EFeaturePackageInfo ePackageInfo = eMap.get(eNsURI);
                     
                     // Not found or overwrite?
                     //
-                    if(eDomainInfo==null)
+                    if(ePackageInfo==null)
                     {
-                        // Create the domain structure
+                        // Create the package structure
                         //
-                        eDomainInfo = EFeatureDomainInfo.create(eContextInfo, eDomainID);
+                        ePackageInfo = EFeaturePackageInfo.create(
+                                eFactory, eContextInfo, eNsURI);
                         
+                        /// Put to map of new structures 
+                        //
+                        eNewMap.put(eNsURI, ePackageInfo);
                     }
-                    /// Put to map of new structures 
-                    //
-                    eNewMap.put(eDomainID, eDomainInfo);
                 }
                 
-                // Remove disposed editing domains
+                // Remove disposed packages
                 //
-                eMap.keySet().retainAll(eDomainIDs);
+                eMap.keySet().retainAll(eNsURIs);
                 
                 // Put new to current map
                 //
