@@ -6,13 +6,20 @@
      */
     private CouchDBResponse executeMethod(HttpMethod method) throws IOException {
         IOException expected = null;
-        int result = -1;
+        int result = -1;            
+        HttpClient client = new HttpClient(clientParams,manager);
         try {
-            result = httpClient.executeMethod(method);
+            result = client.executeMethod(method);
         } catch (IOException ex) {
             expected = ex;
         }
-        CouchDBResponse resp = new CouchDBResponse(method, result, expected);
+        CouchDBResponse resp;
+        try {
+            resp = new CouchDBResponse(method, result, expected);
+        } finally {
+            // @revisit if method doesn't read contents upfront
+            method.releaseConnection();
+        }
         if (logger.isLoggable(Level.FINEST)) {
             logger.finest("Request to : " + method.getPath());
             logger.finest("Response status : " + result);
