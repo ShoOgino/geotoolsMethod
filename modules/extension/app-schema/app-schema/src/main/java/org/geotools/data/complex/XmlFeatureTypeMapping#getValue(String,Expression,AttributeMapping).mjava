@@ -1,16 +1,31 @@
-    protected Object getValue(String xpathPrefix, Expression node, AttributeMapping mapping) {
-        StringBuffer usedXpath = new StringBuffer();
-        String expressionValue = node.toString();
-        if (expressionValue.startsWith("'") || node instanceof LiteralExpressionImpl) {
-            usedXpath.append(xpathPrefix);
-            return null;
-        } else if (node instanceof Function) {
+    protected Expression getValue(String xpathPrefix, Expression node, AttributeMapping mapping) {
+        Expression value = null;
+        if (node instanceof Function) {
+            // function
             Function func = (Function) node;
-            expressionValue = setAsXpathParam(func, mapping).toString();            
-        } else if (xpathPrefix.length() > 0) {
-            expressionValue = xpathPrefix + XPATH_SEPARATOR + expressionValue;
-        }        
-        usedXpath.append(expressionValue);
-        return usedXpath;
+            Expression exp = getAsXpathExpression(func, mapping);
+            if (exp != null) {
+                // this function must be an AsXpath
+                // return the extracted expression
+                value = exp;
+            } else {
+                // not an asXpath, but might have it in the param somewhere
+                // the param would already be turned into the extracted expression
+                // return the function
+                value = func;
+            }
+        } else if (node instanceof LiteralExpressionImpl) {
+            // constant
+            value = node;
+        } else {
+            // input attribute
+            String expressionValue = node.toString();
+            if (xpathPrefix.length() > 0) {
+                value = ff.property(xpathPrefix + XPATH_SEPARATOR + expressionValue);
+            } else {
+                value = node;
+            }
+        }
+        return value;     
     }
 
