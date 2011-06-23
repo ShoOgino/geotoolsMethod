@@ -11,15 +11,45 @@
             }
 
         }
+        String version=(String)this.mapping.getTargetFeature().getType().getUserData().get("targetVersion");
+        //might be because top level feature has no geometry
+        if (query.getCoordinateSystemReproject() == null && version!=null) {
+            // figure out the crs the data is in
+            CoordinateReferenceSystem crs=null;
+            try{
+                crs = this.mappedSource.getSchema().getCoordinateReferenceSystem();
+            }catch(UnsupportedOperationException e){
+                //do nothing as mappedSource is a WSFeatureSource
+            }
+            // gather declared CRS
+            CoordinateReferenceSystem declaredCRS = this.getDeclaredCrs(crs, version);
+            CoordinateReferenceSystem target;
+            URI uri=(URI)this.mapping.getTargetFeature().getType().getUserData().get("targetCrs");
+            if (uri != null) {
+                try {
+                    target = CRS.decode(uri.toString());
+                } catch (Exception e) {
+                    String msg = "Unable to support srsName: " + uri;
+                    throw new UnsupportedOperationException(msg, e);
+                }
+            } else {
+                target = declaredCRS;
+            }
+            this.reprojection = target;
 
-        this.reprojection = query.getCoordinateSystemReproject();
+        } else {
+            this.reprojection = query.getCoordinateSystemReproject();
+        }
+
         // we need to disable the max number of features retrieved so we can
         // sort them manually just in case the data is denormalised
         query.setMaxFeatures(Query.DEFAULT_MAX);
         sourceFeatures = mappedSource.getFeatures(query);
         if (reprojection != null) {
             xpathAttributeBuilder.setCRS(reprojection);
-            if (sourceFeatures.getSchema().getGeometryDescriptor() == null) {
+            if (sourceFeatures.getSchema().getGeometryDescriptor() == null
+                    || this.isReprojectionCrsEqual(this.mappedSource.getSchema()
+                            .getCoordinateReferenceSystem(), this.reprojection)) {
                 // VT: No point trying to re-project without any geometry.
                 query.setCoordinateSystemReproject(null);
             }
