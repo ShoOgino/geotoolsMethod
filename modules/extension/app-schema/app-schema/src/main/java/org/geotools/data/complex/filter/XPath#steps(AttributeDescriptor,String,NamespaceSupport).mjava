@@ -42,17 +42,17 @@
             expression = expression.substring(1);
         }
 
-        final String[] partialSteps = expression.split("[/]");
+        final List<String> partialSteps = splitPath(expression);
 
-        if (partialSteps.length == 0) {
+        if (partialSteps.size() == 0) {
             throw new IllegalArgumentException("no steps provided");
         }
 
         int startIndex = 0;
 
-        for (int i = startIndex; i < partialSteps.length; i++) {
+        for (int i = startIndex; i < partialSteps.size(); i++) {
 
-            String step = partialSteps[i];
+            String step = partialSteps.get(i);
             if ("..".equals(step)) {
                 steps.remove(steps.size() - 1);
             } else if (".".equals(step)) {
@@ -61,15 +61,19 @@
                 int index = 1;
                 boolean isXmlAttribute = false;
                 boolean isIndexed = false;
+                String predicate = null;
                 String stepName = step;
                 if (step.indexOf('[') != -1) {
                     int start = step.indexOf('[');
                     int end = step.indexOf(']');
                     stepName = step.substring(0, start);
-                    Scanner scanner = new Scanner(step.substring(start + 1, end));
+                    String s = step.substring(start + 1, end);
+                    Scanner scanner = new Scanner(s);
                     if (scanner.hasNextInt()) {
                         index = scanner.nextInt();
                         isIndexed = true;
+                    } else {
+                        predicate = s;
                     }
                 }
                 if (step.charAt(0) == '@') {
@@ -77,7 +81,12 @@
                     stepName = stepName.substring(1);
                 }
                 QName qName = deglose(stepName, root, namespaces, isXmlAttribute);
-                steps.add(new Step(qName, index, isXmlAttribute, isIndexed));
+                if (predicate == null) {
+                    steps.add(new Step(qName, index, isXmlAttribute, isIndexed));
+                } else {
+                    steps.add(new Step(qName, isXmlAttribute, predicate));
+                }
+                 
             }
             //            
             // if (step.indexOf('[') != -1) {
