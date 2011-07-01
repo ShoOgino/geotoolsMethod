@@ -1,67 +1,68 @@
-	/**
-	 * testReader
-	 * 
-	 * @throws IllegalArgumentException
-	 * @throws IOException
-	 * @throws NoSuchAuthorityCodeException
-	 */
-	public void testReader() throws IllegalArgumentException, IOException,
-			NoSuchAuthorityCodeException {
+    /**
+     * testReader
+     * 
+     * @throws IllegalArgumentException
+     * @throws IOException
+     * @throws NoSuchAuthorityCodeException
+     */
+    @Test
+    public void testReader() throws IllegalArgumentException, IOException,
+            NoSuchAuthorityCodeException {
 
-		final File file = TestData.file(this, ".");
-		final File files[] = file.listFiles();
-		final int numFiles = files.length;
-		final AbstractGridFormat format = new GeoTiffFormat();
-		for (int i = 0; i < numFiles; i++) {
-			StringBuffer buffer = new StringBuffer();
-			final String path = files[i].getAbsolutePath().toLowerCase();
-			if (!path.endsWith("tif") && !path.endsWith("tiff"))
-				continue;
+        final File file = TestData.file(this, ".");
+        final File files[] = file.listFiles();
+        final int numFiles = files.length;
+        final AbstractGridFormat format = new GeoTiffFormat();
+        for (int i = 0; i < numFiles; i++) {
+            StringBuffer buffer = new StringBuffer();
+            final String path = files[i].getAbsolutePath().toLowerCase();
+            if (!path.endsWith("tif") && !path.endsWith("tiff"))
+                continue;
+            if (path.contains("ovr.tif"))
+                continue;
+            buffer.append(files[i].getAbsolutePath()).append("\n");
+            Object o;
+            if (i % 2 == 0)
+                // testing file
+                o = files[i];
+            else
+                // testing url
+                o = files[i].toURI().toURL();
+            if (format.accepts(o)) {
+                buffer.append("ACCEPTED").append("\n");
 
-			buffer.append(files[i].getAbsolutePath()).append("\n");
-			Object o;
-			if (i % 2 == 0)
-				// testing file
-				o = files[i];
-			else
-				// testing url
-				o = files[i].toURI().toURL();
-			if (format.accepts(o)) {
-				buffer.append("ACCEPTED").append("\n");
+                // getting a reader
+                GeoTiffReader reader = new GeoTiffReader(o, new Hints(
+                        Hints.FORCE_LONGITUDE_FIRST_AXIS_ORDER, Boolean.TRUE));
 
-				// getting a reader
-				GeoTiffReader reader = new GeoTiffReader(o, new Hints(
-						Hints.FORCE_LONGITUDE_FIRST_AXIS_ORDER, Boolean.TRUE));
+                if (reader != null) {
 
-				if (reader != null) {
+                    // reading the coverage
+                    GridCoverage2D coverage = (GridCoverage2D) reader.read(null);
 
-					// reading the coverage
-					GridCoverage2D coverage = (GridCoverage2D) reader
-							.read(null);
+                    // Crs and envelope
+                    if (TestData.isInteractiveTest()) {
+                        buffer.append("CRS: ")
+                                .append(coverage.getCoordinateReferenceSystem2D().toWKT())
+                                .append("\n");
+                        buffer.append("GG: ").append(coverage.getGridGeometry().toString())
+                                .append("\n");
+                    }
 
-					// Crs and envelope
-					if (TestData.isInteractiveTest()) {
-						buffer.append("CRS: ").append(
-								coverage.getCoordinateReferenceSystem2D()
-										.toWKT()).append("\n");
-						buffer.append("GG: ").append(
-								coverage.getGridGeometry().toString()).append("\n");
-					}
+                    // showing it
+                    if (TestData.isInteractiveTest())
+                        coverage.show();
+                    else
+                        coverage.getRenderedImage().getData();
 
-					// showing it
-					if (TestData.isInteractiveTest())
-						coverage.show();
-					else
-						coverage.getRenderedImage().getData();
+                }
 
-				}
+            } else
+                buffer.append("NOT ACCEPTED").append("\n");
+            if (TestData.isInteractiveTest())
+                LOGGER.info(buffer.toString());
 
-			} else
-				buffer.append("NOT ACCEPTED").append("\n");
-			if (TestData.isInteractiveTest())
-				LOGGER.info(buffer.toString());
+        }
 
-		}
-
-	}
+    }
 

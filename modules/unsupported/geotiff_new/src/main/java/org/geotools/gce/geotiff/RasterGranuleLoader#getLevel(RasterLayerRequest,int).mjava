@@ -1,4 +1,4 @@
-    Level getLevel(final int index) {
+    Level getLevel(RasterLayerRequest request, final int index) {
         synchronized (granuleLevels) {
             if (granuleLevels.containsKey(Integer.valueOf(index))) {
                 return granuleLevels.get(Integer.valueOf(index));
@@ -7,13 +7,21 @@
                 // create the base grid to world transformation
                 ImageInputStream inStream = null;
                 ImageReader reader = null;
+                File file = granuleFile; 
+                int imageChoice = index;
                 try {
                     //
                     // get info about the raster we have to read
                     //
-
-                    // get a stream
-                    inStream = ImageIOExt.createImageInputStream(granuleFile);
+                    if (request.rasterManager.parent.extOvrImgChoice >= 0 && 
+                            index >= request.rasterManager.parent.extOvrImgChoice) {
+                        file = request.rasterManager.parent.ovrSource;
+                        inStream = request.rasterManager.parent.ovrInStreamSPI.createInputStreamInstance(
+                                file, ImageIO.getUseCache(), ImageIO.getCacheDirectory());
+                        imageChoice = index - request.rasterManager.parent.extOvrImgChoice;
+                    } else {
+                        inStream = ImageIOExt.createImageInputStream(file);    
+                    }
                     if (inStream == null) {
                         throw new IllegalArgumentException();
                     }
@@ -25,7 +33,7 @@
                     }
 
                     // get selected level and base level dimensions
-                    final Rectangle levelDimension = ImageUtilities.getDimension(index, inStream,
+                    final Rectangle levelDimension = ImageUtilities.getDimension(imageChoice, inStream,
                             reader);
 
                     final Level baseLevel = granuleLevels.get(0);

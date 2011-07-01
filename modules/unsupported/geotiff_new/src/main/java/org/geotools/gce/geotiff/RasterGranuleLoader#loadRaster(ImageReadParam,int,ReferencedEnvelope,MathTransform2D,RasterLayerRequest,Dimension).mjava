@@ -5,21 +5,30 @@
         if (LOGGER.isLoggable(java.util.logging.Level.FINE)) {
             LOGGER.fine("Loading raster data for rasterGranuleLoader " + this.toString());
         }
+        ImageInputStream inStream = null;
+        int imageChoice = imageIndex;
+        File file = granuleFile;
 
         final ReferencedEnvelope bbox = new ReferencedEnvelope(granuleBBOX);
         // intersection of this tile bound with the current crop bbox
         final ReferencedEnvelope intersection = new ReferencedEnvelope(bbox.intersection(cropBBox),
                 cropBBox.getCoordinateReferenceSystem());
 
-        ImageInputStream inStream = null;
         ImageReader reader = null;
         try {
             //
             // get info about the raster we have to read
             //
-
-            // get a stream
-            inStream = ImageIOExt.createImageInputStream(granuleFile);
+            if (request.rasterManager.parent.extOvrImgChoice >= 0 && 
+                    imageIndex >= request.rasterManager.parent.extOvrImgChoice) {
+                file = request.rasterManager.parent.ovrSource;
+                inStream = request.rasterManager.parent.ovrInStreamSPI.createInputStreamInstance(
+                        file, ImageIO.getUseCache(), ImageIO.getCacheDirectory());
+                imageChoice = imageIndex - request.rasterManager.parent.extOvrImgChoice;
+            } else {
+                inStream = ImageIOExt.createImageInputStream(file);    
+            }
+            
             if (inStream == null) {
                 return null;
             }
@@ -34,7 +43,7 @@
             }
 
             // get selected level and base level dimensions
-            final Level selectedlevel = getLevel(imageIndex);
+            final Level selectedlevel = getLevel(request, imageIndex);
 
             // now create the crop grid to world which can be used to decide
             // which source area we need to crop in the selected level taking
@@ -76,8 +85,8 @@
             readParameters.setSourceRegion(sourceArea);
 
             // read
-            RenderedImage raster = request.getReadType().read(readParameters, imageIndex,
-                    granuleFile, selectedlevel.rasterDimensions, tileDimension);
+            RenderedImage raster = request.getReadType().read(readParameters, imageChoice,
+                    file, selectedlevel.rasterDimensions, tileDimension);
             if (raster == null) {
                 return null;
             }
