@@ -30,11 +30,10 @@
      * @throws IOException
      * @throws IllegalFilterException
      */
-    final private void processStylers(final Graphics2D graphics,
+    private void processStylers(final Graphics2D graphics,
             MapLayer currLayer, AffineTransform at,
             CoordinateReferenceSystem destinationCrs, Envelope mapArea,
             Rectangle screenSize, String layerId) throws Exception {
-
         /*
          * DJB: changed this a wee bit so that it now does the layer query AFTER
          * it has evaluated the rules for scale inclusion. This makes it so that
@@ -46,9 +45,8 @@
         // Preparing feature information and styles
         //
         // /////////////////////////////////////////////////////////////////////
-        final FeatureTypeStyle[] featureStylers = currLayer.getStyle().getFeatureTypeStyles();
-
-        final FeatureSource featureSource =  currLayer.getFeatureSource();
+        final Style style = currLayer.getStyle();
+        final FeatureSource featureSource = currLayer.getFeatureSource();
 
         final CoordinateReferenceSystem sourceCrs;
         final NumberRange scaleRange = NumberRange.create(scaleDenominator,scaleDenominator);
@@ -61,12 +59,12 @@
             final GeometryDescriptor geometryAttribute = schema.getGeometryDescriptor();
             sourceCrs = geometryAttribute.getType().getCoordinateReferenceSystem();
             if (LOGGER.isLoggable(Level.FINE)) {
-                LOGGER.fine("Processing " + featureStylers.length + " stylers for " +
-                                currLayer.getFeatureSource().getSchema().getName());
+                LOGGER.fine("Processing " + style.featureTypeStyles().size() + 
+                        " stylers for " + featureSource.getSchema().getName());
             }
 
-            lfts = createLiteFeatureTypeStyles(featureStylers,schema, graphics);
-            if(lfts.size() == 0)
+            lfts = createLiteFeatureTypeStyles(style.featureTypeStyles(), schema, graphics);
+            if(lfts.isEmpty())
                 return;
             
             applyUnitRescale(lfts);
@@ -130,10 +128,11 @@
             collection = queryLayer( currLayer, currLayer.getSource() );
 
             sourceCrs = null;
-            lfts = createLiteFeatureTypeStyles( featureStylers, source.describe(), graphics );
+            lfts = createLiteFeatureTypeStyles( 
+                    style.featureTypeStyles(), source.describe(), graphics );
             applyUnitRescale(lfts);
             
-            if (lfts.size() == 0) return; // nothing to do
+            if (lfts.isEmpty()) return; // nothing to do
 
             // finally, perform rendering
             if(isOptimizedFTSRenderingEnabled() && lfts.size() > 1) {

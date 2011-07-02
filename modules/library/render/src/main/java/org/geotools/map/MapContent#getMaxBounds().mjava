@@ -9,8 +9,11 @@
      * @throws IOException
      *             if an IOException occurs while accessing the FeatureSource bounds
      */
-    ReferencedEnvelope getMaxBounds() throws IOException {        
-        CoordinateReferenceSystem mapCrs = getCoordinateReferenceSystem();
+    ReferencedEnvelope getMaxBounds() {        
+        CoordinateReferenceSystem mapCrs = null;
+        if( viewport != null ){
+            mapCrs = viewport.getCoordianteReferenceSystem();
+        }
         ReferencedEnvelope maxBounds = null;
         
         if( layerList != null ){
@@ -18,32 +21,37 @@
                 if( layer == null ){
                     continue;
                 }
-                ReferencedEnvelope layerBounds = layer.getBounds();
-                if (layerBounds == null || layerBounds.isEmpty() || layerBounds.isNull()) {
-                    continue;
-                }
-                if (mapCrs == null) {
-                    // crs for the map is not defined; let us start with the first CRS we see then!
-                    maxBounds = new ReferencedEnvelope(layerBounds);
-                    mapCrs = layerBounds.getCoordinateReferenceSystem();
-                    continue;
-                }
-                ReferencedEnvelope normalized;
-                if (CRS.equalsIgnoreMetadata(mapCrs, layerBounds.getCoordinateReferenceSystem())) {
-                    normalized = layerBounds;
-                } else {
-                    try {
-                        normalized = layerBounds.transform(mapCrs, true);
-                    } catch (Exception e) {
-                        LOGGER.log(Level.FINE, "Unable to transform: {0}", e);
+                try {
+                    ReferencedEnvelope layerBounds = layer.getBounds();
+                    if (layerBounds == null || layerBounds.isEmpty() || layerBounds.isNull()) {
                         continue;
                     }
+                    if (mapCrs == null) {
+                        // crs for the map is not defined; let us start with the first CRS we see then!
+                        maxBounds = new ReferencedEnvelope(layerBounds);
+                        mapCrs = layerBounds.getCoordinateReferenceSystem();
+                        continue;
+                    }
+                    ReferencedEnvelope normalized;
+                    if (CRS.equalsIgnoreMetadata(mapCrs, layerBounds.getCoordinateReferenceSystem())) {
+                        normalized = layerBounds;
+                    } else {
+                        try {
+                            normalized = layerBounds.transform(mapCrs, true);
+                        } catch (Exception e) {
+                            LOGGER.log(Level.FINE, "Unable to transform: {0}", e);
+                            continue;
+                        }
+                    }
+                    if( maxBounds == null ){
+                        maxBounds = normalized;
+                    }
+                    else {
+                        maxBounds.expandToInclude(normalized);
+                    }
                 }
-                if( maxBounds == null ){
-                    maxBounds = normalized;
-                }
-                else {
-                    maxBounds.expandToInclude(normalized);
+                catch (Throwable eek){
+                    LOGGER.warning("Unable to determine bounds of "+layer+":"+eek );
                 }
             }
         }

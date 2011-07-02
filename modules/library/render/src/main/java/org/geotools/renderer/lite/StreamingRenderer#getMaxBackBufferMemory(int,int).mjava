@@ -10,20 +10,26 @@
      */
     public int getMaxBackBufferMemory(int width, int height) {
         int maxBuffers = 0;
-        for (MapLayer layer : context.getLayers()) {
+        for (Layer layer : mapContent.layers()) {
             if (!layer.isVisible()) {
                 // Only render layer when layer is visible
                 continue;
             }
 
-            // skip layers that do have only one fts
-            if(layer.getStyle().getFeatureTypeStyles().length < 2)
+            // Skip layers that do not have multiple FeatureTypeStyles
+            if (!(layer instanceof StyleLayer)) {
                 continue;
+            } 
+
+            StyleLayer styleLayer = (StyleLayer) layer;
+            
+            if (styleLayer.getStyle().featureTypeStyles().size() < 2) continue;
 
             // count how many lite feature type styles are active
             int currCount = 0;
-            FeatureType ftype = layer.getFeatureSource().getSchema();
-            for (FeatureTypeStyle fts : layer.getStyle().getFeatureTypeStyles()) {
+            MapLayer mapLayer = new MapLayer(layer);
+            FeatureType ftype = mapLayer.getFeatureSource().getSchema();
+            for (FeatureTypeStyle fts : styleLayer.getStyle().featureTypeStyles()) {
                 if (isFeatureTypeStyleActive(ftype, fts)) {
                     // get applicable rules at the current scale
                     List[] splittedRules = splitRules(fts);
@@ -31,7 +37,7 @@
                     List elseRuleList = splittedRules[1];
 
                     // if none, skip this fts
-                    if ((ruleList.size() == 0) && (elseRuleList.size() == 0))
+                    if ((ruleList.isEmpty()) && (elseRuleList.isEmpty()))
                         continue; 
 
                     currCount++;
