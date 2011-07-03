@@ -15,67 +15,78 @@
      * nor adds the {@link EClass#getEIDAttribute()} to the 
      * {@link EFeatureContext#eIDFactory()}. This must be done manually.
      * </p>  
-     * @param eFeatureInfo - copy from this {@link EFeatureInfo} instance
+     * @param eInfo - copy from this {@link EFeatureInfo} instance
      * @param eContextInfo - copy into this context
      * @see {@link EFeatureContextInfo#doAdapt(EFeatureInfo, boolean)}
      */
-    protected EFeatureInfo(EFeatureInfo eFeatureInfo, EFeatureContextInfo eContextInfo) {
+    protected EFeatureInfo(EFeatureInfo eInfo, EFeatureContextInfo eContextInfo) {
         //
         // Forward (copies context, state and hints)
         //
-        super(eFeatureInfo, eContextInfo);        
+        super(eInfo, eContextInfo);        
         //
         // Mark as being structural equal to given structure
         //
-        this.eUID = eFeatureInfo.eUID;
+        this.eUID = eInfo.eUID;
         //
         // Copy context path
         //
-        this.eNsURI = eFeatureInfo.eNsURI;
-        this.eFolderName = eFeatureInfo.eFolderName;
+        this.eNsURI = eInfo.eNsURI;
+        this.eFolderName = eInfo.eFolderName;
         //
         // Copy EClass information
         //        
-        this.eClassName = eFeatureInfo.eClassName;
-        this.eClass = new WeakReference<EClass>(eFeatureInfo.eClass());
+        this.eClassName = eInfo.eClassName;
+        this.eClass = new WeakReference<EClass>(eInfo.eClass());
         //
         // Copy parent EClass information (folder is an EClass)
         //                
-        this.eReferenceName = eFeatureInfo.eReferenceName;
-        this.eReference = new WeakReference<EReference>(eFeatureInfo.eReference());
-        this.eParentClass = new WeakReference<EClass>(eFeatureInfo.eParentClass());
+        this.eReferenceName = eInfo.eReferenceName;
+        this.eReference = new WeakReference<EReference>(eInfo.eReference());
+        this.eParentClass = new WeakReference<EClass>(eInfo.eParentClass());
         //
         // Copy ID attribute information
         //                
-        this.eIDAttributeName = eFeatureInfo.eIDAttributeName;
+        this.eIDAttributeName = eInfo.eIDAttributeName;
         //
         // Copy SRID attribute information
         //                
-        this.eSRIDAttributeName = eFeatureInfo.eSRIDAttributeName;
+        this.eSRIDAttributeName = eInfo.eSRIDAttributeName;
         //
         // Copy default geometry attribute information
         //                
-        this.eDefaultAttributeName = eFeatureInfo.eDefaultAttributeName;
+        this.eDefaultAttributeName = eInfo.eDefaultAttributeName;
         //
         // Copy other attributes 
         //
-        this.isAvailable = eFeatureInfo.isAvailable;        
+        this.isAvailable = eInfo.isAvailable;        
         //
-        // Prepare to add attributes
+        // Prepare new hash maps
         //
-        this.eAttributeInfoMap = 
-            new HashMap<String, EFeatureAttributeInfo>(eFeatureInfo.eAttributeInfoMap.size());
-        this.eGeometryInfoMap = 
-            new HashMap<String, EFeatureGeometryInfo>(eFeatureInfo.eGeometryInfoMap.size());
+        this.eGeometryInfoMap = EFeatureUtils.newMap(eInfo.eGeometryInfoMap);
+        this.eAttributeInfoMap = EFeatureUtils.newMap(eInfo.eAttributeInfoMap);
         //
-        // Loop over all attributes and copy them
+        // Loop over all attribute structures, copy them and add to maps
         //
-        for(EFeatureAttributeInfo it : eFeatureInfo.eAttributeInfoMap.values()) {
-            eAttributeInfoMap.put(it.eName,new EFeatureAttributeInfo(it,this));
+        for(EFeatureAttributeInfo it : eInfo.eAttributeInfoMap.values()) {
+            it = new EFeatureAttributeInfo(it,this);
+            eAttributeInfoMap.put(it.eName,it);
         }
-        for(EFeatureGeometryInfo it : eFeatureInfo.eGeometryInfoMap.values()) {
-            eGeometryInfoMap.put(it.eName,new EFeatureGeometryInfo(it,this));
+        for(EFeatureGeometryInfo it : eInfo.eGeometryInfoMap.values()) {
+            it = new EFeatureGeometryInfo(it,this);
+            eGeometryInfoMap.put(it.eName,it);
         }
-        
+        //
+        // Pass mappings directly (is copied when made immutable below)
+        //
+        eMappingMap = eInfo.eMappingMap;
+        //
+        // Optimize structure lookup methods
+        //
+        eOptimize(this);
+        //
+        // Make structure immutable (it is allowed to not be modified)
+        //
+        eImmutable(this);
     }
 

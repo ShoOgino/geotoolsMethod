@@ -1,6 +1,19 @@
-    public ESimpleFeature next() throws IOException, IllegalArgumentException,
-    NoSuchElementException {
+    @Override
+    public ESimpleFeature next() throws IOException, 
+        IllegalArgumentException, NoSuchElementException {
+        
+        //
+        // Sanity check
+        //
+        if (!hasNext()) { 
+            throw new NoSuchElementException();
+        }
+        
         try {
+            //
+            // Access to EFeatureInfo hints must be synchronized (thread safe)
+            //
+            eStructure.eLock();
             //
             // Initialize
             //
@@ -12,11 +25,11 @@
             //
             // Adapt given object to EFeature structure
             //
-            eObject = adapt(eFeatureInfo,eObject);
+            eObject = eAdapt(eStructure,eObject,hints);
             //
             // Get feature from EFeature
             //
-            feature = ((EFeature)eObject).getData();            
+            feature = eData((EFeature)eObject,hints);
             //
             // Implements ESimpleFeature?
             //
@@ -34,16 +47,19 @@
                 // startup problem etc.), a WARNING message is issued telling them that
                 // the this operation may be unsafe. 
                 //
-                LOGGER.log(Level.WARNING,"Non-standard Feature " +
-                		"implementation found. Unpredictable behavior may occur");
+                LOGGER.log(Level.WARNING,"Non-standard Feature implementation " +
+                		"found. Unpredictable behavior may occur.");
                 //
                 // Forward ESimpleFeature delegate
                 //
-                return new ESimpleFeatureDelegate(eObject,(SimpleFeature)feature);
+                return new ESimpleFeatureDelegate(eStructure, eObject,(SimpleFeature)feature);
             }
 
-
         } finally {
+            //
+            // Release lock on structure
+            //
+            eStructure.eUnlock();
             //
             // Progress to next feature
             //

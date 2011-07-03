@@ -1,0 +1,91 @@
+    /**
+     * Replace current delegation
+     * <p>
+     * @param eStructure - EFeature {@link EFeatureInfo structure}.
+     * @param eImpl - new {@link EObject} implementation which this delegates to 
+     * @param eTrusted - if <code>true</code>, the method will not validate 
+     * structure against implementation.
+     * @throws IllegalArgumentException If implementation does not validate 
+     * against given structure
+     */
+    protected void eReplace(EFeatureInfo eStructure, InternalEObject eImpl, boolean eTrusted) {
+        //
+        // Validate structure?
+        //
+        if(!eTrusted) {
+            EFeatureStatus eStatus;
+            if((eStatus = eStructure.validate(eImpl)).isFailure()) {
+                throw new IllegalArgumentException(
+                        "EObject implementation is not valid. " +
+                        eStatus.getMessage(), eStatus.getCause());
+            }
+        }
+        //
+        // Is known implementation?
+        //
+        if(eImpl instanceof EFeatureImpl) {
+            //
+            // --------------------------------------------
+            //  This is a copy operation.
+            // --------------------------------------------
+            //
+            // Cache strong reference to implementation, 
+            // ensuring that it is not garbage collected 
+            // until this delegate is.  
+            //            
+            this.eImpl = eImpl;
+            //
+            // Get internal EFeature implementation from EFeatureImpl
+            //                        
+            this.eInternal = ((EFeatureImpl)eImpl).eInternal();            
+            //
+            // Update structure
+            //
+            setStructure(eStructure);        
+        } 
+        else if(eImpl instanceof EFeatureDelegate) {
+            //
+            // --------------------------------------------
+            //  This is a copy operation.
+            // --------------------------------------------
+            //
+            // Cache strong reference to EObject implementation, 
+            // ensuring that it is not garbage collected until 
+            // this delegate is. This acts like a copy constructor.
+            //            
+            this.eImpl = ((EFeatureDelegate)eImpl).eImpl();
+            //
+            // Get internal EFeature implementation from delegate
+            //                        
+            this.eInternal = ((EFeatureDelegate)eImpl).eInternal();            
+            //
+            // Update structure
+            //
+            setStructure(eStructure);        
+        } 
+        else {
+            //
+            // Cache strong reference to EObject implementation, 
+            // ensuring that it is not garbage collected until 
+            // this delegate is.
+            //            
+            this.eImpl = eImpl;
+            //
+            // --------------------------------------------
+            //  This is the replace operation.
+            // --------------------------------------------
+            //
+            if(this.eInternal==null) {
+                //
+                // Create internal implementation
+                //
+                this.eInternal = new EFeatureInternal(eStructure,this);
+            } else {
+                //
+                // Update structure
+                //
+                setStructure(eStructure);        
+            }                
+        }
+    }
+
