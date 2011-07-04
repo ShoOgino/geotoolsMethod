@@ -5,10 +5,12 @@
      * @param eImpl - new {@link EObject} implementation which this delegates to 
      * @param eTrusted - if <code>true</code>, the method will not validate 
      * structure against implementation.
+     * @param eHints - {@link EFeatureHints} instance. If <code>null</code>,
+     * {@link EFeatureInfo#eHints() structure hints} is used instead.
      * @throws IllegalArgumentException If implementation does not validate 
      * against given structure
      */
-    protected void eReplace(EFeatureInfo eStructure, InternalEObject eImpl, boolean eTrusted) {
+    protected void eReplace(EFeatureInfo eStructure, InternalEObject eImpl, boolean eTrusted, EFeatureHints eHints) {
         //
         // Validate structure?
         //
@@ -21,12 +23,16 @@
             }
         }
         //
+        // Ensure hints exists
+        //
+        eHints = (eHints==null ? new EFeatureHints(eStructure.eHints()) : eHints);
+        //
         // Is known implementation?
         //
         if(eImpl instanceof EFeatureImpl) {
             //
             // --------------------------------------------
-            //  This is a copy operation.
+            //  This is a replace (copy) operation.
             // --------------------------------------------
             //
             // Cache strong reference to implementation, 
@@ -39,14 +45,14 @@
             //                        
             this.eInternal = ((EFeatureImpl)eImpl).eInternal();            
             //
-            // Update structure
+            // Replace implementation
             //
-            setStructure(eStructure);        
+            this.eInternal.eReplace(eStructure, this, eHints, true);     
         } 
         else if(eImpl instanceof EFeatureDelegate) {
             //
             // --------------------------------------------
-            //  This is a copy operation.
+            //  This is a replace (copy) operation.
             // --------------------------------------------
             //
             // Cache strong reference to EObject implementation, 
@@ -57,34 +63,37 @@
             //
             // Get internal EFeature implementation from delegate
             //                        
-            this.eInternal = ((EFeatureDelegate)eImpl).eInternal();            
+            this.eInternal = ((EFeatureDelegate)eImpl).eInternal();
             //
-            // Update structure
+            // Replace implementation
             //
-            setStructure(eStructure);        
+            this.eInternal.eReplace(eStructure, this, eHints, true);
         } 
         else {
             //
             // Cache strong reference to EObject implementation, 
             // ensuring that it is not garbage collected until 
-            // this delegate is.
+            // this delegate is 
+            //
+            // (EFeatureInternal only has a weak reference).
             //            
             this.eImpl = eImpl;
             //
             // --------------------------------------------
-            //  This is the replace operation.
+            //  This is the replace (or create) operation.
             // --------------------------------------------
             //
             if(this.eInternal==null) {
                 //
                 // Create internal implementation
                 //
-                this.eInternal = new EFeatureInternal(eStructure,this);
-            } else {
+                this.eInternal = new EFeatureInternal(eStructure, this, eHints);
+            } 
+            else {
                 //
-                // Update structure
+                // Replace implementation
                 //
-                setStructure(eStructure);        
+                this.eInternal.eReplace(eStructure, this, eHints, true);
             }                
         }
     }

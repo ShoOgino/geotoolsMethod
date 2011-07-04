@@ -4,12 +4,13 @@
      * @param eStructure - EFeature {@link EFeatureInfo structure}.
      * @param eImpl - new {@link InternalEObject} implementation which this delegates to 
      * @param eTrusted - if <code>true</code>, the method will not validate structure against implementation.
-     * @param eSingletonFeatures - if <code>true</code>, {@link ThreadLocal thread local} singleton instance is returned
+     * @param eHints - if {@link EFeatureHints#EFEATURE_SINGLETON_FEATURES} is <code>true</code>, 
+     * a {@link ThreadLocal thread local} singleton instance is returned
      * @throws IllegalArgumentException If implementation does not validate 
      * against given structure
      */
     public static final EFeatureDelegate create(EFeatureInfo eStructure, 
-            InternalEObject eImpl, boolean eTrusted, boolean eSingletonFeatures) {
+            InternalEObject eImpl, boolean eTrusted, EFeatureHints eHints) {
         //
         // Initialize
         //
@@ -17,7 +18,7 @@
         //
         // Is EFeatureDelegate a singleton?
         //
-        if(eSingletonFeatures) {
+        if(eHints.eSingletonFeatures()) {
             //
             // Get singleton instance
             //
@@ -29,7 +30,7 @@
                 //
                 // Create new delegate
                 //
-                eDelegate = EFeatureDelegate.create(eStructure, (InternalEObject)eImpl, eTrusted, false);
+                eDelegate = new EFeatureDelegate(eStructure, eImpl, eTrusted, eHints);
                 //
                 // Update thread local variable
                 //
@@ -46,11 +47,7 @@
                 //
                 // Replace structure
                 //
-                eDelegate.setStructure(eStructure);
-                //
-                // Update thread local variable
-                //
-                eSingleton.set(eDelegate);
+                eDelegate.eReplace(eStructure, eDelegate.eImpl, false, eHints);
             } 
             //
             // Replace implementation of singleton delegate
@@ -59,14 +56,27 @@
                 //
                 // Replace implementation
                 //
-                eDelegate.eReplace(eStructure, (InternalEObject)eImpl, eTrusted);
+                eDelegate.eReplace(eStructure, (InternalEObject)eImpl, eTrusted, eHints);
             }
         } 
+        //
+        // Adapt directly? (returns same current delegate) 
+        //
+        else if(eImpl instanceof EFeatureDelegate) {
+            //
+            // Cast to EFeatureDelegate
+            //
+            eDelegate = (EFeatureDelegate)eImpl;
+            //
+            // Replace structure
+            //
+            eDelegate.eReplace(eStructure, eDelegate.eImpl, false, eHints);
+        }
         //
         // Construct new instance
         //
         else {        
-            eDelegate = new EFeatureDelegate(eStructure, eImpl, eTrusted);
+            eDelegate = new EFeatureDelegate(eStructure, eImpl, eTrusted, eHints);
         }        
         //
         // Get current ID if set
