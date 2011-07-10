@@ -3,13 +3,23 @@
      * this new task will be accepted; otherwise it will be rejected (ie. there
      * is no task queue).
      *
-     * @param envelope the map area (world coordinates) to be rendered
-     * @param graphics the graphics object to draw on
+     * @param mapContent the map content holding 
+     * @param graphics graphics object to be used for drawing
      *
      * @return true if the rendering task was accepted; false if it was
      *         rejected
      */
-    public synchronized boolean submit(ReferencedEnvelope envelope, Rectangle paintArea, Graphics2D graphics) {
+    public synchronized boolean submit(MapContent mapContent, Graphics2D graphics) {
+        if (mapContent == null) {
+            throw new IllegalArgumentException("mapContent must not be null");
+        }
+        if (graphics == null) {
+            throw new IllegalArgumentException("graphics must not be null");
+        }
+        if (mapContent.getViewport().isEmpty()) {
+            throw new IllegalArgumentException("The viewport must not be empty");
+        }
+        
         if (!isRunning() || cancelLatch.getCount() > 0) {
             try {
                 // wait for any cancelled task to finish its shutdown
@@ -18,7 +28,7 @@
                 return false;
             }
 
-            task = new Task(envelope, paintArea, graphics);
+            task = new Task(mapContent, graphics);
             taskRunning.set(true);
             taskResult = taskExecutor.submit(task);
             watcher = watchExecutor.scheduleAtFixedRate(new Runnable() {

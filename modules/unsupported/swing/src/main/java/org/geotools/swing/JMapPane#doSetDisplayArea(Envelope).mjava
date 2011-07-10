@@ -6,15 +6,28 @@
      * @param envelope requested display area
      */
     private void doSetDisplayArea(Envelope envelope) {
-        assert (context != null && currentPaintArea != null && !currentPaintArea.isEmpty());
-
+        if (mapContent == null) {
+            throw new IllegalStateException("No MapContent instance set");
+        }
+        
         if (equalsFullExtent(envelope)) {
-            setTransforms(fullExtent, currentPaintArea);
+            mapContent.getViewport().setBounds(fullExtent);
+            
         } else {
-            setTransforms(envelope, currentPaintArea);
+            CoordinateReferenceSystem crs = envelope.getCoordinateReferenceSystem();
+            if (crs == null) {
+                // assume that it is the current CRS
+                crs = mapContent.getCoordinateReferenceSystem();
+            }
+            
+            ReferencedEnvelope refEnv = new ReferencedEnvelope(
+                    envelope.getMinimum(0), envelope.getMaximum(0),
+                    envelope.getMinimum(1), envelope.getMaximum(1),
+                    crs);
+                    
+            mapContent.getViewport().setBounds(refEnv);
         }
 
-        calculateDisplayArea();
         MapPaneEvent ev = new MapPaneEvent(this, MapPaneEvent.Type.DISPLAY_AREA_CHANGED);
         publishEvent(ev);
     }
