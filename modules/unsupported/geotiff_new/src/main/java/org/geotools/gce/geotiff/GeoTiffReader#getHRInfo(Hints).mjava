@@ -26,28 +26,11 @@
             reader.setInput(inStream);
     
             final IIOMetadata iioMetadata = reader.getImageMetadata(0);
-            CoordinateReferenceSystem foundCrs = null;
-            boolean useWorldFile = false;
             GeoTiffIIOMetadataDecoder metadata = null; 
 
-            try {
-                metadata = new GeoTiffIIOMetadataDecoder(iioMetadata);
-                gtcs = new GeoTiffMetadata2CRSAdapter(hints);
-                if (gtcs != null) {
-                    foundCrs = gtcs.createCoordinateSystem(metadata);
-                } else {
-                    useWorldFile = true;
-                }
-    
-                if (metadata.hasNoData()) {
-                    noData = metadata.getNoData();
-                }
-            } catch (IllegalArgumentException iae) {
-                useWorldFile = true;
-            } catch (UnsupportedOperationException uoe) {
-                useWorldFile = true;
-            }
-
+            metadata = new GeoTiffIIOMetadataDecoder(iioMetadata);
+            gtcs = new GeoTiffMetadata2CRSAdapter(hints);
+            
             // //
             //
             // get the CRS INFO
@@ -56,18 +39,25 @@
             final Object tempCRS = this.hints.get(Hints.DEFAULT_COORDINATE_REFERENCE_SYSTEM);
             if (tempCRS != null) {
                 this.crs = (CoordinateReferenceSystem) tempCRS;
-                LOGGER.log(Level.WARNING, "Using forced coordinate reference system " + crs.toWKT());
+                if (LOGGER.isLoggable(Level.FINE))
+                    LOGGER.log(Level.FINE, "Using forced coordinate reference system");
             } else {
-                if (useWorldFile) {
-                    foundCrs = Utils.getCRS(source);
-                }
-                crs = foundCrs;
+                // check metadata first
+                if (metadata.hasGeoKey()&& gtcs != null)
+                    crs = gtcs.createCoordinateSystem(metadata);
+
+                if (crs == null)
+                    crs = Utils.getCRS(source);
+            }
+
+            if (crs == null){
+            if(LOGGER.isLoggable(Level.WARNING))
+                LOGGER.warning("Coordinate Reference System is not available");
+                crs = AbstractGridFormat.getDefaultCRS();
             }
     
-            if (crs == null) {
-                throw new DataSourceException("Coordinate Reference System is not available");
-            }
-    
+            if (metadata.hasNoData())
+                noData = metadata.getNoData();
             // //
             //
             // get the dimension of the hr image and build the model as well as
@@ -81,8 +71,8 @@
             hrLayout = new RasterLayout(0, 0, hrWidth, hrHeight, 0, 0, hrTileW, hrTileH);
             final Rectangle actualDim = new Rectangle(0, 0, hrWidth, hrHeight);
             originalGridRange = new GridEnvelope2D(actualDim);
-    
-            if (!useWorldFile && gtcs != null) {
+
+            if (gtcs != null&& metadata!=null&& (metadata.hasModelTrasformation()||(metadata.hasPixelScales()&&metadata.hasTiePoints()))) {
                 this.raster2Model = GeoTiffMetadata2CRSAdapter.getRasterToModel(metadata);
             } else {
                 this.raster2Model = Utils.parseWorldFile(source);
@@ -161,7 +151,6 @@
             readParam.setSourceRegion(new Rectangle(0, 0, 4, 4));
             final BufferedImage sampleImage = reader.read(0, readParam);
             baseImageType = new ImageTypeSpecifier(sampleImage);
-            reader.dispose();
         } catch (Throwable e) {
             throw new DataSourceException(e);
         } finally {
