@@ -1,4 +1,21 @@
 	public void run() {
+	    // did we create a local private tile cache or not?
+	    boolean localTileCache= false;
+            //
+            // creating the image to use for the successive
+            // subsampling
+            //
+            TileCache baseTC= JAI.getDefaultInstance().getTileCache();
+
+            final TCTool tc= new TCTool((SunTileCache)baseTC);
+            if(baseTC==null){
+                localTileCache=true;
+                final long tilecacheSize=super.getTileCacheSize();
+                baseTC= JAI.createTileCache();
+                baseTC.setMemoryCapacity(tilecacheSize);
+                baseTC.setMemoryThreshold(0.75f);   
+            }	    
+	    
 		//
 		// CHECK INPUT DIRECTORIES/FILES
 		//
@@ -65,8 +82,7 @@
 
 			ImageInputStream stream=null;
 			ImageWriter writer =null;
-			ImageOutputStream streamOut=null;
-			TileCache baseTC= null;			
+			ImageOutputStream streamOut=null;	
 			RenderedOp currentImage = null;
 			RenderedOp newImage=null;				
 			try{
@@ -169,26 +185,6 @@
 				writer.addIIOWriteWarningListener(writeProgressListener);
 				ImageWriteParam param = writer.getDefaultWriteParam();
 
-//				// can we tile this image? (TIFF or JPEG2K)
-//				if (!(param.canWriteTiles())) {
-//					message = new StringBuilder("This format do not support tiling!");
-//					if (LOGGER.isLoggable(Level.SEVERE)) {
-//						LOGGER.severe(message.toString());
-//					}
-//					fireEvent(message.toString(),((fileBeingProcessed * 100.0) / numFiles));
-//					break;
-//				}
-//
-//				// can we write a sequence for these images?
-//				if (!(writer.canInsertImage(numImages))) {
-//					message = new StringBuilder("This format do not support embedded overviews, proceeding with external!");
-//					if (LOGGER.isLoggable(Level.SEVERE)) {
-//						LOGGER.severe(message.toString());
-//					}
-//					fireEvent(message.toString(),((fileBeingProcessed * 100.0) / numFiles));
-//					break;
-//
-//				}
 
 				//
 				// setting tiling on the first image using writing parameters
@@ -207,18 +203,7 @@
 					param.setCompressionQuality((float) this.compressionRatio);
 				}
 
-				//
-				// creating the image to use for the successive
-				// subsampling
-				//
-				if(this.getTileCacheSize()<=0){
-                                    baseTC= JAI.getDefaultInstance().getTileCache();
-				}else{
-				    final long tilecacheSize=super.getTileCacheSize();
-				    baseTC= JAI.createTileCache();
-				    baseTC.setMemoryCapacity(tilecacheSize);
-				    baseTC.setMemoryThreshold(0.75f);   
-				}
+
 							
 				
 				final RenderingHints newHints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout);
@@ -242,6 +227,9 @@
 				}
 				fireEvent(message.toString(),((fileBeingProcessed * 100.0) / numFiles));
 				int i=0;
+				//
+				// OVERVIEWS CYLE
+				//
 				for (overviewInProcess = 0; overviewInProcess < numSteps; overviewInProcess++) {
 
 					message = new StringBuilder("Subsampling step ").append(overviewInProcess).append(" of image  ").append(fileBeingProcessed);
@@ -300,11 +288,9 @@
 					}
 					fireEvent(message.toString(),
 							((fileBeingProcessed * 100.0) / numFiles));
-
-					// flushing cache on the old image which we are not going to use anymore
-					baseTC.flush();
-					
-					// switching caches and images
+			
+					// switching images
+					currentImage.dispose(); //dispose old image
 					currentImage = newImage;
 
 					i++;
@@ -324,8 +310,8 @@
 			}finally{
 				// clean up
 				
-				// clean caches
-				if(baseTC!=null)
+				// clean caches if they are local
+				if(localTileCache&&baseTC!=null)
 				    try{
 				        baseTC.flush();
 				    } catch (Exception e) {
@@ -333,13 +319,6 @@
 				
 				//
 				// free everything
-				try {
-					if(streamOut!=null)
-					    streamOut.flush();
-				} catch (Throwable e) {
-					if(LOGGER.isLoggable(Level.FINE))
-						LOGGER.log(Level.FINE,e.getLocalizedMessage(),e);
-				}
 				try {
 				    if(streamOut!=null)
                                         streamOut.close();
