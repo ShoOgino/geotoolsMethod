@@ -6,23 +6,31 @@
         String fid = null;
         try {
             //
+            // Get flag
+            //
+            boolean bHasNext = hasNext();
+            //
             // Has more features?
             //
-            if (hasNext()) {
+            if (isUpdating() && bHasNext) {
                 //
                 // Grab next feature matching given query
                 //
-                eNext = eReader.next(); 
+                eNext = eReader.next();
                 //
-                // Finished 
+                // Create live copy
                 //
-                return eNext;
+                eLive = new ESimpleFeatureImpl(eNext, eReader.eTx);
+                //
+                // Finished
+                //
+                return eLive;
                 
-            } else {
+            } else if(isAppending()) {
                 //
                 //  No more EObject found, create new from structure
                 //
-                EFeature eFeature = eNewInstance();                
+                EFeature eFeature = eNewInstance();
                 //
                 // Get default values
                 //
@@ -36,6 +44,15 @@
                 //
                 return (ESimpleFeature)eFeature.getData(eReader.eTx);
             }
+            //
+            // Illegal writer mode
+            //
+            if(bHasNext) {
+                throw new IOException("EFeatureWriter does allow updates");
+            } else {
+                throw new IOException("EFeatureWriter does allow appending");                
+            }
+            
         } catch (IllegalAttributeException e) {
             String message = "Problem creating feature "
                     + (fid != null ? fid : "");
