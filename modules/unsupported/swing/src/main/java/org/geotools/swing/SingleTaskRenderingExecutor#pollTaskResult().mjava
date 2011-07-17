@@ -1,18 +1,17 @@
     private void pollTaskResult() {
-        if (!taskResult.isDone()) {
+        if (!taskFuture.isDone()) {
             return;
         }
 
-        TaskResult result = TaskResult.PENDING;
+        RenderingTask.Status result = RenderingTask.Status.PENDING;
 
         try {
-            result = taskResult.get();
+            result = taskFuture.get();
         } catch (Exception ex) {
             throw new IllegalStateException("When getting rendering result", ex);
         }
 
-        watcher.cancel(false);
-        taskRunning.set(false);
+        watcher.cancel(true);
 
         /*
          * We zero the cancel latch here because it's possible that the job
@@ -22,17 +21,18 @@
          */
         cancelLatch.countDown();
 
+        RenderingExecutorEvent event = new RenderingExecutorEvent(this, task.getId());
         switch (result) {
             case CANCELLED:
-                mapPane.onRenderingCancelled();
+                listener.onRenderingCancelled(event);
                 break;
 
             case COMPLETED:
-                mapPane.onRenderingCompleted();
+                listener.onRenderingCompleted(event);
                 break;
 
             case FAILED:
-                mapPane.onRenderingFailed();
+                listener.onRenderingFailed(event);
                 break;
         }
     }
