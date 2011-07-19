@@ -7,6 +7,8 @@
             Graphics2D graphics,
             RenderingExecutorListener listener) {
         
+        long rtnValue = RenderingExecutor.TASK_REJECTED;
+        
         if (taskExecutor.isShutdown()) {
             throw new IllegalStateException("Calling submit after the executor has been shutdown");
         }
@@ -25,7 +27,7 @@
         }
         
         
-        if (taskFuture == null || taskFuture.isDone()) {
+        if (!hasUnfinishedTask()) {
             try {
                 // wait for any cancelled task to finish its shutdown
                 cancelLatch.await();
@@ -37,17 +39,9 @@
             this.listener = listener;
             notifiedStart.set(false);
             taskFuture = taskExecutor.submit(task);
-            
-            watcher = watchExecutor.scheduleAtFixedRate(new Runnable() {
-                public void run() {
-                    pollTaskResult();
-                }
-            }, DEFAULT_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL, TimeUnit.MILLISECONDS);
-            
-            return task.getId();
-            
-        } else {
-            return RenderingExecutor.TASK_REJECTED;
+            rtnValue = task.getId();
         }
+        
+        return rtnValue;
     }
 

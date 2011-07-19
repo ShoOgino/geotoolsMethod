@@ -1,5 +1,7 @@
     private void pollTaskResult() {
-        if (!taskFuture.isDone()) {
+        if (taskFuture == null) {
+            return;
+        } else if (!taskFuture.isDone()) {
             notifyStarted(false);
             return;
         }
@@ -7,24 +9,26 @@
         // call again in case the task was so quick we missed the start
         notifyStarted(true);
         
-        RenderingTask.Status result = RenderingTask.Status.PENDING;
+        RenderingTask.Status result = null;
+        long taskId = task.getId();
         try {
             result = taskFuture.get();
         } catch (Exception ex) {
             throw new IllegalStateException("When getting rendering result", ex);
         }
 
-        watcher.cancel(true);
-
         /*
          * We zero the cancel latch here because it's possible that the job
          * completed (or failed) before it could be cancelled. When this statement 
-         * was only executed for the CANCELLED case (below) it led to 
-         * apps somtimes freezing.
+         * was only executed for the CANCELLED case (below) it caused apps
+         * to freeze occasionally.
          */
         cancelLatch.countDown();
+        
+        task = null;
+        taskFuture = null;
 
-        RenderingExecutorEvent event = new RenderingExecutorEvent(this, task.getId());
+        RenderingExecutorEvent event = new RenderingExecutorEvent(this, taskId);
         switch (result) {
             case CANCELLED:
                 listener.onRenderingCancelled(event);
