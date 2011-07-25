@@ -1,0 +1,90 @@
+        @SuppressWarnings("unchecked")
+        public Map<String, Object> execute(Map<String, Object> input, ProgressListener monitor)
+                throws ProcessException {
+
+            Object[] args = buildProcessArguments(method, input, monitor, false);
+
+            // invoke and grab result
+            Object value = null;
+            try {
+                value = method.invoke(targetObject, args);
+            } catch (IllegalAccessException e) {
+                // report the exception and exit
+                if (monitor != null) {
+                    monitor.exceptionOccurred(e);
+                }
+                throw new ProcessException(e);
+            } catch (InvocationTargetException e) {
+                Throwable t = e.getTargetException();
+                // report the exception and exit
+                if (monitor != null) {
+                    monitor.exceptionOccurred(t);
+                }
+                if (t instanceof ProcessException) {
+                    throw ((ProcessException) t);
+                } else {
+                    throw new ProcessException(t);
+                }
+            }
+
+            // build up the result
+            if (value instanceof Object[]) {
+                // handle the case the implementor used a positional array for
+                // returning multiple outputs
+                Object values[] = (Object[]) value;
+                Map<String, Object> result = new LinkedHashMap<String, Object>();
+                int i = 0;
+                for (Annotation annotation : method.getAnnotations()) {
+                    if (i >= values.length)
+                        break; // no more values to encode
+                    Object obj = values[i];
+
+                    if (annotation instanceof DescribeResult) {
+                        DescribeResult info = (DescribeResult) annotation;
+                        addResult(result, obj, info);
+                    }
+                    if (annotation instanceof DescribeResults) {
+                        DescribeResults info = (DescribeResults) annotation;
+                        for (DescribeResult dr : info.value()) {
+                            addResult(result, obj, dr);
+                        }
+                    }
+                }
+                return result;
+            } else if (value instanceof Map) {
+                Map<String, Object> result = new LinkedHashMap<String, Object>();
+                Map<String, Object> map = (Map<String, Object>) value;
+                for (Annotation annotation : method.getAnnotations()) {
+                    if (annotation instanceof DescribeResult) {
+                        DescribeResult info = (DescribeResult) annotation;
+                        Object resultValue = map.get(info.name());
+                        if(resultValue != null) {
+                            addResult(result, resultValue, info);
+                        }
+                    }
+                    if (annotation instanceof DescribeResults) {
+                        DescribeResults info = (DescribeResults) annotation;
+                        for (DescribeResult dr : info.value()) {
+                            Object resultValue = map.get(dr.name());
+                            if(resultValue != null) {
+                                addResult(result, resultValue, dr);
+                            }
+                        }
+                    }
+                }
+                return result;
+            } else if (!Void.class.equals(method.getReturnType())) {
+                // handle the single result case
+                Map<String, Object> result = new LinkedHashMap<String, Object>();
+                DescribeResult dr = method.getAnnotation(DescribeResult.class);
+                if (dr != null) {
+                    result.put(dr.name(), value);
+                } else {
+                    result.put("result", value);
+                }
+                return result;
+            }
+            // handle the case where the method returns void
+            return null;
+        }
+
