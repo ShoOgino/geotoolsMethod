@@ -1,0 +1,46 @@
+    @DescribeResult(name = "buffers", description = "The buffers. Each feature has a 'geom' attribute and a 'radius' attribute")
+    public SimpleFeatureCollection execute(
+            @DescribeParameter(name = "center", description = "The buffers center") Point center,
+            @DescribeParameter(name = "crs", description = "The coordinate reference system "
+                    + "in which the point expressed and the points will be generated", min = 0) CoordinateReferenceSystem crs,
+            @DescribeParameter(name = "distances", description = "The buffer distances, in meters") double[] distances,
+            @DescribeParameter(name = "quadrantSegments", description = "Number of segments per quadrant "
+                    + "in the generated buffers (8 by default)", min = 0) Integer quadrantSegments,
+            ProgressListener listener) {
+        SimpleFeatureTypeBuilder tb = new SimpleFeatureTypeBuilder();
+        tb.add("geom", Polygon.class, crs);
+        tb.add("radius", Double.class);
+        tb.setName("buffers");
+        SimpleFeatureType schema = tb.buildFeatureType();
+
+        if (quadrantSegments == null) {
+            quadrantSegments = 8;
+        }
+
+        // build the buffer geometry generator
+        BufferGenerator generator;
+        if (crs != null) {
+            CoordinateReferenceSystem hor = CRS.getHorizontalCRS(crs);
+            if (hor instanceof GeographicCRS) {
+                generator = new GeographicGenerator(center, quadrantSegments, crs);
+            } else {
+                Unit unit = hor.getCoordinateSystem().getAxis(0).getUnit();
+                UnitConverter converter = SI.METER.getConverterTo(unit);
+                generator = new MetricGenerator(center, quadrantSegments, converter);
+            }
+        } else {
+            generator = new MetricGenerator(center, quadrantSegments, UnitConverter.IDENTITY);
+        }
+
+        // we don't expect million of directions, so we use a simple in memory collection
+        SimpleFeatureCollection result = new ListFeatureCollection(schema);
+        SimpleFeatureBuilder fb = new SimpleFeatureBuilder(schema);
+        for (int i = 0; i < distances.length; i++) {
+            fb.add(generator.getBuffer(distances[i]));
+            fb.add(distances[i]);
+            result.add(fb.buildFeature("buffers." + (i + 1)));
+        }
+
+        return result;
+    }
+

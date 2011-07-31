@@ -1,0 +1,18 @@
+    @DescribeResult(name = "result", description = "The feature collection bounds")
+    public SimpleFeatureCollection execute(
+            @DescribeParameter(name = "features", description = "The feature collection to be simplified") SimpleFeatureCollection features,
+            @DescribeParameter(name = "clip", description = "The clipping area (in the same SRS as the feature collection") Geometry clip)
+            throws ProcessException {
+        // only get the geometries in the bbox of the clip
+        Envelope box = clip.getEnvelopeInternal();
+        FilterFactory ff = CommonFactoryFinder.getFilterFactory(null);
+        String srs = null;
+        if(features.getSchema().getCoordinateReferenceSystem() != null) {
+            srs = CRS.toSRS(features.getSchema().getCoordinateReferenceSystem());
+        }
+        BBOX bboxFilter = ff.bbox("", box.getMinX(), box.getMinY(), box.getMaxX(), box.getMaxY(), srs);
+        
+        // return dynamic collection clipping geometries on the fly
+        return new ClippingFeatureCollection(features.subCollection(bboxFilter), clip);
+    }
+

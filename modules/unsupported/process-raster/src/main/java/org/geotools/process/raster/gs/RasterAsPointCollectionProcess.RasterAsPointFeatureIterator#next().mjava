@@ -1,0 +1,55 @@
+        public SimpleFeature next() throws NoSuchElementException {
+            if(!hasNext())
+            	throw new NoSuchElementException("Index beyond size:"+index+">"+size);
+            
+            // iterate
+            if(iterator.finishedPixels())
+            	throw new NoSuchElementException("Index beyond size:"+index+">"+size);
+            if(iterator.finishedLines())
+            	throw new NoSuchElementException("Index beyond size:"+index+">"+size);                    
+            
+            // ID
+            final int id=index;
+            
+            // POINT
+            // can we reuse the coord?
+            coord.x= 0.5+fc.rasterBounds.x+index%fc.rasterBounds.width;
+            coord.y=0.5+ fc.rasterBounds.y+index/fc.rasterBounds.width ;
+            final Point point = RasterAsPointFeatureCollection.geometryFactory.createPoint( coord );
+            try {
+				fb.add(JTS.transform(point, fc.mt2D));
+			} catch (MismatchedDimensionException e) {
+				final NoSuchElementException nse= new NoSuchElementException();
+				nse.initCause(e);
+				throw nse;
+			} catch (TransformException e) {
+				final NoSuchElementException nse= new NoSuchElementException();
+				nse.initCause(e);
+				throw nse;
+			}
+            
+			// VALUES
+            // loop on bands
+			iterator.getPixel(temp);
+			for(double d:temp){
+				// I exploit the internal converters to go from double to whatever the type is
+				// TODO is this correct or we can do more.
+				fb.add(d);
+			}
+			
+            
+            // do we need to wrap the line??
+            if(iterator.nextPixelDone()){
+            	if(!iterator.nextLineDone())
+            		iterator.startPixels();
+            }
+            
+            // return
+            final SimpleFeature returnValue= fb.buildFeature(String.valueOf(id));
+            
+            // increase index and iterator
+            index++;
+            
+            return returnValue;
+        }
+
