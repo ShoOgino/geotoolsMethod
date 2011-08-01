@@ -1,0 +1,41 @@
+    /**
+     * Gets the {@code MathTransform} used to convert coordinates from the
+     * projection being used by the {@code MapContent} to that of the
+     * {@code Layer}.
+     *
+     * @return the transform or {@code null} if the layer's CRS is the same
+     *     as that of the map content, or if either has no CRS defined
+     */
+    protected MathTransform getContentToLayerTransform() {
+        if (transform == null && !transformFailed) {
+            MapContent content = getMapContent();
+            Layer layer = getLayer();
+
+            if (content != null && layer != null) {
+                CoordinateReferenceSystem contentCRS = content.getCoordinateReferenceSystem();
+                CoordinateReferenceSystem layerCRS =
+                        layer.getFeatureSource().getSchema().getCoordinateReferenceSystem();
+
+                if (contentCRS != null && layerCRS != null) {
+                    if (CRS.equalsIgnoreMetadata(contentCRS, layerCRS)) {
+                        transform = new AffineTransform2D(new AffineTransform());
+                        
+                    } else {
+                        try {
+                            transform = CRS.findMathTransform(contentCRS, layerCRS, true);
+                        } catch (Exception ex) {
+                            LOGGER.warning("Can't transform map content CRS to layer CRS");
+                            transformFailed = true;
+                        }
+                    }
+                }
+
+            } else {
+                // one or both of content and layer CRS is null
+                transform = new AffineTransform2D(new AffineTransform());
+            }
+        }
+
+        return transform;
+    }
+
