@@ -1,0 +1,91 @@
+    /**
+     * Creates a new map pane with the given renderer and map content.
+     * Either or both of {@code renderer} and {@code content} may be
+     * {@code null} when the {@link #setRenderer(GTRenderer)} and 
+     * {@link #setMapContent(MapContent)} methods are to be called 
+     * subsequently. If {@code executor} is {@code null}, a default
+     * rendering executor (an instance of {@linkplain DefaultRenderingExecutor})
+     * will be set.
+     *
+     * @param renderer the renderer to use for drawing layers
+     * @param content the {@code MapContent} instance containing layers to 
+     *     display
+     * @param executor the rendering executor
+     */
+    public JLayeredMapPane(GTRenderer renderer, MapContent content, RenderingExecutor executor) {
+        imageOrigin = new Point(0, 0);
+        setBackground(DEFAULT_BACKGROUND_COLOR);
+        baseImages = new ConcurrentHashMap<Layer, BufferedImage>();
+        acceptRepaintRequests = true;
+        baseImageMoved = new AtomicBoolean();
+        clearLabelCache = new AtomicBoolean();
+
+        /*
+         * An interval is set for delayed painting to avoid
+         * flickering when the user is drag-resizing the parent
+         * container of this map pane.
+         *
+         * Using a ComponentListener doesn't work because, unlike
+         * a JFrame, the pane receives a stream of events during
+         * drag-resizing.
+         */
+        resizingPaintDelay = DEFAULT_RESIZING_PAINT_DELAY;
+
+        doSetRenderer(renderer);
+        doSetMapContent(content);
+        doSetRenderingExecutor(executor);
+
+        toolManager = new MapToolManager(this);
+
+        dragBox = new DragBox();
+        this.addMouseListener(dragBox);
+        this.addMouseMotionListener(dragBox);
+
+        this.addMouseListener(toolManager);
+        this.addMouseMotionListener(toolManager);
+        this.addMouseWheelListener(toolManager);
+
+        /*
+         * Listen for mouse entered events to (re-)set the
+         * current tool cursor, otherwise the cursor seems to
+         * default to the standard cursor sometimes (at least
+         * on OSX)
+         */
+        this.addMouseListener(new MouseInputAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                super.mouseEntered(e);
+                CursorTool tool = toolManager.getCursorTool();
+                if (tool != null) {
+                    JLayeredMapPane.this.setCursor(tool.getCursor());
+                }
+            }
+        });
+
+
+        /*
+         * Note: we listen for both resizing events (with HierarchyBoundsListener) 
+         * and showing events (with HierarchyListener). Although showing
+         * is often accompanied by resizing this is not reliable in Swing.
+         */
+        addHierarchyListener(new HierarchyListener() {
+            @Override
+            public void hierarchyChanged(HierarchyEvent he) {
+                if ((he.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0) {
+                    if (isShowing()) {
+                        onShownOrResized();
+                    }
+                }
+            }
+        });
+
+        addHierarchyBoundsListener(new HierarchyBoundsAdapter() {
+            @Override
+            public void ancestorResized(HierarchyEvent he) {
+                if (isShowing()) {
+                    onShownOrResized();
+                }
+            }
+        });
+    }
+
