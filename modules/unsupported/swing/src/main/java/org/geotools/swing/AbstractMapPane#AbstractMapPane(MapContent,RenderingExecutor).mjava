@@ -1,0 +1,69 @@
+    public AbstractMapPane(MapContent content, RenderingExecutor executor) {
+        doSetMapContent(content);
+        doSetRenderingExecutor(executor);
+
+        setBackground(DEFAULT_BACKGROUND_COLOR);
+        
+        paneTaskExecutor = Executors.newSingleThreadScheduledExecutor();
+
+        paintDelay = DEFAULT_PAINT_DELAY;
+        
+        toolManager = new MapToolManager(this);
+
+        acceptRepaintRequests = new AtomicBoolean(true);
+        clearLabelCache = new AtomicBoolean(true);
+        imageOrigin = new Point(0, 0);
+        baseImageMoved = new AtomicBoolean();
+
+        dragBox = new MouseDragBox(this);
+        this.addMouseListener(dragBox);
+        this.addMouseMotionListener(dragBox);
+
+        this.addMouseListener(toolManager);
+        this.addMouseMotionListener(toolManager);
+        this.addMouseWheelListener(toolManager);
+
+        /*
+         * Listen for mouse entered events to (re-)set the
+         * current tool cursor, otherwise the cursor seems to
+         * default to the standard cursor sometimes (at least
+         * on OSX)
+         */
+        this.addMouseListener(new MouseInputAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                super.mouseEntered(e);
+                CursorTool tool = toolManager.getCursorTool();
+                if (tool != null) {
+                    setCursor(tool.getCursor());
+                }
+            }
+        });
+
+
+        /*
+         * Note: we listen for both resizing events (with HierarchyBoundsListener) 
+         * and showing events (with HierarchyListener). Although showing
+         * is often accompanied by resizing this is not reliable in Swing.
+         */
+        addHierarchyListener(new HierarchyListener() {
+            @Override
+            public void hierarchyChanged(HierarchyEvent he) {
+                if ((he.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0) {
+                    if (isShowing()) {
+                        onShownOrResized();
+                    }
+                }
+            }
+        });
+
+        addHierarchyBoundsListener(new HierarchyBoundsAdapter() {
+            @Override
+            public void ancestorResized(HierarchyEvent he) {
+                if (isShowing()) {
+                    onShownOrResized();
+                }
+            }
+        });
+    }
+
