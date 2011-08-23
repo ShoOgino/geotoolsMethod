@@ -1,4 +1,4 @@
-    public RenderedImage loadRaster(
+    public GranuleLoadingResult loadRaster(
             final ImageReadParam readParameters, 
             final int overviewIndex,
             final ReferencedEnvelope cropBBox, 
@@ -42,7 +42,7 @@
             reader.setInput(inStream);
 
             // get selected level and base level dimensions
-            final Level selectedlevel = getLevel(reader,request, imageChoice, overviewIndex);
+            final GranuleOverviewLevelDescriptor selectedlevel = getLevel(reader,request, imageChoice, overviewIndex);
 
             // now create the crop grid to world which can be used to decide
             // which source area we need to crop in the selected level taking
@@ -113,59 +113,23 @@
             // raster space
             final AffineTransform afterDecimationTranslateTranform = XAffineTransform.getTranslateInstance(sourceArea.x, sourceArea.y);
 
+            // now we need to go back to the base level raster space
+            final AffineTransform backToBaseLevelScaleTransform =selectedlevel.getBaseToLevelTransform();
+            
             // now create the overall transform
-            final AffineTransform finalTransform = AffineTransform.getRotateInstance(0);
-            if (!XAffineTransform.isIdentity(afterDecimationTranslateTranform, Utils.AFFINE_IDENTITY_EPS)) {
-                finalTransform.concatenate(afterDecimationTranslateTranform);
-            }
-            if (!XAffineTransform.isIdentity(decimationScaleTranform, Utils.AFFINE_IDENTITY_EPS)) {
-                finalTransform.concatenate(decimationScaleTranform);
-            }
-
-
-            final InterpolationNearest interpolation = new InterpolationNearest();
-            // paranoiac check to avoid that JAI freaks out when computing its
-            // internal layouT on images that are too small
-            Rectangle2D finalLayout = ImageUtilities.layoutHelper(raster,
-                    (float) finalTransform.getScaleX(),
-                    (float) finalTransform.getScaleY(),
-                    (float) finalTransform.getTranslateX(),
-                    (float) finalTransform.getTranslateY(), interpolation);
-            if (finalLayout.isEmpty()) {
-                if (LOGGER.isLoggable(java.util.logging.Level.FINE)) {
-                    LOGGER.fine("Unable to create a rasterGranuleLoader " + this.toString()
-                            + " due to jai scale bug");
-                }
-                return null;
-            }
-
-            // apply the affine transform conserving indexed color model
-            final RenderingHints localHints = new RenderingHints(JAI.KEY_REPLACE_INDEX_COLOR_MODEL,interpolation instanceof InterpolationNearest? Boolean.FALSE:Boolean.TRUE);
-            if (XAffineTransform.isIdentity(finalTransform, Utils.AFFINE_IDENTITY_EPS)) {
-                return raster;
-            } else {
-                //
-                // In case we are asked to use certain tile dimensions we tile
-                // also at this stage in case the read type is Direct since
-                // buffered images comes up untiled and this can affect the
-                // performances of the subsequent affine operation.
-                //
-                final Dimension tileDimensions=request.getTileDimensions();
-                if(tileDimensions!=null&&request.getReadType().equals(ReadType.DIRECT_READ)) {
-                        final ImageLayout layout = new ImageLayout();
-                        layout.setTileHeight(tileDimensions.width).setTileWidth(tileDimensions.height);
-                        localHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT,layout));
-                } 
-                // border extender
-                localHints.add(ImageUtilities.BORDER_EXTENDER_HINTS);
-
-//                ImageWorker iw = new ImageWorker(raster);
-//                iw.setRenderingHints(localHints);
-//                iw.affine(finalTransform, interpolation, request.getBackgroundValues());
-//                return iw.getRenderedImage();
-                
-                return AffineDescriptor.create(raster, finalTransform, interpolation,request.getBackgroundValues(),localHints);
-            }
+            final AffineTransform finalRaster2Model = new AffineTransform(baseGridToWorld);
+            finalRaster2Model.concatenate(CoverageUtilities.CENTER_TO_CORNER);
+            
+            if(!XAffineTransform.isIdentity(backToBaseLevelScaleTransform, Utils.AFFINE_IDENTITY_EPS))
+                    finalRaster2Model.concatenate(backToBaseLevelScaleTransform);
+            if(!XAffineTransform.isIdentity(afterDecimationTranslateTranform, Utils.AFFINE_IDENTITY_EPS))
+                    finalRaster2Model.concatenate(afterDecimationTranslateTranform);
+            if(!XAffineTransform.isIdentity(decimationScaleTranform, Utils.AFFINE_IDENTITY_EPS))
+                    finalRaster2Model.concatenate(decimationScaleTranform);
+            
+            // return raster + its own transformation
+            return  new GranuleLoadingResult(raster, finalRaster2Model);
+            
 
         } catch (IllegalStateException e) {
             if (LOGGER.isLoggable(java.util.logging.Level.WARNING)) {
