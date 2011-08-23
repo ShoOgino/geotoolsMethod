@@ -10,8 +10,6 @@
             LOGGER.fine("Loading raster data for GranuleDescriptor " + this.toString());
         }
         ImageInputStream inStream = null;
-        int imageChoice = overviewIndex;
-        File file = granuleFile;
 
         final ReferencedEnvelope bbox = new ReferencedEnvelope(granuleBBOX);
         // intersection of this tile bound with the current crop bbox
@@ -23,15 +21,11 @@
             //
             // get info about the raster we have to read
             //
-            
-            // EXTERNAL Overviews management
-            if (request.rasterManager.parent.extOvrImgChoice >= 0 && overviewIndex >= request.rasterManager.parent.extOvrImgChoice) {
-                file = request.rasterManager.parent.ovrSource;
-                inStream = request.rasterManager.parent.ovrInStreamSPI.createInputStreamInstance(file, ImageIO.getUseCache(), ImageIO.getCacheDirectory());
-                imageChoice = overviewIndex - request.rasterManager.parent.extOvrImgChoice;
-            } else {
-                inStream = ImageIOExt.createImageInputStream(file);    
-            }
+            // get selected level and base level dimensions
+            final GranuleLevelDescriptor selectedlevel=granuleLevels.get(Integer.valueOf(overviewIndex));
+            final File input = selectedlevel.source;
+            inStream = selectedlevel.streamSPI.createInputStreamInstance(input, ImageIO.getUseCache(), ImageIO.getCacheDirectory());
+            int imageChoice= selectedlevel.imageIndex;
             
             if (inStream == null) {
                 return null;
@@ -41,14 +35,11 @@
             reader = Utils.TIFFREADERFACTORY.createReaderInstance();
             reader.setInput(inStream);
 
-            // get selected level and base level dimensions
-            final GranuleOverviewLevelDescriptor selectedlevel = getLevel(reader,request, imageChoice, overviewIndex);
-
             // now create the crop grid to world which can be used to decide
             // which source area we need to crop in the selected level taking
             // into account the scale factors imposed by the selection of this
             // level together with the base level grid to world transformation
-            final MathTransform2D cropGridToWorldCorner = (MathTransform2D) ProjectiveTransform.create(selectedlevel.gridToWorldTransform);
+            final MathTransform2D cropGridToWorldCorner = (MathTransform2D) ProjectiveTransform.create(selectedlevel.gridToWorldTransformCorner);
             final MathTransform2D cropWorldToGrid = cropGridToWorldCorner.inverse();
 
             // computing the crop source area which leaves straight into the
@@ -76,7 +67,7 @@
             readParameters.setSourceRegion(sourceArea);
 
             // read
-            RenderedImage raster = request.getReadType().read(readParameters, imageChoice, file, selectedlevel.rasterDimensions, tileDimension);
+            RenderedImage raster = request.getReadType().read(readParameters, imageChoice, input, selectedlevel.rasterDimensions, tileDimension);
             if (raster == null) {
                 return null;
             }
