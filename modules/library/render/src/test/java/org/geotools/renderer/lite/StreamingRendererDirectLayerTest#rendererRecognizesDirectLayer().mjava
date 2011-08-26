@@ -1,0 +1,37 @@
+    @Test
+    public void rendererRecognizesDirectLayer() {
+        MapContent mapContent = new MapContent();
+        mapContent.addLayer( new MockLayer() );
+        
+        StreamingRenderer renderer = new StreamingRenderer();
+        renderer.setMapContent(mapContent);
+        
+        BufferedImage image = new BufferedImage(SCREEN.width, SCREEN.height, BufferedImage.TYPE_INT_ARGB);
+        mapContent.getViewport().setScreenArea(SCREEN);
+        
+        Graphics2D destGraphics = image.createGraphics();
+        renderer.paint(destGraphics, SCREEN, WORLD);
+        
+        // PerceptualDiff could be used to examine the resulting image.
+        // For now we just do a quick and dirty check
+        Map<Integer, Integer> colorFreq = getColorFreq(image);
+        assertEquals(2, colorFreq.size());
+        assertTrue(colorFreq.containsKey(Color.BLACK.getRGB()));
+        assertTrue(colorFreq.containsKey(Color.WHITE.getRGB()));
+        
+        double ratio = (double) colorFreq.get(Color.BLACK.getRGB()) /
+                colorFreq.get(Color.WHITE.getRGB());
+        
+        assertTrue(ratio > 0.95 && ratio < 1.05);
+        
+        if (TestData.isInteractiveTest()) {
+            CountDownLatch latch = new CountDownLatch(1);
+            displayImage(image, latch);
+            try {
+                latch.await();
+            } catch (InterruptedException ex) {
+                throw new RuntimeException(ex);
+            }
+        }
+    }
+
