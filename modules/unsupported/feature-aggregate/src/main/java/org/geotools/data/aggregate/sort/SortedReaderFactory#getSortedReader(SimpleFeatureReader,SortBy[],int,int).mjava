@@ -1,0 +1,84 @@
+    /**
+     * Builds a reader that will sort the specified reader contents following the {@link SortBy}
+     * directives given. The reader provided will be closed by this routine.
+     * 
+     * @param reader The reader whose contents need sorting
+     * @param sortBy The sorting directives
+     * @param maxFeatures The max number of features to keep in memory
+     * @param maxFiles The max number of files the merge/sort algorithm can keep open concurrently
+     * @return
+     * @throws IOException
+     */
+    public static final SimpleFeatureReader getSortedReader(SimpleFeatureReader reader,
+            SortBy[] sortBy, int maxFeatures, int maxFiles) throws IOException {
+        Comparator<SimpleFeature> comparator = getComparator(sortBy);
+
+        // easy case, no sorting needed
+        if (comparator == null) {
+            return reader;
+        }
+
+        // double check
+        SimpleFeatureType schema = reader.getFeatureType();
+        if (!canSort(schema, sortBy)) {
+            throw new IllegalArgumentException(
+                    "The specified reader cannot be sorted, either the "
+                            + "sorting properties are not comparable or the attributes are not serializable");
+        }
+
+        int count = 0;
+        List<File> files = new ArrayList<File>();
+        List<SimpleFeature> features = new ArrayList<SimpleFeature>();
+        boolean cleanFiles = true;
+        try {
+            // read and store into files as necessary
+            while (reader.hasNext()) {
+                SimpleFeature f = reader.next();
+                features.add(f);
+                count++;
+
+                if (count > maxFeatures) {
+                    Collections.sort(features, comparator);
+                    File file = storeToFile(features);
+                    files.add(file);
+                    count = 0;
+                    features.clear();
+                }
+            }
+
+            if (files.isEmpty()) {
+                // simple case, we managed to keep everything in memory, sort and return a
+                // reader based on the collection contents
+                Collections.sort(features, comparator);
+
+                SimpleFeatureIterator fi = new ListFeatureCollection(schema, features).features();
+                return new DelegateSimpleFeatureReader(schema, fi);
+            } else {
+                // we saved at least one file. For the sake of simplicity store the last
+                // partial collection in files as well and then return a merge/sort reader
+                if (count > 0) {
+                    Collections.sort(features, comparator);
+                    File file = storeToFile(features);
+                    files.add(file);
+                }
+
+                // make sure we are not going to keep too many files open
+                if (files.size() > maxFiles) {
+                    reduceFiles(files, maxFiles, schema, comparator);
+                }
+
+                cleanFiles = false;
+                return new MergeSortReader(schema, files, comparator);
+            }
+
+        } finally {
+            if (cleanFiles) {
+                for (File file : files) {
+                    file.delete();
+                }
+            }
+
+            reader.close();
+        }
+    }
+
