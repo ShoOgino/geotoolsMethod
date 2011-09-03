@@ -1,0 +1,54 @@
+    static void writeAttribute(RandomAccessFile raf, AttributeDescriptor ad, Object value)
+            throws IOException {
+        if (value == null) {
+            // null marker
+            raf.writeBoolean(true);
+        } else {
+            // not null, write the contents. This one requires some explanation. We are not
+            // writing any type metadata in the stream for the types we can optimize (primitives,
+            // numbers,
+            // strings and the like). This means we have to be 100% sure the class we're writing is
+            // actually the one we can optimize for, and not some subclass. Thus, we are authorized
+            // to use identity comparison instead of isAssignableFrom or equality, when we read back
+            // it must be as if we did not serialize stuff at all
+            raf.writeBoolean(false);
+            Class<?> binding = ad.getType().getBinding();
+            if (binding == Boolean.class) {
+                raf.writeBoolean((Boolean) value);
+            } else if (binding == Byte.class || binding == byte.class) {
+                raf.writeByte((Byte) value);
+            } else if (binding == Short.class || binding == short.class) {
+                raf.writeShort((Short) value);
+            } else if (binding == Integer.class || binding == int.class) {
+                raf.writeInt((Integer) value);
+            } else if (binding == Long.class || binding == long.class) {
+                raf.writeLong((Long) value);
+            } else if (binding == Float.class || binding == float.class) {
+                raf.writeFloat((Float) value);
+            } else if (binding == Double.class || binding == double.class) {
+                raf.writeDouble((Double) value);
+            } else if (binding == String.class) {
+                raf.writeUTF((String) value);
+            } else if (binding == java.sql.Date.class || binding == java.sql.Time.class
+                    || binding == java.sql.Timestamp.class || binding == java.util.Date.class) {
+                raf.writeLong(((Date) value).getTime());
+            } else if (Geometry.class.isAssignableFrom(binding)) {
+                WKBWriter writer = new WKBWriter();
+                byte[] buffer = writer.write((Geometry) value);
+                int length = buffer.length;
+                raf.writeInt(length);
+                raf.write(buffer);
+            } else {
+                // can't optimize, in this case we use an ObjectOutputStream to write out
+                // full metadata
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                ObjectOutputStream oos = new ObjectOutputStream(bos);
+                oos.writeObject(value);
+                oos.flush();
+                byte[] bytes = bos.toByteArray();
+                raf.writeInt(bytes.length);
+                raf.write(bytes);
+            }
+        }
+    }
+
