@@ -1,0 +1,39 @@
+    /**
+     * Searches for properties files in the specified resource directory and returns
+     * information about each file and the {@code Locales} that it supports.
+     * 
+     * @param resourceDir
+     * @return
+     * @throws IOException 
+     */
+    public List<PropertiesFileInfo> scan(String resourceDir) throws IOException {
+        List<SingleFileInfo> infoList = new ArrayList<SingleFileInfo>();
+        
+        String path = getSelfPath();
+        if (isJarPath(path)) {
+            JarInputStream jarFile = getAsJarFile(path);
+            JarEntry entry;
+            while ((entry = jarFile.getNextJarEntry()) != null) {
+                String name = entry.getName();
+                if (name.startsWith(resourceDir) && name.endsWith("properties")) {
+                    infoList.add(parseEntry(resourceDir.length(), name));
+                }
+            }
+            jarFile.close();
+
+        } else {  // must be running locally
+            File localDir = getAsLocalDir(path);
+            File[] children = localDir.listFiles();
+            for (File child : children) {
+                if (child != null && child.isFile()) {
+                    String name = child.getName();
+                    if (name.endsWith(".properties")) {
+                        infoList.add(parseEntry(0, name));
+                    }
+                }
+            }
+        }
+
+        return createReturnList( infoList );
+    }
+
