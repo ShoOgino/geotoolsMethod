@@ -31,23 +31,35 @@
 				// STEP 1
 				// Getting an ImageIO reader for this coverage.
 				//
-				inStream = ImageIO.createImageInputStream(fileBeingProcessed);
-				if(inStream==null) {
-					fireEvent(Level.INFO,fileBeingProcessed+" has been skipped since we could not get a stream for it", ((fileIndex * 100.0) / numFiles));
-					return;
-				}
+			        // try to use cache
+			        if(cachedStreamSPI!=null ){
+			            inStream=cachedStreamSPI.createInputStreamInstance(fileBeingProcessed);
+			        } 
+			        if(inStream==null ){
+			            // failed, look for a new SPI
+			            cachedStreamSPI= ImageIOExt.getImageInputStreamSPI(fileBeingProcessed);
+			            if(cachedStreamSPI!=null){
+			                inStream=cachedStreamSPI.createInputStreamInstance(fileBeingProcessed);
+			            }
+			            
+			        } 
+    				if(inStream==null) {
+    				    // failed again
+    					fireEvent(Level.INFO,fileBeingProcessed+" has been skipped since we could not get a stream for it", ((fileIndex * 100.0) / numFiles));
+    					return;
+    				}
 				inStream.mark();
 				
 				
-				cachedSPITest: {
+				cachedReaderSPITest: {
 					// there is no cached reader spi, let's look for one
-					if(cachedSPI==null){
+					if(cachedReaderSPI==null){
 						final Iterator<ImageReader> it = ImageIO.getImageReaders(inStream);
 						if (it.hasNext()) {
 							imageioReader = it.next();
 							if(imageioReader!=null){
 								//cache the SPI
-								cachedSPI=imageioReader.getOriginatingProvider();
+								cachedReaderSPI=imageioReader.getOriginatingProvider();
 								imageioReader.setInput(inStream);
 							}
 						} else {
@@ -55,14 +67,14 @@
 						}
 					} else {
 						// we have a cached SPI, let's try to use it
-						if(!cachedSPI.canDecodeInput(inStream)){				
+						if(!cachedReaderSPI.canDecodeInput(inStream)){				
 							// the SPI is no good for this input
-							cachedSPI=null;
+							cachedReaderSPI=null;
 							//take me to the SPI search
-							break cachedSPITest;
+							break cachedReaderSPITest;
 						}
 						// the spi is good
-						imageioReader=cachedSPI.createReaderInstance();
+						imageioReader=cachedReaderSPI.createReaderInstance();
 						imageioReader.setInput(inStream);
 					}
 				}
