@@ -1,13 +1,16 @@
         public boolean hasNext() {
+            logger.finer("HAS NEXT");
             while ((next == null && delegate.hasNext()) || (next == null && added)) {
                 if (complete) {
                     first = delegate.next();
                     intersectedGeometries = null;
                 }
+                logger.finer("control HAS NEXT");
                 for (Object attribute : first.getAttributes()) {
                     if (attribute instanceof Geometry
                             && attribute.equals(first.getDefaultGeometry())) {
                         Geometry currentGeom = (Geometry) attribute;
+
                         if (intersectedGeometries == null && !added) {
                             intersectedGeometries = filteredCollection(currentGeom,
                                     subFeatureCollection);
@@ -19,24 +22,38 @@
                                 SimpleFeature second = iterator.next();
                                 if (currentGeom.getEnvelope().intersects(
                                         ((Geometry) second.getDefaultGeometry()))) {
-                                    attribute = currentGeom.intersection((Geometry) second
-                                            .getDefaultGeometry());
+                                    // compute geometry
+                                    if (intersectionMode == IntersectionMode.INTERSECTION) {
+                                        attribute = currentGeom.intersection((Geometry) second
+                                                .getDefaultGeometry());
+
+                                        GeometryFilterImpl filter = new GeometryFilterImpl(geomType
+                                                .getType().getBinding());
+                                        ((Geometry) attribute).apply(filter);
+                                        attribute = filter.getGeometry();
+                                    } else if (intersectionMode == IntersectionMode.FIRST) {
+                                        attribute = currentGeom;
+                                    } else if (intersectionMode == IntersectionMode.SECOND) {
+                                        attribute = (Geometry) second.getDefaultGeometry();
+                                    }
                                     if (((Geometry) attribute).getNumGeometries() > 0) {
                                         fb.add(attribute);
+                                        
+                                        // add the non geometric attributes
+                                        addAttributeValues(first, retainAttributesFst, fb);
+                                        addAttributeValues(second, retainAttributesSnd, fb);
+                                        // add the dynamic attributes
+                                        if (percentagesEnabled) {
+                                            addPercentages(currentGeom, second);
+                                        }
+                                        if (areasEnabled) {
+                                            addAreas(currentGeom, second);
+                                        }
 
-                                        // add first feature's attributes
-                                        for (Object firstAttribute : first.getAttributes()) {
-                                            if (!(firstAttribute instanceof Geometry)) {
-                                                fb.add(firstAttribute);
-                                            }
-                                        }
-                                        // add second feature's attributes
-                                        for (Object secondAttribute : second.getAttributes()) {
-                                            if (!(secondAttribute instanceof Geometry)) {
-                                                fb.add(secondAttribute);
-                                            }
-                                        }
+                                        // build the feature
                                         next = fb.buildFeature(iterationIndex.toString());
+
+                                        // update iterator status
                                         if (iterator.hasNext()) {
                                             complete = false;
                                             added = true;
@@ -45,6 +62,7 @@
                                         }
                                         iterationIndex++;
                                     }
+
                                 }
                                 complete = false;
                             }

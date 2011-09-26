@@ -1,0 +1,32 @@
+    static AttributeDescriptor getIntersectionType(SimpleFeatureCollection first,
+            SimpleFeatureCollection second) {
+        Class firstGeomType = first.getSchema().getGeometryDescriptor().getType().getBinding();
+        Class secondGeomType = second.getSchema().getGeometryDescriptor().getType().getBinding();
+
+        // figure out the output geometry type
+        Class binding;
+        if (isGeometryTypeIn(secondGeomType, Point.class)) {
+            binding = Point.class;
+        } else if (isGeometryTypeIn(secondGeomType, MultiPoint.class)) {
+            binding = MultiPoint.class;
+        } else if (isGeometryTypeIn(secondGeomType, LineString.class, MultiLineString.class)) {
+            binding = MultiLineString.class;
+        } else if (isGeometryTypeIn(secondGeomType, Polygon.class, MultiPolygon.class)) {
+            if (isGeometryTypeIn(firstGeomType, Polygon.class, MultiPolygon.class)) {
+                binding = MultiPolygon.class;
+            } else {
+                binding = MultiLineString.class;
+            }
+        } else {
+            // we can't be more precise than this
+            binding = Geometry.class;
+        }
+
+        AttributeTypeBuilder builder = new AttributeTypeBuilder();
+        builder.setName("the_geom");
+        builder.setBinding(binding);
+        builder.setCRS(first.features().next().getFeatureType().getCoordinateReferenceSystem());
+        AttributeDescriptor descriptor = builder.buildDescriptor("the_geom");
+        return descriptor;
+    }
+
