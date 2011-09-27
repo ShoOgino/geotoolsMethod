@@ -88,8 +88,8 @@
             } else if (findCommentStart.matcher(text).find()) {
                 inCommentBlock = true;
 
-            // Guard against nested or following classes and mention of classes in
-            // comment blocks
+                // Guard against nested or following classes and mention of classes in
+                // comment blocks
             } else if (!inJavadocBlock && !inCommentBlock && !classFound) {
                 if (optionAnyClass) {
                     matcher = findClass.matcher(text);
@@ -99,13 +99,27 @@
                 if (matcher.find()) {
                     classFound = true;
                     /*
-                     * If no javadoc comment block preceded the class header
-                     * there is nothing to do
+                     * If no javadoc comment block preceded the class header,
+                     * either add one (if optionAddHeader is true) or skip the class.
                      */
                     if (javadocStartLine < 0) {
-                        System.out.println("   *** No class javadocs - skipping file ***");
-                        System.out.println();
-                        return false;
+                        if (optionAddHeader) {
+                            // It is easieset to insert the elements in reverse order.
+                            buffer.add(lineNo, " */");
+                            buffer.add(lineNo, " * ");
+                            buffer.add(lineNo, "/**");
+
+                            javadocStartLine = lineNo;
+                            javadocEndLine = lineNo + 2;
+
+                            // clear the preceding content flag since it will no longer apply
+                            unknownPrecedingContent = false;
+
+                        } else {
+                            System.out.println("   *** No class javadocs - skipping file ***");
+                            System.out.println();
+                            return false;
+                        }
                     }
 
                     /* If there were any non-blank lines between the comment and
@@ -122,7 +136,7 @@
                      * Check if the source tag already exists. If it does, and
                      * the replace tag option is false, skip this file.
                      */
-                    for (int blockLineNo = javadocStartLine; 
+                    for (int blockLineNo = javadocStartLine;
                             blockLineNo <= javadocEndLine; blockLineNo++) {
                         String commentText = buffer.get(blockLineNo);
                         matcher = findSourceTag.matcher(commentText);
@@ -145,7 +159,9 @@
                                             // 
                                             String http = matcher.group();
                                             int start = http.indexOf("$URL");
-                                            if (start < 0) start = http.indexOf("http"); 
+                                            if (start < 0) {
+                                                start = http.indexOf("http");
+                                            }
                                             http = http.substring(start, http.length());
                                             sourceTagText = commentText + http;
                                         }
