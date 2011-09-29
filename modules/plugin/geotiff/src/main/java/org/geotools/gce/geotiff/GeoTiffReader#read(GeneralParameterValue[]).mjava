@@ -14,7 +14,9 @@
 	public GridCoverage2D read(GeneralParameterValue[] params) throws IOException {
 		GeneralEnvelope requestedEnvelope = null;
 		Rectangle dim = null;
+		Color inputTransparentColor=null;
 		OverviewPolicy overviewPolicy=null;
+		int[] suggestedTileSize=null;
 		if (params != null) {
 
 			//
@@ -33,7 +35,27 @@
 					if (name.equals(AbstractGridFormat.OVERVIEW_POLICY.getName())) {
 						overviewPolicy=(OverviewPolicy) param.getValue();
 						continue;
-					}					
+					}	
+                                        if (name.equals(AbstractGridFormat.INPUT_TRANSPARENT_COLOR.getName())) {
+                                            inputTransparentColor = (Color) param.getValue();
+                                            continue;
+                                        }	
+                                        if (name.equals(AbstractGridFormat.SUGGESTED_TILE_SIZE.getName())) {
+                                            String suggestedTileSize_= (String) param.getValue();
+                                            if(suggestedTileSize_!=null&&suggestedTileSize_.length()>0){
+                                                suggestedTileSize_=suggestedTileSize_.trim();
+                                                int commaPosition=suggestedTileSize_.indexOf(",");
+                                                if(commaPosition<0){
+                                                    int tileDim=Integer.parseInt(suggestedTileSize_);
+                                                    suggestedTileSize= new int[]{tileDim,tileDim};
+                                                } else {
+                                                    int tileW=Integer.parseInt(suggestedTileSize_.substring(0,commaPosition));
+                                                    int tileH=Integer.parseInt(suggestedTileSize_.substring(commaPosition+1));
+                                                    suggestedTileSize= new int[]{tileW,tileH};
+                                                }
+                                            }
+                                            continue;
+                                        }                                               
 				}
 			}
 		}
@@ -49,29 +71,20 @@
 			new DataSourceException(e);
 		}
 
-		// /////////////////////////////////////////////////////////////////////
 		//
 		// IMAGE READ OPERATION
 		//
-		// /////////////////////////////////////////////////////////////////////
-//		final ImageReader reader = readerSPI.createReaderInstance();
-//		final ImageInputStream inStream = ImageIO
-//				.createImageInputStream(source);
-//		reader.setInput(inStream);
-		final Hints newHints = (Hints) hints.clone();
-//		if (!reader.isImageTiled(imageChoice.intValue())) {
-//			final Dimension tileSize = ImageUtilities.toTileSize(new Dimension(
-//					reader.getWidth(imageChoice.intValue()), reader
-//							.getHeight(imageChoice.intValue())));
-//			final ImageLayout layout = new ImageLayout();
-//			layout.setTileGridXOffset(0);
-//			layout.setTileGridYOffset(0);
-//			layout.setTileHeight(tileSize.height);
-//			layout.setTileWidth(tileSize.width);
-//			newHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
-//		}
-//		inStream.close();
-//		reader.reset();
+
+                Hints newHints = null;
+		if(suggestedTileSize!=null){
+		    newHints= (Hints) hints.clone();
+                    final ImageLayout layout = new ImageLayout();
+                    layout.setTileGridXOffset(0);
+                    layout.setTileGridYOffset(0);
+                    layout.setTileHeight(suggestedTileSize[1]);
+                    layout.setTileWidth(suggestedTileSize[0]);
+                    newHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
+		}
 		final ParameterBlock pbjRead = new ParameterBlock();
         if (extOvrImgChoice >= 0 && imageChoice >= extOvrImgChoice) {
             pbjRead.add(ovrInStreamSPI.createInputStreamInstance(ovrSource, ImageIO.getUseCache(),
@@ -88,15 +101,19 @@
 		pbjRead.add(null);
 		pbjRead.add(null);
 		pbjRead.add(readP);
-		pbjRead.add( readerSPI.createReaderInstance());
-		final RenderedOp coverageRaster=JAI.create("ImageRead", pbjRead,
-                        (RenderingHints) newHints);
-
-		// /////////////////////////////////////////////////////////////////////
+		pbjRead.add(READER_SPI.createReaderInstance());
+		RenderedOp coverageRaster=JAI.create("ImageRead", pbjRead,newHints!=null?(RenderingHints) newHints:null);
+		
+                //
+                // MASKING INPUT COLOR as indicated
+                //
+		if(inputTransparentColor!=null){
+		    coverageRaster= new ImageWorker(coverageRaster).setRenderingHints(newHints).makeColorTransparent(inputTransparentColor).getRenderedOperation();
+		}
+		
 		//
 		// BUILDING COVERAGE
 		//
-		// /////////////////////////////////////////////////////////////////////
                 // I need to calculate a new transformation (raster2Model)
                 // between the cropped image and the required
                 // adjustedRequestEnvelope
