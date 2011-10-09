@@ -1,0 +1,41 @@
+    /**
+     * Reads a date field from the OGR api
+     * @param ogrFeature
+     * @param idx
+     * @return
+     */
+    private Calendar getDateField(Pointer<?> ogrFeature, Integer idx) {
+        Pointer<Integer> year = allocateInt();
+        Pointer<Integer> month = allocateInt();
+        Pointer<Integer> day = allocateInt();
+        Pointer<Integer> hour = allocateInt();
+        Pointer<Integer> minute = allocateInt();
+        Pointer<Integer> second = allocateInt();
+        Pointer<Integer> timeZone = allocateInt();
+        
+        OGR_F_GetFieldAsDateTime(ogrFeature, idx, year, month, day, hour, minute, second, timeZone);
+        
+        Calendar cal = Calendar.getInstance();
+        // from ogr_core.h 
+        // 0=unknown, 1=localtime(ambiguous), 100=GMT, 104=GMT+1, 80=GMT-5, etc
+        int tz = timeZone.getInt();
+        if(tz != 0 && tz != 1) {
+            int offset = tz - 100 / 4;
+            if(offset < 0) {
+                cal.setTimeZone(TimeZone.getTimeZone("GMT" + offset));
+            } else if(offset == 0) {
+                cal.setTimeZone(TimeZone.getTimeZone("GMT"));
+            } else {
+                cal.setTimeZone(TimeZone.getTimeZone("GMT+" + offset));
+            }               
+        }
+        cal.clear();
+        cal.set(Calendar.YEAR, year.getInt());
+        cal.set(Calendar.MONTH, month.getInt());
+        cal.set(Calendar.DAY_OF_MONTH, day.getInt());
+        cal.set(Calendar.HOUR_OF_DAY, hour.getInt());
+        cal.set(Calendar.MINUTE, minute.getInt());
+        cal.set(Calendar.SECOND, second.getInt());
+        return cal;
+    }
+

@@ -1,11 +1,86 @@
     @Override
     protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query)
             throws IOException {
+        // check how much we can encode
         OGRFilterTranslator filterTx = new OGRFilterTranslator(getSchema(), query.getFilter());
         if (Filter.EXCLUDE.equals(filterTx.getFilter())) {
             return new EmptyFeatureReader<SimpleFeatureType, SimpleFeature>(getSchema());
-        } 
-        
-        
+        }
+
+        // encode and count
+        Pointer dataSource = null;
+        Pointer layer = null;
+        boolean cleanup = true;
+        try {
+            // grab the layer
+            String typeName = getEntry().getTypeName();
+            dataSource = getDataStore().openOGRDataSource(false);
+            layer = openOGRLayer(dataSource, typeName);
+
+            // filter it
+            setLayerFilters(layer, filterTx);
+
+            // extract the post filter
+            Filter postFilter = null;
+            if (!filterTx.isFilterFullySupported()) {
+                postFilter = filterTx.getPostFilter();
+            }
+
+            // prepare the target schema
+            SimpleFeatureType sourceSchema = getSchema();
+            SimpleFeatureType querySchema = sourceSchema;
+            SimpleFeatureType targetSchema = sourceSchema;
+            String[] properties = query.getPropertyNames();
+            if (properties != null && properties.length > 0) {
+                targetSchema = SimpleFeatureTypeBuilder.retype(sourceSchema, properties);
+                querySchema = targetSchema;
+                // if we have a post filter we have to include in the queried features also the
+                // attribute needed to evaluate the post-filter
+                if (postFilter != null) {
+                    Set<String> queriedAttributes = new HashSet<String>(Arrays.asList(properties));
+                    FilterAttributeExtractor extraAttributeExtractor = new FilterAttributeExtractor();
+                    postFilter.accept(extraAttributeExtractor, null);
+                    Set<String> extraAttributeSet = new HashSet<String>(extraAttributeExtractor.getAttributeNameSet());
+                    extraAttributeSet.removeAll(queriedAttributes);
+                    if (extraAttributeSet.size() > 0) {
+                        String[] queryProperties = new String[properties.length
+                                + extraAttributeSet.size()];
+                        System.arraycopy(properties, 0, queryProperties, 0, properties.length);
+                        String[] extraAttributes = (String[]) extraAttributeSet
+                                .toArray(new String[extraAttributeSet.size()]);
+                        System.arraycopy(extraAttributes, 0, queryProperties, properties.length,
+                                extraAttributes.length);
+                        querySchema = SimpleFeatureTypeBuilder.retype(sourceSchema, queryProperties);
+                    }
+                }
+            }
+
+            // tell OGR not to load all the attributes
+            // OGR_L_SetIgnoredFields(layer, charPtrPtr1)
+
+            // see if we have a geometry factory to use
+            GeometryFactory gf = getGeometryFactory(query);
+
+            // build the reader
+            FeatureReader<SimpleFeatureType, SimpleFeature> reader = new OGRFeatureReader(
+                    dataSource, layer, querySchema, sourceSchema, gf);
+            cleanup = false;
+
+            // do we have to post-filter?
+            if (!filterTx.isFilterFullySupported()) {
+                reader = new FilteringFeatureReader<SimpleFeatureType, SimpleFeature>(reader,
+                        filterTx.getPostFilter());
+                if (targetSchema != querySchema) {
+                    reader = new ReTypeFeatureReader(reader, targetSchema);
+                }
+            }
+
+            return reader;
+        } finally {
+            if (cleanup) {
+                OGRUtils.releaseLayer(layer);
+                OGRUtils.releaseDataSource(dataSource);
+            }
+        }
     }
 
