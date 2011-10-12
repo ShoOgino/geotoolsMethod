@@ -20,44 +20,11 @@
         StringBuffer sql = new StringBuffer();
         sql.append("SELECT ");
 
-        // primary key
-        PrimaryKey key = null;
-
-        try {
-            key = getPrimaryKey(featureType);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        Set<String> pkColumnNames = getColumnNames(key);
-
-        for ( PrimaryKeyColumn col : key.getColumns() ) {
-            dialect.encodeColumnName(col.getName(), sql);
-            sql.append(",");
-        }
-        
-        //other columns
-        for (AttributeDescriptor att : featureType.getAttributeDescriptors()) {
-            // skip the eventually exposed pk column values
-            String columnName = att.getLocalName();
-            if(pkColumnNames.contains(columnName))
-                continue;
-            
-            if (att instanceof GeometryDescriptor) {
-                //encode as geometry
-            	encodeGeometryColumn((GeometryDescriptor) att, sql, query.getHints());
-
-                //alias it to be the name of the original geometry
-                dialect.encodeColumnAlias(columnName, sql);
-            } else {
-                dialect.encodeColumnName(columnName, sql);
-            }
-
-            sql.append(",");
-        }
-
+        //column names
+        selectColumns(featureType, null, query, sql);
         sql.setLength(sql.length() - 1);
         dialect.encodePostSelect(featureType, sql);
-        
+
         sql.append(" FROM ");
         encodeTableName(featureType.getTypeName(), sql, query.getHints());
 
@@ -65,20 +32,14 @@
         PreparedFilterToSQL toSQL = null;
         Filter filter = query.getFilter();
         if (filter != null && !Filter.INCLUDE.equals(filter)) {
+            sql.append(" WHERE ");
+            
             //encode filter
-            try {
-                // grab the full feature type, as we might be encoding a filter
-                // that uses attributes that aren't returned in the results
-                SimpleFeatureType fullSchema = getSchema(featureType.getTypeName());
-                toSQL = createPreparedFilterToSQL(fullSchema);
-                sql.append(" ").append(toSQL.encodeToString(filter));
-            } catch (FilterToSQLException e) {
-                throw new RuntimeException(e);
-            }
+            toSQL = (PreparedFilterToSQL) filter(featureType, filter, sql);
         }
 
         //sorting
-        sort(featureType, query.getSortBy(), key, sql);
+        sort(featureType, query.getSortBy(), null, sql);
         
         // finally encode limit/offset, if necessary
         applyLimitOffset(sql, query);

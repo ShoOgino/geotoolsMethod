@@ -1,0 +1,35 @@
+    protected String selectJoinSQL(SimpleFeatureType featureType, JoinInfo join, Query query) 
+        throws IOException, SQLException {
+
+        StringBuffer sql = new StringBuffer();
+        sql.append("SELECT ");
+
+        //column names
+        selectColumns(featureType, join.getPrimaryAlias(), query, sql);
+
+        //joined columns
+        for (JoinPart part : join.getParts()) {
+            selectColumns(part.getQueryFeatureType(), part.getAlias(), query, sql);
+        }
+
+        sql.setLength(sql.length() - 1);
+        dialect.encodePostSelect(featureType, sql);
+
+        //from
+        sql.append(" FROM ");
+        
+        //join clauses
+        encodeTableJoin(featureType, join, query, sql);
+        
+        //filtering
+        encodeWhereJoin(featureType, join, sql);
+        
+        //TODO: sorting
+        sort(featureType, query.getSortBy(), join.getPrimaryAlias(), sql);
+        
+        //finally encode limit/offset, if necessary
+        applyLimitOffset(sql, query);
+
+        return sql.toString();
+    }
+
