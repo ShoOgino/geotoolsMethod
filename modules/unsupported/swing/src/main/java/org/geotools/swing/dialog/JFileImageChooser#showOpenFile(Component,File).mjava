@@ -1,22 +1,34 @@
     /**
-     * Display a dialog to choose an image file to open
+     * Prompts for file name to read an image.
      *
      * @param parent parent component (may be {@code null})
-     * @param workingDir the initial directory to display
+     * @param workingDir the initial directory
      *
      * @return the selected file or {@code null} if the dialog was cancelled
      */
-    public static File showOpenFile(Component parent, File workingDir) {
-        JFileImageChooser chooser = new JFileImageChooser(workingDir);
-        chooser.setFilter(supportedReaders);
-        chooser.setDialogTitle("Open image file");
+    public static File showOpenFile(final Component parent, final File workingDir) {
+        final File[] file = new File[1];
+        
+        if (SwingUtilities.isEventDispatchThread()) {
+            file[0] = doShow(parent, workingDir, OPEN_DIALOG);
+            
+        } else {
+            try {
+                SwingUtilities.invokeAndWait(new Runnable() {
 
-        File file = null;
-
-        if (chooser.showOpenDialog(parent) == JFileImageChooser.APPROVE_OPTION) {
-            file = chooser.getSelectedFile();
+                    @Override
+                    public void run() {
+                        file[0] = doShow(parent, workingDir, OPEN_DIALOG);
+                    }
+                });
+            } catch (InterruptedException ex) {
+                LOGGER.log(Level.SEVERE, "Thread interrupted while prompting for file", ex);
+                
+            } catch (InvocationTargetException ex) {
+                LOGGER.log(Level.SEVERE, "Unexpected problem while prompting for file", ex);
+            }
         }
-
-        return file;
+        
+        return file[0];
     }
 
