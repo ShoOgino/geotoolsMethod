@@ -9,7 +9,6 @@
         while (startIndex <= endIndex) {
             List<AttributeMapping> attMappings = new ArrayList<AttributeMapping>();
             StepList steps = null;
-            Step lastStep = null;
             if (isLastStep(endIndex)) {
                 // exhausted all paths
                 return values;
@@ -18,148 +17,95 @@
             while (attMappings.isEmpty() && endIndex < fullSteps.size()) {
                 endIndex++;
                 steps = fullSteps.subList(startIndex, endIndex);
-                lastStep = steps.get(steps.size() - 1);
-                if (isLastStep(endIndex) && lastStep.isXmlAttribute()) {
-                    if (steps.size() == 1) {
-                        if (prevMapping == null) {
-                            return values;
-                        }
-                        // use previous mapping to get client properties
-                        attMappings.add(prevMapping);
-                    } else {
-                        XPath.StepList parentPath = steps.clone();
-                        parentPath.remove(parentPath.size() - 1);
-
-                        if (prevMapping != null && prevMapping.getTargetXPath().equals(parentPath)) {
-                            attMappings.add(prevMapping);
-                        } else {
-                            // find the attribute mapping that carries the
-                            // client properties
-                            attMappings = fMapping.getAttributeMappingsIgnoreIndex(parentPath);
-                        }
-                    }
-                } else {
-                    attMappings = fMapping.getAttributeMappingsIgnoreIndex(steps);
-                }
+                attMappings = fMapping.getAttributeMappingsIgnoreIndex(steps);
 
                 if (steps.size() == 1) {
-                     if (Types.equals(fMapping.getTargetFeature().getName(), steps.get(0)
-                             .getName())) {
-                         // skip element name
-                         startIndex++;
-                         endIndex = startIndex;
-                         continue;
-                     }
-                 }
+                    if (Types.equals(fMapping.getTargetFeature().getName(), steps.get(0).getName())
+                            && !(Types.isSimpleContentType(fMapping.getTargetFeature().getType()))) {
+                        // skip element type name, but not when it's a simple content
+                        // like gml:name because it wouldn't have the element type name in the xpath        
+                        startIndex++;
+                        endIndex = startIndex;      
+                        steps = fullSteps.subList(startIndex, endIndex);
+                        attMappings = fMapping.getAttributeMappingsIgnoreIndex(steps);
+                        continue;
+                    } else if (attMappings.isEmpty() && steps.get(0).isId()) {
+                        // sometimes there's no explicit attribute mapping for top element name
+                        // but id should still resolve to primary key by default
+                        // e.g. gsml:GeologicUnit/@gml:id should resolve even though there's no
+                        // AttributeMapping for gsml:GeologicUnit 
+                        setIdValues(null, roots, values);                         
+                        return values;
+                    }
+                }
             }
 
-            if (attMappings.isEmpty()) {
+            if (attMappings.isEmpty()) {                
                 // not found here, but might be found in other nodes if multi-valued
                 // and polymorphic
                 continue;
-            }
-            if (lastStep.isXmlAttribute()) {
-                // a client properties
-                for (AttributeMapping mapping : attMappings) {
-                    Expression exp = getClientPropertyExpression(lastStep,
-                            mapping, this.attPath);
-                    if (exp != null) {
-                        for (Feature root : roots) {
-                            Object value = getValue(exp, root);
+            }   
+
+            for (AttributeMapping mapping : attMappings) {
+                if (mapping instanceof NestedAttributeMapping) {                    
+                    if (isClientProperty(endIndex)) {
+                        // check for client properties
+                        boolean isNestedXlinkHref = isXlinkHref(mapping);
+                        boolean valueFound = false;
+                        if (!isNestedXlinkHref) {
+                            // check if client properties are set in the parent attributeMapping in root mapping file
+                            valueFound = getClientProperties(mapping, values, roots);
+                        }
+                        if (!valueFound) {
+                            // or if they're set in the attributeMapping in feature chained mapping file
+                            getNestedClientProperties((NestedAttributeMapping) mapping, roots,
+                                    values, isNestedXlinkHref);
+                        }
+                    } else {
+                        boolean isSimpleContent = Types.isSimpleContent(steps, fMapping
+                                .getTargetFeature().getType());
+                        // if simple content, then it doesn't need to increment the next starting
+                        // index
+                        // since there will be no type name in the xpath, e.g. when gml:name is
+                        // feature
+                        // chained
+                        // the path stays as gml:name.. but if it's a complex type with complex
+                        // content,
+                        // e.g. gsml:specification
+                        // the path will be gsml:specification/gsml:GeologicUnit/<some leaf
+                        // attribute to
+                        // filter by>
+                        getNestedValues((NestedAttributeMapping) mapping, roots, values,
+                                isSimpleContent ? startIndex : startIndex + 1);
+                    }
+                } else {
+                    // normal attribute mapping
+                    if (endIndex == fullSteps.size()) {
+                        Expression exp = mapping.getSourceExpression();
+                        for (Feature f : roots) {
+                            Object value = getValue(exp, f);
                             if (value != null) {
                                 values.add(value);
                             }
                         }
-                    }
-                }
-            } else {
-                int nextIndex = startIndex + 1;
-                for (AttributeMapping mapping : attMappings) {
-                    if (mapping instanceof NestedAttributeMapping) {
-                        // feature chaining mapping
-                        NestedAttributeMapping nestedMapping = ((NestedAttributeMapping) mapping);
-                        for (Feature root : roots) {
-                            try {
-                                fMapping = nestedMapping.getFeatureTypeMapping(root);
-                            } catch (IOException e) {
-                                fMapping = null;
-                            }
-                            if (fMapping != null && nestedMapping.isSameSource()) {
-                                // same root/database row, different mappings, used in
-                                // polymorphism
-                                List<Feature> nestedRoots = new ArrayList<Feature>(1);
-                                nestedRoots.add(root);
-                                List<Object> nestedValues = getValues(nextIndex, nextIndex,
-                                        nestedRoots, fMapping, mapping);
-                                if (nestedValues != null) {
-                                    values.addAll(nestedValues);
-                                }
-                                continue;
-                            }
-                            try {
-                                List<Feature> nestedFeatures = getNestedFeatures(root,
-                                        nestedMapping, fMapping);
-                                if (nestedFeatures == null || nestedFeatures.isEmpty()) {
-                                    continue;
-                                }
-
-                                if (lastStep.isIndexed()) {
-                                    int index = lastStep.getIndex() - 1;
-                                    Feature f = nestedFeatures.get(index);
-                                    nestedFeatures.clear();
-                                    nestedFeatures.add(f);
-                                }
-
-                                if (fMapping != null) {
-                                    List<Object> nestedValues = getValues(nextIndex, nextIndex,
-                                            nestedFeatures, fMapping, mapping);
-                                    if (nestedValues != null) {
-                                        values.addAll(nestedValues);
-                                    }
-                                } else if (!nestedFeatures.isEmpty()) {
-                                    throw new UnsupportedOperationException(
-                                            "FeatureTypeMapping not found for "
-                                                    + attPath
-                                                    + ". This shouldn't happen if it's set in AppSchemaDataAccess mapping file!");
-                                } else {
-                                    List<Object> nestedValues = getValues(nextIndex, nextIndex,
-                                            nestedFeatures, fMapping, mapping);
-                                    if (nestedValues != null) {
-                                        values.addAll(nestedValues);
-                                    }
-                                }
-                            } catch (IOException e) {
-                                throw new RuntimeException("Failed evaluating filter expression: '"
-                                        + attPath + "'. Caused by: " + e.getMessage());
-                            } catch (IllegalArgumentException e) {
-                                // might be a polymorphic case where it's looking for an attribute
-                                // from another type
-                                // that doesn't match this, but might match another database row
-                                // so just continue
-                                continue;
-                            }
+                    } else if (isClientProperty(endIndex)) {
+                        // peek at the next attribute to check for client properties     
+                        if (getLastStep().isId()) {
+                            setIdValues(mapping, roots, values);
+                        } else {
+                            getClientProperties(mapping, values, roots);       
                         }
                     } else {
-                        // normal attribute mapping
-                        if (endIndex == fullSteps.size()) {
-                            Expression exp = mapping.getSourceExpression();
-                            for (Feature f : roots) {
-                                Object value = getValue(exp, f);
-                                if (value != null) {
-                                    values.add(value);
-                                }
-                            }
-                        } else {
-                            // might be a client property?
-                            List<Object> nestedValues = getValues(startIndex, endIndex, roots,
-                                    fMapping, mapping);
-                            if (nestedValues != null) {
-                                values.addAll(nestedValues);
-                            }
+                        // increment the xpath
+                        List<Object> nestedValues = getValues(startIndex, endIndex, roots,
+                                fMapping, mapping);
+                        if (nestedValues != null) {
+                            values.addAll(nestedValues);
                         }
                     }
                 }
             }
+
             return values;
         }
         return values;

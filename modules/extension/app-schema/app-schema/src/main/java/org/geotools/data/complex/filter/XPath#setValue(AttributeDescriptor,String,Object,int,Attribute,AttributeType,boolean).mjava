@@ -1,8 +1,24 @@
+    @SuppressWarnings("unchecked")
     private Attribute setValue(final AttributeDescriptor descriptor, final String id,
             final Object value, final int index, final Attribute parent,
             final AttributeType targetNodeType, boolean isXlinkRef) {
-        // adapt value to context
-        Object convertedValue = convertValue(descriptor, value);
+        
+        Object convertedValue;
+        Map <Object, Object> simpleContentProperties = null;
+        if (isFeatureChainedSimpleContent(descriptor, value)) {   
+            // get the simple content attribute from the value
+            Collection<Property> simpleContentList = extractSimpleContent(value);
+            convertedValue = simpleContentList;
+            // and also get the client properties from the feature that wraps the simple content
+            // and it will be merged with the created attribute's client properties later
+            if (!simpleContentList.isEmpty()) {
+                simpleContentProperties = simpleContentList.iterator().next().getUserData();    
+            }
+        } else {
+            // adapt value to context
+            convertedValue = convertValue(descriptor, value);   
+        }
+                
         Attribute leafAttribute = null;
         final Name attributeName = descriptor.getName();        
         if (!isXlinkRef) {
@@ -35,13 +51,13 @@
                                         mappedIndex = valueIndex;
                                     }
                                     if (index == Integer.parseInt(String.valueOf(mappedIndex))) {
-                                        return stepValue;
+                                        leafAttribute = stepValue;
                                     }
                                     valueIndex++;
                                 }
                             } else {
                                 // get the last existing node
-                                return values.get(values.size() - 1);
+                                leafAttribute = values.get(values.size() - 1);
                             }
                         } else {
                             for (Attribute stepValue : values) {
@@ -57,7 +73,7 @@
                                     }
                                 }
                                 if (sameIndex && stepValue.getValue().equals(convertedValue)) {
-                                    return stepValue;
+                                    leafAttribute = stepValue;
                                 }
                             }
                         }
@@ -108,6 +124,9 @@
 
         if (!isEmpty(convertedValue)) {
             leafAttribute.setValue(convertedValue);
+        }
+        if (simpleContentProperties != null) {
+            mergeClientProperties(leafAttribute, simpleContentProperties);
         }
         return leafAttribute;
     }

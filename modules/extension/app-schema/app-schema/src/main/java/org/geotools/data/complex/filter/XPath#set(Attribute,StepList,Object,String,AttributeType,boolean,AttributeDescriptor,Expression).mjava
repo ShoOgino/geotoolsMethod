@@ -8,22 +8,21 @@
 
         final StepList steps = new StepList(xpath);
 
-        // if (steps.size() < 2) {
-        // throw new IllegalArgumentException("parent not yet built for " +
-        // xpath);
-        // }
-
         Attribute parent = att;
         Name rootName = null;
-        if (parent.getDescriptor() != null) {
-            rootName = parent.getDescriptor().getName();
+        AttributeDescriptor parentDescriptor = parent.getDescriptor();
+        if (parentDescriptor != null) {
+            rootName = parentDescriptor.getName();
             Step rootStep = (Step) steps.get(0);
             QName stepName = rootStep.getName();
-            if (stepName.getLocalPart().equals(rootName.getLocalPart())) {
-                if (XMLConstants.NULL_NS_URI.equals(stepName.getNamespaceURI())
-                        || stepName.getNamespaceURI().equals(rootName.getNamespaceURI())) {
-                    // first step is the self reference to att, so skip it
+            if (Types.equals(rootName, stepName)) {
+                // first step is the self reference to att, so skip it
+                if (steps.size() > 1) {
                     steps.remove(0);
+                } else {
+                    // except when the xpath is the root itself 
+                    // where it is done for feature chaining for simple content
+                    return setSimpleContentValue(parent, value);
                 }
             }
         }
@@ -128,8 +127,8 @@
             if (isLastStep) {
                 // reached the leaf
                 if (currStepDescriptor == null) {
-                    throw new IllegalArgumentException(currStep
-                            + " is not a valid location path for type " + _parentType.getName());
+                    throw new IllegalArgumentException(currStep + " is not a valid location path for type "
+                            + _parentType.getName());
                 }
                 if (value == null && !currStepDescriptor.isNillable() && sourceExpression != null
                         && !sourceExpression.equals(Expression.NIL)) {
@@ -137,10 +136,8 @@
                         return null;
                     }
                 }
-                int index = currStep.isIndexed ? currStep.getIndex() : -1;
-                Attribute attribute = setValue(currStepDescriptor, id, value, index, parent,
-                        targetNodeType, isXlinkRef);
-                return attribute;
+                return setLeafAttribute(currStepDescriptor, currStep, id, value,
+                        parent, targetNodeType, isXlinkRef);
             } else {
                 // parent = appendComplexProperty(parent, currStep,
                 // currStepDescriptor);
