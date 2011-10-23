@@ -15,10 +15,6 @@
             // grab the layer
             String typeName = getEntry().getTypeName();
             dataSource = getDataStore().openOGRDataSource(false);
-            layer = getDataStore().openOGRLayer(dataSource, typeName);
-
-            // filter it
-            setLayerFilters(layer, filterTx);
 
             // extract the post filter
             Filter postFilter = null;
@@ -40,7 +36,8 @@
                     Set<String> queriedAttributes = new HashSet<String>(Arrays.asList(properties));
                     FilterAttributeExtractor extraAttributeExtractor = new FilterAttributeExtractor();
                     postFilter.accept(extraAttributeExtractor, null);
-                    Set<String> extraAttributeSet = new HashSet<String>(extraAttributeExtractor.getAttributeNameSet());
+                    Set<String> extraAttributeSet = new HashSet<String>(
+                            extraAttributeExtractor.getAttributeNameSet());
                     extraAttributeSet.removeAll(queriedAttributes);
                     if (extraAttributeSet.size() > 0) {
                         String[] queryProperties = new String[properties.length
@@ -50,13 +47,26 @@
                                 .toArray(new String[extraAttributeSet.size()]);
                         System.arraycopy(extraAttributes, 0, queryProperties, properties.length,
                                 extraAttributes.length);
-                        querySchema = SimpleFeatureTypeBuilder.retype(sourceSchema, queryProperties);
+                        querySchema = SimpleFeatureTypeBuilder
+                                .retype(sourceSchema, queryProperties);
                     }
                 }
             }
 
-            // tell OGR not to load all the attributes
-            // OGR_L_SetIgnoredFields(layer, charPtrPtr1)
+            // build the layer query and execute it
+            String sql = getLayerSql(querySchema == sourceSchema ? null : querySchema,
+                    filterTx.getAttributeFilter(), query.getSortBy());
+            Pointer spatialFilterPtr = null;
+            Geometry spatialFilter = filterTx.getSpatialFilter();
+            if (spatialFilter != null) {
+                spatialFilterPtr = new GeometryMapper.WKB(new GeometryFactory())
+                        .parseGTGeometry(spatialFilter);
+
+            }
+            layer = OGR_DS_ExecuteSQL(dataSource, pointerToCString(sql), spatialFilterPtr, null);
+            if(layer == null) {
+                throw new IOException("Failed to query the source layer with SQL" + sql);
+            }
 
             // see if we have a geometry factory to use
             GeometryFactory gf = getGeometryFactory(query);
