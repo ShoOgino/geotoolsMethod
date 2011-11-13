@@ -1,0 +1,43 @@
+    /**
+     * Obtain a ReadableByteChannel from the given URL. If the url protocol is file, a FileChannel
+     * will be returned. Otherwise a generic channel will be obtained from the urls input stream.
+     * <p>
+     * A read lock is obtained when this method is called and released when the channel is closed.
+     * </p>
+     * 
+     * @param type the type of file to open the channel to.
+     * @param requestor the object requesting the channel
+     * 
+     */
+    public ReadableByteChannel getReadChannel(ShpFileType type, FileReader requestor)
+            throws IOException {
+        URL url = acquireRead(type, requestor);
+        ReadableByteChannel channel = null;
+        try {
+            if (isLocal()) {
+
+                File file = DataUtilities.urlToFile(url);
+
+                RandomAccessFile raf = new RandomAccessFile(file, "r");
+                channel = new FileChannelDecorator(raf.getChannel(), this, url, requestor);
+
+            } else {
+                InputStream in = url.openConnection().getInputStream();
+                channel = new ReadableByteChannelDecorator(Channels.newChannel(in), this, url,
+                        requestor);
+            }
+        } catch (Throwable e) {
+            unlockRead(url, requestor);
+            if (e instanceof IOException) {
+                throw (IOException) e;
+            } else if (e instanceof RuntimeException) {
+                throw (RuntimeException) e;
+            } else if (e instanceof Error) {
+                throw (Error) e;
+            } else {
+                throw new RuntimeException(e);
+            }
+        }
+        return channel;
+    }
+
