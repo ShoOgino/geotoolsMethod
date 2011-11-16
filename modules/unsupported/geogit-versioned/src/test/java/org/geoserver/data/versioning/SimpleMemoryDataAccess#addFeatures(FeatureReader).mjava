@@ -1,0 +1,47 @@
+    /**
+     * Configures MemoryDataStore with FeatureReader.
+     * 
+     * @param reader New contents to add
+     * @throws IOException If problems are encountered while adding
+     * @throws DataSourceException See IOException
+     */
+    public void addFeatures(FeatureReader reader) throws IOException {
+        try {
+            FeatureType featureType;
+            // use an order preserving map, so that features are returned in the
+            // same
+            // order as they were inserted. This is important for repeatable
+            // rendering
+            // of overlapping features.
+            Map<String, SimpleFeature> featureMap = new LinkedHashMap<String, SimpleFeature>();
+            Name typeName;
+            Feature feature;
+
+            feature = reader.next();
+
+            if (feature == null) {
+                throw new IllegalArgumentException(
+                        "Provided  FeatureReader<FeatureType, Feature> is closed");
+            }
+
+            featureType = feature.getType();
+            typeName = featureType.getName();
+
+            featureMap.put(feature.getIdentifier().getID(),
+                    (SimpleFeature) feature);
+
+            while (reader.hasNext()) {
+                feature = reader.next();
+                featureMap.put(feature.getIdentifier().getID(),
+                        (SimpleFeature) feature);
+            }
+
+            schema.put(typeName, (SimpleFeatureType) featureType);
+            memory.put(typeName, featureMap);
+        } catch (IllegalAttributeException e) {
+            throw new DataSourceException("Problem using reader", e);
+        } finally {
+            reader.close();
+        }
+    }
+

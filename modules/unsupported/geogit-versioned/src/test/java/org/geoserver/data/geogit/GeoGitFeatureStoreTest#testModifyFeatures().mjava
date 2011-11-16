@@ -1,0 +1,43 @@
+    @SuppressWarnings("deprecation")
+    public void testModifyFeatures() throws Exception {
+        // add features circunventing FeatureStore.addFeatures to keep the test
+        // independent of the
+        // addFeatures functionality
+        insertAndAdd(lines1, lines2, lines3, points1, points2, points3);
+        new GeoGIT(repo).commit().call();
+
+        Id filter = ff.id(Collections.singleton(ff.featureId(idP1)));
+        Transaction tx = new DefaultTransaction();
+        points.setTransaction(tx);
+        try {
+            // initial value
+            assertEquals("StringProp1_1", points.getFeatures(filter).iterator()
+                    .next().getAttribute("sp"));
+            // modify
+            points.modifyFeatures("sp", "modified", filter);
+            // modified value before commit
+            assertEquals("modified", points.getFeatures(filter).iterator()
+                    .next().getAttribute("sp"));
+            // unmodified value before commit on another store instance (tx
+            // isolation)
+            assertEquals(
+                    "StringProp1_1",
+                    dataStore.getFeatureSource(pointsTypeName)
+                            .getFeatures(filter).iterator().next()
+                            .getAttribute("sp"));
+
+            tx.commit();
+
+            // modified value after commit on another store instance
+            assertEquals("modified", dataStore.getFeatureSource(pointsTypeName)
+                    .getFeatures(filter).iterator().next().getAttribute("sp"));
+        } catch (Exception e) {
+            tx.rollback();
+            throw e;
+        } finally {
+            tx.close();
+        }
+        SimpleFeature modified = points.getFeatures(filter).iterator().next();
+        assertEquals("modified", modified.getAttribute("sp"));
+    }
+

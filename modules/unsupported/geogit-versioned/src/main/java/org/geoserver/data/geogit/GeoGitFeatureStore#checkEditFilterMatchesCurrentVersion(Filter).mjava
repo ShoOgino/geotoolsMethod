@@ -1,0 +1,34 @@
+    /**
+     * Throws an IllegalArgumentException if {@code filter} contains a resource
+     * filter that doesn't match the current version of a feature
+     * 
+     * @param filter original upate filter
+     */
+    private void checkEditFilterMatchesCurrentVersion(final Filter filter) {
+        final Id versionFilter = VersionFilters.getVersioningFilter(filter);
+        if (versionFilter == null) {
+            return;
+        }
+        final Repository repository = dataStore.getRepository();
+        // don't allow non current versions
+        GeoGIT ggit = new GeoGIT(repository);
+        VersionQuery query = new VersionQuery(ggit, getSchema().getName());
+        for (Identifier id : versionFilter.getIdentifiers()) {
+            ResourceId rid = (ResourceId) id;
+            List<Ref> requested;
+            List<Ref> current;
+            try {
+                requested = Lists.newArrayList(query.get(rid));
+                current = Lists.newArrayList(query.get(new ResourceIdImpl(rid
+                        .getID(), null)));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            if (!current.equals(requested)) {
+                throw new IllegalArgumentException(
+                        "Requested resource id filter doesn't match curent version for feature "
+                                + rid.getID());
+            }
+        }
+    }
+

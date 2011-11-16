@@ -1,0 +1,36 @@
+    /**
+     * Performs the given query with knowledge of feature versioning.
+     * <p>
+     * In case the feature type this source refers to is not versioned, defers
+     * to the underlying {@link FeatureSource}.
+     * </p>
+     * If the Feature Type is versioned, and the Query filter contains an
+     * {@link Id} filter with {@link ResourceId} predicates, defers to the
+     * versioning backend (GeoGIT) to spply the requested versions of the
+     * feature identified by the {@link ResourceId}s; othwewise just wraps the
+     * wrapped FeatureSource results into a decorating FeatureCollection that
+     * assigns {@link ResourceId} instead of {@link FeatureId} to returned
+     * Features, containing the current version hash, as in
+     * {@code <original feature id>@<current version id>}. </p>
+     * 
+     * @see org.geotools.data.FeatureSource#getFeatures(org.geotools.data.Query)
+     */
+    @Override
+    public FeatureCollection<T, F> getFeatures(Query query) throws IOException {
+        Id versioningFilter;
+        if (!isVersioned()) {
+            return unversioned.getFeatures(query);
+        }
+        versioningFilter = getVersioningFilter(query.getFilter());
+        if (versioningFilter == null && query.getVersion() == null) {
+            FeatureCollection<T, F> delegate = unversioned.getFeatures(query);
+            final RevTree currentTypeTree = getCurrentVersion();
+
+            return createFeatureCollection(delegate, currentTypeTree);
+        }
+        Filter unversionedFilter = getUnversioningFilter(query.getFilter());
+
+        FeatureCollection coll = getFeatures(versioningFilter, query);
+        return coll.subCollection(unversionedFilter);
+    }
+
