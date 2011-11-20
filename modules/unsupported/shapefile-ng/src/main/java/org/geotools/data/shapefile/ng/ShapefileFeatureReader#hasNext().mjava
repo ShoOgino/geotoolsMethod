@@ -6,30 +6,31 @@
             // read the geometry, so that we can decide if this row is to be skipped or not
             Envelope envelope = record.envelope();
             boolean skip = false;
-            Geometry geometry;
-            // ... if geometry is out of the target bbox, skip both geom and row
-            if (targetBBox != null && !targetBBox.isNull() && !targetBBox.intersects(envelope)) {
-                geometry = null;
-                skip = true;
-                // ... if the geometry is awfully small avoid reading it (unless it's a point)
-            } else if (simplificationDistance > 0 && envelope.getWidth() < simplificationDistance
-                    && envelope.getHeight() < simplificationDistance) {
-                try {
-                    if (screenMap != null && screenMap.checkAndSet(envelope)) {
-                        geometry = null;
-                        skip = true;
-                    } else {
-                        // if we are using the screenmap better provide a slightly modified
-                        // version of the geometry bounds or we'll end up with many holes
-                        // in the rendering
-                        geometry = (Geometry) record.getSimplifiedShape(screenMap);
+            Geometry geometry = null;
+            if(schema.getGeometryDescriptor() != null) {
+                // ... if geometry is out of the target bbox, skip both geom and row
+                if (targetBBox != null && !targetBBox.isNull() && !targetBBox.intersects(envelope)) {
+                    skip = true;
+                    // ... if the geometry is awfully small avoid reading it (unless it's a point)
+                } else if (simplificationDistance > 0 && envelope.getWidth() < simplificationDistance
+                        && envelope.getHeight() < simplificationDistance) {
+                    try {
+                        if (screenMap != null && screenMap.checkAndSet(envelope)) {
+                            geometry = null;
+                            skip = true;
+                        } else {
+                            // if we are using the screenmap better provide a slightly modified
+                            // version of the geometry bounds or we'll end up with many holes
+                            // in the rendering
+                            geometry = (Geometry) record.getSimplifiedShape(screenMap);
+                        }
+                    } catch (Exception e) {
+                        geometry = (Geometry) record.getSimplifiedShape();
                     }
-                } catch (Exception e) {
-                    geometry = (Geometry) record.getSimplifiedShape();
+                    // ... otherwise business as usual
+                } else {
+                    geometry = (Geometry) record.shape();
                 }
-                // ... otherwise business as usual
-            } else {
-                geometry = (Geometry) record.shape();
             }
 
             if (!skip) {

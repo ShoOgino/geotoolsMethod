@@ -5,9 +5,11 @@
             throw new IllegalArgumentException("no write flags set");
         }
 
-        ShapefileFeatureReader reader = (ShapefileFeatureReader) delegate.getReaderInternal(query);
-        ShapefileFeatureWriter writer = new ShapefileFeatureWriter(delegate.shpFiles, reader,
-                getDataStore().getCharset(), getDataStore().getTimeZone());
+        ShapefileFeatureReader reader = (ShapefileFeatureReader) delegate
+                .getReaderInternal(Query.ALL);
+        FeatureWriter<SimpleFeatureType, SimpleFeature> writer = new ShapefileFeatureWriter(
+                delegate.shpFiles, reader, getDataStore().getCharset(), getDataStore()
+                        .getTimeZone());
 
         // if we only have to add move to the end.
         // TODO: just make the code transfer the bytes in bulk instead and start actual writing at
@@ -16,6 +18,13 @@
             while (writer.hasNext()) {
                 writer.next();
             }
+        }
+
+        // if we are filtering wrap the writer so that it returns only the selected features
+        // but writes down the mall
+        Filter filter = query.getFilter();
+        if (filter != null && !Filter.INCLUDE.equals(filter)) {
+            writer = new FilteringFeatureWriter(writer, filter);
         }
 
         return writer;

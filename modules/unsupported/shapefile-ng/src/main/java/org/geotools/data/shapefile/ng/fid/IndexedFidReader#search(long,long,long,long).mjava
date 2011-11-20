@@ -1,0 +1,58 @@
+    /**
+     * Searches for the desired record.
+     * 
+     * @param desired
+     *                the id of the desired record.
+     * @param minRec
+     *                the last record that is known to be <em>before</em> the
+     *                desired record.
+     * @param maxRec
+     *                the first record that is known to be <em>after</em> the
+     *                desired record.
+     * @param predictedRec
+     *                the record that is predicted to be the desired record.
+     * 
+     * @return returns the record number of the feature in the shx file.
+     * 
+     * @throws IOException
+     */
+    long search(long desired, long minRec, long maxRec, long predictedRec)
+            throws IOException {
+        if (minRec == maxRec) {
+            return -1;
+        }
+
+        goTo(predictedRec);
+        hasNext(); // force data reading
+        next();
+        buffer.limit(buffer.capacity());
+        if (currentId == desired) {
+            return currentShxIndex;
+        }
+
+        if (maxRec - minRec < 10) {
+            return search(desired, minRec + 1, maxRec, minRec + 1);
+        } else {
+            long newOffset = desired - currentId;
+            long newPrediction = predictedRec + newOffset;
+
+            if (newPrediction <= minRec) {
+                newPrediction = minRec + ((predictedRec - minRec) / 2);
+            }
+
+            if (newPrediction >= maxRec) {
+                newPrediction = predictedRec + ((maxRec - predictedRec) / 2);
+            }
+
+            if (newPrediction == predictedRec) {
+                return -1;
+            }
+
+            if (newPrediction < predictedRec) {
+                return search(desired, minRec, predictedRec, newPrediction);
+            } else {
+                return search(desired, predictedRec, maxRec, newPrediction);
+            }
+        }
+    }
+
