@@ -1,0 +1,32 @@
+    /**
+     * This constructor grabs a "copy" of the current diff.
+     * <p>
+     * This reader is not "live" to changes over the course of the Transaction. (Iterators are not always stable of the course of modifications)
+     * </p>
+     * 
+     * @param reader
+     * @param diff2 Differences of Feature by FID
+     */
+    public DiffContentFeatureReader(ContentFeatureStore store, FeatureReader<T, F> reader, Filter filter) {
+        this.reader = reader;
+        this.store = store;
+        this.state = (DiffContentState) store.getState();
+        this.diff = state.diff();
+        this.filter = filter;
+        encounteredFids = new HashSet();
+
+        if (filter instanceof Id) {
+            fidFilter = true;
+        } else if (isSubsetOfBboxFilter(filter)) {
+            indexedGeometryFilter = true;
+        }
+
+        synchronized (diff) {
+            if (indexedGeometryFilter) {
+                spatialIndexIterator = getIndexedFeatures().iterator();
+            }
+            addedIterator = (Iterator<F>) diff.added.values().iterator();
+            modifiedIterator = (Iterator<F>) diff.modified2.values().iterator();
+        }
+    }
+
