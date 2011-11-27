@@ -8,20 +8,27 @@
         query = joinQuery( query );
         query = resolvePropertyNames(query);
         
-        FeatureWriter<SimpleFeatureType, SimpleFeature> writer = getWriterInternal( query, flags );
-        
-        //TODO: apply wrappers
-        //filtering
-        if ( !canFilter() ) {
-            if (query.getFilter() != null && query.getFilter() != Filter.INCLUDE ) {
-                writer = new FilteringFeatureWriter( writer, query.getFilter() );
-            }    
-        }
-        
-        // Use InProcessLockingManager to assert write locks?
-        if(!canLock()) {
-            LockingManager lockingManager = getDataStore().getLockingManager();
-            return ((InProcessLockingManager)lockingManager).checkedWriter(writer, transaction);
+        FeatureWriter<SimpleFeatureType, SimpleFeature> writer;
+        if (!canTransact() && transaction != null && transaction != Transaction.AUTO_COMMIT) {
+            DiffTransactionState state = (DiffTransactionState) getTransaction().getState(getEntry());
+            FeatureReader<SimpleFeatureType, SimpleFeature> reader = getReader(query);
+            writer = new DiffContentFeatureWriter(this, state.getDiff(), reader);
+        } else {
+            writer = getWriterInternal(query, flags);
+
+            // filtering
+            if (!canFilter()) {
+                if (query.getFilter() != null && query.getFilter() != Filter.INCLUDE) {
+                    writer = new FilteringFeatureWriter(writer, query.getFilter());
+                }
+            }
+
+            // Use InProcessLockingManager to assert write locks?
+            if (!canLock()) {
+                LockingManager lockingManager = getDataStore().getLockingManager();
+                writer = ((InProcessLockingManager) lockingManager).checkedWriter(writer,
+                        transaction);
+            }
         }
         
         // Finished
