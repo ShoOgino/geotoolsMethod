@@ -1,0 +1,25 @@
+    public void write() throws IOException {
+        if (live == null)
+            throw new IOException("No current feature to write");
+
+        // this will return true only in update mode, otherwise original is null
+        boolean changed = !live.equals(original);
+        if (!changed && original != null) {
+            // nothing to do, just skip
+        } else if (original != null) {
+            // not equals, we're updating an existing one
+            Pointer ogrFeature = mapper.convertGTFeature(layerDefinition, live);
+            checkError(OGR_L_SetFeature(layer, ogrFeature));
+        } else {
+            Pointer ogrFeature = mapper.convertGTFeature(layerDefinition, live);
+            checkError(OGR_L_CreateFeature(layer, ogrFeature));
+            String geotoolsId = mapper.convertOGRFID(featureType, ogrFeature);
+			((FeatureIdImpl) live.getIdentifier()).setID(geotoolsId);
+            OGR_F_Destroy(ogrFeature);
+        }
+
+        // reset state
+        live = null;
+        original = null;
+    }
+

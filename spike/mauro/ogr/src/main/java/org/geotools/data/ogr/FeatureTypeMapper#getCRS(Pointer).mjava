@@ -1,0 +1,41 @@
+    /**
+     * Returns the GeoTools {@link CoordinateReferenceSystem} equivalent to the layer native one
+     * 
+     * @param layer
+     * @return
+     * @throws IOException
+     */
+    private CoordinateReferenceSystem getCRS(Pointer layer) throws IOException {
+        Pointer spatialReference = null;
+        CoordinateReferenceSystem crs = null;
+        try {
+            spatialReference = OGR_L_GetSpatialRef(layer);
+            if (spatialReference == null) {
+                return null;
+            }
+
+            try {
+                Pointer<Byte> code = OSRGetAuthorityCode(spatialReference, pointerToCString("EPSG"));
+                if (code != null) {
+                    String fullCode = "EPSG:" + code;
+                    crs = CRS.decode(fullCode);
+                }
+            } catch (Exception e) {
+                // fine, the code might be unknown to out authority
+            }
+            if (crs == null) {
+                try {
+                    Pointer<Pointer<Byte>> wktPtr = allocatePointer(Byte.class);
+                    OSRExportToWkt(spatialReference, wktPtr);
+                    String wkt = wktPtr.getPointer(Byte.class).getCString();
+                    crs = CRS.parseWKT(wkt);
+                } catch (Exception e) {
+                    // the wkt might reference an unsupported projection
+                }
+            }
+            return crs;
+        } finally {
+            OGRUtils.releaseSpatialReference(spatialReference);
+        }
+    }
+
