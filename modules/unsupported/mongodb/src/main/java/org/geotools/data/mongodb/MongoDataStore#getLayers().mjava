@@ -1,0 +1,68 @@
+    /**
+     * Get list of valid layers for this mongo DB; those containing at least one valid, non-null
+     * GeoJSON geometry
+     */
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    private void getLayers ()
+    {
+        Mongo mongo = null;
+        try
+        {
+            // Get the list of collections from Mongo...
+            mongo = new Mongo( config.getHost(), config.getPort() );
+            DB db = mongo.getDB( config.getDB() ); // TODO add authentication
+            Set<String> colls = db.getCollectionNames();
+            for (String s : colls)
+            {
+                DBCollection dbc = db.getCollection( s );
+                log.info( "getLayers; collection=" + dbc );
+                // find distinct non-null geometry to determine if valid layer
+                // TODO branch point for separate geometry-specific layers per collection
+                List geoList = dbc.distinct( "geometry.type" );
+                // distinct returns single BSON List, may barf if results large, > max doc. size
+                // trap exception on props distinct and assume it's valid since there's obviously
+                // something there (http://www.mongodb.org/display/DOCS/Aggregation)
+                List propList = null;
+                try
+                {
+                    propList = dbc.distinct( "properties" );
+                }
+                catch (IllegalArgumentException ex)
+                {
+                    propList = new BasicBSONList();
+                    propList.add( "ex nihilo" );
+                }
+                catch (MongoException ex)
+                {
+                    propList = new BasicBSONList();
+                    propList.add( "ex nihilo" );
+                }
+                // check that layer has valid geometry and some properties defined
+                if (geoList != null && propList != null && propList.size() > 0)
+                {
+                    boolean hasValidGeo = false;
+                    for (GeometryType type : GeometryType.values())
+                    {
+                        if (geoList.contains( type.toString() ))
+                        {
+                            hasValidGeo = true;
+                            break;
+                        }
+                    }
+                    if (hasValidGeo)
+                    {
+                        layers.add( new MongoLayer( dbc, config ) );
+                    }
+                }
+            }
+        }
+        catch (Throwable t)
+        {
+            log.severe( "getLayers error; " + t.getLocalizedMessage() );
+        }
+        if (mongo != null)
+        {
+            mongo.close();
+        }
+    }
+

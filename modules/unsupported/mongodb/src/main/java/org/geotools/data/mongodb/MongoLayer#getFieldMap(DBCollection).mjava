@@ -1,0 +1,54 @@
+    /**
+     * Get mapping of field names and types, and counts for different types
+     * 
+     * @param collection where metadata from map-reduce job stored, in format: { "_id" : {
+     *            "fieldname" : "geometry.type", "type" : "Point"}, "value" : 2 } { "_id" : {
+     *            "fieldname" : "properties.ActivityDescription", "type" : "number" }, "value" : 1 }
+     *            { "_id" : { "fieldname" : "properties.ActivityDescription", "type" : "string" },
+     *            "value" : 3 } where value is number of occurrences for given type
+     * @return mapping of field names to ClassCount holding type and count info
+     */
+    private HashMap<String, ClassCount> getFieldMap (DBCollection metaResultsColl)
+    {
+        // cursor over collection
+        BasicDBObject query = new BasicDBObject();
+        DBCursor cursor = metaResultsColl.find( query );
+        // avoid cursor timeout
+        cursor.addOption( Bytes.QUERYOPTION_NOTIMEOUT );
+        // map to store fieldname and ClasCount object holding type and type-count info
+        HashMap<String, ClassCount> fieldMap = new HashMap<String, ClassCount>();
+
+        try
+        {
+            // iterate over each record
+            while (cursor.hasNext())
+            {
+                // check type found for current field
+                DBObject currRec = cursor.next();
+                DBObject currField = (DBObject) currRec.get( "_id" );
+                String fieldName = (String) currField.get( "fieldname" );
+                String fieldType = (String) currField.get( "type" );
+                int typeCount = ((Double) currRec.get( "value" )).intValue();
+                // if first occurrence of field name instantiate counter
+                if (!fieldMap.containsKey( fieldName ))
+                {
+                    fieldMap.put( fieldName, new ClassCount( fieldType, typeCount ) );
+                }
+                // else increment count for given type
+                else
+                {
+                    ClassCount currCount = fieldMap.get( fieldName );
+                    currCount.add( fieldType, typeCount );
+                    fieldMap.put( fieldName, currCount );
+                }
+            }
+        }
+        finally
+        {
+            // need to explicitly release cursor since notimeout option set
+            cursor.close();
+        }
+
+        return fieldMap;
+    }
+

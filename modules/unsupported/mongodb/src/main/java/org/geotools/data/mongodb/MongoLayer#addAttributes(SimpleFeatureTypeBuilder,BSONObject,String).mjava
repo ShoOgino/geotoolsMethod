@@ -1,0 +1,38 @@
+    /**
+     * Add JSON attributes to geo tools schema
+     * 
+     * @param builder geo tools feature builder
+     * @param dbo base object; either a JSON object or Array
+     * @param baseProp base property name, e.g. "properties" or nested properties objects and/or
+     *            arrays
+     */
+    private void addAttributes (SimpleFeatureTypeBuilder builder, BSONObject dbo, String baseProp)
+    {
+        Set<String> cols = dbo.keySet();
+        for (String col : cols)
+        {
+            Object dbcol = dbo.get( col );
+            String propName = baseProp + "." + col;
+            keywords.add( propName );
+            // cannot bind to nulls; only handle non-nulls
+            if (dbcol != null)
+            {
+                // handle as native types
+                AttributeTypeBuilder b = new AttributeTypeBuilder();
+                b.setName( propName );
+                b.setBinding( dbcol.getClass() );
+                b.setNillable( true );
+                b.setDefaultValue( null );
+                b.setLength( 1024 );
+                AttributeDescriptor a = b.buildDescriptor( propName );
+                builder.add( a );
+
+                // add attrs for nested JSON or Array objects
+                if (dbcol instanceof BasicDBObject || dbcol instanceof BasicBSONList)
+                {
+                    addAttributes( builder, (BSONObject) dbcol, propName );
+                }
+            }
+        }
+    }
+
