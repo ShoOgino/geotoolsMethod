@@ -1,0 +1,31 @@
+    /**
+     * Reproject source features if reprojection is set in the query. This has to be done after filtering, so 
+     * it's consistent with JDBCFeatureSource way of filtering and reprojection.
+     * @param srcFeatures
+     * @return
+     * @throws OperationNotFoundException
+     * @throws FactoryRegistryException
+     * @throws FactoryException
+     */
+    @SuppressWarnings("unchecked")
+    private List<Feature> reprojectFeatures(List<Feature> srcFeatures) {
+        if (targetCrs != null) {
+            List<Feature> features = new ArrayList<Feature>();
+            GeometryCoordinateSequenceTransformer transformer = new GeometryCoordinateSequenceTransformer();
+            Iterator<Feature> reprojectedFeatures;
+            try {
+                reprojectedFeatures = new ReprojectingIterator(srcFeatures.iterator(), mappedSource
+                        .getSchema().getCoordinateReferenceSystem(), targetCrs,
+                        (SimpleFeatureType) this.mappedSource.getSchema(), transformer);
+                while (reprojectedFeatures.hasNext()) {
+                    features.add(reprojectedFeatures.next());
+                }
+            } catch (Exception e) {
+                close();
+                throw new RuntimeException ("Failed to reproject features in app-schema!", e);
+            }
+            return features;
+        }
+        return srcFeatures;
+    }
+

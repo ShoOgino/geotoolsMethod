@@ -8,23 +8,30 @@
         Expression propertyExpression;
         for (Iterator it = attributeMappings.iterator(); it.hasNext();) {
             attMapping = (AttributeMapping) it.next();
-            clientProperties = attMapping.getClientProperties();
-            // NC -added
-            if (clientPropertyName.equals(GML.id)) {
-                clientPropertyExpressions.add(attMapping.getIdentifierExpression());
-            } else if (clientProperties.containsKey(clientPropertyName)) {
-                // end NC - added
-                propertyExpression = (Expression) clientProperties.get(clientPropertyName);
-                clientPropertyExpressions.add(propertyExpression);
-            } else if (attMapping.isNestedAttribute() && Types.isSimpleContent(parentPath, getTargetFeature().getType())) {
-                // create the full xpath from the parent's attribute
-                // only bother if this is a simple content
-                // otherwise, it would be handled in NestedAttributeExpression since it'd
-                // already have the full path then
-                StepList fullXpath = parentPath.clone();
-                fullXpath.add(new Step(Types.toQName(clientPropertyName, namespaces), 1, true, false));
-                clientPropertyExpressions.add(new NestedAttributeExpression(
-                                        fullXpath, this));
+            if (attMapping instanceof JoiningNestedAttributeMapping) {
+                // if it's joining for simple content feature chaining it has to be empty
+                // so it will be added to the post filter
+                clientPropertyExpressions.add(null);
+            } else {
+                clientProperties = attMapping.getClientProperties();
+                // NC -added
+                if (clientPropertyName.equals(GML.id)) {
+                    clientPropertyExpressions.add(attMapping.getIdentifierExpression());
+                } else if (clientProperties.containsKey(clientPropertyName)) {
+                    // end NC - added
+                    propertyExpression = (Expression) clientProperties.get(clientPropertyName);
+                    clientPropertyExpressions.add(propertyExpression);
+                } else if (attMapping.isNestedAttribute()
+                        && Types.isSimpleContent(parentPath, getTargetFeature().getType())) {
+                    // create the full xpath from the parent's attribute
+                    // only bother if this is a simple content
+                    // otherwise, it would be handled in NestedAttributeExpression since it'd
+                    // already have the full path then
+                    StepList fullXpath = parentPath.clone();
+                    fullXpath.add(new Step(Types.toQName(clientPropertyName, namespaces), 1, true,
+                            false));
+                    clientPropertyExpressions.add(new NestedAttributeExpression(fullXpath, this));
+                }
             }
         }
 

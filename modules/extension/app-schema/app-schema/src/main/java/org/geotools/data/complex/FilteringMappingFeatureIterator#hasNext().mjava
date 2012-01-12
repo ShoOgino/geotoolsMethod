@@ -1,14 +1,35 @@
     @Override
     public boolean hasNext() {
-        // check that the feature exists
-        while (super.hasNext()) {
-            // apply filter
-            if (filter.evaluate(curSrcFeature)) {
-               return true;
-            }
-
-            setHasNextCalled(false);
+        if (sources != null) {
+            // this is called in the beginning of next()
+            // we don't want to actually check the source iterator again
+            return true;
         }
-        return false;
+        List<Feature> groupedFeatures;
+        // check that the feature exists
+        boolean matches = false;
+        while (!matches && super.hasNext()) {
+            sources = null;
+            // get all rows with same id from denormalised views
+            // and evaluate each row
+            currentFeatureId = extractIdForFeature(curSrcFeature);
+            try {
+                groupedFeatures = super.getSources(currentFeatureId);
+                Iterator<Feature> srcFeatures = groupedFeatures.iterator();
+                while (!matches && srcFeatures.hasNext()) {
+                    // apply filter
+                    if (filter == null || filter.evaluate(srcFeatures.next())) {
+                        sources = reprojectFeatures(groupedFeatures);
+                        matches = true;
+                    }
+                }
+            } catch (IOException e) {
+                close();
+                throw new RuntimeException(e);
+            }
+            // reset so next time we call hasNext, it will get the next row
+            setHasNextCalled(false);            
+        }
+        return matches;
     }
 

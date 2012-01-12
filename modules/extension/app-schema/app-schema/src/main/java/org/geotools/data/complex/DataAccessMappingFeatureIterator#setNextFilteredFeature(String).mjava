@@ -1,10 +1,17 @@
-    private void setNextFilteredFeature(String fId, ArrayList<Feature> features) throws IOException {
-        FeatureCollection<SimpleFeatureType, SimpleFeature> matchingFeatures;
-        FeatureId featureId = namespaceAwareFilterFactory.featureId(fId);
+    /**
+     * Only used when joining is not used and pre-filter exists because the sources will match
+     * the prefilter but there might be denormalised rows with same id that don't.
+     * @param fId
+     * @param features
+     * @throws IOException
+     */
+    private List<Feature> setNextFilteredFeature(String fId) throws IOException {
+        FeatureCollection<? extends FeatureType, ? extends Feature> matchingFeatures;
         Query query = new Query();
         if (reprojection != null) {
-            if (sourceFeatures.getSchema().getGeometryDescriptor() != null && !this.isReprojectionCrsEqual(this.mappedSource.getSchema()
-                    .getCoordinateReferenceSystem(),this.reprojection)) {
+            if (sourceFeatures.getSchema().getGeometryDescriptor() != null
+                    && !this.isReprojectionCrsEqual(this.mappedSource.getSchema()
+                            .getCoordinateReferenceSystem(), this.reprojection)) {
                 query.setCoordinateSystemReproject(reprojection);
             }
         }
@@ -13,6 +20,7 @@
             // no real feature id mapping,
             // so let's find by database row id
             Set<FeatureId> ids = new HashSet<FeatureId>();
+            FeatureId featureId = namespaceAwareFilterFactory.featureId(fId);
             ids.add(featureId);
             query.setFilter(namespaceAwareFilterFactory.id(ids));
             matchingFeatures = this.mappedSource.getFeatures(query);
@@ -24,8 +32,9 @@
             matchingFeatures = this.mappedSource.getFeatures(query);
         }
 
-        FeatureIterator<SimpleFeature> iterator = matchingFeatures.features();
+        FeatureIterator<? extends Feature> iterator = matchingFeatures.features();
 
+        List<Feature> features = new ArrayList<Feature>();
         while (iterator.hasNext()) {
             features.add(iterator.next());
         }
@@ -37,7 +46,9 @@
         filteredFeatures.add(fId);
 
         iterator.close();
-
+        
         curSrcFeature = null;
+        
+        return features;
     }
 

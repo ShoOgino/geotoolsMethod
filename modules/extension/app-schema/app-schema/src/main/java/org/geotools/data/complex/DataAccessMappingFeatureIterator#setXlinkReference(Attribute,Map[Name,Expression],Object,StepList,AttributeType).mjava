@@ -16,38 +16,40 @@
      */
     protected void setXlinkReference(Attribute target, Map<Name, Expression> clientPropsMappings,
             Object value, StepList xpath, AttributeType targetNodeType) {
-        // Make sure the same value isn't already set
-        // in case it comes from a denormalized view for many-to-many relationship.
-        // (1) Get the first existing value
-        Property existingAttribute = getProperty(target, xpath);
+        Expression linkExpression = clientPropsMappings.get(XLINK_HREF_NAME);
+        
+        for (Object singleVal : (Collection) value) {
+            // Make sure the same value isn't already set
+            // in case it comes from a denormalized view for many-to-many relationship.
+            // (1) Get the first existing value
+            Collection<Property> existingAttributes = getProperties((ComplexAttribute) target, xpath);
+            boolean exists = false;
 
-        if (existingAttribute != null) {
-            Object existingValue = existingAttribute.getUserData().get(Attributes.class);
-            if (existingValue != null) {
-                assert existingValue instanceof HashMap;
-                existingValue = ((Map) existingValue).get(XLINK_HREF_NAME);
-            }
-            if (existingValue != null) {
-                Expression linkExpression = clientPropsMappings.get(XLINK_HREF_NAME);
-                for (Object singleVal : (Collection) value) {
-                    assert singleVal instanceof Feature;
-                    assert linkExpression != null;
-                    Object hrefValue = linkExpression.evaluate(singleVal);
-                    if (hrefValue != null && hrefValue.equals(existingValue)) {
-                        // (2) if one of the new values matches the first existing value,
-                        // that means this comes from a denormalized view,
-                        // and this set has already been set
-                        return;
+            if (existingAttributes != null) {
+                for (Property existingAttribute : existingAttributes) {
+                    Object existingValue = existingAttribute.getUserData().get(Attributes.class);
+                    if (existingValue != null) {
+                        assert existingValue instanceof HashMap;
+                        existingValue = ((Map) existingValue).get(XLINK_HREF_NAME);
+                    }
+                    if (existingValue != null) {
+                        Object hrefValue = linkExpression.evaluate(singleVal);
+                        if (hrefValue != null && hrefValue.equals(existingValue)) {
+                            // (2) if one of the new values matches the first existing value,
+                            // that means this comes from a denormalized view,
+                            // and this set has already been set
+                            exists = true;
+                            // stop looking once found
+                            break;
+                        }
                     }
                 }
             }
-        }
-
-        for (Object singleVal : (Collection) value) {
-            assert singleVal instanceof Feature;
-            Attribute instance = xpathAttributeBuilder.set(target, xpath, null, null,
-                    targetNodeType, true, null);
-            setClientProperties(instance, singleVal, clientPropsMappings);
+            if (!exists) {
+                Attribute instance = xpathAttributeBuilder.set(target, xpath, null, null,
+                        targetNodeType, true, null);
+                setClientProperties(instance, singleVal, clientPropsMappings);
+            }
         }
     }
 
