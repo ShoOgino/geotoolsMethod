@@ -1,0 +1,111 @@
+    /**
+     * Parses the original sql command and returns a Expression that has all environment variable
+     * references expanded to a {@link EnvFunction} call.</p>
+     * This code is partially copied from gt-renderer ExpressionExtractor code, but simplified
+     * to only have enviroment variable references instead of CQL to avoid creating a dependendcy
+     * cascading issue (ExpressionExtractor would have to be moved to gt-cql and gt-jdbc made
+     * to depend on it.
+     * 
+     * @param sql
+     * @return
+     */
+    Expression expandEviromentVariables(String sql) {
+        if(sql == null || "".equals(sql)) {
+            return null;
+        }
+        
+        boolean inEnvVariable = false;
+        List<Expression> expressions = new ArrayList<Expression>();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < sql.length(); i++) {
+            final char curr = sql.charAt(i);
+            final boolean last = (i == sql.length() - 1);
+            final char next = last ? 0 : sql.charAt(i + 1);
+
+            if (curr == '\\') {
+                if (last)
+                    throw new IllegalArgumentException("Unescaped \\ at position " + (i + 1));
+
+                if (next == '\\')
+                    sb.append('\\');
+                else if (next == '$')
+                    sb.append('$');
+                else if (next == '}')
+                    sb.append('}');
+                else
+                    throw new IllegalArgumentException("Unescaped \\ at position " + (i + 1));
+
+                // skip the next character
+                i++;
+            } else if (curr == '$') {
+                if (last || next != '{')
+                    throw new IllegalArgumentException("Unescaped $ at position " + (i + 1));
+                if (inEnvVariable)
+                    throw new IllegalArgumentException(
+                            "Already found a ${ sequence before the one at " + (i + 1));
+
+                // if we extracted a literal in between two expressions, add it to the result
+                if (sb.length() > 0) {
+                    expressions.add(ff.literal(sb.toString()));
+                    sb.setLength(0);
+                }
+
+                // mark the beginning and skip the next character
+                inEnvVariable = true;
+                i++;
+            } else if (curr == '}') {
+                if (!inEnvVariable)
+                    throw new IllegalArgumentException(
+                            "Already found a ${ sequence before the one at " + (i + 1));
+
+                if (sb.length() == 0)
+                    throw new IllegalArgumentException(
+                            "Invalid empty enviroment variable reference ${} at " + (i - 1));
+
+                String name = sb.toString();
+                String defaultValue = null;
+                int idx = name.indexOf(',');
+                if(idx >= 0) {
+                    if(idx == 0) {
+                        throw new IllegalArgumentException("There is no variable name before " +
+                        		"the comma, the valid format is '${name,defaultValue}'");
+                    } else if(idx < name.length() - 1) {
+                        defaultValue = name.substring(idx + 1);
+                        name = name.substring(0, idx);
+                    } 
+                }
+                Expression env;
+                if(defaultValue != null) {
+                    env = ff.function("env", ff.literal(name), ff.literal(defaultValue));
+                } else {
+                    env = ff.function("env", ff.literal(name));
+                }
+                expressions.add(env);
+                sb.setLength(0);
+                inEnvVariable = false;
+            } else {
+                sb.append(curr);
+            }
+        }
+
+        // when done, if we are still in a environment variable reference it means it hasn't been
+        // closed
+        if (inEnvVariable) {
+            throw new IllegalArgumentException("Unclosed enviroment variable reference '" + sb
+                    + "'");
+        } else if (sb.length() > 0) {
+            expressions.add(ff.literal(sb.toString()));
+        }
+
+        // now concatenate back all the references
+        if (expressions == null || expressions.size() == 0)
+            throw new IllegalArgumentException("The SQL command appears to be empty: " + sql);
+
+        Expression result = expressions.get(0);
+        for (int i = 1; i < expressions.size(); i++) {
+            result = ff.function("strConcat", result, expressions.get(i));
+        }
+
+        return result;
+    }
+
