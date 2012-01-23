@@ -1,6 +1,6 @@
 	public void  getGranules(final Query q, final GranuleCatalogVisitor visitor)
 	throws IOException {
-		Utilities.ensureNonNull("q",q);
+		Utilities.ensureNonNull("query",q);
 
 		final Lock lock=rwLock.readLock();
 		try{
@@ -11,8 +11,6 @@
 			// Load tiles informations, especially the bounds, which will be
 			// reused
 			//
-			
-
 			final SimpleFeatureSource featureSource = tileIndexStore.getFeatureSource(this.typeName);
 			if (featureSource == null) 
 				throw new NullPointerException(
@@ -45,14 +43,26 @@
 			        if(feature instanceof SimpleFeature)
 			        {
 			        	final SimpleFeature sf= (SimpleFeature) feature;
-						// create the granule descriptor
-						final GranuleDescriptor granule= new GranuleDescriptor(
-								sf,
-								suggestedSPI,
-								pathType,
-								locationAttribute,
-								parentLocation,
-								heterogeneous);
+			        	final GranuleDescriptor granule;
+			        	synchronized (granuleDescriptorsCache) {
+			        	    String granuleLocation = (String) sf.getAttribute(locationAttribute);
+                                            if(granuleDescriptorsCache.containsKey(granuleLocation)){
+                                                granule=granuleDescriptorsCache.get(granuleLocation);
+                                            } else{
+                                                // create the granule descriptor
+                                                granule= new GranuleDescriptor(
+                                                                sf,
+                                                                suggestedSPI,
+                                                                pathType,
+                                                                locationAttribute,
+                                                                parentLocation,
+                                                                heterogeneous);
+                                                granuleDescriptorsCache.put(granuleLocation, granule);
+                                            }
+  
+			        	    
+			        	    
+                                        }
 			        	visitor.visit(granule, null);
 			        	
 			        	// check if something bad occurred

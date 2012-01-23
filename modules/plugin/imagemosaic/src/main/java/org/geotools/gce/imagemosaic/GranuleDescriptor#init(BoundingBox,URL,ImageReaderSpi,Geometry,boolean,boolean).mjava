@@ -17,9 +17,29 @@
 			//
 			
 			// get a stream
-			inStream = Utils.getInputStream(granuleUrl);
-			if(inStream == null)
-				throw new IllegalArgumentException("Unable to get an input stream for the provided file "+granuleUrl.toString());
+		        if(cachedStreamSPI==null){
+		            cachedStreamSPI=ImageIOExt.getImageInputStreamSPI(granuleUrl, true);
+		            if(cachedStreamSPI==null){
+		                final File file = DataUtilities.urlToFile(granuleUrl);
+		                if(file!=null){
+		                    if(LOGGER.isLoggable(Level.WARNING)){
+		                        LOGGER.log(Level.WARNING,Utils.getFileInfo(file));
+		                    }
+		                }
+		                throw new IllegalArgumentException("Unable to get an input stream for the provided granule "+granuleUrl.toString());
+		            }
+		        }
+		        assert cachedStreamSPI!=null:"no cachedStreamSPI available!";
+			inStream = cachedStreamSPI.createInputStreamInstance(granuleUrl, ImageIO.getUseCache(), ImageIO.getCacheDirectory());
+			if(inStream == null){
+                            final File file = DataUtilities.urlToFile(granuleUrl);
+                            if(file!=null){
+                                if(LOGGER.isLoggable(Level.WARNING)){
+                                    LOGGER.log(Level.WARNING,Utils.getFileInfo(file));
+                                }
+                            }
+			    throw new IllegalArgumentException("Unable to get an input stream for the provided file "+granuleUrl.toString());
+			}
 			
 			// get a reader and try to cache the suggested SPI first
 			if(cachedReaderSPI == null){

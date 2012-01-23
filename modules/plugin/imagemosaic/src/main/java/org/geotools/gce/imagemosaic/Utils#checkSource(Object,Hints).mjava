@@ -1,11 +1,10 @@
     static URL checkSource(Object source, Hints hints) {
         URL sourceURL = null;
         File sourceFile = null;
-        // /////////////////////////////////////////////////////////////////////
+
         //
         // Check source
         //
-        // /////////////////////////////////////////////////////////////////////
         // if it is a URL or a String let's try to see if we can get a file to
         // check if we have to build the index
         if (source instanceof File) {
@@ -126,16 +125,39 @@
 
                         }
 
-                        // did we find anything?
+                        // did we find anything? If no, we try to build a new mosaic
                         if (buildMosaic) {
+                                ////
+                                //
+                                // Creating a new mosaic
+                                //
+                                ////
                                 // try to build a mosaic inside this directory and see what
                                 // happens
+                            
+                                // preliminar checks
+                                final File mosaicDirectory= new File(locationPath);
+                                if(!mosaicDirectory.exists()||mosaicDirectory.isFile()||!mosaicDirectory.canWrite()){
+                                    if(LOGGER.isLoggable(Level.SEVERE)){
+                                        LOGGER.log(Level.SEVERE,"Unable to create the mosaic, check the location:\n"+
+                                                "location is:"+locationPath+"\n"+
+                                                "location exists:"+mosaicDirectory.exists()+"\n"+
+                                                "location is a directory:"+mosaicDirectory.isDirectory()+"\n"+
+                                                "location is writable:"+mosaicDirectory.canWrite()+"\n"+
+                                                "location is readable:"+mosaicDirectory.canRead()+"\n"+
+                                                "location is hidden:"+mosaicDirectory.isHidden()+"\n");
+                                    }
+                                    return null;
+                                }
+                            
+                                // actual creation
                                 createMosaic(locationPath, defaultIndexName,DEFAULT_WILCARD, DEFAULT_PATH_BEHAVIOR,hints);
 
                                 // check that the mosaic properties file was created
                                 final File propertiesFile = new File(locationPath,
                                                 defaultIndexName + ".properties");
                                 if (!Utils.checkFileReadable(propertiesFile)) {
+                                        // retrieve a null so that we shows that a problem occurred
                                         sourceURL = null;
                                         return sourceURL;
                                 }
@@ -154,10 +176,12 @@
                                         dataStoreProperties = new File(locationPath,"datastore.properties");
 
                                         // datastore.properties as the source
-                                        if (!Utils.checkFileReadable(dataStoreProperties))
-                                                sourceURL = null;
-                                        else
-                                                sourceURL = DataUtilities.fileToURL(dataStoreProperties);
+                                        if (!Utils.checkFileReadable(dataStoreProperties)){
+                                            sourceURL = null;
+                                        }
+                                        else {
+                                            sourceURL = DataUtilities.fileToURL(dataStoreProperties);
+                                        }
                                 }
 
                         } else
