@@ -17,10 +17,32 @@
                     // as it was already set
                     continue;
                 }
-
-                // extract the values from multiple source features of the same id
-                // and set them to one built feature
-                if (attMapping.isMultiValued()) {
+                if (attMapping.isList()) {
+                    Attribute instance = setAttributeValue(target, null, sources.get(0),
+                            attMapping, null, null, selectedProperties.get(attMapping));
+                    if (sources.size() > 1 && instance != null) {
+                        Object[] values = new Object[sources.size()];
+                        Expression sourceExpr = attMapping.getSourceExpression();
+                        int i = 0;
+                        for (Feature source : sources) {
+                            values[i] = getValue(sourceExpr, source);
+                            i++;
+                        }
+                        String valueString = StringUtils.join(values, " ");
+                        StepList fullPath = attMapping.getTargetXPath();
+                        StepList leafPath = fullPath.subList(fullPath.size() - 1, fullPath.size());
+                        if (ComplexFeatureConstants.SIMPLE_CONTENT.equals(instance.getDescriptor()
+                                .getName())) {
+                            instance.setValue(valueString);
+                        } else {
+                            // xpath builder will work out the leaf attribute to set values on
+                            xpathAttributeBuilder.set(instance, leafPath, valueString, null, null,
+                                    false, sourceExpr);
+                        }
+                    }
+                } else if (attMapping.isMultiValued()) {
+                    // extract the values from multiple source features of the same id
+                    // and set them to one built feature
                     for (Feature source : sources) {
                         setAttributeValue(target, null, source, attMapping, null, null, selectedProperties.get(attMapping));
                     }
