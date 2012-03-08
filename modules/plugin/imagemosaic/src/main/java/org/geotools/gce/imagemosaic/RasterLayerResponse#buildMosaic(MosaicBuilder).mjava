@@ -47,19 +47,19 @@
 		//
 		// SPECIAL CASE
 		// 1 single tile, we try not do a mosaic.
+        final ROI[] sourceRoi = visitor.sourceRoi;
 		if(visitor.granulesNumber==1 && Utils.OPTIMIZE_CROP){
 		    // the roi is exactly equal to the 
 		    final ROI roi = visitor.rois.get(0);
-		    Rectangle bounds = toRectangle(roi.getAsShape());
+		    Rectangle bounds = Utils.toRectangle(roi.getAsShape());
 	        if (bounds != null) {
-	            final RenderedImage image= visitor.getSourcesAsArray()[0];
-	            final Rectangle imageBounds= PlanarImage.wrapRenderedImage(image).getBounds();
+	            RenderedImage image= visitor.getSourcesAsArray()[0];
+	            Rectangle imageBounds= PlanarImage.wrapRenderedImage(image).getBounds();
 	            if(imageBounds.equals(bounds)){
 	                
-	                // do we need to crop
-	                if(!imageBounds.equals(rasterBounds)){
+	                // do we need to crop? (image is bigger than requested?)
+	                if(!rasterBounds.contains(imageBounds)){
 	                    // we have to crop
-	                    
 	                    XRectangle2D.intersect(imageBounds, rasterBounds, imageBounds);
 	                    
 	                    if(imageBounds.isEmpty()){
@@ -70,15 +70,28 @@
 	                    ImageWorker iw = new ImageWorker(image);
 	                    iw.setRenderingHints(localHints);
 	                    iw.crop(imageBounds.x, imageBounds.y, imageBounds.width, imageBounds.height);
-	                    return iw.getRenderedImage();
+	                    
+	                    image = iw.getRenderedImage();
+	                    imageBounds = PlanarImage.wrapRenderedImage(image).getBounds();
 	                }
+	                
+	                // and, do we need to add a border around the image?
+	                if(!imageBounds.contains(rasterBounds)) {
+	                    image = MosaicDescriptor.create(
+	                            new RenderedImage[] {image}, 
+	                            request.isBlend()? MosaicDescriptor.MOSAIC_TYPE_BLEND: MosaicDescriptor.MOSAIC_TYPE_OVERLAY, 
+	                            (alphaIn || visitor.doInputTransparency) ? visitor.alphaChannels : null, sourceRoi, 
+	                            visitor.sourceThreshold, 
+	                            backgroundValues, 
+	                            localHints);
+	                }
+	                
 	                return image;
 	            }
 	        }
 		}
 
 
-		final ROI[] sourceRoi = visitor.sourceRoi;
 		final RenderedImage mosaic = MosaicDescriptor.create(
 		        visitor.getSourcesAsArray(), 
 		        request.isBlend()? MosaicDescriptor.MOSAIC_TYPE_BLEND: MosaicDescriptor.MOSAIC_TYPE_OVERLAY, 
