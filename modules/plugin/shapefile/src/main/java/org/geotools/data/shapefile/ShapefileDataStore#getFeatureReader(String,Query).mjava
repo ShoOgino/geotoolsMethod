@@ -30,15 +30,27 @@
                         schema, propertyNames);
 
                 return createFeatureReader(typeName,
-                        getAttributesReader(false, query), newSchema);
+                        getAttributesReader(false, query, propertyNames), newSchema);
             } catch (SchemaException se) {
                 throw new DataSourceException("Error creating schema", se);
             }
         }
 
         try {
-            return createFeatureReader(getSchema().getTypeName(),
-                    getAttributesReader(true, query), schema);
+            String[] requiredProperties = null;
+            SimpleFeatureType newSchema = schema;
+            if (propertyNames != null) {
+                Set<String> props = new HashSet<String>();
+                props.addAll(Arrays.asList(propertyNames));
+                if (filterAttnames != null) {
+                    props.addAll(Arrays.asList(filterAttnames));
+                }
+                requiredProperties = getPropertiesInOrder(props);
+                newSchema = DataUtilities.createSubType(
+                        schema, requiredProperties);
+            }
+            return createFeatureReader(typeName,
+                    getAttributesReader(true, query, requiredProperties), newSchema);
         } catch (SchemaException se) {
             throw new DataSourceException("Error creating schema", se);
         }
