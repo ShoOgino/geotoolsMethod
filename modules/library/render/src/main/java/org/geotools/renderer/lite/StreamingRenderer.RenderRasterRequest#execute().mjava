@@ -1,0 +1,50 @@
+        @Override
+        void execute() {
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine("Rendering Raster " + coverage);
+            }
+
+            try {
+                // /////////////////////////////////////////////////////////////////
+                //
+                // If the grid object is a reader we ask him to do its best for the
+                // requested resolution, if it is a gridcoverage instead we have to
+                // rely on the gridocerage renderer itself.
+                //
+                // /////////////////////////////////////////////////////////////////
+                final GridCoverageRenderer gcr = new GridCoverageRenderer(destinationCRS,
+                        originalMapExtent, screenSize, worldToScreen, java2dHints);
+
+                try {
+                    gcr.paint(graphics, coverage, symbolizer);
+                } finally {
+                    // we need to try and dispose this coverage if was created on purpose for
+                    // rendering
+                    if (coverage != null && disposeCoverage) {
+                        coverage.dispose(true);
+                        final RenderedImage image = coverage.getRenderedImage();
+                        if(image instanceof PlanarImage) {
+                            ImageUtilities.disposePlanarImageChain((PlanarImage) image);
+                        }
+                    }
+                }
+                
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.fine("Raster rendered");
+                }
+
+            } catch (FactoryException e) {
+                LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
+                fireErrorEvent(e);
+            } catch (TransformException e) {
+                LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
+                fireErrorEvent(e);
+            } catch (NoninvertibleTransformException e) {
+                LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
+                fireErrorEvent(e);
+            } catch (IllegalArgumentException e) {
+                LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
+                fireErrorEvent(e);
+            }
+        }
+

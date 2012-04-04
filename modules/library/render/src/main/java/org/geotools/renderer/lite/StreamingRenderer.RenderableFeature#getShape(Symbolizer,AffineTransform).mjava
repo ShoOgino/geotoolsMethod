@@ -1,0 +1,82 @@
+        public LiteShape2 getShape(Symbolizer symbolizer, AffineTransform at) throws FactoryException {
+            Geometry g = findGeometry(content, symbolizer); // pulls the geometry
+
+            if ( g == null )
+                return null;
+            
+            try {
+                // process screenmap if necessary (only do it once, 
+                // the geometry will be transformed simplified in place and the screenmap 
+                // really needs to play against the original coordinates, plus, once we start
+                // drawing a geometry we want to apply all symbolizers on it)
+                if (screenMap != null // 
+                        && !(symbolizer instanceof PointSymbolizer) //
+                        && !(g instanceof Point)
+                        && getGeometryIndex(g) == -1) {
+                    Envelope env = g.getEnvelopeInternal();
+                    if(screenMap.canSimplify(env))
+                        if (screenMap.checkAndSet(env)) {
+                            return null;
+                        } else {
+                            g = screenMap.getSimplifiedShape(env.getMinX(), env.getMinY(), 
+                                    env.getMaxX(), env.getMaxY(), g.getFactory(), g.getClass());
+                        }
+                }
+    
+                SymbolizerAssociation sa = (SymbolizerAssociation) symbolizerAssociationHT
+                .get(symbolizer);
+                MathTransform2D crsTransform = null;
+                MathTransform2D atTransform = null;
+                MathTransform2D fullTransform = null;
+                if (sa == null) {
+                    sa = new SymbolizerAssociation();
+                    sa.crs = (findGeometryCS(layer, content, symbolizer));
+                    try {
+                        crsTransform = buildTransform(sa.crs, destinationCrs);
+                        atTransform = (MathTransform2D) ProjectiveTransform.create(worldToScreenTransform);
+                        fullTransform = buildFullTransform(sa.crs, destinationCrs, at);
+                    } catch (Exception e) {
+                        // fall through
+                        LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
+                    }
+                    sa.xform = fullTransform;
+                    sa.crsxform = crsTransform;
+                    sa.axform = atTransform;
+    
+                    symbolizerAssociationHT.put(symbolizer, sa);
+                }
+
+                // some shapes may be too close to projection boundaries to
+                // get transformed, try to be lenient
+                if (symbolizer instanceof PointSymbolizer) {
+                    // if the coordinate transformation will occurr in place on the coordinate sequence
+                    if(!clone && g.getFactory().getCoordinateSequenceFactory() instanceof LiteCoordinateSequenceFactory) {
+                        // if the symbolizer is a point symbolizer we first get the transformed
+                        // geometry to make sure the coordinates have been modified once, and then
+                        // compute the centroid in the screen space. This is a side effect of the
+                        // fact we're modifing the geometry coordinates directly, if we don't get
+                        // the reprojected and decimated geometry we risk of transforming it twice
+                        // when computing the centroid
+                        Shape first = getTransformedShape(g, sa);
+                        if(first != null) {
+                                return getTransformedShape(RendererUtilities.getCentroid(g), null);
+                        } else {
+                                return null;
+                        }
+                    } else {
+                        return getTransformedShape(RendererUtilities.getCentroid(g), sa);
+                    }
+                } else {
+                    return getTransformedShape(g, sa);
+                }
+            } catch (TransformException te) {
+                LOGGER.log(Level.FINE, te.getLocalizedMessage(), te);
+                fireErrorEvent(te);
+                return null;
+            } catch (AssertionError ae) {
+                LOGGER.log(Level.FINE, ae.getLocalizedMessage(), ae);
+                fireErrorEvent(ae);
+                return null;
+            }
+        }
+
