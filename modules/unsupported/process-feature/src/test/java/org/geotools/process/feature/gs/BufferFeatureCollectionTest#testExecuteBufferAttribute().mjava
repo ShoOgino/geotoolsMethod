@@ -8,7 +8,7 @@
         GeometryFactory gf = new GeometryFactory();
         SimpleFeatureBuilder b = new SimpleFeatureBuilder(tb.buildFeatureType());
 
-        DefaultFeatureCollection features = new DefaultFeatureCollection(null, b.getFeatureType());
+        ListFeatureCollection features = new ListFeatureCollection(b.getFeatureType());
         for (int numFeatures = 0; numFeatures < 5; numFeatures++) {
             Coordinate array[] = new Coordinate[4];
             int j = 0;
@@ -20,7 +20,7 @@
             LinearRing shell = new LinearRing(array, new PrecisionModel(), 0);
             b.add(gf.createPolygon(shell, null));
             b.add(0);
-            b.add(500);
+            b.add(numFeatures + 1);
             features.add(b.buildFeature(numFeatures + ""));
         }
 
@@ -28,6 +28,7 @@
         SimpleFeatureCollection output = process.execute(features, null, "buffer");
         assertEquals(5, output.size());
         SimpleFeatureIterator iterator = output.features();
+        ReferencedEnvelope expectedBounds = new ReferencedEnvelope(output.getSchema().getCoordinateReferenceSystem());
         for (int numFeatures = 0; numFeatures < 5; numFeatures++) {
             Coordinate[] array = new Coordinate[4];
             int j = 0;
@@ -37,10 +38,14 @@
             }
             array[3] = new Coordinate(numFeatures, numFeatures);
             LinearRing shell = new LinearRing(array, new PrecisionModel(), 0);
-            Geometry expected = gf.createPolygon(shell, null).buffer(500);
+            Geometry expected = gf.createPolygon(shell, null).buffer(numFeatures + 1);
+            expectedBounds.expandToInclude(expected.getEnvelopeInternal());
 
             SimpleFeature sf = iterator.next();
             assertTrue(expected.equals((Geometry) sf.getDefaultGeometry()));
         }
+        
+        assertEquals(expectedBounds, output.getBounds());
+        assertEquals(5, output.size());
     }
 
