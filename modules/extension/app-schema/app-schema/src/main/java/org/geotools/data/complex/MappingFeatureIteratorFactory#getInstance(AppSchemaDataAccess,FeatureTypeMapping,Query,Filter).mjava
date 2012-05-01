@@ -4,6 +4,22 @@
         if (mapping instanceof XmlFeatureTypeMapping) {
             return new XmlMappingFeatureIterator(store, mapping, query);
         }
+        
+        // HACK HACK HACK
+        // experimental/temporary solution for isList subsetting by filtering
+        List<AttributeMapping> listMappings = mapping.getIsListMappings();
+        Filter isListFilter = null;
+        List<StepList> listFilterProperties = null;
+        if (!listMappings.isEmpty()) {
+            IsListFilterVisitor listChecker = new IsListFilterVisitor(listMappings, mapping);
+            Filter complexFilter = query.getFilter();
+            complexFilter.accept(listChecker, null);
+            listFilterProperties = listChecker.getListFilterProperties();
+            if (!listFilterProperties.isEmpty()) {
+                isListFilter = AppSchemaDataAccess.unrollFilter(complexFilter, mapping);
+            }
+        }
+        // END OF HACK
 
         boolean isJoining = AppSchemaDataAccessConfigurator.isJoining();
 
@@ -47,6 +63,14 @@
                 // to find denormalised rows that match the id (but doesn't match pre filter)
                 boolean isFiltered = !isJoining && preFilter != null && preFilter != Filter.INCLUDE;
                 iterator = new DataAccessMappingFeatureIterator(store, mapping, query, isFiltered);
+                // HACK HACK HACK
+                // experimental/temporary solution for isList subsetting by filtering
+                if (isListFilter != null) {
+                    ((DataAccessMappingFeatureIterator) iterator).setListFilter(isListFilter);
+                    ((DataAccessMappingFeatureIterator) iterator)
+                            .setListFilterProperties(listFilterProperties);
+                }
+                // END OF HACK
                 if (filter != null && filter != Filter.INCLUDE) {
                     iterator = new PostFilteringMappingFeatureIterator(iterator, filter,
                             maxFeatures);
@@ -85,6 +109,15 @@
                 }
             }
         }
+        
+        // HACK HACK HACK
+        // experimental/temporary solution for isList subsetting by filtering
+        if (isListFilter != null && iterator instanceof DataAccessMappingFeatureIterator) {
+            ((DataAccessMappingFeatureIterator) iterator).setListFilter(isListFilter);
+            ((DataAccessMappingFeatureIterator) iterator)
+                    .setListFilterProperties(listFilterProperties);
+        }
+        // END OF HACK
 
         return iterator;
     }
