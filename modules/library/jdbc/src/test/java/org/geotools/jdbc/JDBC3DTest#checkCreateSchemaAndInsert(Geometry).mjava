@@ -1,0 +1,51 @@
+    /**
+     * Creates the polygon schema, inserts a 3D geometry into the datastore,
+     * and retrieves it back to make sure 3d data is preserved.
+     * 
+     * @throws Exception
+     */
+    private void checkCreateSchemaAndInsert(Geometry poly) throws Exception {
+        dataStore.createSchema(poly3DType);
+        SimpleFeatureType actualSchema = dataStore.getSchema(tname(POLY3D));
+        assertFeatureTypesEqual(poly3DType, actualSchema);
+        assertEquals(
+                getNativeSRID(),
+                actualSchema.getGeometryDescriptor().getUserData()
+                        .get(JDBCDataStore.JDBC_NATIVE_SRID));
+
+        // insert the feature
+        FeatureWriter<SimpleFeatureType, SimpleFeature> fw = dataStore.getFeatureWriterAppend(
+                tname(POLY3D), Transaction.AUTO_COMMIT);
+        SimpleFeature f = fw.next();
+        f.setAttribute(aname(ID), 0);
+        f.setAttribute(aname(GEOM), poly);
+        f.setAttribute(aname(NAME), "3dpolygon!");
+        fw.write();
+        fw.close();
+
+        // read feature back
+        
+        /**
+         * Use a LiteCoordinateSequence, since this mimics GeoServer behaviour better,
+         * and it exposes bugs in CoordinateSequence handling.
+         */
+        final Hints hints = new Hints();
+        hints.put(Hints.JTS_COORDINATE_SEQUENCE_FACTORY, new LiteCoordinateSequenceFactory());
+        Query query = new DefaultQuery(tname(POLY3D));
+        query.setHints(hints);
+        
+        FeatureReader<SimpleFeatureType, SimpleFeature> fr = dataStore.getFeatureReader(
+                query, Transaction.AUTO_COMMIT);
+        assertTrue(fr.hasNext());
+        f = fr.next();
+
+        /**
+         * Check the geometries are topologically equal.
+         * Check that the Z values are preserved
+         */
+        Geometry fgeom = (Geometry) f.getDefaultGeometry();
+        assertTrue("2D topology does not match", poly.equalsTopo(fgeom));
+        assertTrue("Z values do not match", hasMatchingZValues(poly, fgeom));
+        fr.close();
+    }
+
