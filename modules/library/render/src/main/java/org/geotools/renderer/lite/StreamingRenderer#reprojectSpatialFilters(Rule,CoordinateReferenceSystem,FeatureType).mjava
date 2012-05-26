@@ -1,0 +1,31 @@
+    /**
+     * Reprojects spatial filters so that they match the feature source native CRS, and assuming all literal
+     * geometries are specified in the specified declaredCRS
+     */
+    private Rule reprojectSpatialFilters(Rule rule, CoordinateReferenceSystem declaredCRS, FeatureType schema) {
+        // NPE avoidance
+        Filter filter = rule.getFilter();
+        if(filter == null) {
+            return rule;
+        }
+        
+        // do we have any spatial filter?
+        SpatialFilterVisitor sfv = new SpatialFilterVisitor();
+        filter.accept(sfv, null);
+        if(!sfv.hasSpatialFilter()) {
+            return rule;
+        }
+        
+        // all right, we need to default the literals to the declaredCRS and then reproject to
+        // the native one
+        DefaultCRSFilterVisitor defaulter = new DefaultCRSFilterVisitor(filterFactory, declaredCRS);
+        Filter defaulted = (Filter) filter.accept(defaulter, null);
+        ReprojectingFilterVisitor reprojector = new ReprojectingFilterVisitor(filterFactory, schema);
+        Filter reprojected = (Filter) defaulted.accept(reprojector, null);
+        
+        // clone the rule (the style can be reused over and over, we cannot alter it) and set the new filter
+        Rule rr = new RuleImpl(rule);
+        rr.setFilter(reprojected);
+        return rr;
+    }
+
