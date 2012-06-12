@@ -27,11 +27,24 @@
                 rightContext = attType.getType().getBinding();
             }
         }
+        else if (left instanceof Function) {
+            //check for a function return type
+            Class ret = getFunctionReturnType((Function)left);
+            if (ret != null) {
+                rightContext = ret;
+            }
+        }
         
         if (right instanceof PropertyName) {
             AttributeDescriptor attType = (AttributeDescriptor)right.evaluate(featureType);
             if (attType != null) {
                 leftContext = attType.getType().getBinding();
+            }
+        }
+        else if (right instanceof Function){
+            Class ret = getFunctionReturnType((Function)right);
+            if (ret != null) {
+                leftContext = ret;
             }
         }
 
@@ -53,14 +66,32 @@
 
         try {
             if ( matchCase ) {
-                left.accept(this, leftContext);
+                if (leftContext != null && isBinaryExpression(left)) {
+                    writeBinaryExpression(left, leftContext);
+                }
+                else {
+                    left.accept(this, leftContext);
+                }
+                
                 out.write(" " + type + " ");
-                right.accept(this, rightContext);
+
+                if (rightContext != null && isBinaryExpression(right)) {
+                    writeBinaryExpression(right, rightContext);
+                }
+                else {
+                    right.accept(this, rightContext);
+                }
             }
             else {
-                //wrap both sides in "lower"
-                FunctionImpl f = new FunctionImpl(); 
-                f.setName( "lower" );
+                // wrap both sides in "lower"
+                FunctionImpl f = new FunctionImpl() {
+                    {
+                        functionName = new FunctionNameImpl("lower",
+                                parameter("lowercase", String.class),
+                                parameter("string", String.class));
+                    }
+                };
+                f.setName("lower");
                 
                 f.setParameters(Arrays.asList(left));
                 f.accept(this, Arrays.asList(leftContext));
