@@ -1,0 +1,111 @@
+    @DescribeResult(name = "result", description = "The interpolated surface as a raster")
+    public GridCoverage2D execute(
+            
+            // process data
+            @DescribeParameter(name = "data", description = "Features containing the point observations to be interpolated") SimpleFeatureCollection obsFeatures,
+            @DescribeParameter(name = "valueAttr", description = "Featuretype attribute containing the observed surface value") String valueAttr,
+            @DescribeParameter(name = "dataLimit", description = "Limits the number of input features processed", min=0, max=1) Integer argDataLimit,
+            
+            // process parameters
+            @DescribeParameter(name = "scale", description = "Length scale to use for the interpolation", min=1, max=1) Double argScale,
+            @DescribeParameter(name = "convergence", description = "Convergence factor for the interpolation (default: 0.3)", min=0, max=1) Double argConvergence,
+            @DescribeParameter(name = "passes", description = "Number of passes to compute (default: 2)", min=0, max=1) Integer argPasses,
+            @DescribeParameter(name = "minObservations", description = "Minimum number of observations required to support a grid cell (default: 2)", min=0, max=1) Integer argMinObsCount,
+            @DescribeParameter(name = "maxObservationDistance", description = "Maximum distance to a supporting observation (default: 0)", min=0, max=1) Double argMaxObsDistance,
+            @DescribeParameter(name = "noDataValue", description = "Value to use for NO_DATA cells (default: -999)", min=0, max=1) Double argNoDataValue,
+            @DescribeParameter(name = "pixelsPerCell", description = "Number of pixels per grid cell (default = 1)", min=0, max=1) Integer argPixelsPerCell,
+            
+            // query modification parameters
+            @DescribeParameter(name = "queryBuffer", description = "Distance by which to expand the query window (default: 0)", min=0, max=1) Double argQueryBuffer,
+
+            // output image parameters
+            @DescribeParameter(name = "outputBBOX", description = "Georeferenced bounding box of the output") ReferencedEnvelope outputEnv,
+            @DescribeParameter(name = "outputWidth", description = "Width of the output raster") Integer outputWidth,
+            @DescribeParameter(name = "outputHeight", description = "Height of the output raster") Integer outputHeight,
+            
+            ProgressListener monitor) throws ProcessException {
+
+        /**---------------------------------------------
+         * Check that process arguments are valid
+         * ---------------------------------------------
+         */
+        if (valueAttr == null || valueAttr.length() <= 0) {
+            throw new IllegalArgumentException("Value attribute must be specified");
+        }
+
+        /**---------------------------------------------
+         * Set up required information from process arguments.
+         * ---------------------------------------------
+         */
+        int dataLimit = 0;
+        if (argDataLimit != null) dataLimit = argDataLimit;
+        
+        double lengthScale = argScale;
+        double convergenceFactor = argConvergence != null ? argConvergence : 0.3;
+        int passes = argPasses != null ? argPasses : 2;
+        int minObsCount = argMinObsCount != null ? argMinObsCount : 2;
+        double maxObsDistance = argMaxObsDistance != null ? argMaxObsDistance : 0.0;
+        float noDataValue = (float) (argNoDataValue != null ? argNoDataValue : -999);
+        int pixelsPerCell = 1;
+        if (argPixelsPerCell != null && argPixelsPerCell > 1) {
+            pixelsPerCell = argPixelsPerCell;
+        }
+        int gridWidth = outputWidth;
+        int gridHeight = outputHeight;
+        if (pixelsPerCell > 1) {
+            gridWidth = outputWidth / pixelsPerCell;
+            gridHeight = outputHeight / pixelsPerCell;
+        }
+        
+        CoordinateReferenceSystem srcCRS = obsFeatures.getSchema().getCoordinateReferenceSystem();
+        CoordinateReferenceSystem dstCRS = outputEnv.getCoordinateReferenceSystem();
+        MathTransform trans = null;
+        try {
+            trans = CRS.findMathTransform(srcCRS, dstCRS);
+        } catch (FactoryException e) {
+            throw new ProcessException(e);
+        }
+        /**---------------------------------------------
+         * Convert distance parameters to units of the destination CRS.
+         * ---------------------------------------------
+         */
+        double distanceConversionFactor = distanceConversionFactor(srcCRS, dstCRS);
+        double dstLengthScale = lengthScale * distanceConversionFactor;
+        double dstMaxObsDistance = maxObsDistance * distanceConversionFactor;
+
+        /**---------------------------------------------
+         * Extract the input observation points
+         * ---------------------------------------------
+         */
+        Coordinate[] pts = null;
+        try {
+            pts = extractPoints(obsFeatures, valueAttr, trans, dataLimit);
+        } catch (CQLException e) {
+            throw new ProcessException(e);
+        }
+
+        /**---------------------------------------------
+         * Do the processing
+         * ---------------------------------------------
+         */
+        //Stopwatch sw = new Stopwatch();
+        // interpolate the surface at the specified resolution
+        float[][] barnesGrid = createBarnesGrid(pts, dstLengthScale, convergenceFactor, passes, minObsCount, dstMaxObsDistance, noDataValue, outputEnv, gridWidth, gridHeight);
+        
+        // flip now, since grid size may be smaller
+        barnesGrid = flipXY(barnesGrid);
+        
+        // upsample to output resolution if necessary
+        float[][] outGrid = barnesGrid;
+        if (pixelsPerCell > 1)
+            outGrid = upsample(barnesGrid, noDataValue, outputWidth, outputHeight);
+        
+        // convert to the GridCoverage2D required for output
+        GridCoverageFactory gcf = CoverageFactoryFinder.getGridCoverageFactory(null);
+        GridCoverage2D gridCov = gcf.create("Process Results", outGrid, outputEnv);
+        
+        //System.out.println("**************  Barnes Surface computed in " + sw.getTimeString());
+        
+        return gridCov;
+    }    
+
