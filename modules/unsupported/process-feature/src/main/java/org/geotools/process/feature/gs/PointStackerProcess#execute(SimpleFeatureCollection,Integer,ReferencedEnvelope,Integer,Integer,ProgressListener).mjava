@@ -1,0 +1,64 @@
+    @DescribeResult(name = "result", description = "The collection of stacked points")
+    public SimpleFeatureCollection execute(
+
+            // process data
+            @DescribeParameter(name = "data", description = "Features containing the data points") SimpleFeatureCollection data,
+
+            // process parameters
+            @DescribeParameter(name = "cellSize", description = "Cell size for gridding, in pixels") Integer cellSize,
+
+            // output image parameters
+            @DescribeParameter(name = "outputBBOX", description = "Georeferenced bounding box of the output image") ReferencedEnvelope outputEnv,
+            @DescribeParameter(name = "outputWidth", description = "Width of the output image, in pixels") Integer outputWidth,
+            @DescribeParameter(name = "outputHeight", description = "Height of the output image, in pixels") Integer outputHeight,
+
+            ProgressListener monitor) throws ProcessException, TransformException {
+
+        CoordinateReferenceSystem srcCRS = data.getSchema().getCoordinateReferenceSystem();
+        CoordinateReferenceSystem dstCRS = outputEnv.getCoordinateReferenceSystem();
+        MathTransform crsTransform = null;
+        MathTransform invTransform = null;
+        try {
+            crsTransform = CRS.findMathTransform(srcCRS, dstCRS);
+            invTransform = crsTransform.inverse();
+        } catch (FactoryException e) {
+            throw new ProcessException(e);
+        }
+
+        // TODO: allow output CRS to be different to data CRS 
+        // assume same CRS for now...
+        double cellSizeSrc = cellSize * outputEnv.getWidth() / outputWidth;
+
+        Collection<StackedPoint> stackedPts = stackPoints(data, crsTransform, cellSizeSrc,
+                outputEnv.getMinX(), outputEnv.getMinY());
+
+        SimpleFeatureType schema = createType(srcCRS);
+        SimpleFeatureCollection result = new ListFeatureCollection(schema);
+        SimpleFeatureBuilder fb = new SimpleFeatureBuilder(schema);
+
+        GeometryFactory factory = new GeometryFactory(new PackedCoordinateSequenceFactory());
+
+        double[] srcPt = new double[2];
+        double[] dstPt = new double[2];
+
+
+        for (StackedPoint sp : stackedPts) {
+            // create feature for stacked point
+            Coordinate pt = sp.getLocation();
+            
+            // transform back to src CRS, since RT rendering expects the output to be in the same CRS
+            srcPt[0] = pt.x;
+            srcPt[1] = pt.y;
+            invTransform.transform(srcPt, 0, dstPt, 0, 1);
+            Coordinate psrc = new Coordinate(dstPt[0], dstPt[1]);
+
+            Geometry point = factory.createPoint(psrc);
+            fb.add(point);
+            fb.add(sp.getCount());
+            fb.add(sp.getCountUnique());
+            
+            result.add(fb.buildFeature(null));
+        }
+        return result;
+    }
+
