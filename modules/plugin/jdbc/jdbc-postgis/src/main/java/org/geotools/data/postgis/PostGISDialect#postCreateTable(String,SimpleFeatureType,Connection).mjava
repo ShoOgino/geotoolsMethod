@@ -45,27 +45,42 @@
                     if (geomType == null)
                         geomType = "GEOMETRY";
 
-                    // register the geometry type, first remove and eventual
-                    // leftover, then write out the real one
-                    String sql = 
-                    "DELETE FROM GEOMETRY_COLUMNS"
-                            + " WHERE f_table_catalog=''" //
-                            + " AND f_table_schema = '" + schemaName + "'" //
-                            + " AND f_table_name = '" + tableName + "'" // 
-                            + " AND f_geometry_column = '" + gd.getLocalName() + "'";
-                    
-                    LOGGER.fine( sql );
-                    st.execute( sql );
-                    
-                    sql = "INSERT INTO GEOMETRY_COLUMNS VALUES (''," //
-                            + "'" + schemaName + "'," //
-                            + "'" + tableName + "'," //
-                            + "'" + gd.getLocalName() + "'," //
-                            + dimensions + "," //
-                            + srid + "," //
-                            + "'" + geomType + "')";
-                    LOGGER.fine( sql );
-                    st.execute( sql );
+                    String sql = null;
+                    if (getVersion(cx).compareTo(V_2_0_0) >= 0) {
+                        // postgis 2 and up we don't muck with geometry_columns, we just alter the
+                        // type directly to set the geometry type and srid
+                        //setup the geometry type
+                        sql = 
+                            "ALTER TABLE \"" + schemaName + "\".\"" + tableName + "\" " + 
+                             "ALTER COLUMN \"" + gd.getLocalName() + "\" " + 
+                             "TYPE geometry (" + geomType + ", " + srid + ");";
+                        
+                        LOGGER.fine( sql );
+                        st.execute( sql );
+                    }
+                    else {
+                        // register the geometry type, first remove and eventual
+                        // leftover, then write out the real one
+                        sql = 
+                        "DELETE FROM GEOMETRY_COLUMNS"
+                                + " WHERE f_table_catalog=''" //
+                                + " AND f_table_schema = '" + schemaName + "'" //
+                                + " AND f_table_name = '" + tableName + "'" // 
+                                + " AND f_geometry_column = '" + gd.getLocalName() + "'";
+                        
+                        LOGGER.fine( sql );
+                        st.execute( sql );
+                        
+                        sql = "INSERT INTO GEOMETRY_COLUMNS VALUES (''," //
+                                + "'" + schemaName + "'," //
+                                + "'" + tableName + "'," //
+                                + "'" + gd.getLocalName() + "'," //
+                                + dimensions + "," //
+                                + srid + "," //
+                                + "'" + geomType + "')";
+                        LOGGER.fine( sql );
+                        st.execute( sql );
+                    }
 
                     // add srid checks
                     if (srid > -1) {
@@ -75,7 +90,7 @@
                                 + "\"" + tableName + "\"" //
                                 + " ADD CONSTRAINT \"enforce_srid_" // 
                                 + gd.getLocalName() + "\""// 
-                                + " CHECK (SRID(" //
+                                + " CHECK (ST_SRID(" //
                                 + "\"" + gd.getLocalName() + "\"" //
                                 + ") = " + srid + ")";
                         LOGGER.fine( sql );
@@ -126,8 +141,10 @@
                     st.execute(sql);
                 }
             }
-            cx.commit();
-        } finally {
+            if (!cx.getAutoCommit()) {
+                cx.commit();
+            }
+         } finally {
             dataStore.closeSafe(st);
         }
     }
