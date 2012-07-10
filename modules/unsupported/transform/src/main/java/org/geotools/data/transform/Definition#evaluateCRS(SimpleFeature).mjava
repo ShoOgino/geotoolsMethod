@@ -1,0 +1,22 @@
+    private CoordinateReferenceSystem evaluateCRS(SimpleFeature originalFeature) {
+        SimpleFeatureType originalSchema = originalFeature.getFeatureType();
+        CoordinateReferenceSystem computedCRS;
+        // try static analysis
+        computedCRS = (CoordinateReferenceSystem) expression.accept(
+                new CRSEvaluator(originalSchema), null);
+        if (computedCRS == null) {
+            // all right, let's try the sample feature then
+            Geometry g = expression.evaluate(originalFeature, Geometry.class);
+            if (g != null && g.getUserData() instanceof CoordinateReferenceSystem) {
+                computedCRS = (CoordinateReferenceSystem) g.getUserData();
+            } else {
+                try {
+                    computedCRS = CRS.decode("EPSG:" + g.getSRID());
+                } catch (Exception e) {
+                    return null;
+                }
+            }
+        }
+        return computedCRS;
+    }
+

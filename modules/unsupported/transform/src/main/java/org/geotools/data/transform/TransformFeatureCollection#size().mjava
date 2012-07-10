@@ -1,0 +1,34 @@
+    @Override
+    public int size() {
+        try {
+            Query txQuery = transformer.transformQuery(query);
+            int size = source.getCount(query);
+            if (size >= 0) {
+                // see if we had to hide paging to the wrapped store
+                if(query.getStartIndex() != null && txQuery.getStartIndex() == null) {
+                    size -= query.getStartIndex();
+                }
+                return Math.min(size, query.getMaxFeatures());
+            }
+
+            // sigh, fall back to brute force computation
+            SimpleFeatureIterator fi = null;
+            try {
+                size = 0;
+                fi = source.getFeatures(query).features();
+                while (fi.hasNext()) {
+                    fi.next();
+                    size++;
+                }
+
+                return size;
+            } finally {
+                if (fi != null) {
+                    fi.close();
+                }
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
