@@ -11,11 +11,19 @@
 			this.pathType=(PathType) params.get("PathType");
 			this.locationAttribute=(String)params.get("LocationAttribute");
 			final String temp=(String)params.get("SuggestedSPI");
-			this.suggestedSPI=temp!=null?(ImageReaderSpi) Class.forName(temp).newInstance():null;
+			this.suggestedRasterSPI=temp!=null?(ImageReaderSpi) Class.forName(temp).newInstance():null;
 			this.parentLocation=(String)params.get("ParentLocation");
 			Object heterogen = params.get("Heterogeneous");
 			if (heterogen != null){
 			    this.heterogeneous = ((Boolean) heterogen).booleanValue();
+			}
+			
+			// H2 workadound
+			if(spi instanceof H2DataStoreFactory || spi instanceof H2JNDIDataStoreFactory){
+				if(params.containsKey(H2DataStoreFactory.DATABASE.key)){
+					String dbname = (String) params.get(H2DataStoreFactory.DATABASE.key);
+					params.put(H2DataStoreFactory.DATABASE.key,( parentLocation+"/"+dbname));
+				}
 			}
 			
 			// creating a store, this might imply creating it for an existing underlying store or 
@@ -33,21 +41,25 @@
 				}
 			}
 
-			
 			// is this a new store? If so we do not set any properties
 			if(create)
 				return;
 				
 			// if this is not a new store let's extract basic properties from it
-			if(spi instanceof PostgisNGJNDIDataStoreFactory||spi instanceof PostgisNGDataStoreFactory){
-				String typeName = FilenameUtils.getBaseName(FilenameUtils.getPathNoEndSeparator(this.parentLocation));
-				//if (typeName != null){
-				//    typeName = typeName.toLowerCase();
-				//}
-               extractBasicProperties(typeName);
-			} else {
-				extractBasicProperties(null);
+			if(params.containsKey("TypeName")){
+				this.typeName=(String) params.get("TypeName");
+	        	
+	        	// Oracle trick
+	        	if(spi instanceof OracleNGOCIDataStoreFactory||
+	        			spi instanceof OracleNGJNDIDataStoreFactory||
+	        			spi instanceof OracleNGDataStoreFactory){
+	        		this.typeName=typeName.toUpperCase();
+	        		if(locationAttribute!=null){
+	        			this.locationAttribute=this.locationAttribute.toUpperCase();
+	        		}
+	        	}				
 			}
+			extractBasicProperties();
 		}
 		catch (Throwable e) {
 			try {

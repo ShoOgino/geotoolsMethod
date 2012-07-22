@@ -13,9 +13,38 @@
 		//
 		// Load properties file with information about levels and envelope
 		//
-		final MosaicConfigurationBean configuration = loadMosaicProperties();
+		MosaicConfigurationBean configuration = Utils.loadMosaicProperties(sourceURL,this.locationAttributeName);
+		if(configuration==null){
+			//
+			// do we have a datastore properties file? It will preempt on the shapefile
+			//
+        	final File parent=DataUtilities.urlToFile(sourceURL).getParentFile();
+			
+			// this can be used to look for properties files that do NOT define a datastore
+			final File[] properties = parent.listFiles(
+					(FilenameFilter)
+					FileFilterUtils.and(
+							FileFilterUtils.notFileFilter(FileFilterUtils.nameFileFilter("indexer.properties")),
+						FileFilterUtils.and(
+								FileFilterUtils.notFileFilter(FileFilterUtils.nameFileFilter("datastore.properties")),
+								FileFilterUtils.makeFileOnly(FileFilterUtils.suffixFileFilter(".properties")
+						)
+					)
+			));
+			
+			// do we have a valid datastore + mosaic properties pair?
+			for(File propFile:properties)
+				if(Utils.checkFileReadable(propFile)&&
+						Utils.loadMosaicProperties(DataUtilities.fileToURL(propFile), "")!=null){
+					configuration = Utils.loadMosaicProperties(DataUtilities.fileToURL(propFile),this.locationAttributeName);
+				}               	
+			
+		}
+				
 		if(configuration==null)
 			throw new DataSourceException("Unable to create reader for this mosaic since we could not parse the configuration.");
+		extractProperties(configuration);
+		
 		//location attribute override
 		if(this.hints.containsKey(Hints.MOSAIC_LOCATION_ATTRIBUTE))
 			this.locationAttributeName=((String)this.hints.get(Hints.MOSAIC_LOCATION_ATTRIBUTE));	
@@ -60,47 +89,27 @@
                 } else
                     crs = tempcrs;
             }
-			
+						
 			//
-			// location attribute field checks
-			//	
-			if(this.locationAttributeName==null)
-			{
-				//get the first string
-				for(AttributeDescriptor attribute: type.getAttributeDescriptors()){
-					if(attribute.getType().getBinding().equals(String.class))
-						this.locationAttributeName=attribute.getName().toString();
-				}
+			// perform checks on location attribute name
+			//
+			if(this.locationAttributeName==null) {
+			    throw new DataSourceException("The provided name for the location attribute is invalid.");
+			} else {
+			    if(type.getDescriptor(this.locationAttributeName)==null){
+			        // ORACLE fix
+			        this.locationAttributeName=this.locationAttributeName.toUpperCase();
+			        
+			        // try again with uppercase
+			        if(type.getDescriptor(this.locationAttributeName)==null){
+			            throw new DataSourceException("The provided name for the location attribute is invalid.");
+			        }
+			    }
 			}
-			if(type.getDescriptor(this.locationAttributeName)==null)
-				throw new DataSourceException("The provided name for the location attribute is invalid.");
 			
 			//
 			// time attribute field checks
 			//
-			//time attribute override
-			if(this.timeAttribute==null)
-			{
-				//get the first attribute that can be use as date
-				for(AttributeDescriptor attribute: type.getAttributeDescriptors()){
-					// TODO improve this code
-					if(attribute.getType().getBinding().equals(Date.class))
-					{
-						this.timeAttribute=attribute.getName().toString();
-						break;
-					}
-					if(attribute.getType().getBinding().equals(Timestamp.class))
-					{
-						this.timeAttribute=attribute.getName().toString();
-						break;
-					}
-					if(attribute.getType().getBinding().equals(java.sql.Date.class))
-					{
-						this.timeAttribute=attribute.getName().toString();
-						break;
-					}						
-				}
-			}
 			if(this.timeAttribute!=null&&this.timeAttribute.length()>0&&type.getDescriptor(this.timeAttribute)==null)
 				throw new DataSourceException("The provided name for the timeAttribute attribute is invalid.");			
 			
