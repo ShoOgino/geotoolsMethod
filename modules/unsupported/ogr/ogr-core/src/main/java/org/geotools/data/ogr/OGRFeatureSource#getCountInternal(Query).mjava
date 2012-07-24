@@ -1,0 +1,31 @@
+    @Override
+    protected int getCountInternal(Query query) throws IOException {
+        // check how much we can encode
+        OGRFilterTranslator filterTx = new OGRFilterTranslator(getSchema(), query.getFilter());
+        if (Filter.EXCLUDE.equals(filterTx.getFilter())) {
+            return 0;
+        } else if (!filterTx.isFilterFullySupported()) {
+            // too expensive then
+            return -1;
+        } else {
+            // encode and count
+            Object dataSource = null;
+            Object layer = null;
+
+            try {
+                // grab the layer
+                String typeName = getEntry().getTypeName();
+                dataSource = getDataStore().openOGRDataSource(false);
+                layer = getDataStore().openOGRLayer(dataSource, typeName);
+
+                // filter it
+                setLayerFilters(layer, filterTx);
+
+                return (int) ogr.LayerGetFeatureCount(layer);
+            } finally {
+                ogr.LayerRelease(layer);
+                ogr.DataSourceRelease(dataSource);
+            }
+        }
+    }
+

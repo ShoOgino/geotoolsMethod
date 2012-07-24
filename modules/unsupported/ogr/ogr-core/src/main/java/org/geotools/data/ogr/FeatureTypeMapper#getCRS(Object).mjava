@@ -1,0 +1,39 @@
+    /**
+     * Returns the GeoTools {@link CoordinateReferenceSystem} equivalent to the layer native one
+     * 
+     * @param layer
+     * @return
+     * @throws IOException
+     */
+    private CoordinateReferenceSystem getCRS(Object layer) throws IOException {
+        Object spatialReference = null;
+        CoordinateReferenceSystem crs = null;
+        try {
+            spatialReference = ogr.LayerGetSpatialRef(layer);
+            if (spatialReference == null) {
+                return null;
+            }
+
+            try {
+                String code = ogr.SpatialRefGetAuthorityCode(spatialReference, "EPSG");
+                if (code != null) {
+                    String fullCode = "EPSG:" + code;
+                    crs = CRS.decode(fullCode);
+                }
+            } catch (Exception e) {
+                // fine, the code might be unknown to out authority
+            }
+            if (crs == null) {
+                try {
+                    String wkt = ogr.SpatialRefExportToWkt(spatialReference);
+                    crs = CRS.parseWKT(wkt);
+                } catch (Exception e) {
+                    // the wkt might reference an unsupported projection
+                }
+            }
+            return crs;
+        } finally {
+            if (spatialReference != null) ogr.SpatialRefRelease(spatialReference);
+        }
+    }
+
