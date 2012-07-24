@@ -1,0 +1,61 @@
+    /**
+     * Returns the geotools feature type equivalent from the native OGR one
+     * 
+     * @param layer
+     * @param typeName
+     * @param namespaceURI
+     * @return
+     * @throws IOException
+     */
+    SimpleFeatureType getFeatureType(Object layer, String typeName, String namespaceURI)
+            throws IOException {
+        Object definition = null;
+        try {
+            // setup the builder
+            SimpleFeatureTypeBuilder tb = new SimpleFeatureTypeBuilder();
+            tb.setName(typeName);
+            tb.setNamespaceURI(namespaceURI);
+            if (tb.getNamespaceURI() == null) {
+                tb.setNamespaceURI(BasicFeatureTypes.DEFAULT_NAMESPACE);
+            }
+
+            // grab the layer definition
+            definition = ogr.LayerGetLayerDefn(layer);
+
+            // figure out the geometry
+            Class<? extends Geometry> geometryBinding = getGeometryBinding(definition);
+            if (geometryBinding != null) {
+                CoordinateReferenceSystem crs = getCRS(layer);
+                tb.add("the_geom", geometryBinding, crs);
+            }
+
+            // get the non geometric fields
+            final int count = ogr.LayerGetFieldCount(definition);
+            for (int i = 0; i < count; i++) {
+                Object field = ogr.LayerGetFieldDefn(definition, i);
+                String name = ogr.FieldGetName(field);
+                Class binding = getBinding(field);
+               int width = ogr.FieldGetWidth(field);
+                if (width > 0) {
+                    tb.length(width);
+                }
+                tb.add(name, binding);
+            }
+
+            // compute a default parent feature type
+            if ((geometryBinding == Point.class) || (geometryBinding == MultiPoint.class)) {
+                tb.setSuperType(BasicFeatureTypes.POINT);
+            } else if ((geometryBinding == Polygon.class)
+                    || (geometryBinding == MultiPolygon.class)) {
+                tb.setSuperType(BasicFeatureTypes.POLYGON);
+            } else if ((geometryBinding == LineString.class)
+                    || (geometryBinding == MultiLineString.class)) {
+                tb.setSuperType(BasicFeatureTypes.LINE);
+            }
+
+            return tb.buildFeatureType();
+        } finally {
+            ogr.LayerReleaseLayerDefn(definition);
+        }
+    }
+
