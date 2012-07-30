@@ -1,0 +1,37 @@
+    private static Iterator<WFSResponseFactory> getServiceProviders() {
+        if (registry == null) {
+            synchronized (WFSExtensions.class) {
+                if (registry == null) {
+                    /*
+                     * Set the current thread's class loader to the one that actually loaded the
+                     * WDSDataStore and related classes for while the factory lookup is performed.
+                     * This way the module is friendlier to crazy class loader hierarchies like
+                     * OSGI/Eclipse
+                     */
+                    final ClassLoader current = Thread.currentThread().getContextClassLoader();
+                    try {
+                        final ClassLoader tempClassLoader = WFSDataStoreFactory.class
+                                .getClassLoader();
+                        Thread.currentThread().setContextClassLoader(tempClassLoader);
+                        /*
+                         * Now that we're on the correct classloader lets perform the lookup
+                         */
+                        Iterator<WFSResponseFactory> providers;
+                        providers = ServiceRegistry.lookupProviders(WFSResponseFactory.class);
+                        registry = new HashSet<WFSResponseFactory>();
+                        while (providers.hasNext()) {
+                            WFSResponseFactory provider = providers.next();
+                            registry.add(provider);
+                        }
+                    } finally {
+                        /*
+                         * And finally restore the original thread's class loader
+                         */
+                        Thread.currentThread().setContextClassLoader(current);
+                    }
+                }
+            }
+        }
+        return registry.iterator();
+    }
+
