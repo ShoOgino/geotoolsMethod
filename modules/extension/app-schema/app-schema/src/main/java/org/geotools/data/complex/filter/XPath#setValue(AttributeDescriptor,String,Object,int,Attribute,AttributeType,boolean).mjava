@@ -3,16 +3,19 @@
             final Object value, final int index, final Attribute parent,
             final AttributeType targetNodeType, boolean isXlinkRef) {
         
-        Object convertedValue;
+        Object convertedValue = null;
         Map <Object, Object> simpleContentProperties = null;
-        if (isFeatureChainedSimpleContent(descriptor, value)) {   
-            // get the simple content attribute from the value
-            Collection<Property> simpleContentList = extractSimpleContent(value);
-            convertedValue = simpleContentList;
-            // and also get the client properties from the feature that wraps the simple content
-            // and it will be merged with the created attribute's client properties later
-            if (!simpleContentList.isEmpty()) {
-                simpleContentProperties = simpleContentList.iterator().next().getUserData();    
+        if (isFeatureChainedSimpleContent(descriptor, value)) {
+            List<Property> nestedPropList = getSimpleContentList(value);
+            if (!nestedPropList.isEmpty()) {
+            	Property nestedProp = nestedPropList.iterator().next();
+            	if (Types.isGeometryType(descriptor.getType())
+            			|| nestedProp.getName().equals(descriptor.getName())) {
+            		convertedValue = nestedProp.getValue();
+            	} else {
+                    convertedValue = nestedPropList;
+            	}
+                simpleContentProperties = nestedProp.getUserData();
             }
         } else {
             // adapt value to context
