@@ -55,15 +55,33 @@
             throw new IllegalArgumentException("Optional values cannot be primitives, " +
             		"use the associated object wrapper instead: " + info.name() + " in process " + process.getName());
         }
+        Object defaultValue = null;
+        if(info != null && !DescribeParameter.DEFAULT_NULL.equals(info.defaultValue())) {
+            String strDefault = info.defaultValue();
+
+            // lookup for constant value
+            defaultValue = lookupConstant(strDefault, process, type);
+
+            // try a string to target value conversion
+            if (defaultValue == null) {
+                defaultValue = Converters.convert(strDefault, type);
+            }
+
+            if(defaultValue == null) {
+                throw new IllegalArgumentException("Default value " + strDefault + " could not be converted to target type " + type);
+            }
+        }
+        
+        
         // finally build the parameter
         if (info != null) {
             return new Parameter(info.name(), type, new SimpleInternationalString(info.name()),
-                    new SimpleInternationalString(info.description()), min > 0, min, max, null,
+                    new SimpleInternationalString(info.description()), min > 0, min, max, defaultValue, 
                     null);
         } else {
             return new Parameter("arg" + i, type, new SimpleInternationalString("Argument " + i),
                     new SimpleInternationalString("Input " + type.getName() + " value"), min > 0,
-                    min, max, null, null);
+                    min, max, defaultValue, null);
         }
     }
 
