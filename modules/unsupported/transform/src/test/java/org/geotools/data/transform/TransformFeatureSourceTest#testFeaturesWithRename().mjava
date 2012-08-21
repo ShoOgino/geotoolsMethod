@@ -1,0 +1,35 @@
+    @Test
+    public void testFeaturesWithRename() throws Exception {
+        SimpleFeatureSource transformed = transformWithRename();
+
+        // some checks on the feature collection with the ALL query
+        SimpleFeatureCollection fc = transformed.getFeatures();
+        assertEquals(transformed.getSchema(), fc.getSchema());
+        assertEquals(transformed.getCount(Query.ALL), fc.size());
+        assertEquals(transformed.getBounds(), fc.getBounds());
+
+        // and now with a specific one, here the property feature source will return null values
+        Query q = new Query("usa", CQL.toFilter("name = 'Delaware'"));
+        fc = transformed.getFeatures(q);
+        assertEquals(transformed.getSchema(), fc.getSchema());
+        assertEquals(1, fc.size());
+        assertEquals(DELAWARE_BOUNDS, fc.getBounds());
+
+        // and now read for good
+        SimpleFeatureIterator fi = null;
+        try {
+            fi = fc.features();
+            assertTrue(fi.hasNext());
+            SimpleFeature f = fi.next();
+            assertEquals(f.getFeatureType(), transformed.getSchema());
+            assertNotNull(f.getDefaultGeometry());
+            assertEquals(DELAWARE_BOUNDS, f.getBounds());
+            assertEquals("Delaware", f.getAttribute("name"));
+            assertEquals(666168d, f.getAttribute("people"));
+        } finally {
+            if (fi != null) {
+                fi.close();
+            }
+        }
+    }
+
