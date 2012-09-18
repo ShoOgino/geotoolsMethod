@@ -6,6 +6,7 @@
 
         String format = "";
         String uri = "";
+        String content = null;
         Map<String, Object> paramList = new HashMap<String, Object>();
 
         NodeList children = root.getChildNodes();
@@ -20,7 +21,20 @@
             if (childName == null) {
                 childName = child.getNodeName();
             }
-            if (childName.equalsIgnoreCase("OnLineResource")) {
+            if (childName.equalsIgnoreCase("InlineContent")) {
+                String contentEncoding = getAttribute(child, "encoding");
+                if (LOGGER.isLoggable(Level.FINEST)) {
+                    LOGGER.finest("inline content with encoding " + contentEncoding);
+                }
+                if ("base64".equals(contentEncoding)) {
+                    content = getFirstChildValue(child);
+                } else {
+                    content = "";
+                    if (LOGGER.isLoggable(Level.WARNING)) {
+                        LOGGER.warning("could not process <" + contentEncoding + "> content encoding");
+                    }
+                }
+            } else if (childName.equalsIgnoreCase("OnLineResource")) {
                 uri = parseOnlineResource(child);
             }
 
@@ -41,13 +55,33 @@
             }
         }
 
-        URL url = onlineResourceLocator.locateResource(uri);
-
         ExternalGraphic extgraph;
-        if (url == null) {
-            extgraph = factory.createExternalGraphic(uri, format);
+        if (content != null) {
+            Icon icon = null;
+            if (content.length() > 0) {
+                try {
+                    icon = parseIcon(content);
+                }
+                catch (IOException e) {
+                    if (LOGGER.isLoggable(Level.WARNING)) {
+                        LOGGER.log(Level.WARNING, "could not parse graphic inline content: " + content, e);
+                    }
+                }
+            }
+
+            if (icon == null) {
+                LOGGER.warning("returning empty icon");
+                icon = EmptyIcon.INSTANCE;
+            }
+
+            extgraph = factory.createExternalGraphic(icon, format);
         } else {
-            extgraph = factory.createExternalGraphic(url, format);
+            URL url = onlineResourceLocator.locateResource(uri);
+            if (url == null) {
+                extgraph = factory.createExternalGraphic(uri, format);
+            } else {
+                extgraph = factory.createExternalGraphic(url, format);
+            }
         }
         extgraph.setCustomProperties(paramList);
         return extgraph;
