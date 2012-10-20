@@ -5,21 +5,21 @@
         QueryExpressionTextType qe = (QueryExpressionTextType) object;
         if (!qe.isIsPrivate()) {
             //include the query text
+
+            //this is a hack, but we need to build up a dom with namespaces without actually 
+            // having them decelared by the edxpression text, so we first parse the query 
+            // expression with a sax handler that can transform to a namespace aware dom 
+            // using the current namespace context
             DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-            DocumentBuilder db = dbf.newDocumentBuilder();
+            dbf.setNamespaceAware(true);
+
+            ConvertToDomHandler h = new ConvertToDomHandler(
+                dbf.newDocumentBuilder().newDocument(), namespaceContext);
             
-            Document d = db.parse(new ByteArrayInputStream(qe.getValue().getBytes()));
+            SAXParser saxp = SAXParserFactory.newInstance().newSAXParser();
+            saxp.parse(new ByteArrayInputStream(qe.getValue().getBytes()), h);
             
-            //register all the namespaces from this context with the root element of the parsed
-            // content
-            for (Enumeration en = namespaceContext.getPrefixes(); en.hasMoreElements(); ) {
-                String prefix = (String) en.nextElement();
-                if (prefix == null) {
-                    continue;
-                }
-                String uri = namespaceContext.getURI(prefix);
-                d.getDocumentElement().setAttribute("xmlns:" + prefix, uri);
-            }
+            Document d = h.getDocument();
             e.appendChild(document.importNode(d.getDocumentElement(), true));
         }
         
