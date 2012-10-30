@@ -10,37 +10,63 @@
 
         // for each lite feature type style, scan the whole collection and draw
         for (LiteFeatureTypeStyle liteFeatureTypeStyle : fts_array) {
-            Iterator iterator = null;
-            if (collection != null)
-                iterator = collection.iterator();
-            if (features != null)
-                iterator = features.iterator();
-
-            if (iterator == null)
-                return; // nothing to do
-
-            try {
-                boolean clone = isCloningRequired(currLayer, fts_array);
-                RenderableFeature rf = new RenderableFeature(currLayer, clone);
-                // loop exit condition tested inside try catch
-                // make sure we test hasNext() outside of the try/cath that follows, as that
-                // one is there to make sure a single feature error does not ruin the rendering
-                // (best effort) whilst an exception in hasNext() + ignoring catch results in
-                // an infinite loop
-                while (iterator.hasNext() && !renderingStopRequested) {
-                    try {
-                        rf.setFeature(iterator.next());
-                        process(rf, liteFeatureTypeStyle, scaleRange, at, destinationCrs, layerId);
-                    } catch (Throwable tr) {
-                        fireErrorEvent(tr);
+            
+            if (collection != null){
+                Iterator iterator = collection.iterator();
+                if (iterator == null ){
+                    return; // nothing to do
+                }
+                try {
+                    boolean clone = isCloningRequired(currLayer, fts_array);
+                    RenderableFeature rf = new RenderableFeature(currLayer, clone);
+                    // loop exit condition tested inside try catch
+                    // make sure we test hasNext() outside of the try/cath that follows, as that
+                    // one is there to make sure a single feature error does not ruin the rendering
+                    // (best effort) whilst an exception in hasNext() + ignoring catch results in
+                    // an infinite loop
+                    while (iterator.hasNext() && !renderingStopRequested) {
+                        try {
+                            rf.setFeature(iterator.next());
+                            process(rf, liteFeatureTypeStyle, scaleRange, at, destinationCrs, layerId);
+                        } catch (Throwable tr) {
+                            fireErrorEvent(tr);
+                        }
+                    }
+                } finally {
+                    if( iterator instanceof Closeable ){
+                        try {
+                            ((Closeable)iterator).close();
+                        } catch (IOException e) {
+                            LOGGER.log(Level.FINER, e.getMessage(), e);
+                        }
                     }
                 }
-            } finally {
-                if (collection instanceof FeatureCollection) {
-                    FeatureCollection resource = (FeatureCollection) collection;
-                    resource.close(iterator);
-                } else if (features != null) {
-                    features.close(iterator);
+            }
+            
+            
+            if( features != null ){
+                FeatureIterator<?> iterator = features.features();
+                if (iterator == null ){
+                    return; // nothing to do
+                }  
+                try {
+                    boolean clone = isCloningRequired(currLayer, fts_array);
+                    RenderableFeature rf = new RenderableFeature(currLayer, clone);
+                    // loop exit condition tested inside try catch
+                    // make sure we test hasNext() outside of the try/cath that follows, as that
+                    // one is there to make sure a single feature error does not ruin the rendering
+                    // (best effort) whilst an exception in hasNext() + ignoring catch results in
+                    // an infinite loop
+                    while (iterator.hasNext() && !renderingStopRequested) {
+                        try {
+                            rf.setFeature(iterator.next());
+                            process(rf, liteFeatureTypeStyle, scaleRange, at, destinationCrs, layerId);
+                        } catch (Throwable tr) {
+                            fireErrorEvent(tr);
+                        }
+                    }
+                } finally {
+                    iterator.close();
                 }
             }
         }
