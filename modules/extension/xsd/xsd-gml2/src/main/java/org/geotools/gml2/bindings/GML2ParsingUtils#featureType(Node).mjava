@@ -20,6 +20,9 @@
         ftBuilder.setName(node.getComponent().getName());
         ftBuilder.setNamespaceURI(node.getComponent().getNamespace());
         ftBuilder.setCRS(null); //JD: set explicitly to null to avoid warning
+
+        CoordinateReferenceSystem crs = null;
+
         //mandatory gml attributes
         if (!node.hasChild("description")) {
             ftBuilder.add("description", String.class);
@@ -31,6 +34,10 @@
 
         if (!node.hasChild("boundedBy")) {
             ftBuilder.add("boundedBy", ReferencedEnvelope.class);
+        } else {
+            if (node.getChild("boundedBy").hasChild("Box")) {
+                crs = crs(node.getChild("boundedBy").getChild("Box"));
+            }
         }
 
         //application schema defined attributes
@@ -38,6 +45,11 @@
             Node child = (Node) c.next();
             String name = child.getComponent().getName();
             Object valu = child.getValue();
+
+            // if the next property is of type geometry, let's set its CRS
+            if (Geometry.class.isAssignableFrom(valu.getClass()) && crs != null) {
+                ftBuilder.crs(crs);
+            }
 
             ftBuilder.add(name, (valu != null) ? valu.getClass() : Object.class);
         }
