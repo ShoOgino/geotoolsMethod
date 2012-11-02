@@ -6,16 +6,28 @@
      *            stream from which XML instance document is read
      */
     public void parse(InputStream input) {
-        XMLReader parser = new SAXParser();
-        configure(parser);
+        SAXParserFactory parserFactory = SAXParserFactory.newInstance();
+        parserFactory.setNamespaceAware(true);
+        parserFactory.setValidating(true);
+        XMLReader xmlReader;
+        try {
+            SAXParser parser = parserFactory.newSAXParser();
+            // Validation is against XML Schema
+            parser.setProperty("http://java.sun.com/xml/jaxp/properties/schemaLanguage",
+                    "http://www.w3.org/2001/XMLSchema");
+            xmlReader = parser.getXMLReader();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        xmlReader.setEntityResolver(new AppSchemaEntityResolver());
         // We principally care about the failures themselves, but it is also possible to install a
         // ContentHandler to output annotated XML that identifies the precise location of failures.
         // That can be done with a serializer that implements both ContentHandler and ErrorHandler.
         // It should be installed here (and used for the error handler):
         // parser.setContentHandler(contentHandler);
-        parser.setErrorHandler(new AppSchemaValidatorErrorHandler());
+        xmlReader.setErrorHandler(new AppSchemaValidatorErrorHandler());
         try {
-            parser.parse(new InputSource(input));
+            xmlReader.parse(new InputSource(input));
         } catch (RuntimeException e) {
             // Avoid gratuitous exception chaining.
             // Resolver failures pass through this block.
