@@ -1,15 +1,22 @@
         @Override
-        public SimpleFeature next() {
-            // Object value = next.getProperty(descriptor.getName()).getValue();
-            // return (F) factory.createAttribute(value, newDescriptor, null);
+        public Object next() {
+            //create a new descriptor based on teh xml type
+            AttributeType xmlType = findType(descriptor.getType().getBinding());
+            if (xmlType == null) {
+                throw new RuntimeException("Unable to map attribute " + descriptor.getName() + 
+                    " to xml type");
+            }
+            
+            Object value = next.getProperty(descriptor.getName()).getValue();
 
-            Object value = next.getAttribute(descriptor.getName());
-            String fid = next.getID();
-
+            //because simple features don't carry around their namespace, create a descritor name
+            // that actually used the feature type schema namespace
+            Name name = new NameImpl(next.getType().getName().getNamespaceURI(), descriptor.getLocalName());
+            AttributeDescriptor newDescriptor = typeFactory.createAttributeDescriptor(xmlType, 
+                name, descriptor.getMinOccurs(), descriptor.getMaxOccurs(), 
+                descriptor.isNillable(), descriptor.getDefaultValue());
+            
             next = null;
-
-            builder.add(value);
-            SimpleFeature newFeature = builder.buildFeature(fid);
-            return newFeature;
+            return factory.createAttribute(value, newDescriptor, null);
         }
 
