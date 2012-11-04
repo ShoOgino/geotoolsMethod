@@ -4,15 +4,16 @@
      */
     private void drawPlain(final Graphics2D graphics, MapLayer currLayer, AffineTransform at,
             CoordinateReferenceSystem destinationCrs, String layerId, Collection collection,
-            FeatureCollection features, final NumberRange scaleRange, final List lfts) {
-        final LiteFeatureTypeStyle[] fts_array = (LiteFeatureTypeStyle[]) lfts
-        .toArray(new LiteFeatureTypeStyle[lfts.size()]);
+            FeatureCollection<?,?> features, final NumberRange scaleRange,
+            final List<LiteFeatureTypeStyle> lfts) {
+        
+        final LiteFeatureTypeStyle[] fts_array = lfts.toArray(new LiteFeatureTypeStyle[lfts.size()]);
 
         // for each lite feature type style, scan the whole collection and draw
         for (LiteFeatureTypeStyle liteFeatureTypeStyle : fts_array) {
-            
+            Iterator<?> iterator = null;
             if (collection != null){
-                Iterator iterator = collection.iterator();
+                iterator = collection.iterator();
                 if (iterator == null ){
                     return; // nothing to do
                 }
@@ -36,14 +37,17 @@
                     DataUtilities.close( iterator );
                 }
             }
-            
-            
-            if( features != null ){
-                FeatureIterator<?> iterator = features.features();
-                if (iterator == null ){
+            else if (features != null ){
+                FeatureIterator<?> featureIterator = ((FeatureCollection<?,?>)features).features();
+                if( featureIterator == null ){
                     return; // nothing to do
-                }  
-                try {
+                }
+                iterator = DataUtilities.iterator( featureIterator );
+            }
+            else {
+                return; // nothing to do
+            }
+            try {
                     boolean clone = isCloningRequired(currLayer, fts_array);
                     RenderableFeature rf = new RenderableFeature(currLayer, clone);
                     // loop exit condition tested inside try catch
@@ -59,9 +63,8 @@
                             fireErrorEvent(tr);
                         }
                     }
-                } finally {
-                    iterator.close();
-                }
+            } finally {
+                DataUtilities.close( iterator );
             }
         }
     }
