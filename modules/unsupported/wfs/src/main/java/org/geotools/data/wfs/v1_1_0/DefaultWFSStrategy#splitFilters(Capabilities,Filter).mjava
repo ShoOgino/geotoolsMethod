@@ -10,14 +10,49 @@
      * @see WFSStrategy#splitFilters(WFS_1_1_0_Protocol, Filter)
      */
     public Filter[] splitFilters(Capabilities caps, Filter queryFilter) {
-        CapabilitiesFilterSplitter splitter = new CapabilitiesFilterSplitter(
-                caps, null, null);
+        // ID Filters aren't allowed to be parameters in Logical or Comparison Operators
+        
+        FilterCapabilities filterCapabilities = caps.getContents();
+        IdCapabilities idCapabilities = filterCapabilities.getIdCapabilities();
+        if (idCapabilities != null && (idCapabilities.hasEID() || idCapabilities.hasFID())) {
+            // server supports ID Filters so we need to check our queryFilter is valid            
+            
+            Capabilities idFilterCaps = new Capabilities();
+            idFilterCaps.addName("Id");
+            
+            CapabilitiesFilterSplitter splitter = new CapabilitiesFilterSplitter(idFilterCaps, null, null);
+            queryFilter.accept(splitter, null);
+        
+            Filter server = splitter.getFilterPre();
+            if (server.equals(Filter.INCLUDE)) {
+                // ID Filters not found in the root Filter
+                // remove ID Filter from Capabilities
+                FilterCapabilities filterCapabilitiesWithoutId = new FilterCapabilitiesImpl(
+                        filterCapabilities.getVersion(),
+                        filterCapabilities.getScalarCapabilities(),
+                        filterCapabilities.getSpatialCapabilities(),
+                        null,
+                        filterCapabilities.getTemporalCapabilities());
 
-        queryFilter.accept(splitter, null);
+                Capabilities capabilitiesWithoutId = new Capabilities();
+                capabilitiesWithoutId.addAll(filterCapabilitiesWithoutId);
+                
+                return splitFilters(capabilitiesWithoutId, queryFilter);                
+            } else {
+                // ID Filter found
+                // query the server using the ID Filter
+                Filter post = splitter.getFilterPost();
+                return new Filter[] { server, post };                            
+            }
+        } else {
+            CapabilitiesFilterSplitter splitter = new CapabilitiesFilterSplitter(caps, null, null);
 
-        Filter server = splitter.getFilterPre();
-        Filter post = splitter.getFilterPost();
+            queryFilter.accept(splitter, null);
 
-        return new Filter[] { server, post };
+            Filter server = splitter.getFilterPre();
+            Filter post = splitter.getFilterPost();
+
+            return new Filter[] { server, post };
+        }
     }
 
