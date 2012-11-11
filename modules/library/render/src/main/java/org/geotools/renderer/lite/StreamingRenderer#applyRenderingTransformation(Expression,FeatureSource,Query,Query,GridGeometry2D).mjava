@@ -1,5 +1,6 @@
     FeatureCollection applyRenderingTransformation(Expression transformation,
-            FeatureSource featureSource, Query query, GridGeometry2D gridGeometry) throws IOException, SchemaException, TransformException, FactoryException  {
+            FeatureSource featureSource, Query layerQuery, Query renderingQuery, 
+            GridGeometry2D gridGeometry) throws IOException, SchemaException, TransformException, FactoryException  {
         Object result = null;
         
         // check if it's a wrapper coverage or a wrapped reader
@@ -15,7 +16,7 @@
                 GridGeometry2D readGG = gridGeometry;
                 if(transformation instanceof RenderingTransformation) {
                     RenderingTransformation tx = (RenderingTransformation) transformation;
-                    readGG = (GridGeometry2D) tx.invertGridGeometry(query, gridGeometry);
+                    readGG = (GridGeometry2D) tx.invertGridGeometry(renderingQuery, gridGeometry);
                     // TODO: override the read params and force this grid geometry, or something
                     // similar to this (like passing it as a param to readCoverage
                 }
@@ -112,38 +113,32 @@
             Query optimizedQuery = null;
             if(transformation instanceof RenderingTransformation) {
                 RenderingTransformation tx = (RenderingTransformation) transformation;
-                optimizedQuery = tx.invertQuery(query, gridGeometry);
+                optimizedQuery = tx.invertQuery(renderingQuery, gridGeometry);
             }
             // if we could not find an optimized query no other choice but to just limit
             // ourselves to the bbox, we don't know if the transformation alters/adds attributes :-(
             if(optimizedQuery == null) {
-                 Envelope bounds = (Envelope) query.getFilter().accept(ExtractBoundsFilterVisitor.BOUNDS_VISITOR, null);
+                 Envelope bounds = (Envelope) renderingQuery.getFilter().accept(ExtractBoundsFilterVisitor.BOUNDS_VISITOR, null);
                  Filter bbox = new FastBBOX(filterFactory.property(""), bounds, filterFactory);
                  optimizedQuery = new Query(null, bbox);
-                // optimizedQuery = query;
             }
             
             // grab the original features
-            originalFeatures = featureSource.getFeatures(optimizedQuery);
+            Query mixedQuery = DataUtilities.mixQueries(layerQuery, optimizedQuery, null);
+            originalFeatures = featureSource.getFeatures(mixedQuery);
             
             // transform them
             result = transformation.evaluate(originalFeatures);
         } 
         
         // null safety, a transformation might be free to return null
-        if(result == null) {
+         if(result == null) {
             return null;
         }
         
         // what did we get? raster or vector?
         if(result instanceof FeatureCollection) {
-            // we need to apply the original query, but that uses the wrong type name and
-            // likely the wrong attribute name for the default geometry
-            final SimpleFeatureSource source = DataUtilities.source((FeatureCollection) result);
-            SimpleFeatureType transformedSchema = source.getSchema();
-            Query adapted = adaptQuery(query, transformedSchema, schema);
-            checkAttributeExistence(transformedSchema, adapted);
-            return source.getFeatures(adapted);
+            return (FeatureCollection) result;
         } else if(result instanceof GridCoverage2D) {
             return FeatureUtilities.wrapGridCoverage((GridCoverage2D) result);
         } else if(result instanceof AbstractGridCoverage2DReader) {
