@@ -1,8 +1,7 @@
-    private void testTransformWithQuery(boolean invert) throws IOException, URISyntaxException,
-            CQLException, NoSuchAuthorityCodeException, FactoryException, Exception {
+    @Test
+    public void testTransformReproject() throws Exception {
         // grab the style
-        Style style = RendererBaseTest.loadStyle(this, invert ? "attributeRename.sld"
-                : "attributeRenameNoInvert.sld");
+        Style style = RendererBaseTest.loadStyle(this, "reproject-rt.sld");
         // grab the data
         File property = new File(TestData.getResource(this, "point.properties").toURI());
         PropertyDataStore ds = new PropertyDataStore(property.getParentFile());
@@ -10,7 +9,10 @@
 
         // prepare a feature layer with a query and the rendering tx
         FeatureLayer layer = new FeatureLayer(fs, style);
-        layer.setQuery(new Query(null, CQL.toFilter("id > 5")));
+        
+        // prepare a bbox in UTM-32N
+        ReferencedEnvelope reWgs84 = new ReferencedEnvelope(0, 12, 0, 12, CRS.decode("EPSG:4326"));
+        ReferencedEnvelope reUTM32N = reWgs84.transform(CRS.decode("EPSG:32632"), true);
 
         // render it
         MapContent mc = new MapContent();
@@ -29,13 +31,11 @@
             }
         });
         renderer.setMapContent(mc);
-        ReferencedEnvelope re = new ReferencedEnvelope(0, 12, 0, 12, CRS.decode("EPSG:4326"));
         BufferedImage image = RendererBaseTest.showRender("Lines with circle stroke", renderer,
-                TIME, re);
+                TIME, reUTM32N);
 
-        // if everything went fine we'll have a single red dot in the middle, and we rendered
-        // just one feature
-        assertEquals(1, counter.get());
+        // if everything went fine we rendered all the features
+        assertEquals(10, counter.get());
         assertEquals(Color.RED, getPixelColor(image, image.getWidth() / 2, image.getHeight() / 2));
     }
 
