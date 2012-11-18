@@ -104,8 +104,8 @@
         }
         
         // Setup the secondary painting thread
-        requests = new ArrayBlockingQueue<RenderingRequest>(10000);
-        PainterThread painterThread = new PainterThread(requests);
+        requests = getRequestsQueue();
+        painterThread = new PainterThread(requests);
         ExecutorService localThreadPool = threadPool;
         boolean localPool = false;
         if(localThreadPool == null) {
@@ -169,8 +169,10 @@
             }
         } finally {
             try {
-                requests.put(new EndRequest());
-                painterFuture.get();
+                if(!renderingStopRequested) {
+                    requests.put(new EndRequest());
+                    painterFuture.get();
+                }
             } catch(Exception e) {
                 painterFuture.cancel(true);
                 fireErrorEvent(e);
@@ -181,7 +183,11 @@
             }
         }
         
-        labelCache.end(graphics, paintArea);
+        if(!renderingStopRequested) {
+            labelCache.end(graphics, paintArea);
+        } else {
+            labelCache.clear();
+        }
     
         if (LOGGER.isLoggable(Level.FINE))
             LOGGER.fine(new StringBuffer("Style cache hit ratio: ").append(
