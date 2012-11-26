@@ -6,7 +6,7 @@
 
             // process parameters
             @DescribeParameter(name = "cellSize", description = "Grid cell size to aggregate to, in pixels") Integer cellSize,
-            @DescribeParameter(name = "stretch", description = "Add normalized fields where the largest stack is 1.0. Default false.", min=0, max=1) Boolean argStretch,
+            @DescribeParameter(name = "normalize", description = "Indicates whether to add fields normalized to the range 0-1.", defaultValue="false") Boolean argNormalize,
 
             // output image parameters
             @DescribeParameter(name = "outputBBOX", description = "Bounding box for target image extent") ReferencedEnvelope outputEnv,
@@ -27,9 +27,9 @@
             throw new ProcessException(e);
         }
         
-        boolean stretch = false;
-        if(argStretch!=null){
-            stretch = argStretch;
+        boolean normalize = false;
+        if(argNormalize!=null){
+            normalize = argNormalize;
         }
 
         // TODO: allow output CRS to be different to data CRS 
@@ -39,7 +39,7 @@
         Collection<StackedPoint> stackedPts = stackPoints(data, crsTransform, cellSizeSrc,
                 outputEnv.getMinX(), outputEnv.getMinY());
 
-        SimpleFeatureType schema = createType(srcCRS, stretch);
+        SimpleFeatureType schema = createType(srcCRS, normalize);
         ListFeatureCollection result = new ListFeatureCollection(schema);
         SimpleFeatureBuilder fb = new SimpleFeatureBuilder(schema);
 
@@ -51,7 +51,7 @@
         // Find maxima of the point stacks if needed.
         int maxCount = 0;
         int maxCountUnique = 0;
-        if(stretch){
+        if(normalize){
             for (StackedPoint sp : stackedPts) {
                 if(maxCount<sp.getCount()) maxCount = sp.getCount();
                 if(maxCountUnique<sp.getCount()) maxCountUnique = sp.getCountUnique();
@@ -72,9 +72,9 @@
             fb.add(point);
             fb.add(sp.getCount());
             fb.add(sp.getCountUnique());
-            if(stretch){
-                fb.add(((float)sp.getCount())/maxCount);
-                fb.add(((float)sp.getCountUnique())/maxCountUnique);
+            if(normalize){
+                fb.add(((double)sp.getCount())/maxCount);
+                fb.add(((double)sp.getCountUnique())/maxCountUnique);
             }
             
             result.add(fb.buildFeature(null));
