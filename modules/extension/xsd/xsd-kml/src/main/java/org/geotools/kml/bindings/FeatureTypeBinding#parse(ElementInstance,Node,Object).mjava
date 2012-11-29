@@ -6,6 +6,29 @@
      */
     public Object parse(ElementInstance instance, Node node, Object value)
         throws Exception {
+
+        // start off with the default feature type, and retype as necessary
+        SimpleFeatureType featureType = FeatureType;
+
+        // retype based on schema if we have extended data pointing to a url
+        @SuppressWarnings("unchecked")
+        Map<String, Object> extData = (Map<String, Object>) node.getChildValue("ExtendedData");
+        if (extData != null) {
+            @SuppressWarnings("unchecked")
+            List<URI> schemaURI = (List<URI>) extData.get("schemas");
+            if (schemaURI != null) {
+                for (URI uri : schemaURI) {
+                    String normalizedSchemaName = normalizeSchemaName(uri);
+                    SimpleFeatureType schemaType = schemaRegistry.get(normalizedSchemaName);
+                    featureType = appendAttributes(featureType, schemaType);
+                }
+            }
+        }
+
+        // if we are a custom schema element, add the attributes to the type
+        SimpleFeatureType customFeatureType = schemaRegistry.get(instance.getName());
+        featureType = appendAttributes(featureType, customFeatureType);
+
         SimpleFeatureBuilder b = new SimpleFeatureBuilder(featureType);
 
         //&lt;element minOccurs="0" name="name" type="string"/&gt;
@@ -48,6 +71,36 @@
 
         //&lt;element minOccurs="0" ref="kml:Region"/&gt;
         b.set("Region", node.getChildValue("Region"));
+
+        // stick extended data in feature user data
+        if (extData != null) {
+            b.featureUserData("UntypedExtendedData", extData.get("untyped"));
+            @SuppressWarnings("unchecked")
+            Map<String, Object> typedUserData = (Map<String, Object>) extData.get("typed");
+            if (typedUserData != null) {
+                for (Entry<String, Object> entry : typedUserData.entrySet()) {
+                    String attrName = entry.getKey();
+                    if (featureType.getDescriptor(attrName) != null) {
+                        b.set(attrName, entry.getValue());
+                    }
+                }
+            }
+        }
+
+        // if we are a custom schema type
+        // add in any attributes from that type onto the feature
+        if (customFeatureType != null) {
+            for (AttributeDescriptor ad : customFeatureType.getAttributeDescriptors()) {
+                String attrName = ad.getLocalName();
+                Object childValue = node.getChildValue(attrName);
+                if (childValue != null) {
+                    b.set(attrName, childValue);
+                }
+            }
+        }
+
+        // stick folder stack in feature user data
+        b.featureUserData("Folder", folderStack.asList());
 
         //&lt;element minOccurs="0" name="Metadata" type="kml:MetadataType"/&gt;
         return b.buildFeature((String) node.getAttributeValue("id"));
