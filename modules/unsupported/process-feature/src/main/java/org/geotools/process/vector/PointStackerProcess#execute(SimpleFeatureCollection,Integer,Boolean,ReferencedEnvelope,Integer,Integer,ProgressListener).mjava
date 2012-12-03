@@ -6,11 +6,13 @@
 
             // process parameters
             @DescribeParameter(name = "cellSize", description = "Grid cell size to aggregate to, in pixels") Integer cellSize,
+            @DescribeParameter(name = "normalize", description = "Indicates whether to add fields normalized to the range 0-1.", defaultValue="false") Boolean argNormalize,
 
             // output image parameters
             @DescribeParameter(name = "outputBBOX", description = "Bounding box for target image extent") ReferencedEnvelope outputEnv,
             @DescribeParameter(name = "outputWidth", description = "Target image width in pixels") Integer outputWidth,
             @DescribeParameter(name = "outputHeight", description = "Target image height in pixels") Integer outputHeight,
+            
 
             ProgressListener monitor) throws ProcessException, TransformException {
 
@@ -24,6 +26,11 @@
         } catch (FactoryException e) {
             throw new ProcessException(e);
         }
+        
+        boolean normalize = false;
+        if(argNormalize!=null){
+            normalize = argNormalize;
+        }
 
         // TODO: allow output CRS to be different to data CRS 
         // assume same CRS for now...
@@ -32,7 +39,7 @@
         Collection<StackedPoint> stackedPts = stackPoints(data, crsTransform, cellSizeSrc,
                 outputEnv.getMinX(), outputEnv.getMinY());
 
-        SimpleFeatureType schema = createType(srcCRS);
+        SimpleFeatureType schema = createType(srcCRS, normalize);
         ListFeatureCollection result = new ListFeatureCollection(schema);
         SimpleFeatureBuilder fb = new SimpleFeatureBuilder(schema);
 
@@ -41,6 +48,15 @@
         double[] srcPt = new double[2];
         double[] dstPt = new double[2];
 
+        // Find maxima of the point stacks if needed.
+        int maxCount = 0;
+        int maxCountUnique = 0;
+        if(normalize){
+            for (StackedPoint sp : stackedPts) {
+                if(maxCount<sp.getCount()) maxCount = sp.getCount();
+                if(maxCountUnique<sp.getCount()) maxCountUnique = sp.getCountUnique();
+            }
+        }
 
         for (StackedPoint sp : stackedPts) {
             // create feature for stacked point
@@ -56,6 +72,10 @@
             fb.add(point);
             fb.add(sp.getCount());
             fb.add(sp.getCountUnique());
+            if(normalize){
+                fb.add(((double)sp.getCount())/maxCount);
+                fb.add(((double)sp.getCountUnique())/maxCountUnique);
+            }
             
             result.add(fb.buildFeature(null));
         }
