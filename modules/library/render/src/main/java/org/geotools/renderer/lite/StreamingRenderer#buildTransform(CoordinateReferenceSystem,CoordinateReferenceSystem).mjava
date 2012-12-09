@@ -11,11 +11,15 @@
      * @return the transform, or null if any of the crs is null, or if the the two crs are equal
      * @throws FactoryException If no transform is available to the destCRS
      */
-    private MathTransform2D buildTransform(CoordinateReferenceSystem sourceCRS,
+    private MathTransform buildTransform(CoordinateReferenceSystem sourceCRS,
             CoordinateReferenceSystem destCRS) throws FactoryException {
+        MathTransform transform = null;
         if( sourceCRS != null && sourceCRS.getCoordinateSystem().getDimension() >= 3 ){
             // We are going to transform over to DefaultGeographic.WGS84 on the fly
             // so we will set up our math transform to take it from there
+            MathTransform toWgs84_3d = CRS.findMathTransform( sourceCRS,  DefaultGeographicCRS.WGS84_3D );
+            MathTransform toWgs84_2d = CRS.findMathTransform( DefaultGeographicCRS.WGS84_3D, DefaultGeographicCRS.WGS84);
+            transform = ConcatenatedTransform.create(toWgs84_3d, toWgs84_2d);
             sourceCRS = DefaultGeographicCRS.WGS84;
         }
         // the basic crs transformation, if any
@@ -27,6 +31,15 @@
         else {
             mt = (MathTransform2D) CRS.findMathTransform(sourceCRS, destCRS, true);
         }
-        return mt;
+        
+        if(transform != null) {
+            if(mt == null) {
+                return transform;
+            } else {
+                return ConcatenatedTransform.create(transform, mt);
+            }
+        } else {
+            return mt;
+        }
     }
 
