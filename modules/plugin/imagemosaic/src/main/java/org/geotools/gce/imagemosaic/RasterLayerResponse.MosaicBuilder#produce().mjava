@@ -8,12 +8,16 @@
 			// execute them all
 			boolean firstGranule=true;
 			int[] alphaIndex=null;
+			StringBuilder paths = new StringBuilder();
 			
 			for (Future<GranuleLoadingResult> future :tasks) {
 				
 				
 				final RenderedImage loadedImage;
 				final GranuleLoadingResult result;
+				final URL url;
+				final File inputFile;
+				final String canonicalPath;
 				boolean doFiltering;
 				try {
 					if(!multithreadingAllowed || rasterManager.parent.multiThreadedLoader == null)
@@ -31,6 +35,9 @@
                                         }
 					loadedImage = result.getRaster();
 					doFiltering = result.isDoFiltering();
+					url = result.granuleUrl;
+					inputFile = DataUtilities.urlToFile(url);
+					canonicalPath = inputFile.getCanonicalPath();
 					if(loadedImage==null)
 					{
 						if(LOGGER.isLoggable(Level.FINE))
@@ -85,6 +92,10 @@
 					if (LOGGER.isLoggable(Level.FINE))
 						LOGGER.fine("Adding to mosaic image number " + granuleIndex+ " failed, original request was "+request);
 					continue;
+				} catch (IOException e) {
+				            if (LOGGER.isLoggable(Level.FINE))
+				                LOGGER.fine("Adding to mosaic image number " + granuleIndex + " failed, original request was " + request);
+				            continue;
 				}
 
 
@@ -122,15 +133,12 @@
                                 if (defaultArtifactsFilterThreshold != Integer.MIN_VALUE && doFiltering){
                                     int artifactThreshold = defaultArtifactsFilterThreshold; 
                                     if (artifactsFilterPTileThreshold != -1){
-                                        final URL url = result.getGranuleUrl();
                                         
                                         //Looking for a histogram for that granule in order to 
                                         //setup dynamic threshold 
                                         if (url != null){
-                                            final File inputFile = DataUtilities.urlToFile(url);
-                                            final String inputFileName = inputFile.getPath();
-                                            final String path = FilenameUtils.getFullPath(inputFileName);
-                                            final String baseName = FilenameUtils.getBaseName(inputFileName);
+                                            final String path = FilenameUtils.getFullPath(canonicalPath);
+                                            final String baseName = FilenameUtils.getBaseName(canonicalPath);
                                             final String histogramPath = path + baseName + "." + "histogram";
                                             final Histogram histogram = Utils.getHistogram(histogramPath);
                                             if (histogram != null) {
@@ -149,7 +157,7 @@
 
 				// add to mosaic
                                 sources.add(raster);
-                                
+                                paths.append(granuleIndex > 0 ? "," : "").append(canonicalPath);
 			
 				//increment index 
 				granuleIndex++;
@@ -162,7 +170,7 @@
 					LOGGER.log(Level.FINE,"Unable to load any granuleDescriptor ");
 				return;
 			}
-			
+			granulesPaths = paths.toString();
 	                sourceRoi = rois.toArray(new ROI[rois.size()]);
 		}
 
