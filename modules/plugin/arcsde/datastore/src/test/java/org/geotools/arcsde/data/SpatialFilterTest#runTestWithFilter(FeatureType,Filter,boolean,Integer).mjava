@@ -1,4 +1,5 @@
-    private void runTestWithFilter(FeatureType ft, Filter filter, boolean empty) throws Exception {
+    private void runTestWithFilter(FeatureType ft, Filter filter, boolean empty, /* Nullable */
+            Integer expectedCount) throws Exception {
         System.err.println("****************");
         System.err.println("**");
         System.err.println("** TESTING FILTER: " + filter);
@@ -7,7 +8,8 @@
 
         // First, read using the slow, built-in mechanisms
         String[] propertyNames = safePropertyNames(ft);
-        Query allQuery = new Query(testData.getTempTableName(), Filter.INCLUDE, propertyNames);
+        final String typeName = testData.getTempTableName();
+        Query allQuery = new Query(typeName, Filter.INCLUDE, propertyNames);
         System.err.println("Performing slow read...");
 
         long startTime = System.currentTimeMillis();
@@ -34,10 +36,15 @@
         fr.close();
         endTime = System.currentTimeMillis();
         System.err.println("Fast read took " + (endTime - startTime) + " milliseconds.");
-        
+
         assertFeatureListsSimilar(slowResults, fastResults);
-        
-        if(empty) {
+
+        if (expectedCount != null) {
+            assertEquals(expectedCount.intValue(), slowResults.size());
+            assertEquals(expectedCount.intValue(), fastResults.size());
+        }
+
+        if (empty) {
             assertEquals("Result was supposed to be empty", 0, fastResults.size());
         } else {
             assertTrue("Result was supposed to be non empty", fastResults.size() > 0);
