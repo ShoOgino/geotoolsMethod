@@ -127,7 +127,7 @@
              */
             if (colors != null) {
                 layout.setColorModel(colors);
-            }
+            } 
             if (hints != null) {
                 hints = hints.clone();
                 hints.put(JAI.KEY_IMAGE_LAYOUT, layout);
@@ -143,7 +143,19 @@
             operation = "BandSelect";
             params = params.add(bandIndices);
         }
-        final PlanarImage image = OperationJAI.getJAI(hints).createNS(operation, params, hints);
+        PlanarImage image = OperationJAI.getJAI(hints).createNS(operation, params, hints);
+        // do we have a color model available?
+        if(image.getColorModel()==null){
+            layout=(ImageLayout) hints.get(JAI.KEY_IMAGE_LAYOUT);
+            final ColorModel tempCM=ImageIOUtilities.createColorModel(image.getSampleModel());
+            
+            // did we manage to create one?
+            if(tempCM!=null){
+                layout.setColorModel(tempCM);
+                image= FormatDescriptor.create(image,image.getSampleModel().getDataType(), hints);
+            }
+            
+        }
         image.setProperty("GC_VisibleBand", visibleBand);
         return new BandSelector2D(source, image, targetBands, bandIndices, hints);
     }
