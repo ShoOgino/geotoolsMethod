@@ -17,24 +17,27 @@
 		//
 		// /////////////////////////////////////////////////////////////////////
 		// ellipsoid key
-		final String ellipsoidKey = metadata
-				.getGeoKey(GeoTiffGCSCodes.GeogEllipsoidGeoKey);
+		final String ellipsoidKey = metadata.getGeoKey(GeoTiffGCSCodes.GeogEllipsoidGeoKey);
 		String temp = null;
 		// is the ellipsoid user defined?
-		if (ellipsoidKey
-				.equalsIgnoreCase(GeoTiffConstants.GTUserDefinedGeoKey_String)) {
-			// /////////////////////////////////////////////////////////////////////
+		if (ellipsoidKey.equals(GeoTiffConstants.GTUserDefinedGeoKey_String)) {
 			//
 			// USER DEFINED ELLIPSOID
 			//
-			// /////////////////////////////////////////////////////////////////////
-			String nameEllipsoid = metadata
-					.getGeoKey(GeoTiffGCSCodes.GeogCitationGeoKey);
-			if (nameEllipsoid == null)
-				nameEllipsoid = "unnamed";
+			String name = metadata.getGeoKey(GeoTiffGCSCodes.GeogCitationGeoKey);
+			if (name == null){
+			    name = "unnamed";
+			} else {
+	                    name=cleanName(name);
+                            String[] values = name.split("\\|");
+                            if(values!=null&&values.length>=3){
+                                name=values[2];
+                            }  	                    
+	                }
 			// is it the default for WGS84?
-			if (nameEllipsoid.trim().equalsIgnoreCase("WGS84"))
-				return DefaultEllipsoid.WGS84;
+			if (name.trim().equalsIgnoreCase("WGS84")){
+			    return DefaultEllipsoid.WGS84;
+			}
 
 			// //
 			//
@@ -47,39 +50,28 @@
 			// //
 			// getting temporary parameters
 			temp = metadata.getGeoKey(GeoTiffGCSCodes.GeogSemiMajorAxisGeoKey);
-			final double semiMajorAxis = (temp != null ? Double
-					.parseDouble(temp) : Double.NaN);
+			final double semiMajorAxis = (temp != null ? Double.parseDouble(temp) : Double.NaN);
 			temp = metadata.getGeoKey(GeoTiffGCSCodes.GeogInvFlatteningGeoKey);
 			final double inverseFlattening;
 			if (temp != null) {
-				inverseFlattening = (temp != null ? Double.parseDouble(temp)
-						: Double.NaN);
+			    inverseFlattening = (temp != null ? Double.parseDouble(temp): Double.NaN);
 			} else {
-				temp = metadata
-						.getGeoKey(GeoTiffGCSCodes.GeogSemiMinorAxisGeoKey);
-				final double semiMinorAxis = (temp != null ? Double
-						.parseDouble(temp) : Double.NaN);
-				inverseFlattening = semiMajorAxis
-						/ (semiMajorAxis - semiMinorAxis);
+				temp = metadata.getGeoKey(GeoTiffGCSCodes.GeogSemiMinorAxisGeoKey);
+				final double semiMinorAxis = (temp != null ? Double.parseDouble(temp) : Double.NaN);
+				inverseFlattening = semiMajorAxis / (semiMajorAxis - semiMinorAxis);
 
 			}
 			// look for the Ellipsoid first then build the datum
-			return DefaultEllipsoid.createFlattenedSphere(nameEllipsoid,
-					semiMajorAxis, inverseFlattening, unit);
+			return DefaultEllipsoid.createFlattenedSphere(name,semiMajorAxis, inverseFlattening, unit);
 		}
 
 		try {
-			// /////////////////////////////////////////////////////////////////////
 			//
 			// EPSG STANDARD ELLIPSOID
 			//
-			// /////////////////////////////////////////////////////////////////////
-			return this.allAuthoritiesFactory.createEllipsoid(new StringBuffer(
-					"EPSG:").append(ellipsoidKey).toString());
+			return this.allAuthoritiesFactory.createEllipsoid(new StringBuilder("EPSG:").append(ellipsoidKey).toString());
 		} catch (FactoryException fe) {
-			final GeoTiffException ex = new GeoTiffException(metadata, fe
-					.getLocalizedMessage(), fe);
-
+			final GeoTiffException ex = new GeoTiffException(metadata, fe.getLocalizedMessage(), fe);
 			throw ex;
 		}
 	}
