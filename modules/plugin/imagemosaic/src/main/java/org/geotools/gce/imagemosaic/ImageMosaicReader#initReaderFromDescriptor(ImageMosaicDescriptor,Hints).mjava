@@ -4,7 +4,7 @@
 	 * @param uHints
 	 * @throws DataSourceException
 	 */
-    private void initReaderFromDescriptor(final ImageMosaicDescriptor source, final Hints uHints) throws DataSourceException {
+    private void initReaderFromDescriptor(final ImageMosaicDescriptor source, final Hints uHints) throws IOException {
         Utilities.ensureNonNull("source", source);
         final MosaicConfigurationBean configuration = source.getConfiguration();
         if (configuration == null) {
@@ -15,10 +15,37 @@
         if (catalog == null) {
             throw new DataSourceException("Unable to create reader for this mosaic since the inner catalog is null.");
         }
+
+        final SimpleFeatureType schema = catalog.getType();
+        if (schema == null) {
+            throw new DataSourceException("Unable to create reader for this mosaic since the inner catalog schema is null.");
+        }
+        
+        if (configuration.getAdditionalDomainAttributes() != null) {
+            domainsManager = new DomainManager(configuration.getAdditionalDomainAttributes(),schema);
+        }
+        
+        // time attribute
+        if(configuration.getTimeAttribute()!=null){
+            final HashMap<String, String> init=new HashMap<String, String>();
+            init.put("TIME", configuration.getTimeAttribute());
+            timeDomainManager= new DomainManager(init,schema);
+        }
+        // elevation attribute
+        if(configuration.getElevationAttribute()!=null){
+            final HashMap<String, String> init=new HashMap<String, String>();
+            init.put("ELEVATION", configuration.getElevationAttribute());
+            elevationDomainManager= new DomainManager(init,schema);
+        }
+
+        // grid geometry
         setGridGeometry();
         
+        // raster manager
         rasterManager = new RasterManager(this);
         rasterManager.defaultSM = configuration.getSampleModel();
+        
+        
         
     }
 
