@@ -17,8 +17,9 @@
 		
                 //prepare hints
                 final Dimension tileDimensions=request.getTileDimensions();
-                if(tileDimensions!=null)
-                        layout.setTileHeight(tileDimensions.width).setTileWidth(tileDimensions.height);
+                if(tileDimensions!=null){
+                    layout.setTileHeight(tileDimensions.width).setTileWidth(tileDimensions.height);
+                }
                 final RenderingHints localHints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT,layout);
                 if (hints != null && !hints.isEmpty()){
                     if (hints.containsKey(JAI.KEY_TILE_CACHE)){
@@ -47,58 +48,63 @@
 		//
 		// SPECIAL CASE
 		// 1 single tile, we try not do a mosaic.
-        final ROI[] sourceRoi = visitor.sourceRoi;
+                final ROI[] sourceRoi = visitor.sourceRoi;
 		if(visitor.granulesNumber==1 && Utils.OPTIMIZE_CROP){
 		    // the roi is exactly equal to the 
 		    final ROI roi = visitor.rois.get(0);
 		    Rectangle bounds = Utils.toRectangle(roi.getAsShape());
-	        if (bounds != null) {
-	            RenderedImage image= visitor.getSourcesAsArray()[0];
-	            Rectangle imageBounds= PlanarImage.wrapRenderedImage(image).getBounds();
-	            if(imageBounds.equals(bounds)){
-	                
-	                // do we need to crop? (image is bigger than requested?)
-	                if(!rasterBounds.contains(imageBounds)){
-	                    // we have to crop
-	                    XRectangle2D.intersect(imageBounds, rasterBounds, imageBounds);
-	                    
-	                    if(imageBounds.isEmpty()){
-	                        // return back a constant image
-	                        return null;
-	                    }
-	                    // crop
-	                    ImageWorker iw = new ImageWorker(image);
-	                    iw.setRenderingHints(localHints);
-	                    iw.crop(imageBounds.x, imageBounds.y, imageBounds.width, imageBounds.height);
-	                    
-	                    image = iw.getRenderedImage();
-	                    imageBounds = PlanarImage.wrapRenderedImage(image).getBounds();
-	                }
-	                
-	                // and, do we need to add a border around the image?
-	                if(!imageBounds.contains(rasterBounds)) {
-	                    image = MosaicDescriptor.create(
-	                            new RenderedImage[] {image}, 
-	                            request.isBlend()? MosaicDescriptor.MOSAIC_TYPE_BLEND: MosaicDescriptor.MOSAIC_TYPE_OVERLAY, 
-	                            (alphaIn || visitor.doInputTransparency) ? visitor.alphaChannels : null, sourceRoi, 
-	                            visitor.sourceThreshold, 
-	                            backgroundValues, 
-	                            localHints);
-	                }
-	                
-	                return image;
-	            }
-	        }
+        	        if (bounds != null) {
+        	            RenderedImage image= visitor.getSourcesAsArray()[0];
+        	            Rectangle imageBounds= PlanarImage.wrapRenderedImage(image).getBounds();
+        	            if(imageBounds.equals(bounds)){
+        	                
+        	                // do we need to crop? (image is bigger than requested?)
+        	                if(!rasterBounds.contains(imageBounds)){
+        	                    // we have to crop
+        	                    XRectangle2D.intersect(imageBounds, rasterBounds, imageBounds);
+        	                    
+        	                    if(imageBounds.isEmpty()){
+        	                        // return back a constant image
+        	                        return null;
+        	                    }
+        	                    // crop
+        	                    ImageWorker iw = new ImageWorker(image);
+        	                    iw.setRenderingHints(localHints);
+        	                    iw.crop(imageBounds.x, imageBounds.y, imageBounds.width, imageBounds.height);
+        	                    
+        	                    image = iw.getRenderedImage();
+        	                    imageBounds = PlanarImage.wrapRenderedImage(image).getBounds();
+        	                }
+        	                
+        	                // and, do we need to add a border around the image?
+        	                if(!imageBounds.contains(rasterBounds)) {
+        	                    image = MosaicDescriptor.create(
+        	                            new RenderedImage[] {image}, 
+        	                            request.isBlend()? MosaicDescriptor.MOSAIC_TYPE_BLEND: MosaicDescriptor.MOSAIC_TYPE_OVERLAY, 
+        	                            (alphaIn || visitor.doInputTransparency) ? visitor.alphaChannels : null, sourceRoi, 
+        	                            visitor.sourceThreshold, 
+        	                            backgroundValues, 
+        	                            localHints);
+        	                }
+        	                
+        	                return image;
+        	            }
+        	        }
 		}
+	                
+		// 
+		// Final Merge
+		// 
+		// I can even do a stacking merge or a flat merge
+		final RenderedImage mosaic=request.getMergeBehavior().process(
+	                        visitor.getSourcesAsArray(), 
+	                        backgroundValues, 
+	                        visitor.sourceThreshold, 
+	                        (alphaIn || visitor.doInputTransparency) ? visitor.alphaChannels : null, 
+	                        sourceRoi, 
+	                        request.isBlend()? MosaicDescriptor.MOSAIC_TYPE_BLEND: MosaicDescriptor.MOSAIC_TYPE_OVERLAY, 
+	                        localHints);
 
-
-		final RenderedImage mosaic = MosaicDescriptor.create(
-		        visitor.getSourcesAsArray(), 
-		        request.isBlend()? MosaicDescriptor.MOSAIC_TYPE_BLEND: MosaicDescriptor.MOSAIC_TYPE_OVERLAY, 
-		        (alphaIn || visitor.doInputTransparency) ? visitor.alphaChannels : null, sourceRoi, 
-		        visitor.sourceThreshold, 
-		        backgroundValues, 
-		        localHints);
 		
 		if (setRoiProperty) {
 		    

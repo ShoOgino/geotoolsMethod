@@ -5,7 +5,7 @@
      * @param uHints
      * @throws DataSourceException
      */
-    private void initReaderFromURL(final Object source, final Hints hints) throws MalformedURLException, DataSourceException {
+    private void initReaderFromURL(final Object source, final Hints hints) throws Exception {
 		this.sourceURL=Utils.checkSource(source,hints);
 		if(this.sourceURL==null)
 			throw new DataSourceException("This plugin accepts File, URL or String. The string may describe a File or an URL");
@@ -47,8 +47,9 @@
 		extractProperties(configuration);
 		
 		//location attribute override
-		if(this.hints.containsKey(Hints.MOSAIC_LOCATION_ATTRIBUTE))
-			this.locationAttributeName=((String)this.hints.get(Hints.MOSAIC_LOCATION_ATTRIBUTE));	
+		if(this.hints.containsKey(Hints.MOSAIC_LOCATION_ATTRIBUTE)){
+		    this.locationAttributeName=((String)this.hints.get(Hints.MOSAIC_LOCATION_ATTRIBUTE));	
+		}
 		
 		//
 		// Load tiles informations, especially the bounds, which will be
@@ -57,19 +58,40 @@
 		try {
 			// create the index
 			catalog= GranuleCatalogFactory.createGranuleCatalog(sourceURL, configuration);
-			
 			// error
-			if(catalog==null)
-				throw new DataSourceException("Unable to create index for this URL "+sourceURL);
+			if(catalog==null){
+			    throw new DataSourceException("Unable to create index for this URL "+sourceURL);
+			}
+                        final SimpleFeatureType type= catalog.getType();
+                        if (type==null){
+                            throw new IllegalArgumentException("Problems when opening the index, no typenames for the schema are defined");
+                        }
+                        
+                        
+			// additional domain properties
+		        SimpleFeatureType schema = catalog.getType();
+                        if (configuration.getAdditionalDomainAttributes() != null) {
+		            domainsManager = new DomainManager(configuration.getAdditionalDomainAttributes(),schema);
+		        }
+		        // time attribute
+		        if(configuration.getTimeAttribute()!=null){
+                            final HashMap<String, String> init=new HashMap<String, String>();
+                            init.put("TIME", configuration.getTimeAttribute());
+		            timeDomainManager= new DomainManager(init,schema);
+		        }
+                        // elevation attribute
+                        if(configuration.getElevationAttribute()!=null){
+                            final HashMap<String, String> init=new HashMap<String, String>();
+                            init.put("ELEVATION", configuration.getElevationAttribute());
+                            elevationDomainManager= new DomainManager(init,schema);
+                        }
+
 			
 			// everything is fine
 			if (LOGGER.isLoggable(Level.FINE))
 				LOGGER.fine("Connected mosaic reader to its index "
 						+ sourceURL.toString());
-			final SimpleFeatureType type= catalog.getType();
-			if (type==null)
-				throw new IllegalArgumentException("Problems when opening the index, no typenames for the schema are defined");
-			
+
 			setGridGeometry(configuration.getEnvelope());
 
             //
@@ -106,22 +128,18 @@
 			    }
 			}
 			
-			//
-			// time attribute field checks
-			//
-			if(this.timeAttribute!=null&&this.timeAttribute.length()>0&&type.getDescriptor(this.timeAttribute)==null)
-				throw new DataSourceException("The provided name for the timeAttribute attribute is invalid.");			
-			
 			// creating the raster manager
 			rasterManager = new RasterManager(this);
 		}
 		catch (Throwable e) {
 			try {
-				if(catalog!=null)
-					catalog.dispose();
+				if(catalog!=null){
+				    catalog.dispose();
+				}
 			} catch (Throwable e1) {
-				if (LOGGER.isLoggable(Level.FINEST))
-					LOGGER.log(Level.FINEST, e1.getLocalizedMessage(), e1);
+				if (LOGGER.isLoggable(Level.FINEST)){
+				    LOGGER.log(Level.FINEST, e1.getLocalizedMessage(), e1);
+				}
 			}
 			finally{
 				catalog=null;
@@ -138,20 +156,8 @@
 			finally{
 				rasterManager=null;
 			}
-			
-                       try {
-                            // dispose the additional domains manager
-                            if(additionalDomainManager != null)
-                                additionalDomainManager.dispose();
-                    } catch (Throwable e1) {
-                            if (LOGGER.isLoggable(Level.FINEST))
-                                    LOGGER.log(Level.FINEST, e1.getLocalizedMessage(), e1);
-                    }
-                    finally{
-                        additionalDomainManager = null;
-                    }
-                       			
-			
+						
+			// rethrow
 			throw new  DataSourceException(e);
 		}
 
