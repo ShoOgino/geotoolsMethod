@@ -1,0 +1,103 @@
+    /**
+     * Walks through the tasks and turns them into {@link MosaicElement} with minor processing
+     */
+    private void collectGranules() {
+        
+        // do we have anything to do?
+        if(visitor.granulesNumber<=0){
+            return;
+        }
+        
+       // execute them all
+       final StringBuilder paths = new StringBuilder();
+       
+       // cicle on all the dimensions, each dimension is a separate mosaic
+       for (List<Future<GranuleLoadingResult>> futures :visitor.granulesFutures) {
+           
+           // collect inputs for the current dimension and then process them
+           final List<MosaicElement> inputs= new ArrayList<RasterLayerResponse.MosaicElement>();
+           mosaicInputs.add(inputs);
+           
+           for (Future<GranuleLoadingResult> future :futures) {
+                     
+               try {
+                   
+                   // get the resulting RenderedImage
+		   final GranuleLoadingResult result = future.get();
+                   if (result == null) {
+                       if (LOGGER.isLoggable(Level.FINE)){
+                           LOGGER.log(Level.FINE, "Unable to load the raster for granule with request " + request.toString());
+                       }
+                       continue;
+                   }
+                   final RenderedImage loadedImage = result.getRaster();
+                   if(loadedImage==null){
+                       if(LOGGER.isLoggable(Level.FINE)){
+                           LOGGER.log(
+                                   Level.FINE,
+                                   "Unable to load the raster for granuleDescriptor " +result.granuleUrl+ " with request "+request.toString()
+                           );
+                       }
+                       continue;
+                   }
+                   
+                   // now process it
+                   if(sourceThreshold==null){
+                            //
+                            // We check here if the images have an alpha channel or some
+                            // other sort of transparency. In case we have transparency
+                            // I also save the index of the transparent channel.
+                            //
+                            // Specifically, I have to check if the loaded image have
+                            // transparency, because if we do a ROI and/or we have a
+                            // transparent color to set we have to remove it.
+                            //
+                            final ColorModel cm = loadedImage.getColorModel();
+                            hasAlpha = cm.hasAlpha();
+                            if (hasAlpha || doInputTransparency){
+                                alphaIndex = new int[] { cm.getNumComponents() - 1 };
+                            }
+
+                            //
+                            // we set the input threshold accordingly to the input
+                            // image data type. I find the default value (which is 0) very bad
+                            // for data type other than byte and ushort. With float and double
+                            // it can cut off a large par of the dynamic.
+                            //
+                            sourceThreshold = new double[][] { { CoverageUtilities.getMosaicThreshold(loadedImage.getSampleModel().getDataType()) } };									
+                   }					
+
+                   // moving on
+                   if (LOGGER.isLoggable(Level.FINE)) {
+                       LOGGER.fine("Adding to mosaic granule " +result.granuleUrl);
+                   }
+
+
+                   // path management
+                   File inputFile = DataUtilities.urlToFile(result.granuleUrl);
+                   String canonicalPath = inputFile.getCanonicalPath();                   
+                   paths.append(canonicalPath).append(",");
+                   
+                   
+                   //
+                   // add to the mosaic collection, with preprocessing
+                   // TODO pluggable mechanism for processing (artifacts,etc...)
+                   MosaicElement input = processGranuleRaster(
+                                           loadedImage,
+                                           result,
+                                           canonicalPath);  
+                   inputs.add(input);
+                   
+		} catch (Exception e) {
+		    if (LOGGER.isLoggable(Level.FINE)){
+		        LOGGER.fine("Adding to mosaic failed, original request was " + request);
+		    }
+		    continue;
+		}		
+           }
+
+           // collect paths
+           granulesPaths =paths.length()>1? paths.substring(0,paths.length()-1):"";
+       }
+    }
+

@@ -1,0 +1,176 @@
+           /**
+    	 * Once we reach this method it means that we have loaded all the images
+    	 * which were intersecting the requested envelope. Next step is to create
+    	 * the final mosaic image and cropping it to the exact requested envelope.
+    	 * @param visitor 
+    	 * 
+    	 * @return A {@link RenderedImage}}.
+    	 */
+    	private RenderedImage buildMosaic() throws IOException  {
+    	    
+            // anything to do?
+            if (visitor.granulesNumber == 0) {
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.log(Level.FINE, "Unable to load any granuleDescriptor ");
+                }
+                return null;
+            }	    
+                
+            // === prepare hints
+    	    final RenderingHints localHints = prepareHints();
+                   
+                    
+            // === loop on dimensions
+            // at the end I need to have 1 image for each dimension as the result of a mosaic
+            final List<MosaicElement> finalInput= new ArrayList<MosaicElement>();
+            for(List<MosaicElement> inputs:mosaicInputs){
+                //
+                // SPECIAL CASE
+                // 1 single tile, we try not do a mosaic.
+                final int size = inputs.size();
+                if (size == 1 && Utils.OPTIMIZE_CROP) {
+                    // prepare input
+                    MosaicElement in = inputs.get(0);
+
+                    // the roi is exactly equal to the image
+                    final ROI roi = in.roi;
+                    Rectangle bounds = Utils.toRectangle(roi.getAsShape());
+                    if (bounds != null) {
+                        RenderedImage image = in.source;
+                        Rectangle imageBounds = PlanarImage.wrapRenderedImage(image).getBounds();
+                        if (imageBounds.equals(bounds)) {
+
+                            // do we need to crop? (image is bigger than requested?)
+                            if (!rasterBounds.contains(imageBounds)) {
+                                // we have to crop
+                                XRectangle2D.intersect(imageBounds, rasterBounds, imageBounds);
+
+                                if (imageBounds.isEmpty()) {
+                                    // return back a constant image
+                                    return null;
+                                }
+                                // crop
+                                ImageWorker iw = new ImageWorker(image);
+                                iw.setRenderingHints(localHints);
+                                iw.crop(imageBounds.x, imageBounds.y, imageBounds.width,imageBounds.height);
+                                image = iw.getRenderedImage();
+                                imageBounds = PlanarImage.wrapRenderedImage(image).getBounds();
+                            }
+
+                            // and, do we need to add a border around the image?
+                            if (!imageBounds.contains(rasterBounds)) {
+                                image = MergeBehavior.FLAT
+                                        .process(
+                                                new RenderedImage[] { image },
+                                                backgroundValues,
+                                                sourceThreshold,
+                                                (hasAlpha || doInputTransparency) ? new PlanarImage[] { in.alphaChannel }: new PlanarImage[] { null },
+                                                new ROI[] { in.roi },
+                                                request.isBlend() ? MosaicDescriptor.MOSAIC_TYPE_BLEND: MosaicDescriptor.MOSAIC_TYPE_OVERLAY,
+                                                localHints);
+                            }
+                            
+                            // add to final list
+                            finalInput.add(
+                                    new MosaicElement(
+                                            in.alphaChannel, 
+                                            roi, 
+                                            image));
+                            continue;
+                        }
+                    }
+                } 
+        		    
+                // === do the mosaic for this dimension
+
+                // prepare inputs for the mosaic operation
+                final RenderedImage[] sources = new RenderedImage[size];
+                final PlanarImage[] alphas = new PlanarImage[size];
+                final ROI[] rois = new ROI[size];
+                ROI overallROI = null; // final ROI
+                for (int i = 0; i < size; i++) {
+                    final MosaicElement mosaicElement = inputs.get(i);
+                    sources[i] = mosaicElement.source;
+                    alphas[i] = mosaicElement.alphaChannel;
+                    rois[i] = mosaicElement.roi;
+                    if (overallROI == null) {
+                        overallROI = new ROIGeometry(((ROIGeometry) mosaicElement.roi).getAsGeometry());
+                    } else {
+                        if (mosaicElement.roi != null) {
+                            overallROI.add(mosaicElement.roi);
+                        }
+                    }
+                }
+
+                // execute mosaic
+                final RenderedImage image = 
+                    MergeBehavior.FLAT.process(
+                            sources,
+                            backgroundValues, 
+                            sourceThreshold,
+                            (hasAlpha || doInputTransparency) ? alphas : null,
+                            rois, 
+                            request.isBlend() ? MosaicDescriptor.MOSAIC_TYPE_BLEND: MosaicDescriptor.MOSAIC_TYPE_OVERLAY, 
+                            localHints);
+
+                // prepare for next step
+                finalInput.add(new MosaicElement(
+                        (hasAlpha || doInputTransparency) ? new ImageWorker(image).retainLastBand().getPlanarImage() : null, 
+                        overallROI, 
+                        image));
+                
+            }
+
+        //
+        // === Final Merge
+        //
+        // === do the mosaic
+
+        // prepare inputs for the mosaic operation
+        final int size = finalInput.size();
+        final RenderedImage[] sources = new RenderedImage[size];
+        final PlanarImage[] alphas = new PlanarImage[size];
+        final ROI[] rois = new ROI[size];
+        ROI overallROI = null; // final ROI if needed 
+        for (int i = 0; i < size; i++) {
+            final MosaicElement mosaicElement = finalInput.get(i);
+            sources[i] = mosaicElement.source;
+            alphas[i] = mosaicElement.alphaChannel;
+            rois[i] = mosaicElement.roi;
+            if(setRoiProperty){
+                if (overallROI == null) {
+                    overallROI =  new ROIGeometry(((ROIGeometry) mosaicElement.roi).getAsGeometry());
+                } else {
+                    if (mosaicElement.roi != null) {
+                        overallROI.add(mosaicElement.roi);
+                    }
+                }
+            }
+        }
+
+        // I can even do a stacking merge or a flat merge
+        final RenderedImage mosaic = request.getMergeBehavior().process(
+                sources,
+                backgroundValues, 
+                sourceThreshold,
+                (hasAlpha || doInputTransparency) ? alphas : null,
+                rois, 
+                request.isBlend() ? MosaicDescriptor.MOSAIC_TYPE_BLEND: MosaicDescriptor.MOSAIC_TYPE_OVERLAY, 
+                localHints);
+
+        if (setRoiProperty) {
+
+            // Adding globalRoi to the output
+            RenderedOp rop = (RenderedOp) mosaic;
+            assert overallROI!=null;
+            rop.setProperty("ROI", overallROI);
+        }
+
+        if (LOGGER.isLoggable(Level.FINE))
+            LOGGER.fine("Mosaic created ");
+
+        // create the coverage
+        return mosaic;
+    
+    	}
+
