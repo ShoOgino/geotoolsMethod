@@ -124,8 +124,7 @@
 			
 			// prepare eventual filter for filtering granules
                         // handle elevation indexing first since we then combine this with the max in case we are asking for current in time
-                        if (hasElevation) {
-            
+                        if (hasElevation) {            
                             final Filter elevationF = rasterManager.elevationDomainManager.createFilter(
                                     ImageMosaicReader.ELEVATION_DOMAIN, elevations);
                             query.setFilter(FeatureUtilities.DEFAULT_FILTER_FACTORY.and(query.getFilter(),
@@ -255,11 +254,14 @@
 
             // Redo the query without filter to check whether we got no granules due
             // to a filter. In that case we need to return null
+            // Notice that we are using a dryRun visitor to make sure we don't
+            // spawn any loading tasks
             if (hasTime || hasElevation || hasFilter || hasAdditionalDomains) {
+                final MosaicVisitor dryRunVisitor = new MosaicVisitor(true);
                 query.setFilter(bbox);
                 query.setMaxFeatures(1);
-                rasterManager.getGranules(query, visitor);
-                if (visitor.granulesNumber > 0) {
+                rasterManager.getGranules(query, dryRunVisitor);
+                if (dryRunVisitor.granulesNumber > 0) {
                     // It means the previous lack of granule was due to a filter excluding all the results. Then we return null
                     return null;
                 }
