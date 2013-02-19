@@ -1,0 +1,63 @@
+    /**
+     * Return the local file URL of a schema, downloading it if not found in the cache.
+     * 
+     * @param location the absolute http/https URL of the schema
+     * @return the canonical local file URL of the schema, or null if not found
+     */
+    public String resolveLocation(String location) {
+        String path = SchemaResolver.getSimpleHttpResourcePath(location, this.keepQuery);
+        if (path == null) {
+            return null;
+        }
+        String relativePath = path.substring(1);
+        File file;
+        try {
+            file = new File(getDirectory(), relativePath).getCanonicalFile();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        // if the location is already in download we start a temporary download 
+        // for the current thread and we won't cache it at the end
+        boolean isTemp = false;
+        synchronized (locationsInDownload) {
+            if (!locationsInDownload.contains(location)) {
+                if (file.exists()) {
+                    return DataUtilities.fileToURL(file).toExternalForm();
+                }
+            } else {
+                // the location is already in download, we can't wait for it to
+                // complete, so we download another (temporary) copy and return that
+                isTemp = true;
+                try {
+                    // new file in a temporary folder
+                    file = new File(getTempDirectory(), relativePath)
+                            .getCanonicalFile();
+                } catch (IOException e) {
+                    LOGGER.severe("Can't create temporary file: "
+                            + file.getAbsolutePath());
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+        if (isDownloadAllowed()) {
+            // add location to downloading list
+            startDownload(location, file, isTemp);
+    
+            byte[] bytes = download(location);
+            if (bytes == null) {
+                endDownload(location, isTemp);
+                return null;
+            }
+            store(file, bytes);
+            LOGGER.info("Cached XML schema: " + location);
+            endDownload(location, isTemp);
+            if (isTemp) {
+                file.deleteOnExit();
+            }
+    
+            return DataUtilities.fileToURL(file).toExternalForm();
+        } else {
+            return null;
+        }
+    }
+
