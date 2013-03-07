@@ -14,17 +14,28 @@
     public void testHeterogeneousGranules() throws IOException,
             MismatchedDimensionException, FactoryException, TransformException {
 
+        final CoordinateReferenceSystem WGS84 = CRS.decode("EPSG:4326", true);
+        final ReferencedEnvelope TEST_BBOX_A = new ReferencedEnvelope(-180, 0, -90, 90, WGS84);
+        final ReferencedEnvelope TEST_BBOX_B = new ReferencedEnvelope(0, 180, 0, 90, WGS84);
+
+        URL heterogeneousGranulesURL = TestData.url(this, "heterogeneous");
         // //
         //
         // Initialize mosaic variables
         //
         // //
-        final AbstractGridFormat format = getFormat(heterogeneousGranulesURL);
-        final ImageMosaicReader reader = getReader(heterogeneousGranulesURL, format);
+        final Hints hints = new Hints(Hints.DEFAULT_COORDINATE_REFERENCE_SYSTEM, WGS84);
+        final AbstractGridFormat format = (AbstractGridFormat) GridFormatFinder.findFormat(heterogeneousGranulesURL, hints);
+        Assert.assertNotNull(format);
+        Assert.assertFalse("UknownFormat", format instanceof UnknownFormat);
+
+        final ImageMosaicReader reader = (ImageMosaicReader) format.getReader(heterogeneousGranulesURL, hints);
+        Assert.assertNotNull(reader);
+
         final int nOv = reader.getNumberOfOvervies();
         final double[] hRes = reader.getHighestRes();
         final RasterManager rasterManager = new RasterManager(reader);
-        
+
         // //
         //
         // Initialize granules related variables 
@@ -36,15 +47,15 @@
         final ImageReadParam readParamsG2 = new ImageReadParam();
         int imageIndexG1 = 0;
         int imageIndexG2 = 0;
-        
+
         final GranuleDescriptor granuleDescriptor1 = new GranuleDescriptor(g1File.getAbsolutePath(), TEST_BBOX_A, spi, (Geometry) null, true);
         final GranuleDescriptor granuleDescriptor2 = new GranuleDescriptor(g2File.getAbsolutePath(), TEST_BBOX_B, spi, (Geometry) null, true);
         assertNotNull(granuleDescriptor1.toString());
         assertNotNull(granuleDescriptor2.toString());
-        
+
         final OverviewsController ovControllerG1 = granuleDescriptor1.overviewsController;
         final OverviewsController ovControllerG2 = granuleDescriptor2.overviewsController;
-        
+
         // //
         //
         // Initializing read request
@@ -58,16 +69,15 @@
         geMapper.setPixelAnchor(PixelInCell.CELL_CENTER);
         final AffineTransform gridToWorld = geMapper.createAffineTransform();
         final double requestedResolution[] = new double[]{XAffineTransform.getScaleX0(gridToWorld), XAffineTransform.getScaleY0(gridToWorld)}; 
-        
+
         TestSet at = null;
         if (nOv == 4 && Math.abs(hRes[0] - 0.833333333333) <= THRESHOLD) {
             at = at1;
-        } else if (nOv == 2 && Math.abs(hRes[0] - 1.40625) <= THRESHOLD) { 
+        } else if (nOv == 2 && Math.abs(hRes[0] - 1.40625) <= THRESHOLD) {
             at = at2;
         } else {
             return;
         }
-
         
         // //
         //
@@ -86,7 +96,6 @@
             assertSame(at.ot[i].g1.ssy, readParamsG1.getSourceYSubsampling());
             assertSame(at.ot[i].g2.ssx, readParamsG2.getSourceXSubsampling());
             assertSame(at.ot[i].g2.ssy, readParamsG2.getSourceYSubsampling());
-
         }
     }
 

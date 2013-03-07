@@ -1,314 +1,93 @@
-	/**
-	 * This method loads the granules which overlap the requested
-	 * {@link GeneralEnvelope} using the provided values for alpha and input
-	 * ROI.
-	 * @return
-	 * @throws DataSourceException
-	 */
-	private RenderedImage prepareResponse() throws DataSourceException {
+    /**
+     * This method loads the granules which overlap the requested {@link GeneralEnvelope} using the provided values for alpha and input ROI.
+     * 
+     * @return
+     * @throws DataSourceException
+     */
+    private RenderedImage prepareResponse() throws DataSourceException {
 
-		try {
-			
-			//
-			// prepare the params for executing a mosaic operation.
-			//
-			// It might important to set the mosaic type to blend otherwise
-			// sometimes strange results jump in.
-
-			// select the relevant overview, notice that at this time we have
-			// relaxed a bit the requirement to have the same exact resolution
-			// for all the overviews, but still we do not allow for reading the
-			// various grid to world transform directly from the input files,
-			// therefore we are assuming that each granuleDescriptor has a scale and
-			// translate only grid to world that can be deduced from its base
-			// level dimension and envelope. The grid to world transforms for
-			// the other levels can be computed accordingly knowing the scale
-			// factors.
-			if (request.getRequestedBBox() != null && request.getRequestedRasterArea() != null && !request.isHeterogeneousGranules())
-				imageChoice = ReadParamsController.setReadParams(
-				        request.getRequestedResolution(),
-				        request.getOverviewPolicy(),
-				        request.getDecimationPolicy(),
-				        baseReadParameters,
-				        request.rasterManager,
-				        request.rasterManager.overviewsController); // use general overviews controller
-			else
-				imageChoice = 0;
-			assert imageChoice>=0;
-			if (LOGGER.isLoggable(Level.FINE))
-				LOGGER.fine(new StringBuffer("Loading level ").append(
-						imageChoice).append(" with subsampling factors ")
-						.append(baseReadParameters.getSourceXSubsampling()).append(" ")
-						.append(baseReadParameters.getSourceYSubsampling()).toString());			
-			
-			
-			// ok we got something to return, let's load records from the index
-			final BoundingBox cropBBOX = request.getCropBBox();
-			if (cropBBOX != null)
-			    mosaicBBox = ReferencedEnvelope.reference(cropBBOX);
-			else
-			    mosaicBBox = new ReferencedEnvelope(coverageEnvelope);
-						
-			//compute final world to grid
-			// base grid to world for the center of pixels
-			final AffineTransform g2w;
-			final OverviewLevel baseLevel = rasterManager.overviewsController.resolutionsLevels.get(0);
-			final OverviewLevel selectedLevel = rasterManager.overviewsController.resolutionsLevels.get(imageChoice);
-			final double resX = baseLevel.resolutionX;
-			final double resY = baseLevel.resolutionY;
-			final double[] requestRes = request.getRequestedResolution();
-
-                        g2w = new AffineTransform((AffineTransform) baseGridToWorld);
-                        g2w.concatenate(CoverageUtilities.CENTER_TO_CORNER);
-                        
-			if ((requestRes[0] < resX || requestRes[1] < resY) ) {
-			    // Using the best available resolution
-			    oversampledRequest = true;
-			} else {
-				
-			    // SG going back to working on a per level basis to do the composition
-			    // g2w = new AffineTransform(request.getRequestedGridToWorld());
-			    g2w.concatenate(AffineTransform.getScaleInstance(selectedLevel.scaleFactor,selectedLevel.scaleFactor));
-			    g2w.concatenate(AffineTransform.getScaleInstance(baseReadParameters.getSourceXSubsampling(), baseReadParameters.getSourceYSubsampling()));
-			}
-
-			// move it to the corner
-			finalGridToWorldCorner = new AffineTransform2D(g2w);
-			finalWorldToGridCorner = finalGridToWorldCorner.inverse();// compute raster bounds
-			final GeneralEnvelope tempRasterBounds = CRS.transform(finalWorldToGridCorner, mosaicBBox);
-			rasterBounds=tempRasterBounds.toRectangle2D().getBounds();
-			
-			
-//			 SG using the above may lead to problems since the reason is that  may be a little (1 px) bigger
-//			 than what we need. The code below is a bit better since it uses a proper logic (see GridEnvelope
-//			 Javadoc)
-//			rasterBounds = new GridEnvelope2D(new Envelope2D(tempRasterBounds), PixelInCell.CELL_CORNER);
-			if (rasterBounds.width == 0)
-			    rasterBounds.width++;
-			if (rasterBounds.height == 0)
-			    rasterBounds.height++;
-			if(oversampledRequest)
-			    rasterBounds.grow(2, 2);
-			
-                        // make sure we do not go beyond the raster dimensions for this layer
-                        final GeneralEnvelope levelRasterArea_ = CRS.transform(finalWorldToGridCorner, rasterManager.spatialDomainManager.coverageBBox);
-                        final GridEnvelope2D levelRasterArea = new GridEnvelope2D(new Envelope2D(levelRasterArea_), PixelInCell.CELL_CORNER);
-                        XRectangle2D.intersect(levelRasterArea, rasterBounds, rasterBounds);
-			
-			// create the index visitor and visit the feature
-			final MosaicBuilder visitor = new MosaicBuilder(request);
-			final List times = request.getRequestedTimes();
-			final List elevations=request.getElevation();
-			final Map<String, List> additionalDomains = request.getRequestedAdditionalDomains();
-			final Filter filter = request.getFilter();
-			final boolean hasTime=(times!=null&&times.size()>0);
-			final boolean hasElevation=(elevations!=null && elevations.size()>0);
-			final boolean hasAdditionalDomains = additionalDomains.size() > 0;
-			final boolean hasFilter = filter != null && !Filter.INCLUDE.equals(filter);
-
-			// create query
-			final SimpleFeatureType type = rasterManager.granuleCatalog.getType();
-			Query query = null;
-			Filter bbox = null;
-			if (type != null){
-			    query= new Query(rasterManager.granuleCatalog.getType().getTypeName());
-			    bbox=FeatureUtilities.DEFAULT_FILTER_FACTORY.bbox(
-			            FeatureUtilities.DEFAULT_FILTER_FACTORY.property(rasterManager.granuleCatalog.getType().getGeometryDescriptor().getName()),
-			            mosaicBBox);
-			    query.setFilter( bbox);
-			} else {
-				throw new IllegalStateException("GranuleCatalog feature type was null!!!");
-			}
-
-			
-			// prepare eventual filter for filtering granules
-                        // handle elevation indexing first since we then combine this with the max in case we are asking for current in time
-                        if (hasElevation) {
-            
-                            final Filter elevationF = rasterManager.parent.elevationDomainManager.createFilter(
-                                    ImageMosaicReader.ELEVATION_DOMAIN, elevations);
-                            query.setFilter(FeatureUtilities.DEFAULT_FILTER_FACTORY.and(query.getFilter(),
-                                    elevationF));
-                        }
-            
-                        // handle generic filter since we then combine this with the max in case we are asking for current in time
-                        if (hasFilter) {
-                            query.setFilter(FeatureUtilities.DEFAULT_FILTER_FACTORY.and(query.getFilter(),
-                                    filter));
-                        }
-            
-                        // fuse time query with the bbox query
-                        if (hasTime) {
-                            final Filter timeFilter = this.rasterManager.parent.timeDomainManager.createFilter(
-                                    ImageMosaicReader.TIME_DOMAIN, times);
-                            query.setFilter(FeatureUtilities.DEFAULT_FILTER_FACTORY.and(query.getFilter(),
-                                    timeFilter));
-                        }
-            
-                        if (hasAdditionalDomains) {
-                            final List<Filter> additionalFilter = new ArrayList<Filter>();
-                            for (Entry<String, List> entry : additionalDomains.entrySet()) {
-            
-                                // build a filter for each dimension
-                                final String domainName = entry.getKey()+DomainDescriptor.DOMAIN_SUFFIX;
-                                additionalFilter.add(rasterManager.parent.domainsManager.createFilter(
-                                        domainName, (List) entry.getValue()));
-            
-                            }
-                            // merge with existing ones
-                            query.setFilter(FeatureUtilities.DEFAULT_FILTER_FACTORY.and(query.getFilter(),
-                                    FeatureUtilities.DEFAULT_FILTER_FACTORY.and(additionalFilter)));
-                        }
-
-
-            //
-            // handle secondary query parameters
-            //
-
-            // max number of elements
-            if(request.getMaximumNumberOfGranules()>0){
-                query.setMaxFeatures(request.getMaximumNumberOfGranules());
+        try {
+            //=== select overview
+            chooseOverview();	
+            assert imageChoice>=0;
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine(new StringBuilder("Loading level ").append(imageChoice)
+                        .append(" with subsampling factors ")
+                        .append(baseReadParameters.getSourceXSubsampling()).append(" ")
+                        .append(baseReadParameters.getSourceYSubsampling()).toString());
             }
 
-            // sort by clause
-            final String sortByClause= request.getSortClause();
-            if(sortByClause!=null&&sortByClause.length()>0){
-            	final String[] elements=sortByClause.split(",");
-            	if(elements!=null&& elements.length>0){
-            		final List<SortBy> clauses= new ArrayList<SortBy>(elements.length);
-            		for (String element:elements){
-            			// check
-            			if(element==null||element.length()<=0){
-            				continue;// next, please!
-            			}
-            			try{
-            				// which clause?
-            				// ASCENDING
-            			element = element.trim();
-            			if(element.endsWith(Utils.ASCENDING_ORDER_IDENTIFIER)) {
-                                    String attribute = element.substring(0, element.length() - 2);
-                                    clauses.add(new SortByImpl(FeatureUtilities.DEFAULT_FILTER_FACTORY.property(attribute),SortOrder.ASCENDING));
-                            } else 
-                                    // DESCENDING
-                                    if(element.contains(Utils.DESCENDING_ORDER_IDENTIFIER)) {
-                                            String attribute = element.substring(0, element.length() - 2);
-                                            clauses.add(new SortByImpl(FeatureUtilities.DEFAULT_FILTER_FACTORY.property(attribute),SortOrder.DESCENDING));
-                            } 
-//            				if(element.startsWith(Utils.ASCENDING_ORDER_IDENTIFIER)){
-//	            				String attribute=element.substring(Utils.ASCENDING_ORDER_IDENTIFIER.length()+1);
-//	            				attribute=attribute.substring(0, attribute.length()-1);
-//	            				clauses.add(new SortByImpl(FeatureUtilities.DEFAULT_FILTER_FACTORY.property(attribute),SortOrder.ASCENDING));
-//	            			} else 
-//	            				// DESCENDING
-//	            				if(element.startsWith(Utils.DESCENDING_ORDER_IDENTIFIER)){
-//	                				String attribute=element.substring(Utils.DESCENDING_ORDER_IDENTIFIER.length()+1);
-//	                				attribute=attribute.substring(0, attribute.length()-1);
-//	                				clauses.add(new SortByImpl(FeatureUtilities.DEFAULT_FILTER_FACTORY.property(attribute),SortOrder.DESCENDING));
-//	            			} else {
-                                        else {
-	            				if(LOGGER.isLoggable(Level.FINE)){
-	            					LOGGER.fine("Ignoring sort clause :"+element);
-	            				}
-	            			}
-            			}catch (Exception e) {
-            				if(LOGGER.isLoggable(Level.INFO)){
-            					LOGGER.log(Level.INFO,e.getLocalizedMessage(),e);
-            				}
-						}
-            		}
-            		
-            		// assign to query if sorting is supported!
-            		final SortBy[] sb= clauses.toArray(new SortBy[]{});
-            		if(rasterManager.granuleCatalog.getQueryCapabilities().supportsSorting(sb)){
-            			query.setSortBy(sb);
-            		}
-            	}
+            // === extract bbox
+            initBBOX();
+
+            // === init transformations
+            initTransformations();
+
+            // === init raster bounds
+            initRasterBounds();
+
+            // === create query and basic BBOX filtering
+            final Query query = initQuery();
+
+            // === manage additional filters
+            handleAdditionalFilters(query);
+
+            // === sort by clause
+            handleSortByClause(query);
+
+            // === collect granules
+            final MosaicProducer visitor = new MosaicProducer();
+            rasterManager.getGranules(query, visitor);            
+
+            // get those granules and create the final mosaic
+            RenderedImage returnValue = visitor.produce();
+
+            //
+            // Did we actually load anything?? Notice that it might happen that
+            // either we have holes inside the definition area for the mosaic
+            // or we had some problem with missing tiles, therefore it might
+            // happen that for some bboxes we don't have anything to load.
+            //
+
+            //
+            // Create the mosaic image by doing a crop if necessary and also
+            // managing the transparent color if applicable. Be aware that
+            // management of the transparent color involves removing
+            // transparency information from the input images.
+            //
+            if (returnValue != null) {
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.fine("Loaded bbox " + mosaicBBox.toString() + " while crop bbox "
+                            + request.getCropBBox().toString());
+                }
+                return returnValue;
             }
 
-            // collect granules
-            rasterManager.getGranules(query, visitor);
+            // Redo the query without filter to check whether we got no granules due
+            // to a filter. In that case we need to return null
+            // Notice that we are using a dryRun visitor to make sure we don't
+            // spawn any loading tasks, we also ensure we get only 1 feature at most
+            // to make this blazing fast
+            LOGGER.fine("We got no granules, let's do a dry run with no filters");
+            final MosaicProducer dryRunVisitor = new MosaicProducer(true);
+            final Utils.BBOXFilterExtractor bboxExtractor = new Utils.BBOXFilterExtractor();
+            query.getFilter().accept(bboxExtractor, null);
+            query.setFilter(FeatureUtilities.DEFAULT_FILTER_FACTORY.bbox(
+                    FeatureUtilities.DEFAULT_FILTER_FACTORY.property(rasterManager.granuleCatalog.getType().getGeometryDescriptor().getName()),
+                    bboxExtractor.getBBox()));
+            query.setMaxFeatures(1);
+            rasterManager.getGranules(query, dryRunVisitor);
+            if (dryRunVisitor.granulesNumber > 0) {
+                LOGGER.fine("Dry run got a target granule, returning null as the additional filters did filter all the granules out");
+                // It means the previous lack of granule was due to a filter excluding all the results. Then we return null
+                return null;
+            }
 
-			// get those granules
-			visitor.produce();
-			
-			//
-			// Did we actually load anything?? Notice that it might happen that
-			// either we have holes inside the definition area for the mosaic
-			// or we had some problem with missing tiles, therefore it might
-			// happen that for some bboxes we don't have anything to load.
-			//
-			RenderedImage returnValue=null;
-			if (visitor.granulesNumber>=1) {
+            // prepare a blank response
+            return createBlankResponse();
 
-				//
-				// Create the mosaic image by doing a crop if necessary and also
-				// managing the transparent color if applicable. Be aware that
-				// management of the transparent color involves removing
-				// transparency information from the input images.
-				// 			
-				returnValue= buildMosaic(visitor);
-				if(returnValue!=null){
-				    if (LOGGER.isLoggable(Level.FINE))
-				        LOGGER.fine("Loaded bbox "+mosaicBBox.toString()+" while crop bbox "+request.getCropBBox().toString());
-				    return returnValue;
-				}
-			
-			}
-			
-			
-			
-                        // Redo the query without filter to check whether we got no granules due
-                        // to a filter. In that case we need to return null
-                        if (hasTime || hasElevation || hasFilter || hasAdditionalDomains) {
-                            query.setFilter(bbox);
-                            rasterManager.getGranules(query, visitor);
-                            // get those granules
-                            visitor.produce();
-                            if (visitor.granulesNumber >= 1) {
-                                // It means the previous lack of granule was due to a filter excluding all the results. Then we return null
-                                return null;
-                            }
-                        }
-                        
-			
-			if (LOGGER.isLoggable(Level.FINE))
-                            LOGGER.fine("Creating constant image for area with no data");
-                        
-                        // if we get here that means that we do not have anything to load
-                        // but still we are inside the definition area for the mosaic,
-                        // therefore we create a fake coverage using the background values,
-                        // if provided (defaulting to 0), as well as the compute raster
-                        // bounds, envelope and grid to world.
-
-                        final Number[] values = ImageUtilities.getBackgroundValues(rasterManager.defaultSM, backgroundValues);
-                        // create a constant image with a proper layout
-                        RenderedImage finalImage = ConstantDescriptor.create(
-                                Float.valueOf(rasterBounds.width),
-                                Float.valueOf(rasterBounds.height),
-                                values,
-                                null);
-                        if (rasterBounds.x != 0 || rasterBounds.y != 0) {
-                            finalImage = TranslateDescriptor.create(finalImage, Float.valueOf(rasterBounds.x), Float.valueOf(rasterBounds.y), Interpolation.getInstance(Interpolation.INTERP_NEAREST), null);
-                        }
-                        if(rasterManager.defaultCM!=null){
-                            final ImageLayout2 il= new ImageLayout2();
-                            il.setColorModel(rasterManager.defaultCM);
-                            Dimension tileSize= request.getTileDimensions();
-                            if(tileSize==null){
-                                tileSize=JAI.getDefaultTileSize();
-                            } 
-                            il.setSampleModel(rasterManager.defaultCM.createCompatibleSampleModel(tileSize.width, tileSize.height));
-                            il.setTileGridXOffset(0).setTileGridYOffset(0).setTileWidth((int)tileSize.getWidth()).setTileHeight((int)tileSize.getHeight());
-                            return FormatDescriptor.create(
-                                    finalImage,
-                                    Integer.valueOf(il.getSampleModel(null).getDataType()),
-                                    new RenderingHints(JAI.KEY_IMAGE_LAYOUT,il));
-                        }
-                        return finalImage;
-			
-
-		} catch (Exception e) {
-			throw new DataSourceException("Unable to create this mosaic", e);
-		} 
-	}
+        } catch (Exception e) {
+            throw new DataSourceException("Unable to create this mosaic", e);
+        }
+    }
 

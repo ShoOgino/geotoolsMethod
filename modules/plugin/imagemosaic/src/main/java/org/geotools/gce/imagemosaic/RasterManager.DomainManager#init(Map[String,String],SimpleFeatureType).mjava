@@ -1,0 +1,63 @@
+        /**
+         * @param domainAttributes
+         * @param simpleFeatureType
+         * @throws IllegalArgumentException
+         */
+        private void init(Map<String, String> domainAttributes, SimpleFeatureType simpleFeatureType)
+                throws IllegalArgumentException {
+            for (java.util.Map.Entry<String, String> entry : domainAttributes.entrySet()) {
+
+                DomainType domainType = DomainType.SINGLE_VALUE;
+                final String domainName = entry.getKey();
+                String propertyName = entry.getValue();
+                // is the name equals to the propertyname?
+                try {
+
+                    // Domain with ranges management
+                    if (attributeHasRange(propertyName)) {
+                        domainType = domainAttributes.containsKey(DomainDescriptor.TIME_DOMAIN) ? DomainType.TIME_RANGE
+                                : DomainType.NUMBER_RANGE;
+                        addDomain(domainName, propertyName, domainType);
+                        continue;
+                    } else if (simpleFeatureType.getDescriptor(propertyName) != null) {
+                        // add
+                        addDomain(domainName, propertyName, domainType);
+
+                        // continue
+                        continue;
+                    }
+
+                } catch (Exception e) {
+                    if (LOGGER.isLoggable(Level.FINE)) {
+                        LOGGER.log(Level.FINE, e.getLocalizedMessage(), e);
+                    }
+                }
+
+                // ok why we don't have it? Maybe shapefile name truncation?
+                if (propertyName.length() > 10) {
+                    // hakc for shapes
+                    propertyName = propertyName.substring(0, 10);
+                    // alias in provided type
+                    try {
+                        if (simpleFeatureType.getDescriptor(propertyName) != null) {
+                            // add
+                            addDomain(domainName, propertyName, domainType);
+
+                            // continue
+                            continue;
+                        }
+
+                    } catch (Exception e) {
+                        if (LOGGER.isLoggable(Level.FINE)) {
+                            LOGGER.log(Level.FINE, e.getLocalizedMessage(), e);
+                        }
+                    }
+                }
+
+                // if I got here, we are in trouble. No way to add this param
+                throw new IllegalArgumentException("Unable to add this domain:" + domainName + "-"
+                        + propertyName);
+
+            }
+        }
+

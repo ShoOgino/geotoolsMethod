@@ -1,0 +1,35 @@
+        /**
+         * This method is responsible for producing the final mosaic.
+         * 
+         * <p>
+         * Depending on whether or not a {@link MergeBehavior#STACK}ing is required, we perform 1 or 2 steps.
+         * <ol>
+         *      <li> step 1 is for merging flat on each value for the dimension</li>
+         *      <li> step 2 is for merging stack on the resulting mosaics</li>
+         * </ol>
+         * @return
+         * @throws IOException
+         */
+        public RenderedImage produce() throws IOException{
+            // checks
+            if (granulesNumber == 0) {
+                LOGGER.log(Level.FINE, "Unable to load any granuleDescriptor ");     
+                return null;
+            }
+            
+            // STEP 1 collect all the mosaics from each single dimension
+            LOGGER.fine("Producing the final mosaic, step 1, loop through granule collectors");   
+            final List<MosaicElement> mosaicInputs = new ArrayList<RasterLayerResponse.MosaicElement>();
+            GranuleCollector first = null; // we take this apart to steal some val
+            for (GranuleCollector collector : granuleCollectors) {
+                LOGGER.fine("Using collector with filter:" + collector.granuleFilter.toString());
+                final MosaicElement preparedMosaic = new Mosaicker(collector.collectGranules(), MergeBehavior.FLAT).createMosaic();
+                mosaicInputs.add(preparedMosaic);
+                if (first == null) {
+                    first = collector;
+                }
+            }
+            LOGGER.fine("Producing the final mosaic, step 2, final mosaicking"); 
+            return new Mosaicker(new MosaicInputs(first.doInputTransparency, first.hasAlpha, mosaicInputs, first.sourceThreshold),mergeBehavior).createMosaic().source;
+        }
+
