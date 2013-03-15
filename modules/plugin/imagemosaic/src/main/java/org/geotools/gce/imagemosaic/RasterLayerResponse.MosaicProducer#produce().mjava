@@ -10,10 +10,10 @@
          * @return
          * @throws IOException
          */
-        public RenderedImage produce() throws IOException{
+        private RenderedImage produce() throws IOException{
             // checks
             if (granulesNumber == 0) {
-                LOGGER.log(Level.FINE, "Unable to load any granuleDescriptor ");     
+                LOGGER.log(Level.FINE, "Unable to load any granuleDescriptor");     
                 return null;
             }
             
@@ -21,8 +21,11 @@
             LOGGER.fine("Producing the final mosaic, step 1, loop through granule collectors");   
             final List<MosaicElement> mosaicInputs = new ArrayList<RasterLayerResponse.MosaicElement>();
             GranuleCollector first = null; // we take this apart to steal some val
+            final int size=granuleCollectors.size();
             for (GranuleCollector collector : granuleCollectors) {
-                LOGGER.fine("Using collector with filter:" + collector.granuleFilter.toString());
+                if(LOGGER.isLoggable(Level.FINE)){
+                    LOGGER.fine("Using collector with filter:" + collector.granuleFilter.toString());
+                }
                 final MosaicElement preparedMosaic = new Mosaicker(collector.collectGranules(), MergeBehavior.FLAT).createMosaic();
                 mosaicInputs.add(preparedMosaic);
                 if (first == null) {
@@ -30,6 +33,16 @@
                 }
             }
             LOGGER.fine("Producing the final mosaic, step 2, final mosaicking"); 
-            return new Mosaicker(new MosaicInputs(first.doInputTransparency, first.hasAlpha, mosaicInputs, first.sourceThreshold),mergeBehavior).createMosaic().source;
+            if(size==1){
+                // we don't need to mosaick again
+                return mosaicInputs.get(0).source;
+            }
+            return new Mosaicker(
+                    new MosaicInputs(
+                            first.doInputTransparency, 
+                            first.hasAlpha, 
+                            mosaicInputs, 
+                            first.sourceThreshold),
+                            mergeBehavior).createMosaic().source;
         }
 
