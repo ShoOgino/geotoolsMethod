@@ -1,27 +1,21 @@
     /**
-     * Set the FeatureType of this DataStore. This method will delete any
-     * existing local resources or throw an IOException if the DataStore is
-     * remote.
+     * Set the FeatureType of this DataStore. This method will delete any existing local resources
+     * or throw an IOException if the DataStore is remote.
      * 
-     * @param featureType
-     *                The desired FeatureType.
+     * @param featureType The desired FeatureType.
      * 
-     * @throws IOException
-     *                 If the DataStore is remote.
+     * @throws IOException If the DataStore is remote.
      */
     public void createSchema(SimpleFeatureType featureType) throws IOException {
-        if (!isLocal()) {
-            throw new IOException(
-                    "Cannot create FeatureType on remote shapefile");
+        if (!shpFiles.isLocal()) {
+            throw new IOException("Cannot create FeatureType on remote or in-classpath shapefile");
         }
 
         shpFiles.delete();
-        schema = featureType;
 
         CoordinateReferenceSystem crs = featureType.getGeometryDescriptor()
-        		.getCoordinateReferenceSystem();
-        final Class<?> geomType = featureType.getGeometryDescriptor().getType()
-                .getBinding();
+                .getCoordinateReferenceSystem();
+        final Class<?> geomType = featureType.getGeometryDescriptor().getType().getBinding();
         final ShapeType shapeType;
 
         if (Point.class.isAssignableFrom(geomType)) {
@@ -35,9 +29,8 @@
                 || MultiPolygon.class.isAssignableFrom(geomType)) {
             shapeType = ShapeType.POLYGON;
         } else {
-            throw new DataSourceException(
-                    "Cannot create a shapefile whose geometry type is "
-                            + geomType);
+            throw new DataSourceException("Cannot create a shapefile whose geometry type is "
+                    + geomType);
         }
 
         StorageFile shpStoragefile = shpFiles.getStorageFile(SHP);
@@ -50,8 +43,8 @@
 
         ShapefileWriter writer = new ShapefileWriter(shpChannel, shxChannel);
         try {
-        	// by spec, if the file is empty, the shape envelope should be ignored
-        	writer.writeHeaders(new Envelope(), shapeType, 0, 100);
+            // by spec, if the file is empty, the shape envelope should be ignored
+            writer.writeHeaders(new Envelope(), shapeType, 0, 100);
         } finally {
             writer.close();
             assert !shpChannel.isOpen();
@@ -83,12 +76,10 @@
             } finally {
                 prjWriter.close();
             }
-        }
-        else {
+        } else {
             LOGGER.warning("PRJ file not generated for null CoordinateReferenceSystem");
         }
-        StorageFile.replaceOriginals(shpStoragefile, shxStoragefile,
-                dbfStoragefile, prjStoragefile);
-
+        StorageFile
+                .replaceOriginals(shpStoragefile, shxStoragefile, dbfStoragefile, prjStoragefile);
     }
 
