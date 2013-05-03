@@ -11,18 +11,20 @@
         Geometry g = (Geometry) currentFeature.getDefaultGeometry();
 
         // if this is the first Geometry, find the shapeType and handler
-        if (shapeType == null) {
+        if (guessShapeType) {
             try {
-                if(g != null) {
+                if (g != null) {
                     int dims = JTSUtilities.guessCoorinateDims(g.getCoordinates());
                     shapeType = JTSUtilities.getShapeType(g, dims);
                 } else {
-                    shapeType = JTSUtilities.getShapeType(currentFeature.getType().getGeometryDescriptor());
+                    shapeType = JTSUtilities.getShapeType(currentFeature.getType()
+                            .getGeometryDescriptor());
                 }
 
                 // we must go back and annotate this after writing
                 shpWriter.writeHeaders(new Envelope(), shapeType, 0, 0);
                 handler = shapeType.getShapeHandler(gf);
+                guessShapeType = false;
             } catch (ShapefileException se) {
                 throw new RuntimeException("Unexpected Error", se);
             }
@@ -32,19 +34,19 @@
         g = JTSUtilities.convertToCollection(g, shapeType);
 
         // bounds calculations
-        if(g != null) {
-	        Envelope b = g.getEnvelopeInternal();
-	
-	        if (!b.isNull()) {
-	            bounds.expandToInclude(b);
-	        }
+        if (g != null) {
+            Envelope b = g.getEnvelopeInternal();
+
+            if (!b.isNull()) {
+                bounds.expandToInclude(b);
+            }
         }
 
         // file length update
-        if(g != null)
-        	shapefileLength += (handler.getLength(g) + 8);
+        if (g != null)
+            shapefileLength += (handler.getLength(g) + 8);
         else
-        	shapefileLength += (4 + 8);
+            shapefileLength += (4 + 8);
 
         // write it
         shpWriter.writeGeometry(g);
