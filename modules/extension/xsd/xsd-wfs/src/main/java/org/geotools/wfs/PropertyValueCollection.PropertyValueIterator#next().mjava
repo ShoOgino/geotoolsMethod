@@ -1,22 +1,29 @@
         @Override
         public Object next() {
-            //create a new descriptor based on teh xml type
+            Object value = values.remove();
+
+            // create a new descriptor based on teh xml type
             AttributeType xmlType = findType(descriptor.getType().getBinding());
             if (xmlType == null) {
-                throw new RuntimeException("Unable to map attribute " + descriptor.getName() + 
-                    " to xml type");
+                throw new RuntimeException("Unable to map attribute " + descriptor.getName()
+                        + " to xml type");
             }
-            
-            Object value = next.getProperty(descriptor.getName()).getValue();
 
-            //because simple features don't carry around their namespace, create a descritor name
+            // because simple features don't carry around their namespace, create a descritor name
             // that actually used the feature type schema namespace
-            Name name = new NameImpl(next.getType().getName().getNamespaceURI(), descriptor.getLocalName());
-            AttributeDescriptor newDescriptor = typeFactory.createAttributeDescriptor(xmlType, 
-                name, descriptor.getMinOccurs(), descriptor.getMaxOccurs(), 
-                descriptor.isNillable(), descriptor.getDefaultValue());
-            
-            next = null;
-            return factory.createAttribute(value, newDescriptor, null);
+            Name name = new NameImpl(next.getType().getName().getNamespaceURI(),
+                    descriptor.getLocalName());
+            AttributeDescriptor newDescriptor = typeFactory.createAttributeDescriptor(xmlType,
+                    name, descriptor.getMinOccurs(), descriptor.getMaxOccurs(),
+                    descriptor.isNillable(), descriptor.getDefaultValue());
+
+            if (next instanceof SimpleFeature) {
+                return factory.createAttribute(value, newDescriptor, null);
+            } else {
+                return factory
+                        .createComplexAttribute(
+                                Collections.<Property> singletonList((Property) value),
+                                newDescriptor, null);
+            }
         }
 
