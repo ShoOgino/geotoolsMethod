@@ -5,11 +5,9 @@
 	 *            DOCUMENT ME!
 	 * @param feature
 	 *            DOCUMENT ME!
-	 * 
 	 * @return DOCUMENT ME!
 	 */
-	public TexturePaint getTexturePaint(org.geotools.styling.Graphic gr,
-			Object feature) {
+	TexturePaint getTexturePaint(Symbolizer symbolizer, org.geotools.styling.Graphic gr, Object feature) {
 		// -1 to have the image use its natural size if none was provided by the
 		// user
 		double graphicSize = evalToDouble(gr.getSize(), feature, -1);
@@ -76,24 +74,38 @@
 				for (int j = -1; j < 2; j++) {
 					double tx = sizeX * 1.5 + sizeX * i;
 					double ty = sizeY * 1.5 + sizeY * j;
-					fillDrawMark(g2d, tx, ty, mark, size, rotation, feature);
+					fillDrawMark(g2d, tx, ty, symbolizer, mark, size, rotation, feature);
 				}
 			}
 			g2d.dispose();
 
 			iSizeX = (int) Math.floor(sizeX);
 			iSizeY = (int) Math.floor(sizeY);
-			image = image.getSubimage(iSizeX, iSizeY, iSizeX + 1, iSizeY + 1); // updated
-																				// to
-																				// use
-																				// the
-																				// new
-																				// sizes
+			// updated to use the new sizes
+			image = image.getSubimage(iSizeX, iSizeY, iSizeX, iSizeY); 
 		}
 
-		Rectangle2D.Double rect = new Rectangle2D.Double(0.0, 0.0, iSizeX,
-				iSizeY);
-		TexturePaint imagePaint = new TexturePaint(image, rect);
+		// do we have a graphic margin? (top,right,bottom,left order)
+		int[] margin = voParser.getGraphicMargin(symbolizer, "graphic-margin");
+		BufferedImage imageWithMargin;
+		if(margin == null) {
+		    imageWithMargin = image;
+		} else {
+		    int extraY = margin[0] + margin[2];
+		    int extraX = margin[1] + margin[3];
+		    int type = image.getType() == 0 ? BufferedImage.TYPE_4BYTE_ABGR : image.getType();
+            imageWithMargin = new BufferedImage(image.getWidth() + extraY, image.getHeight() + extraX, type);
+            int tx = margin[3];
+            int ty = margin[0];
+            AffineTransform at = AffineTransform.getTranslateInstance(tx, ty);
+            Graphics2D graphics = imageWithMargin.createGraphics();
+            graphics.drawRenderedImage(image, at);
+            graphics.dispose();
+		}
+		
+		Rectangle2D.Double rect = new Rectangle2D.Double(0.0, 0.0, imageWithMargin.getWidth(),
+		        imageWithMargin.getHeight());
+		TexturePaint imagePaint = new TexturePaint(imageWithMargin, rect);
 
 		if (LOGGER.isLoggable(Level.FINER)) {
 			LOGGER.finer("applied TexturePaint " + imagePaint);
