@@ -1,0 +1,66 @@
+    /**
+     * Computes the output attribute descriptor for this {@link Definition} given only the original feature type. 
+     * The code will attempt a static analysis on the original
+     * feature type, if that fails it will return null
+     * 
+     * @param originalFeature
+     * @return
+     */
+    public AttributeDescriptor getAttributeDescriptor(SimpleFeatureType originalSchema) {
+        AttributeTypeBuilder ab = new AttributeTypeBuilder();
+        ExpressionTypeEvaluator typeEvaluator = new ExpressionTypeEvaluator(originalSchema);
+
+        if (binding != null) {
+
+            ab.setBinding(binding);
+            ab.setName(name);
+            if (crs != null) {
+                ab.setCRS(crs);
+            } else {
+                // try to get it from the expression operands, under the assumption that
+                // the geometry crs are not getting modified by the filter functions
+                expression.accept(typeEvaluator, null);
+                ab.setCRS(typeEvaluator.getCoordinateReferenceSystem());
+            }
+
+            return ab.buildDescriptor(name);
+        } else {
+            // in case no evaluation succeeds
+            Class computedBinding = Object.class;
+
+            // see if we are just passing a property trough
+            if (expression instanceof PropertyName) {
+                PropertyName pn = (PropertyName) expression;
+                AttributeDescriptor descriptor = originalSchema.getDescriptor(pn.getPropertyName());
+
+                if (descriptor == null) {
+                    throw new IllegalArgumentException(
+                            "Original feature type does not have a property named " + name);
+                } else {
+                    ab.init(descriptor);
+                    ab.setName(name);
+                    return ab.buildDescriptor(name);
+                }
+            } else {
+                // try static analysis
+                computedBinding = (Class) expression.accept(typeEvaluator, null);
+                if(computedBinding == null) {
+                    return null;
+                }
+
+                CoordinateReferenceSystem computedCRS = crs;
+                if (Geometry.class.isAssignableFrom(computedBinding) && computedCRS == null) {
+                    computedCRS = evaluateCRS(originalSchema);
+                }
+
+                ab.setBinding(computedBinding);
+                ab.setName(name);
+                if (computedCRS != null) {
+                    ab.setCRS(computedCRS);
+                }
+
+                return ab.buildDescriptor(name);
+            }
+        }
+    }
+
