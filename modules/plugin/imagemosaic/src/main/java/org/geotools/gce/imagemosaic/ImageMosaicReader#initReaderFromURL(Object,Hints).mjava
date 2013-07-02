@@ -1,147 +1,128 @@
     /**
-     * Init this {@link ImageMosaicReader} using the provided object as a source referring to an {@link URL}. 
+     * Init this {@link ImageMosaicReader} using the provided object as a source referring to an {@link URL}.
      * 
      * @param source
      * @param uHints
      * @throws DataSourceException
      */
     private void initReaderFromURL(final Object source, final Hints hints) throws Exception {
-		this.sourceURL=Utils.checkSource(source,hints);
-		if(this.sourceURL==null)
-			throw new DataSourceException("This plugin accepts File, URL or String. The string may describe a File or an URL");
-		
-		//
-		// Load properties file with information about levels and envelope
-		//
-		MosaicConfigurationBean configuration = Utils.loadMosaicProperties(sourceURL,this.locationAttributeName);
-		if(configuration==null){
-			//
-			// do we have a datastore properties file? It will preempt on the shapefile
-			//
-        	final File parent=DataUtilities.urlToFile(sourceURL).getParentFile();
-			
-			// this can be used to look for properties files that do NOT define a datastore
-			final File[] properties = parent.listFiles(
-					(FilenameFilter)
-					FileFilterUtils.and(
-							FileFilterUtils.notFileFilter(FileFilterUtils.nameFileFilter("indexer.properties")),
-						FileFilterUtils.and(
-								FileFilterUtils.notFileFilter(FileFilterUtils.nameFileFilter("datastore.properties")),
-								FileFilterUtils.makeFileOnly(FileFilterUtils.suffixFileFilter(".properties")
-						)
-					)
-			));
-			
-			// do we have a valid datastore + mosaic properties pair?
-			for(File propFile:properties)
-				if(Utils.checkFileReadable(propFile)&&
-						Utils.loadMosaicProperties(DataUtilities.fileToURL(propFile), "")!=null){
-					configuration = Utils.loadMosaicProperties(DataUtilities.fileToURL(propFile),this.locationAttributeName);
-				}               	
-			
-		}
-		if(configuration==null)
-			throw new DataSourceException("Unable to create reader for this mosaic since we could not parse the configuration.");
-		
-		// now load the configuration and extract properties from there
-		extractProperties(configuration);
-		
-		//location attribute override
-		if(this.hints.containsKey(Hints.MOSAIC_LOCATION_ATTRIBUTE)){
-		    this.locationAttributeName=((String)this.hints.get(Hints.MOSAIC_LOCATION_ATTRIBUTE));	
-		}
-		
-		//
-		// Load tiles informations, especially the bounds, which will be
-		// reused
-		//
-		try {
-			// create the index
-			catalog= GranuleCatalogFactory.createGranuleCatalog(sourceURL, configuration);
-			// error
-			if(catalog==null){
-			    throw new DataSourceException("Unable to create index for this URL "+sourceURL);
-			}
-                        final SimpleFeatureType type= catalog.getType();
-                        if (type==null){
-                            throw new IllegalArgumentException("Problems when opening the index, no typenames for the schema are defined");
-                        }
-                        
-		
-			// everything is fine
-			if (LOGGER.isLoggable(Level.FINE))
-				LOGGER.fine("Connected mosaic reader to its index "
-						+ sourceURL.toString());
+//        final boolean hasIndex = Utils.minimalIndexCheck(source);
+        this.sourceURL = Utils.checkSource(source, hints);
+        
+        // Preliminar check on source
+        if (this.sourceURL == null) {
+            throw new DataSourceException(
+                    "This plugin accepts File, URL or String. The string may describe a File or an URL");
+        }
 
-			setGridGeometry(configuration.getEnvelope());
-
-            //
-            // get the crs if able to
-            //
-            final Object tempCRS = this.hints.get(Hints.DEFAULT_COORDINATE_REFERENCE_SYSTEM);
-            if (tempCRS != null) {
-                this.crs = (CoordinateReferenceSystem) tempCRS;
-                LOGGER.log(Level.WARNING, "Using forced coordinate reference system ");
-            } else {
-                final CoordinateReferenceSystem tempcrs = type.getGeometryDescriptor().getCoordinateReferenceSystem();
-                if (tempcrs == null) {
-                    // use the default crs
-                    crs = AbstractGridFormat.getDefaultCRS();
-                    LOGGER.log(Level.WARNING, "Unable to find a CRS for this coverage, using a default one" );
-                } else
-                    crs = tempcrs;
+        // Load properties file
+        MosaicConfigurationBean configuration = null;
+        try {
+            if (sourceURL.getProtocol().equals("file")) {
+                final File sourceFile = DataUtilities.urlToFile(sourceURL);
+                if (!sourceFile.exists()) {
+                    throw new DataSourceException("The specified sourceURL doesn't refer to an existing file");
+                }
             }
-						
-			//
-			// perform checks on location attribute name
-			//
-			if(this.locationAttributeName==null) {
-			    throw new DataSourceException("The provided name for the location attribute is invalid.");
-			} else {
-			    if(type.getDescriptor(this.locationAttributeName)==null){
-			        // ORACLE fix
-			        this.locationAttributeName=this.locationAttributeName.toUpperCase();
-			        
-			        // try again with uppercase
-			        if(type.getDescriptor(this.locationAttributeName)==null){
-			            throw new DataSourceException("The provided name for the location attribute is invalid.");
-			        }
-			    }
-			}
-			
-			// creating the raster manager
-			rasterManager = new RasterManager(this,configuration);
-		}
-		catch (Throwable e) {
-			try {
-				if(catalog!=null){
-				    catalog.dispose();
-				}
-			} catch (Throwable e1) {
-				if (LOGGER.isLoggable(Level.FINEST)){
-				    LOGGER.log(Level.FINEST, e1.getLocalizedMessage(), e1);
-				}
-			}
-			finally{
-				catalog=null;
-			}
-			
-			// dispose raster manager as well
-			try {
-				if(rasterManager!=null)
-					rasterManager.dispose();
-			} catch (Throwable e1) {
-				if (LOGGER.isLoggable(Level.FINEST))
-					LOGGER.log(Level.FINEST, e1.getLocalizedMessage(), e1);
-			}
-			finally{
-				rasterManager=null;
-			}
-						
-			// rethrow
-			throw new  DataSourceException(e);
-		}
 
-		
-	}
+            configuration = Utils.loadMosaicProperties(sourceURL, this.locationAttributeName);
+            if (configuration == null) {
+                //
+                // do we have a datastore properties file? It will preempt on the shapefile
+                //
+                final File parent = DataUtilities.urlToFile(sourceURL).getParentFile();
+
+                // this can be used to look for properties files that do NOT define a datastore
+                final File[] properties = parent.listFiles((FilenameFilter) FileFilterUtils.and(
+                        FileFilterUtils.notFileFilter(FileFilterUtils
+                                .nameFileFilter("indexer.properties")), FileFilterUtils.and(
+                                FileFilterUtils.notFileFilter(FileFilterUtils
+                                        .nameFileFilter("datastore.properties")), FileFilterUtils
+                                        .makeFileOnly(FileFilterUtils
+                                                .suffixFileFilter(".properties")))));
+
+                // do we have a valid datastore + mosaic properties pair?
+                final File datastoreProperties = new File(parent, "datastore.properties");
+
+                // Scan for MosaicConfigurationBeans from properties files
+                List<MosaicConfigurationBean> beans = new ArrayList<MosaicConfigurationBean>();
+                for (File propFile : properties) {
+                    if (Utils.checkFileReadable(propFile) && Utils.loadMosaicProperties(DataUtilities.fileToURL(propFile), "") != null) {
+                        configuration = Utils.loadMosaicProperties(DataUtilities.fileToURL(propFile), this.locationAttributeName);
+                        if (configuration != null) {
+                            beans.add(configuration);
+                        }
+                    }
+                }
+                
+                // In case we didn't find any configuration bean and datastore properties, we can't do anything
+                if (beans.isEmpty() && !datastoreProperties.exists()) {
+                    throw new DataSourceException("No mosaic properties file or datastore properties file have been found");
+                }
+                
+                // Catalog initialization from datastore
+                GranuleCatalog catalog = null;
+                final Properties props = CatalogManager.createGranuleCatalogProperties(datastoreProperties);
+                
+                // SPI
+                final String SPIClass = props.getProperty("SPI");
+
+                // create a datastore as instructed
+                final DataStoreFactorySpi spi = (DataStoreFactorySpi) Class.forName(SPIClass).newInstance();
+                final Map<String, Serializable> params = Utils.createDataStoreParamsFromPropertiesFile(props, spi);
+
+                // Since we are dealing with a catalog from an existing store, make sure to scan for all the typeNames on initialization
+                params.put(Utils.SCAN_FOR_TYPENAMES, Boolean.valueOf(true));
+//                params.put(Utils.SCAN_FOR_TYPENAMES, typeNamesProps.getProperty(Utils.SCAN_FOR_TYPENAMES));
+                
+                catalog = GranuleCatalogFactory.createGranuleCatalog(sourceURL, beans.get(0).getCatalogConfigurationBean(), params);
+                if (granuleCatalog == null) {
+                    granuleCatalog = catalog;
+                }
+
+                if (granuleCatalog == null) {
+                    throw new DataSourceException("Unable to create index for this URL " + sourceURL);
+                }
+
+                // Creating a RasterManager for each mosaic configuration found on disk
+                for (MosaicConfigurationBean bean : beans) {
+                    // Add a RasterManager on top of this Mosaic configuration bean and initialize it
+                    addRasterManager(bean, true);
+                }
+            } else {
+                
+                // Old style code: we have a single MosaicConfigurationBean. Use that to create the catalog 
+                granuleCatalog = CatalogManager.createCatalog(sourceURL, configuration, this.hints);
+                addRasterManager(configuration, true);
+            }
+        } catch (Throwable e) {
+            
+            // Dispose catalog
+            try {
+                if (granuleCatalog != null) {
+                    granuleCatalog.dispose();
+                }
+            } catch (Throwable e1) {
+                if (LOGGER.isLoggable(Level.FINEST)) {
+                    LOGGER.log(Level.FINEST, e1.getLocalizedMessage(), e1);
+                }
+            } finally {
+                granuleCatalog = null;
+            }
+            
+            // dispose raster managers as well
+            try {
+                disposeManagers();
+            } catch (Throwable e1) {
+                if (LOGGER.isLoggable(Level.FINEST)) {
+                    LOGGER.log(Level.FINEST, e1.getLocalizedMessage(), e1);
+                }
+            } finally {
+                rasterManagers = null;
+            }
+
+            // rethrow
+            throw new DataSourceException(e);
+        }
+    }
 

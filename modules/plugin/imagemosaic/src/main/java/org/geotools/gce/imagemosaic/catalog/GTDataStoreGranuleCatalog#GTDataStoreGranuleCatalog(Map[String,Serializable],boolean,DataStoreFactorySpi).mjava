@@ -44,26 +44,44 @@
 				}
 			}
 
+			if(spi instanceof OracleNGOCIDataStoreFactory||
+                                spi instanceof OracleNGJNDIDataStoreFactory||
+                                spi instanceof OracleNGDataStoreFactory){
+			    tileIndexStore = new OracleDatastoreWrapper(tileIndexStore, FilenameUtils.getFullPath(parentLocation));
+			}
+			
 			// is this a new store? If so we do not set any properties
 			if(create){
 			    return;
 			}
+			
+			String typeName = null;
+			boolean scanForTypeNames = false;
+
+			 if(params.containsKey("TypeName")){
+	                            typeName=(String) params.get("TypeName");
+	                        } 
+			 
+                        if (params.containsKey(Utils.SCAN_FOR_TYPENAMES)) {
+                            scanForTypeNames = (Boolean) params.get(Utils.SCAN_FOR_TYPENAMES);
+                        }
 				
 			// if this is not a new store let's extract basic properties from it
-			if(params.containsKey("TypeName")){
-				this.typeName=(String) params.get("TypeName");
-	        	
-	        	// Oracle trick
-	        	if(spi instanceof OracleNGOCIDataStoreFactory||
-	        			spi instanceof OracleNGJNDIDataStoreFactory||
-	        			spi instanceof OracleNGDataStoreFactory){
-	        		this.typeName=typeName.toUpperCase();
-	        		if(locationAttribute!=null){
-	        			this.locationAttribute=this.locationAttribute.toUpperCase();
-	        		}
-	        	}				
-			}
-			extractBasicProperties();
+	                if (scanForTypeNames) {
+	                    String[] typeNames = tileIndexStore.getTypeNames();
+	                    if (typeNames != null) {
+	                        for (String tn : typeNames) {
+	                            this.typeNames.add(tn);
+	                        }
+	                    }
+	                } else if (typeName != null) {
+                            addTypeName(typeName, false);
+	                }
+	                if (this.typeNames.size() > 0) {
+	                    extractBasicProperties(typeNames.iterator().next());
+	                } else {
+	                    extractBasicProperties(typeName);
+	                }
 		}
 		catch (Throwable e) {
 			try {
