@@ -1,0 +1,55 @@
+    /**
+     * Init the coverages naming and schema mappings
+     */
+    private void initCoverages(Map<String,String> schemaMapping) {
+        final Coverages coverages = indexer.getCoverages();
+        if (coverages != null) {
+            final List<Coverage> coverageElements = coverages.getCoverage();
+
+            // Loop over coverages
+            for (Coverage coverageElement : coverageElements) {
+
+                // get the coverageName
+                String coverageName = coverageElement.getName();
+                if (coverageName == null) {
+                    // null coverageName... try to setup it through name collector
+                    coverageName = getCoverageNameFromCollector(coverageElement.getNameCollector());
+                }
+
+                // Get the origName for that coverage
+                String origName = coverageElement.getOrigName();
+                if (origName != null && !origName.isEmpty()) {
+                    origName = origName.trim();
+                } else {
+                    origName = coverageName;
+                }
+
+                // Get the coverage schema and attributes
+                final SchemaType coverageSchema = coverageElement.getSchema();
+                String coverageSchemaRef = null;
+                String schemaAttributes = null;
+                if (coverageSchema != null) {
+                    hasImposedSchema = true;
+                    schemaAttributes = coverageSchema.getAttributes();
+                    coverageSchemaRef = coverageSchema.getRef();
+                }
+
+                // initialize schemaName with the coverageName unless there isn't a schema
+                // reference
+                String schemaName = coverageName;
+
+                // in case of coverageSchemaRef not null, link to that reference schema
+                if (coverageSchemaRef == null || coverageSchemaRef.trim().length() == 0)  {
+                    schemaMapping.put(coverageName, schemaAttributes);
+                } else {
+                    schemaName = coverageSchemaRef;
+                    schemaAttributes = schemaMapping.get(schemaName);
+                }
+
+                // Add the newly created indexer coverage
+                final Coverage coverage = createCoverate(coverageName, origName, schemaAttributes, schemaName);
+                addCoverage(coverage);
+            }
+        }
+    }
+

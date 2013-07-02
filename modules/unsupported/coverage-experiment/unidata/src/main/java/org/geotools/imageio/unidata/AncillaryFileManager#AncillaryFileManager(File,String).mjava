@@ -1,0 +1,55 @@
+    public AncillaryFileManager(final File netcdfFile, final String indexFilePath) throws IOException, JAXBException {
+        org.geotools.util.Utilities.ensureNonNull("file", netcdfFile);
+        if (!netcdfFile.exists()) {
+            throw new IllegalArgumentException("The specified file doesn't exist: " + netcdfFile);
+        }
+
+        // Set files  
+        ncFile = netcdfFile;
+        parentDirectory = new File(ncFile.getParent());
+
+        // Look for external folder configuration
+        final String baseFolder = UnidataUtilities.EXTERNAL_DATA_DIR;
+        File baseDir = null;
+        if (baseFolder != null) {
+            baseDir = new File(baseFolder);
+            // Check it again in case it has been deleted in the meantime:
+            baseDir = UnidataUtilities.isValid(baseDir) ? baseDir : null;
+        }
+
+        String mainFilePath = ncFile.getCanonicalPath();
+        String baseName = FilenameUtils.removeExtension(FilenameUtils.getName(mainFilePath));
+        String outputLocalFolder = "." + baseName;
+        destinationDir = new File(parentDirectory, outputLocalFolder);
+
+        // append base file folder tree to the optional external data dir
+        if (baseDir != null) {
+            destinationDir = new File(baseDir, outputLocalFolder);
+        }
+
+        boolean createdDir = false;
+        if (!destinationDir.exists()) {
+            createdDir = destinationDir.mkdirs();
+        }
+
+        // Init auxiliary file names
+        slicesIndexFile = new File(destinationDir, baseName + ".idx");
+        if (indexFilePath != null) {
+            indexerFile = new File(indexFilePath);
+            if (!indexerFile.exists() || !indexerFile.canRead()) {
+                indexerFile = null;
+            }
+        }
+        if (indexerFile == null) {
+            indexerFile = new File(destinationDir, baseName + INDEX_SUFFIX);
+        }
+        
+        if (!createdDir) {
+            // Check for index to be reset only in case we didn't created a new directory.
+            checkReset(ncFile, slicesIndexFile, destinationDir);
+        }
+
+        // init
+        initIndexer();
+    }
+

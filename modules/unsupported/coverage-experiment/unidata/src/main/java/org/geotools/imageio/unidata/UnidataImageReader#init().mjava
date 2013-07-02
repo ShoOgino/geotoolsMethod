@@ -1,0 +1,56 @@
+    /**
+     * Initialize main properties for this reader.
+     * 
+     * @throws exception
+     *                 {@link InvalidRangeException}
+     */
+    private void init() throws IOException {
+        int numImages = 0;
+        try {
+            if (dataset != null) {
+                checkType = UnidataUtilities.getCheckType(dataset);
+
+                // get the coordinate variables
+                extractCoordinatesVariable();
+                extractBBOX();
+                final File slicesIndexFile = ancillaryFileManager.getSlicesIndexFile();
+
+                if (slicesIndexFile != null) {
+                    // === use sidecar index
+                    if (slicesIndexFile.exists()) {
+                        ancillaryFileManager.initSliceManager();
+                        numImages = ancillaryFileManager.slicesIndexManager.getNumberOfRecords();
+                        if (!ignoreMetadata) {
+                            initCatalog(slicesIndexFile.getParentFile(),
+                            FilenameUtils.removeExtension(FilenameUtils.getName(slicesIndexFile.getCanonicalPath())).replace(".", ""));
+                            coverages.addAll(ancillaryFileManager.getCoveragesNames());
+                        }
+                    }
+
+                    if (numImages <= 0 || !slicesIndexFile.exists()) {
+                        // === index doesn't exists already, build it first
+                        // close existing
+                        
+                        // TODO: Optimize this. Why it's storing the index and reading it back??
+                        ancillaryFileManager.resetSliceManager();
+                        numImages = initIndex();
+
+                        // reopen file to cut caching
+                        ancillaryFileManager.initSliceManager();
+                        numImages = ancillaryFileManager.slicesIndexManager.getNumberOfRecords();
+                    }
+
+                } else {
+                    // === the dataset is no file dataset, need to build memory index
+                    numImages = initIndex();
+                }
+
+            } else{
+                throw new IllegalArgumentException("No valid NetCDF dataset has been found");
+            }
+        } catch (InvalidRangeException e) {
+            throw new IllegalArgumentException("Exception occurred during NetCDF file parsing", e);
+        } 
+        setNumImages(numImages);
+    }
+

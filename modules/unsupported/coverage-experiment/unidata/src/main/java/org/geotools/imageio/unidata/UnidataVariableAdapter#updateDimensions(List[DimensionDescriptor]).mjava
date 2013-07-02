@@ -1,0 +1,45 @@
+    /**
+     * Update the dimensions to attributes mapping for this variable if needed.
+     * Default behaviour is to get attributes from the name of the dimensions of the variable.
+     * In case the indexer.xml contains an explicit schema with different attributes for time and elevation
+     * we need to remap them and updates the dimensions mapping as well as the DimensionsDescriptors
+     * @param dimensionDescriptors
+     * @throws IOException
+     */
+    private void updateDimensions(List<DimensionDescriptor> dimensionDescriptors) throws IOException {
+        final Map<Name, String> mapping = reader.ancillaryFileManager.variablesMap;
+        final Set<Name> keys = mapping.keySet();
+        final String varName = getName();
+        for (Name key: keys) {
+
+            // Go to the current variable
+            final String origName = mapping.get(key);
+            if (origName.equalsIgnoreCase(varName)){
+
+                // Get the mapped coverage name (as an instance, NO2 for a GOME2 with var = 'z')
+                final String coverageName = key.getLocalPart();
+                final Coverage coverage = reader.ancillaryFileManager.coveragesMapping.get(coverageName);
+                if (coverage.getSchema() != null) {
+                    final CoverageSlicesCatalog catalog = reader.getCatalog();
+                    if (catalog != null) {
+                        // Current assumption is that we have a typeName for each coverage
+                        final String[] typeNames = catalog.getTypeNames();
+                        for (String typeName : typeNames) {
+
+                            // Look for matching schema 
+                            if (typeName.equalsIgnoreCase(coverageName)) {
+                                final SimpleFeatureType schemaType = catalog.getSchema(coverageName);
+                                if (schemaType != null) {
+                                    // Schema found: proceed with remapping attributes
+                                    updateMapping(schemaType, dimensionDescriptors);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    }
+
