@@ -1,0 +1,171 @@
+    /**
+     * @see javax.imageio.ImageReader#read(int, javax.imageio.ImageReadParam)
+     */
+    @Override
+    public BufferedImage read( int imageIndex, ImageReadParam param ) throws IOException {
+        clearAbortRequest();
+    
+        final UnidataSlice2DIndex slice2DIndex = getSlice2DIndex(imageIndex);
+        final String variableName=slice2DIndex.getVariableName();
+        final UnidataVariableAdapter wrapper=getCoverageDescriptor(new NameImpl(variableName));
+        
+    
+        /*
+         * Fetches the parameters that are not already processed by utility
+         * methods like 'getDestination' or 'computeRegions' (invoked below).
+         */
+        final int strideX, strideY;
+        // final int[] srcBands;
+        final int[] dstBands;
+        if (param != null) {
+            strideX = param.getSourceXSubsampling();
+            strideY = param.getSourceYSubsampling();
+            // srcBands = param.getSourceBands();
+            dstBands = param.getDestinationBands();
+        } else {
+            strideX = 1;
+            strideY = 1;
+            // srcBands = null;
+            dstBands = null;
+        }
+    
+        /*
+         * Gets the destination image of appropriate size. We create it now
+         * since it is a convenient way to get the number of destination bands.
+         */
+        final int width = wrapper.getWidth();
+        final int height        = wrapper.getHeight();
+        /*
+         * Computes the source region (in the NetCDF file) and the destination
+         * region (in the buffered image). Copies those informations into UCAR
+         * Range structure.
+         */
+        final Rectangle srcRegion = new Rectangle();
+        final Rectangle destRegion = new Rectangle();
+        computeRegions(param, width, height, null, srcRegion, destRegion);
+        flipVertically(param, height, srcRegion);
+        int destWidth = destRegion.x + destRegion.width;
+        int destHeight = destRegion.y + destRegion.height;
+    
+        /*
+         * build the ranges that need to be read from each 
+         * dimension based on the source region
+         */
+        final List<Range> ranges = new LinkedList<Range>();
+        try {
+            // add the ranges the COARDS way: T, Z, Y, X
+            // T
+            int first = slice2DIndex.getTIndex();
+            int length = 1;
+            int stride = 1;
+            if (first != -1){
+                ranges.add(new Range(first, first + length - 1, stride));
+            }
+            // Z
+            first = slice2DIndex.getZIndex();
+            if (first != -1){
+                ranges.add(new Range(first, first + length - 1, stride));
+            }
+            // Y
+            first = srcRegion.y;
+            length = srcRegion.height;
+            stride = strideY;
+            ranges.add(new Range(first, first + length - 1, stride));
+            // X
+            first = srcRegion.x;
+            length = srcRegion.width;
+            stride = strideX;
+            ranges.add(new Range(first, first + length - 1, stride));
+        } catch (InvalidRangeException e) {
+            throw netcdfFailure(e);
+        }
+    
+        /*
+         * create the section of multidimensional array indices
+         * that defines the exact data that need to be read 
+         * for this image index and parameters 
+         */
+        final Section section = new Section(ranges);
+    
+        /*
+         * Setting SampleModel and ColorModel.
+         */
+        final SampleModel sampleModel = wrapper.getSampleModel().createCompatibleSampleModel(destWidth, destHeight);
+        final ColorModel colorModel = ImageIOUtilities.createColorModel(sampleModel);
+    
+        final WritableRaster raster = Raster.createWritableRaster(sampleModel, new Point(0, 0));
+        final BufferedImage image = new BufferedImage(colorModel, raster, colorModel.isAlphaPremultiplied(), null);
+    
+        /*
+         * Reads the requested sub-region only.
+         */
+        processImageStarted(imageIndex);
+        final int numDstBands = 1;
+        final float toPercent = 100f / numDstBands;
+        final int type = raster.getSampleModel().getDataType();
+        final int xmin = destRegion.x;
+        final int ymin = destRegion.y;
+        final int xmax = destRegion.width + xmin;
+        final int ymax = destRegion.height + ymin;
+        for( int zi = 0; zi < numDstBands; zi++ ) {
+            // final int srcBand = (srcBands == null) ? zi : srcBands[zi];
+            final int dstBand = (dstBands == null) ? zi : dstBands[zi];
+            final Array array;
+            try {
+                // TODO leak through
+                array = 
+                    wrapper.variableDS.read(section);
+            } catch (InvalidRangeException e) {
+                throw netcdfFailure(e);
+            }
+            final IndexIterator it = array.getIndexIterator();
+             for (int y = ymax; --y >= ymin;) {
+                for( int x = xmin; x < xmax; x++ ) {
+                    switch( type ) {
+                        case DataBuffer.TYPE_DOUBLE: {
+                            raster.setSample(x, y, dstBand, it.getDoubleNext());
+                            break;
+                        }
+                        case DataBuffer.TYPE_FLOAT: {
+                            raster.setSample(x, y, dstBand, it.getFloatNext());
+                            break;
+                        }
+                        case DataBuffer.TYPE_BYTE: {
+                            byte b = it.getByteNext();
+                            // int myByte = (0x000000FF & ((int) b));
+                            // short anUnsignedByte = (short) myByte;
+                            // raster.setSample(x, y, dstBand, anUnsignedByte);
+                            raster.setSample(x, y, dstBand, b);
+                            break;
+                        }
+                        default: {
+                            raster.setSample(x, y, dstBand, it.getIntNext());
+                            break;
+                        }
+                    }
+                }
+            }
+            /*
+             * Checks for abort requests after reading. It would be a waste of a
+             * potentially good image (maybe the abort request occurred after we
+             * just finished the reading) if we didn't implemented the
+             * 'isCancel()' method. But because of the later, which is checked
+             * by the NetCDF library, we can't assume that the image is
+             * complete.
+             */
+            if (abortRequested()) {
+                processReadAborted();
+                return image;
+            }
+            /*
+             * Reports progress here, not in the deeper loop, because the costly
+             * part is the call to 'variable.read(...)' which can't report
+             * progress. The loop that copy pixel values is fast, so reporting
+             * progress there would be pointless.
+             */
+            processImageProgress(zi * toPercent);
+        }
+        processImageComplete();
+        return image;
+    }
+

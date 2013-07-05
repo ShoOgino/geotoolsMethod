@@ -1,6 +1,30 @@
     @SuppressWarnings("unchecked")
-    private static boolean checkForUrl( Object source, Hints hints){
+    private boolean checkForUrl( Object source, Hints hints){
          try {
+            if (hints != null && hints.containsKey(Utils.EXCLUDE_MOSAIC) && ((Boolean)hints.get(Utils.EXCLUDE_MOSAIC) == true)) {
+                return false;
+            }
+
+            // Minimal check. In case we found the indexer we say that we can deal with that mosaic
+            // An additional getReader may confirm or deny that in case.
+            boolean indexerFound = Utils.minimalIndexCheck(source);
+            if (indexerFound) {
+                return true;
+            }
+
+            //
+            // Check source
+            //
+            // if it is a URL or a String let's try to see if we can get a file to
+            // check if we have to build the index
+            ImageMosaicReader reader = getReader(source, hints);
+            if (reader != null) {
+                // TODO: It's inefficient
+                reader.dispose();
+                return true;
+            }
+            
+            
             
             URL sourceURL = Utils.checkSource(source, hints);
             if(sourceURL == null){
@@ -123,9 +147,10 @@
 	            if(configuration==null)
 	            	return false;
 
+	        CatalogConfigurationBean catalogBean = configuration.getCatalogConfigurationBean();
             	// we need the type name with a DB to pick up the right table
             	// for shapefiles this can be null so taht we select the first and ony one
-            	String typeName = configuration.getTypeName();            	
+            	String typeName = catalogBean.getTypeName();            	
             	if(typeName==null){
                     final String[] typeNames = tileIndexStore.getTypeNames();
                     if (typeNames.length <= 0)
@@ -154,7 +179,7 @@
                 if(crs==null)
     				return false;	            
                 // looking for the location attribute
-	            final String locationAttributeName=configuration.getLocationAttribute();
+	            final String locationAttributeName = catalogBean.getLocationAttribute();
                 if (schema.getDescriptor(locationAttributeName) == null&&schema.getDescriptor(locationAttributeName.toUpperCase()) == null)
                     return false;   
                 

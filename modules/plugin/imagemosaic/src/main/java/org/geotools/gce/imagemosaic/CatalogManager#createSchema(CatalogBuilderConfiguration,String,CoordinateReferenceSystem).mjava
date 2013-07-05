@@ -1,0 +1,61 @@
+    /**
+     * Create a {@link SimpleFeatureType} from the specified configuration.
+     * @param configurationBean
+     * @param actualCRS
+     * @return
+     */
+    public static SimpleFeatureType createSchema(CatalogBuilderConfiguration runConfiguration, String name,
+            CoordinateReferenceSystem actualCRS) {
+        SimpleFeatureType indexSchema = null;
+        SchemaType schema = null;
+        String schemaAttributes = null;
+        Indexer indexer = runConfiguration.getIndexer();
+        if (indexer != null) {
+            SchemasType schemas = indexer.getSchemas();
+            Coverage coverage = IndexerUtils.getCoverage(indexer, name);
+            if (coverage != null) {
+                schema = IndexerUtils.getSchema(indexer, coverage);
+            }
+            if (schema != null) {
+                schemaAttributes = schema.getAttributes();
+            } else if (schemas != null) {
+                List<SchemaType> schemaList = schemas.getSchema();
+                // CHECK THAT
+                if (!schemaList.isEmpty()) {
+                    schemaAttributes = schemaList.get(0).getAttributes();
+                }
+            }
+        }
+        if (schemaAttributes == null) {
+            schemaAttributes = runConfiguration.getSchema(name);
+        }
+        if (schemaAttributes != null) {
+            schemaAttributes = schemaAttributes.trim();
+            // get the schema
+            try {
+                indexSchema = DataUtilities.createType(name, schemaAttributes);
+                // override the crs in case the provided one was wrong or absent
+                indexSchema = DataUtilities.createSubType(indexSchema,
+                        DataUtilities.attributeNames(indexSchema), actualCRS);
+            } catch (Throwable e) {
+                if (LOGGER.isLoggable(Level.FINE))
+                    LOGGER.log(Level.FINE, e.getLocalizedMessage(), e);
+                indexSchema = null;
+            }
+        }
+
+        if (indexSchema == null) {
+            // Proceed with default Schema
+            final SimpleFeatureTypeBuilder featureBuilder = new SimpleFeatureTypeBuilder();
+            featureBuilder.setName(runConfiguration.getParameter(Prop.INDEX_NAME));
+            featureBuilder.setNamespaceURI("http://www.geo-solutions.it/");
+            featureBuilder.add(runConfiguration.getParameter(Prop.LOCATION_ATTRIBUTE).trim(), String.class);
+            featureBuilder.add("the_geom", Polygon.class, actualCRS);
+            featureBuilder.setDefaultGeometry("the_geom");
+            String timeAttribute = runConfiguration.getTimeAttribute();
+            addAttributes(timeAttribute, featureBuilder, Date.class);
+            indexSchema = featureBuilder.buildFeatureType();
+        }
+        return indexSchema;
+    }
+

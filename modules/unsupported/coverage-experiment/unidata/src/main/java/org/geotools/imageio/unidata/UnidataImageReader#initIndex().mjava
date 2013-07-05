@@ -1,0 +1,136 @@
+    /**
+     * Index Initialization. Scan the coverageDescriptorsCache and store indexing information.
+     * @param coverageDescriptorsCache
+     * @return
+     * @throws InvalidRangeException
+     * @throws IOException
+     */
+    protected int initIndex( ) throws InvalidRangeException, IOException {
+        DefaultTransaction transaction = new DefaultTransaction("indexTransaction" + System.nanoTime());
+        int numImages = 0;
+        try {
+
+            // init slice catalog
+            final File sliceIndexFile = ancillaryFileManager.getSlicesIndexFile(); 
+            initCatalog(
+                    sliceIndexFile.getParentFile(),
+                    FilenameUtils.removeExtension(FilenameUtils.getName(sliceIndexFile.getCanonicalPath())).replace(".", ""));
+            final List<Variable> variables = dataset.getVariables();
+            if (variables != null) {
+
+                // cycle on all variables to get parse them
+                for (final Variable var_ : variables) {
+                    if (var_ != null && var_ instanceof VariableDS) {
+                        final VariableDS variable= (VariableDS) var_;
+                        
+                        // get the name
+                        // check if it is filtered or not
+                        String varName = variable.getFullName();
+                        if (!ancillaryFileManager.acceptsVariable(varName)) {
+                            continue;
+                        }
+
+                        // is it acceptable?
+                        if (!UnidataUtilities.isVariableAccepted(variable, checkType)) {
+                            continue;
+                        }
+
+                        // COVERAGE NAME
+                        // Add the accepted variable to the list of coverages name
+                        final Name coverageName = getCoverageName(varName);
+                        // TODO wrap this into an object that wraps a Unidata CoordinateSystem
+                        CoordinateSystem cs = UnidataCRSUtilities.getCoordinateSystem(variable);
+                        // SCHEMA
+                        // TODO push into VariableWrapper
+                        final SimpleFeatureType indexSchema = getIndexSchema(coverageName,cs);
+
+                        if (indexSchema == null) {
+                            throw new IllegalStateException("Unable to created index schema for coverage:"+coverageName);
+                        }
+                        // create 
+                        checkSchema(indexSchema);
+                        // get variable
+                        final UnidataVariableAdapter vaAdapter= getCoverageDescriptor(coverageName);
+                        final int variableImageStartIndex = numImages;
+                        final int numberOfSlices = vaAdapter.getNumberOfSlices();
+                        final int variableImageNum = variableImageStartIndex + numberOfSlices;
+                        final int rank = variable.getRank();
+                        numImages+=numberOfSlices;
+
+                        // 2D SLICE INDEX PREPARATION
+                        // TODO Embed into variable wrapper
+                        final boolean hasVerticalAxis = cs.hasVerticalAxis();
+                        final int bandDimension = rank - UnidataUtilities.Z_DIMENSION;
+                        final ListFeatureCollection collection= new ListFeatureCollection(indexSchema);
+                        int features = 0;
+                        for (int imageIndex = variableImageStartIndex; imageIndex < variableImageNum; imageIndex++) {
+                            int zIndex = -1;
+                            int tIndex = -1;
+                            for (int i = 0; i < rank; i++) {
+                                switch (rank - i) {
+                                case UnidataUtilities.X_DIMENSION:
+                                case UnidataUtilities.Y_DIMENSION:
+                                    break;
+                                default: {
+                                    if (i == bandDimension && hasVerticalAxis) {
+                                        zIndex = vaAdapter.getZIndex(imageIndex-variableImageStartIndex);
+                                    } else {
+                                        tIndex =  vaAdapter.getTIndex(imageIndex-variableImageStartIndex);
+                                    }
+                                    break;
+                                }
+                                }
+                            }
+
+                            //Put a new sliceIndex in the list
+                            final UnidataSlice2DIndex variableIndex = new UnidataSlice2DIndex(tIndex, zIndex, varName);
+                            ancillaryFileManager.addSlice(variableIndex);
+
+                            // Create a feature for that index to be put in the CoverageSlicesCatalog
+                            final SimpleFeature feature = createFeature(
+                                    variable, 
+                                    coverageName.toString(), 
+                                    tIndex, 
+                                    zIndex, 
+                                    cs, 
+                                    imageIndex, 
+                                    indexSchema);
+                            collection.add(feature);
+                            features++;
+                            
+                            // write down in pages
+                            if (features % INTERNAL_INDEX_CREATION_PAGE_SIZE == 0) {
+                                getCatalog().addGranules(indexSchema.getTypeName(), collection, transaction);
+                                collection.clear();
+                            }
+                        }
+                        // add residual features
+                        if (collection.size() > 0) {
+                            getCatalog().addGranules(indexSchema.getTypeName(), collection, transaction);
+                            collection.clear();
+                        }
+                    }
+                }
+            }
+            // write things to disk
+            ancillaryFileManager.writeToDisk();
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine("Committing changes to the DB");
+            }
+            transaction.commit();
+        } catch (Throwable e) {
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine("Rollback");
+            }
+            transaction.rollback();
+            throw new IOException(e);
+        } finally {
+            try {
+                transaction.close();
+            } catch (Throwable t) {
+
+            }
+        }
+        return numImages;
+    }
+

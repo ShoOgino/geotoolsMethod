@@ -1,0 +1,37 @@
+    /**
+     * Create a granule catalog from a datastore properties file
+     * @param parent
+     * @param datastoreProperties
+     * @param create
+     * @return
+     * @throws IOException
+     */
+    public static GranuleCatalog createGranuleCatalogFromDatastore(File parent, File datastoreProperties, boolean create) throws IOException {
+        GranuleCatalog catalog = null;
+        Utilities.ensureNonNull("datastoreProperties", datastoreProperties);
+        Properties properties = createGranuleCatalogProperties(datastoreProperties);
+        // SPI
+        final String SPIClass = properties.getProperty("SPI");
+        try {
+            // create a datastore as instructed
+            final DataStoreFactorySpi spi = (DataStoreFactorySpi) Class.forName(SPIClass).newInstance();
+            final Map<String, Serializable> params = Utils.createDataStoreParamsFromPropertiesFile(properties, spi);
+
+            // set ParentLocation parameter since for embedded database like H2 we must change the database
+            // to incorporate the path where to write the db
+            params.put("ParentLocation", DataUtilities.fileToURL(parent).toExternalForm());
+
+            catalog = GranuleCatalogFactory.createGranuleCatalog(params, false, create, spi);
+        } catch (ClassNotFoundException e) {
+            final IOException ioe = new IOException();
+            throw (IOException) ioe.initCause(e);
+        } catch (InstantiationException e) {
+            final IOException ioe = new IOException();
+            throw (IOException) ioe.initCause(e);
+        } catch (IllegalAccessException e) {
+            final IOException ioe = new IOException();
+            throw (IOException) ioe.initCause(e);
+        }
+        return catalog;
+    }
+

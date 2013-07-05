@@ -1,7 +1,8 @@
+	@Override
 	public void  getGranules(final Query q, final GranuleCatalogVisitor visitor)
 	throws IOException {
 		Utilities.ensureNonNull("query",q);
-
+		String typeName = q.getTypeName();
 		final Lock lock=rwLock.readLock();
 		try{
 			lock.lock();		
@@ -11,7 +12,7 @@
 			// Load tiles informations, especially the bounds, which will be
 			// reused
 			//
-			final SimpleFeatureSource featureSource = tileIndexStore.getFeatureSource(this.typeName);
+			final SimpleFeatureSource featureSource = tileIndexStore.getFeatureSource(typeName);
 			if (featureSource == null){
 				throw new NullPointerException(
 						"The provided SimpleFeatureSource is null, it's impossible to create an index!");	
@@ -50,9 +51,9 @@
 			        	
 			        	// caching by granule's location
 			        	synchronized (granuleDescriptorsCache) {
-			        	    String granuleLocation = (String) sf.getAttribute(locationAttribute);
-                                            if(granuleDescriptorsCache.containsKey(granuleLocation)){
-                                                granule=granuleDescriptorsCache.get(granuleLocation);
+			        	    String featureId = sf.getID();
+                                            if(granuleDescriptorsCache.containsKey(featureId)){
+                                                granule=granuleDescriptorsCache.get(featureId);
                                             } else{
                                                 // create the granule descriptor
                                                 granule= new GranuleDescriptor(
@@ -61,8 +62,9 @@
                                                                 pathType,
                                                                 locationAttribute,
                                                                 parentLocation,
-                                                                heterogeneous);
-                                                granuleDescriptorsCache.put(granuleLocation, granule);
+                                                                heterogeneous, 
+                                                                q.getHints());
+                                                granuleDescriptorsCache.put(featureId, granule);
                                             }
   
 			        	    

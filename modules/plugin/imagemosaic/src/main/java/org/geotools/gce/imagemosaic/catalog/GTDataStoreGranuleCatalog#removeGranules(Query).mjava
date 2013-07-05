@@ -1,3 +1,4 @@
+	@Override
 	public int removeGranules(final Query query) {
 		Utilities.ensureNonNull("query",query);
 		final Lock lock=rwLock.writeLock();
@@ -5,7 +6,7 @@
 			lock.lock();
 			// check if the index has been cleared
 			checkStore();		
-			
+			String typeName = query.getTypeName();
 			SimpleFeatureStore fs=null;
 			try{
 				// create a writer that appends this features
@@ -14,8 +15,7 @@
 				fs.removeFeatures(query.getFilter());
 				
 				//update bounds
-				bounds=tileIndexStore.getFeatureSource(typeName).getBounds();
-				
+				bounds.put(typeName, tileIndexStore.getFeatureSource(typeName).getBounds());
 				return retVal;
 				
 			}
@@ -25,7 +25,9 @@
 				return -1;
 			}
 			// do your thing
-		}finally{
+		} finally {
+		    // TODO: see if we can optimize and just drop the features that have been deleted
+		    granuleDescriptorsCache.clear();
 			lock.unlock();
 		}			
 	}

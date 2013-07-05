@@ -1,49 +1,55 @@
-        /**
-	 * Constructor.
-	 * 
-	 * @param source
-	 *            The source object.
-	 * @throws IOException
-	 * @throws UnsupportedEncodingException
-	 * 
-	 */
-	public ImageMosaicReader(Object source, Hints uHints) throws IOException {
-	    super(source,uHints);
-	    
-	    //
-	    // try to extract a multithreaded loader if available
-	    //
-	    if (this.hints.containsKey(Hints.EXECUTOR_SERVICE)) {
-	      final Object executor = uHints.get(Hints.EXECUTOR_SERVICE);
-	      if (executor != null && executor instanceof ExecutorService){
-	          multiThreadedLoader = (ExecutorService) executor;
-	          if (LOGGER.isLoggable(Level.FINE)){
-	              if (multiThreadedLoader instanceof ThreadPoolExecutor){
-	                  final ThreadPoolExecutor tpe = (ThreadPoolExecutor) multiThreadedLoader;
-	                  LOGGER.fine("Using ThreadPoolExecutor with the following settings: " +
-	                              "core pool size = " + tpe.getCorePoolSize() + 
-	                              "\nmax pool size = " + tpe.getMaximumPoolSize() + 
-	                              "\nkeep alive time " + tpe.getKeepAliveTime(TimeUnit.MILLISECONDS));    
-	              }
-	          }
-	      }
-	    }
-	    
-	    // max allowed tiles for a single request
-            if (this.hints.containsKey(Hints.MAX_ALLOWED_TILES))
-                this.maxAllowedTiles = ((Integer) this.hints.get(Hints.MAX_ALLOWED_TILES));
-    
-            //
-            // Check source
-            //
-            if (source instanceof ImageMosaicDescriptor) {
-                initReaderFromDescriptor((ImageMosaicDescriptor) source, uHints);
-            } else {
-                try {
-                    initReaderFromURL(source, uHints);
-                } catch (Exception e) {
-                    throw new DataSourceException(e);
+    /**
+     * Constructor.
+     * 
+     * @param source The source object.
+     * @throws IOException
+     * @throws UnsupportedEncodingException
+     * 
+     */
+    public ImageMosaicReader(Object source, Hints uHints) throws IOException {
+        super(source, uHints);
+
+        //
+        // try to extract a multithreaded loader if available
+        //
+        if (this.hints.containsKey(Hints.EXECUTOR_SERVICE)) {
+            final Object executor = uHints.get(Hints.EXECUTOR_SERVICE);
+            if (executor != null && executor instanceof ExecutorService) {
+                multiThreadedLoader = (ExecutorService) executor;
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    if (multiThreadedLoader instanceof ThreadPoolExecutor) {
+                        final ThreadPoolExecutor tpe = (ThreadPoolExecutor) multiThreadedLoader;
+                        LOGGER.fine("Using ThreadPoolExecutor with the following settings: "
+                                + "core pool size = " + tpe.getCorePoolSize()
+                                + "\nmax pool size = " + tpe.getMaximumPoolSize()
+                                + "\nkeep alive time "
+                                + tpe.getKeepAliveTime(TimeUnit.MILLISECONDS));
+                    }
                 }
             }
-	}
+        }
+
+        // max allowed tiles for a single request
+        if (this.hints.containsKey(Hints.MAX_ALLOWED_TILES))
+            this.maxAllowedTiles = ((Integer) this.hints.get(Hints.MAX_ALLOWED_TILES));
+
+        //
+        // Check source
+        //
+        if (source instanceof ImageMosaicDescriptor) {
+            initReaderFromDescriptor((ImageMosaicDescriptor) source, uHints);
+        } else {
+            try {
+                
+             // Cloning the hints
+                Hints localHints = new Hints(uHints);
+                if (localHints != null) {
+                    localHints.add(new Hints(Utils.MOSAIC_READER, this));
+                } 
+                initReaderFromURL(source, localHints);
+            } catch (Exception e) {
+                throw new DataSourceException(e);
+            }
+        }
+    }
 

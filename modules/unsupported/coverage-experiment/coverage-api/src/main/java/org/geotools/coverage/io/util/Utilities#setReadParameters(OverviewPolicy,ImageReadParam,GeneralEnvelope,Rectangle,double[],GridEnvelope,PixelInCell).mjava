@@ -1,0 +1,77 @@
+    /**
+     * Prepares the read parameters for doing an {@link ImageReader#read(int, ImageReadParam)}.
+     * 
+     * It sets the passed {@link ImageReadParam} in terms of decimation on reading using the provided requestedEnvelope and requestedDim to evaluate
+     * the needed resolution.
+     * 
+     * @param overviewPolicy it can be one of {@link Hints#VALUE_OVERVIEW_POLICY_IGNORE}, {@link Hints#VALUE_OVERVIEW_POLICY_NEAREST},
+     *        {@link Hints#VALUE_OVERVIEW_POLICY_QUALITY} or {@link Hints#VALUE_OVERVIEW_POLICY_SPEED}. It specifies the policy to compute the
+     *        overviews level upon request.
+     * @param readParam an instance of {@link ImageReadParam} for setting the subsampling factors.
+     * @param requestedEnvelope the {@link GeneralEnvelope} we are requesting.
+     * @param requestedDim the requested dimensions.
+     * @param gridRange
+     * @throws IOException
+     * @throws TransformException
+     */
+    public static void setReadParameters(OverviewPolicy overviewPolicy, ImageReadParam readParam,
+            GeneralEnvelope requestedEnvelope, Rectangle requestedDim, double[] highestRes,
+            GridEnvelope gridRange, PixelInCell pixelInCell) throws IOException, TransformException {
+        double[] requestedRes = null;
+
+        // //
+        //
+        // Initialize overview policy
+        //
+        // //
+        if (overviewPolicy == null) {
+            overviewPolicy = OverviewPolicy.NEAREST;
+        }
+
+        // //
+        //
+        // default values for subsampling
+        //
+        // //
+        readParam.setSourceSubsampling(1, 1, 0, 0);
+
+        // //
+        //
+        // requested to ignore overviews
+        //
+        // //
+        if (overviewPolicy.equals(OverviewPolicy.IGNORE)) {
+            return;
+        }
+
+        // //
+        //
+        // Resolution requested. I am here computing the resolution required
+        // by the user.
+        //
+        // //
+        if (requestedEnvelope != null) {
+            final GridToEnvelopeMapper geMapper = new GridToEnvelopeMapper();
+            geMapper.setEnvelope(requestedEnvelope);
+            geMapper.setGridRange(new GeneralGridEnvelope(requestedDim, 2));
+            geMapper.setPixelAnchor(pixelInCell);
+            final AffineTransform transform = geMapper.createAffineTransform();
+            requestedRes = CoverageUtilities.getResolution(transform);
+        }
+
+        if (requestedRes == null) {
+            return;
+        }
+
+        // ////////////////////////////////////////////////////////////////////
+        //
+        // DECIMATION ON READING
+        //
+        // ////////////////////////////////////////////////////////////////////
+        if (highestRes == null)
+            throw new IllegalArgumentException("Unspecified highest Resolution");
+        if ((requestedRes[0] > highestRes[0]) || (requestedRes[1] > highestRes[1])) {
+            Utilities.setDecimationParameters(readParam, gridRange, requestedRes, highestRes);
+        }
+    }
+
