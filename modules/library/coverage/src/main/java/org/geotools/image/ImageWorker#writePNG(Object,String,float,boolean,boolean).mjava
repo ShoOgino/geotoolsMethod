@@ -47,27 +47,52 @@
             }
         }
         
-        if(LOGGER.isLoggable(Level.FINER))
-			LOGGER.finer("Encoded input image for png writer");
+        if(LOGGER.isLoggable(Level.FINER)){
+            LOGGER.finer("Encoded input image for png writer");
+        }
 
         // Getting a writer.
-        if(LOGGER.isLoggable(Level.FINER))
-			LOGGER.finer("Getting a writer");
-        final Iterator<ImageWriter> it = ImageIO.getImageWritersByFormatName("PNG");
-        if (!it.hasNext()) {
-            throw new IllegalStateException(Errors.format(ErrorKeys.NO_IMAGE_WRITER));
+        if(LOGGER.isLoggable(Level.FINER)){
+            LOGGER.finer("Getting a writer");
         }
-        ImageWriter writer = it.next();
+        ImageWriter writer=null;
+        
+        // ImageIO
+        if(nativeAcc){
+            if(IMAGEIO_PNG_IMAGE_WRITER_SPI!=null){
+                writer= IMAGEIO_PNG_IMAGE_WRITER_SPI.createWriterInstance();
+            }else{
+                LOGGER.finer("Unable to find ImageIO PNG writer");
+            }
+        }
+
+        // JDK
+        if(!nativeAcc||writer==null){
+            final Iterator<ImageWriter> it = ImageIO.getImageWritersByFormatName("PNG");
+            if (!it.hasNext()) {
+                throw new IllegalStateException(Errors.format(ErrorKeys.NO_IMAGE_WRITER));
+            }
+            writer = it.next();
+            // check that this is not the native one
+            if (writer.getOriginatingProvider().getClass().equals(IMAGEIO_PNG_IMAGE_WRITER_SPI)){
+                if(it.hasNext()){
+                    writer = it.next();
+                }else{
+                    LOGGER.finer("Unable to use PNG writer different than ImageIO one");
+                }
+            }            
+        }
 
         // Getting a stream.
-        if(LOGGER.isLoggable(Level.FINER))
-			LOGGER.finer("Setting write parameters for this writer");
+        if(LOGGER.isLoggable(Level.FINER)){
+            LOGGER.finer("Setting write parameters for this writer");
+        }
         ImageWriteParam iwp = null;
         final ImageOutputStream memOutStream = ImageIOExt.createImageOutputStream(image, destination);
-        if(memOutStream==null)
-        	throw new IIOException(Errors.format(ErrorKeys.NULL_ARGUMENT_$1,"stream"));        
-        if (nativeAcc && writer.getClass().getName().equals(
-                "com.sun.media.imageioimpl.plugins.png.CLibPNGImageWriter"))
+        if(memOutStream==null){
+            throw new IIOException(Errors.format(ErrorKeys.NULL_ARGUMENT_$1,"stream"));        
+        }
+        if (nativeAcc && writer.getOriginatingProvider().getClass().equals(IMAGEIO_PNG_IMAGE_WRITER_SPI))
         {
             // Compressing with native.
         	if(LOGGER.isLoggable(Level.FINER))
@@ -83,14 +108,9 @@
             iwp.setDestinationType(new ImageTypeSpecifier(image.getColorModel(), image.getSampleModel()));
         } else {
             // Compressing with pure Java.
-            // pure java from native
-            if (!nativeAcc && it.hasNext() && writer.getClass().getName().equals(
-                    "com.sun.media.imageioimpl.plugins.png.CLibPNGImageWriter"))
-            {
-                writer = it.next();
+            if(LOGGER.isLoggable(Level.FINER)){
+                LOGGER.finer("Writer is NOT native");
             }
-            if(LOGGER.isLoggable(Level.FINER))
-    			LOGGER.finer("Writer is NOT native");
             // Instantiating PNGImageWriteParam
             iwp = new PNGImageWriteParam();
             // Define compression mode
