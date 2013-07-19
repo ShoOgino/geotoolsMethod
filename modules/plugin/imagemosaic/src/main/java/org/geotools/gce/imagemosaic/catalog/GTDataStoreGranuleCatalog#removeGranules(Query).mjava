@@ -1,34 +1,34 @@
-	@Override
-	public int removeGranules(final Query query) {
-		Utilities.ensureNonNull("query",query);
-		final Lock lock=rwLock.writeLock();
-		try{
-			lock.lock();
-			// check if the index has been cleared
-			checkStore();		
-			String typeName = query.getTypeName();
-			SimpleFeatureStore fs=null;
-			try{
-				// create a writer that appends this features
-				fs = (SimpleFeatureStore) tileIndexStore.getFeatureSource(typeName);
-				final int retVal=fs.getCount(query);
-				fs.removeFeatures(query.getFilter());
-				
-				//update bounds
-				bounds.put(typeName, tileIndexStore.getFeatureSource(typeName).getBounds());
-				return retVal;
-				
-			}
-			catch (Throwable e) {
-				if(LOGGER.isLoggable(Level.SEVERE))
-					LOGGER.log(Level.SEVERE,e.getLocalizedMessage(),e);
-				return -1;
-			}
-			// do your thing
-		} finally {
-		    // TODO: see if we can optimize and just drop the features that have been deleted
-		    granuleDescriptorsCache.clear();
-			lock.unlock();
-		}			
-	}
+    @Override
+    public int removeGranules(Query query) {
+        Utilities.ensureNonNull("query", query);
+        query = mergeHints(query);
+        final Lock lock = rwLock.writeLock();
+        try {
+            lock.lock();
+            // check if the index has been cleared
+            checkStore();
+            String typeName = query.getTypeName();
+            SimpleFeatureStore fs = null;
+            try {
+                // create a writer that appends this features
+                fs = (SimpleFeatureStore) tileIndexStore.getFeatureSource(typeName);
+                final int retVal = fs.getCount(query);
+                fs.removeFeatures(query.getFilter());
+
+                // update bounds
+                bounds.put(typeName, tileIndexStore.getFeatureSource(typeName).getBounds());
+
+                return retVal;
+
+            } catch (Throwable e) {
+                if (LOGGER.isLoggable(Level.SEVERE))
+                    LOGGER.log(Level.SEVERE, e.getLocalizedMessage(), e);
+                return -1;
+            }
+            // do your thing
+        } finally {
+            lock.unlock();
+
+        }
+    }
 
