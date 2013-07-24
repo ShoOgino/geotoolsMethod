@@ -1,29 +1,57 @@
     @Test
-    public void testImageReaderGOME2() throws Exception {
-        final File file = TestData.file(this, "20130101.METOPA.GOME2.NO2.DUMMY.nc");
+    public void testImageReaderPolyphemunsComplex2() throws Exception {
+        File file=null;
+        try{
+            file = TestData.file(this, "polyphemus_20130301.nc");
+        } catch (IOException e) {
+            LOGGER.warning("Unable to find file polyphemus_20130301.nc");
+            return;
+        }
+        if(!file.exists()){
+            LOGGER.warning("Unable to find file polyphemus_20130301.nc");
+            return;
+        }
+        FileUtils.copyFile(file, new File(TestData.file(this,null),"polyphemus.nc"));
+        file=TestData.file(this,"polyphemus.nc");
         final DummyUnidataImageReaderSpi unidataImageReaderSpi = new DummyUnidataImageReaderSpi();
         assertTrue(unidataImageReaderSpi.canDecodeInput(file));
         DummyUnidataImageReader reader = null;
         try {
-            
-            // checking low level
             reader = (DummyUnidataImageReader) unidataImageReaderSpi.createReaderInstance();
             reader.setInput(file);
             int numImages = reader.getNumImages(true);
-            assertEquals(1, numImages);
-            LOGGER.info("Found "+numImages+ " images.");
+            assertEquals(1008, numImages);
             for (int i = 0; i < numImages; i++) {
                 UnidataSlice2DIndex sliceIndex = reader.getSlice2DIndex(i);
                 assertNotNull(sliceIndex);
                 spitOutSliceInformation(i, sliceIndex);
             }
+    
+            // check dimensions
+            CoverageSourceDescriptor cd = reader.getCoverageDescriptor(new NameImpl("NO2"));
+            final List<AdditionalDomain> additionalDomains = cd.getAdditionalDomains();
+            assertNull(additionalDomains);
+            
+            final List<DimensionDescriptor> dimensions = cd.getDimensionDescriptors();
+            assertNotNull(dimensions);
+            assertTrue(!dimensions.isEmpty());
+            assertEquals("wrong dimensions",2, dimensions.size());
+            DimensionDescriptor dim = dimensions.get(0);
+            assertTrue(dim.getName().equals("TIME"));
+            assertTrue(dim.getStartAttribute().equals("time"));
+            dim = dimensions.get(1);
+            assertTrue(dim.getName().equals("ELEVATION"));
+            assertTrue(dim.getStartAttribute().equals("z"));
+            
             
             // check coverage names
             final List<Name> names = reader.getCoveragesNames();
             assertNotNull(names);
             assertTrue(!names.isEmpty());
-            assertTrue(1==names.size());
-            assertEquals("NO2", names.get(0).toString());
+            assertTrue(3==names.size());
+            assertTrue(names.contains(new NameImpl("NO2")));
+            assertTrue(names.contains(new NameImpl("O3")));
+            assertTrue(names.contains(new NameImpl("V")));
             
             // checking slice catalog
             final CoverageSlicesCatalog cs = reader.getCatalog();
@@ -44,16 +72,13 @@
                     
                     // checks
                    for(Property p: sf.getProperties()){
-                       final String pName = p.getName().toString();
-                    if(!pName.equalsIgnoreCase("time")&&!pName.equalsIgnoreCase("elevation")){
-                        assertNotNull("Property "+p.getName()+" had a null value!",p.getValue());
-                    } else {
-                        assertNull("Property "+p.getName()+" did not have a null value!",p.getValue());
-                    }
+                       assertNotNull("Property "+p.getName()+" had a null value!",p.getValue());
                    }
                 }  
-            }
+            }            
         } finally {
+            
+            // close reader
             if (reader != null) {
                 try {
                     reader.dispose();
@@ -61,6 +86,10 @@
                     // Does nothing
                 }
             }
+            
+
+            // specific clean up
+            FileUtils.deleteDirectory(TestData.file(this,".polyphemus"));
         }
     }
 
