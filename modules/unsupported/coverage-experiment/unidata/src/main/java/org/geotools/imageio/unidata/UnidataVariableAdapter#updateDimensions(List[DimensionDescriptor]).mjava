@@ -19,23 +19,30 @@
                 // Get the mapped coverage name (as an instance, NO2 for a GOME2 with var = 'z')
                 final String coverageName = key.getLocalPart();
                 final Coverage coverage = reader.ancillaryFileManager.coveragesMapping.get(coverageName);
-                if (coverage.getSchema() != null) {
+                final SchemaType schema = coverage.getSchema();
+                if (schema != null) {
+                    // look up the name
+                    String schName= schema.getName();
                     final CoverageSlicesCatalog catalog = reader.getCatalog();
                     if (catalog != null) {
-                        // Current assumption is that we have a typeName for each coverage
-                        final String[] typeNames = catalog.getTypeNames();
-                        for (String typeName : typeNames) {
-
-                            // Look for matching schema 
-                            if (typeName.equalsIgnoreCase(coverageName)) {
-                                final SimpleFeatureType schemaType = catalog.getSchema(coverageName);
-                                if (schemaType != null) {
-                                    // Schema found: proceed with remapping attributes
-                                    updateMapping(schemaType, dimensionDescriptors);
-                                }
-                                break;
+                        // Current assumption is that we have a typeName for each coverage but we should keep on working
+                        // with shared schemas
+                        // try with coveragename
+                        SimpleFeatureType schemaType = null;
+                        try{
+                            if(schName!=null){
+                                schemaType=catalog.getSchema(schName);
                             }
+                        }catch (IOException e) {
+                            // ok, we did not use the schema name, let's use the coverage name
+                            schemaType = catalog.getSchema(coverageName);
                         }
+                        if (schemaType != null) {
+                            // Schema found: proceed with remapping attributes
+                            updateMapping(schemaType, dimensionDescriptors);
+                            break;
+                        }
+                        throw new IllegalStateException("Unable to find the table for this coverage: "+ coverageName);
                     }
                 }
                 break;

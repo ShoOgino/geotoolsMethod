@@ -1,5 +1,6 @@
 	@SuppressWarnings("unchecked")
-	public List<GranuleDescriptor> getGranules(Query q) throws IOException {
+	public SimpleFeatureCollection getGranules(Query q) throws IOException {
+	        q=mergeHints(q);
 		Utilities.ensureNonNull("q",q);
 		final Lock lock=rwLock.readLock();
 		try{
@@ -13,11 +14,8 @@
 			
 			// load what we need to load
 			checkIndex(lock);
-			final List<GranuleDescriptor> features= index.query(requestedBBox);
-			if(q.equals(Query.ALL))
-				return features;
-			
-			final List<GranuleDescriptor> retVal= new ArrayList<GranuleDescriptor>();
+			final List<GranuleDescriptor> features= index.query(requestedBBox);			
+			final ListFeatureCollection retVal= new ListFeatureCollection(wrappedCatalogue.getType(typeName));
 			final int maxGranules= q.getMaxFeatures();
 			int numGranules=0;
 			for(GranuleDescriptor g :features)
@@ -27,7 +25,7 @@
 			            break;
 				final SimpleFeature originator = g.getOriginator();
 				if(originator!=null&&filter.evaluate(originator))
-					retVal.add(g);
+					retVal.add(originator);
 			}
 			return retVal;
 		}finally{
