@@ -38,74 +38,42 @@
                         // COVERAGE NAME
                         // Add the accepted variable to the list of coverages name
                         final Name coverageName = getCoverageName(varName);
-                        // TODO wrap this into an object that wraps a Unidata CoordinateSystem
-                        CoordinateSystem cs = UnidataCRSUtilities.getCoordinateSystem(variable);
-                        // SCHEMA
-                        // TODO push into VariableWrapper
-                        final SimpleFeatureType indexSchema = getIndexSchema(coverageName,cs);
+                        final CoordinateSystem cs = UnidataCRSUtilities.getCoordinateSystem(variable);
+
+                        final SimpleFeatureType indexSchema = getIndexSchema(coverageName, cs);
+                        // get variable adapter which maps to a coverage in the end
+                        final UnidataVariableAdapter vaAdapter = getCoverageDescriptor(coverageName);
 
                         if (indexSchema == null) {
                             throw new IllegalStateException("Unable to created index schema for coverage:"+coverageName);
                         }
-                        // get variable adapter which maps to a coverage in the end
-                        final UnidataVariableAdapter vaAdapter= getCoverageDescriptor(coverageName);
+
                         final int variableImageStartIndex = numImages;
                         final int numberOfSlices = vaAdapter.getNumberOfSlices();
-                        final int variableImageNum = variableImageStartIndex + numberOfSlices;
-                        final int rank = variable.getRank();
-                        numImages+=numberOfSlices;
+                        numImages += numberOfSlices;
 
-                        // 2D SLICE INDEX PREPARATION
-                        // TODO Embed into variable wrapper
-                        final boolean hasVerticalAxis = cs.hasVerticalAxis();
-                        final int bandDimension = rank - UnidataUtilities.Z_DIMENSION;
-                        final ListFeatureCollection collection= new ListFeatureCollection(indexSchema);
-                        int features = 0;
-                        for (int imageIndex = variableImageStartIndex; imageIndex < variableImageNum; imageIndex++) {
-                            int zIndex = -1;
-                            int tIndex = -1;
-                            for (int i = 0; i < rank; i++) {
-                                switch (rank - i) {
-                                case UnidataUtilities.X_DIMENSION:
-                                case UnidataUtilities.Y_DIMENSION:
-                                    break;
-                                default: {
-                                    if (i == bandDimension && hasVerticalAxis) {
-                                        zIndex = vaAdapter.getZIndex(imageIndex-variableImageStartIndex);
-                                    } else {
-                                        tIndex =  vaAdapter.getTIndex(imageIndex-variableImageStartIndex);
-                                    }
-                                    break;
-                                }
-                                }
+                        int startPagingIndex = 0;
+                        final int limit = INTERNAL_INDEX_CREATION_PAGE_SIZE;
+                        final ListFeatureCollection collection = new ListFeatureCollection(indexSchema);
+
+                        int writtenFeatures = 0;
+                        while (writtenFeatures < numberOfSlices) {
+                            // Get a bunch of features 
+                            vaAdapter.getFeatures(startPagingIndex, limit, collection);
+                            if (variableImageStartIndex != 0) {
+                                // Need to updated the imageIndex of the features since all indexes 
+                                // are zero based inside each variable but we need to index them inside
+                                // the whole NetCDF dataset. 
+                                updateFeaturesIndex(collection, variableImageStartIndex);
                             }
-
-                            //Put a new sliceIndex in the list
-                            final UnidataSlice2DIndex variableIndex = new UnidataSlice2DIndex(tIndex, zIndex, varName);
-                            ancillaryFileManager.addSlice(variableIndex);
-
-                            // Create a feature for that index to be put in the CoverageSlicesCatalog
-                            final SimpleFeature feature = createFeature(
-                                    variable, 
-                                    coverageName.toString(), 
-                                    tIndex, 
-                                    zIndex, 
-                                    cs, 
-                                    imageIndex, 
-                                    indexSchema);
-                            collection.add(feature);
-                            features++;
-                            
-                            // write down in pages
-                            if (features % INTERNAL_INDEX_CREATION_PAGE_SIZE == 0) {
+                            final int features = collection.size();
+                            if (features > 0) {
+                                // adding granules to the catalog and updating the number of written features
                                 getCatalog().addGranules(indexSchema.getTypeName(), collection, transaction);
                                 collection.clear();
+                                startPagingIndex += features;
                             }
-                        }
-                        // add residual features
-                        if (collection.size() > 0) {
-                            getCatalog().addGranules(indexSchema.getTypeName(), collection, transaction);
-                            collection.clear();
+                            writtenFeatures += features;
                         }
                     }
                 }
