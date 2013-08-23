@@ -1,0 +1,31 @@
+        @Override
+        public boolean checkAndReserve(List<AffineTransform2D> transforms)
+                throws MismatchedDimensionException, TransformException {
+            List<Geometry> transformedConflictBounds = new ArrayList<Geometry>();
+            boolean conflict = false;
+            for (AffineTransform2D tx2d : transforms) {
+                if (conflict) {
+                    break;
+                }
+                Geometry cbTransformed = JTS.transform(conflictBounds, tx2d);
+                transformedConflictBounds.add(cbTransformed);
+                List results = qt.query(cbTransformed.getEnvelopeInternal());
+                for (Iterator it = results.iterator(); it.hasNext();) {
+                    Geometry candidate = (Geometry) it.next();
+                    if (candidate.intersects(cbTransformed)) {
+                        // location conflict
+                        conflict = true;
+                        break;
+                    }
+                }
+            }
+
+            // reserve the area if no conflict
+            if (!conflict) {
+                for (Geometry tcb : transformedConflictBounds) {
+                    qt.insert(tcb.getEnvelopeInternal(), tcb);
+                }
+            }
+            return !conflict;
+        }
+
