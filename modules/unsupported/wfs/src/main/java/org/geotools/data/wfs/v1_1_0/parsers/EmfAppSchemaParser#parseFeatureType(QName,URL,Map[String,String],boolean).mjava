@@ -5,11 +5,17 @@
      * @param schemaLocation
      * @return
      */
-    private static XSDElementDeclaration parseFeatureType(final QName featureTypeName,
-            final URL schemaLocation ) throws DataSourceException {
+    private static XSDElementDeclaration parseFeatureType(QName featureTypeName,
+            final URL schemaLocation, final Map<String, String> mappedURIs,
+            final boolean ignoreMissingElementDeclaration)
+            throws DataSourceException {
         ApplicationSchemaConfiguration configuration;
         {
             String namespaceURI = featureTypeName.getNamespaceURI();
+            if(mappedURIs.containsKey(namespaceURI)) {
+                namespaceURI = mappedURIs.get(namespaceURI);
+                featureTypeName = new QName(namespaceURI, featureTypeName.getLocalPart());
+            }
             String uri = schemaLocation.toExternalForm();
             configuration = new ApplicationSchemaConfiguration(namespaceURI, uri);
         }
@@ -23,7 +29,7 @@
         XSDElementDeclaration elementDeclaration;
         elementDeclaration = schemaIndex.getElementDeclaration(featureTypeName);
         schemaIndex.destroy();
-        if (elementDeclaration == null) {
+        if (elementDeclaration == null && !ignoreMissingElementDeclaration) {
             throw new DataSourceException("No XSDElementDeclaration found for " + featureTypeName);
         }
         return elementDeclaration;
