@@ -21,8 +21,9 @@
 		//
 		// GETTING READER AND METADATA
 		//
-		final TIFFImageWriter writer = (TIFFImageWriter) GeoTiffFormat.IMAGEIO_WRITER_FACTORY.createWriterInstance();
+		final ImageWriter writer = tiffWriterFactory.createWriterInstance();
 		final IIOMetadata metadata = createGeoTiffIIOMetadata(writer,ImageTypeSpecifier.createFromRenderedImage(image),geoTIFFMetadata, params);
+
 
 		try{
 
@@ -39,23 +40,24 @@
 			writer.write(writer.getDefaultStreamMetadata(params), new IIOImage(image, null, metadata), params);
 
 
-
+			// flush then close
+			if(outputStream!=null){
+                            outputStream.flush();
+                        }
+			
 		}finally{
 			//
 			// release resources
 			//
-			try{
-				if(outputStream!=null)
-					outputStream.flush();
-			}catch (Throwable e) {
-				// eat me
-			}
 			
 			try{
 				if (!(destination instanceof ImageOutputStream)&&outputStream!=null)
 					outputStream.close();
 			}catch (Throwable e) {
 				// eat me
+			    if(LOGGER.isLoggable(Level.WARNING)){
+			        LOGGER.log(Level.WARNING,e.getLocalizedMessage(),e);
+			    }
 			}
 			
 			try{
@@ -63,6 +65,9 @@
 					writer.dispose();
 			}catch (Throwable e) {
 				// eat me
+                            if(LOGGER.isLoggable(Level.WARNING)){
+                                LOGGER.log(Level.WARNING,e.getLocalizedMessage(),e);
+                            }			    
 			}			
 		}
 
