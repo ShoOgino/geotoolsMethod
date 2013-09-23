@@ -22,6 +22,7 @@
         int dstScanlineOffset[] = new int[dnumBands];
         int val[]= new int[dnumBands];
         int valueCount = 0;
+        boolean readOriginalValues = false;
         for (int k = 0; k < dnumBands; k++) {
             dstScanlineOffset[k] = dstBandOffsets[k];
         }
@@ -32,6 +33,7 @@
 
             for (int i = 0; i < dwidth; i++) {
                 valueCount = 0;
+                readOriginalValues = false;
                 for (int k = 0;k<dnumBands;k++){
                     val[k] = Integer.MIN_VALUE;
                 }
@@ -41,17 +43,17 @@
                 // Pixels outside the ROI will be forced to background color
                 //
                 // //
-                boolean outsideRoi = !contains(roiAccessor, x+i, y+j);
+                boolean insideRoi = contains(roiAccessor, x+i, y+j);
                 
-                if (!outsideRoi){
+                if (insideRoi){
                     
                     // // 
                     //
                     // Artifact filtering is applied only on ROI border 
                     //
                     // //
-                    boolean isBorder = isBorder(roiAccessor, x+i, y+j);
-                    if (isBorder) {
+//                    boolean isBorder = isBorder(roiAccessor, x+i, y+j);
+//                    if (isBorder) {
                         
                         // //
                         //
@@ -87,7 +89,7 @@
                             }
                             
                             if (valueCount == 0){
-                                //Last attempt to get more valid pixels by looking at the 
+                                //Last attempt to get more valid pixels by looking at the borders
                                 for (int u = min - 1; u <= max + 1; u += (filterSize+1) ) {
                                     for (int v = min-1 ; v <= max +1; v += (filterSize+1)) {
                                         boolean set = false;
@@ -107,43 +109,25 @@
                             // //
                             if (valueCount > 0) {
                                 computeValueAtOnce(valuess, valueCount, val);
+                            } else {
+                                readOriginalValues = true;
                             }
+                        } else {
+                            readOriginalValues = true;
                         }
-                    } else {
-                        // //
-                        //
-                        // Pixel within ROI is all zero. Force to almost black value
-                        // 
-                        // //
-                        if (!contains(zeroRoiAccessor,x+i, y+j)){
-                            for (int k = 0; k < dnumBands; k++){
-                                val[k] = FILL_VALUE;
-                            }
-                        }
-                    }
-                    int zeros=0;
-                    for (int k = 0; k < dnumBands; k++){
-                        // //
-                        //
-                        // In case some pixels haven't been computed, provide them a proper value
-                        //
-                        // //
-                        if (val[k] == Integer.MIN_VALUE) {
-                            val[k] = (int) iter.getSample(x+i, y+j, k) & 0xff;
-                        }
-                        if (val[k] == 0){
-                            zeros++;
-                        }
-                    }
-                    if (zeros == dnumBands){
-                        for (int k = 0; k < dnumBands; k++){
-                            val[k] = FILL_VALUE;
-                        }
-                    }
                     for (int k = 0; k < dnumBands; k++){
                         dstDataArrays[k][dstPixelOffset[k]] = (byte) val[k];
                     }    
+                } else {
+                    readOriginalValues = true;
                 }
+                if (readOriginalValues){
+                    for (int k = 0; k < dnumBands; k++){
+                        val[k] = (int) iter.getSample(x+i, y+j, k) & 0xff;
+                        dstDataArrays[k][dstPixelOffset[k]] = (byte) val[k];
+                    }
+                }
+                
                 for (int k = 0; k < dnumBands; k++){
                     dstPixelOffset[k] += dstPixelStride;
                 }    
