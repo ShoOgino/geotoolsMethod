@@ -1,0 +1,35 @@
+    /**
+     * Removes collinear vertices from the provided {@link Polygon}.
+     * 
+     * @param polygon the instance of a {@link Polygon} to remove collinear vertices from.
+     * @return a new instance of the provided {@link Polygon} without collinear vertices.
+     */
+    static Polygon removeCollinearVertices(final Polygon polygon) {
+        if (polygon == null) {
+            throw new NullPointerException("The provided Polygon is null");
+        }
+
+        // reuse existing factory
+        final GeometryFactory gf = polygon.getFactory();
+
+        // work on the exterior ring
+        LineString exterior = polygon.getExteriorRing();
+        LineString shell = removeCollinearVertices(exterior);
+        if ((shell == null) || shell.isEmpty()) {
+            return null;
+        }
+
+        // work on the holes
+        List<LineString> holes = new ArrayList<LineString>();
+        final int size = polygon.getNumInteriorRing();
+        for (int i = 0; i < size; i++) {
+            LineString hole = polygon.getInteriorRingN(i);
+            hole = removeCollinearVertices(hole);
+            if ((hole != null) && !hole.isEmpty()) {
+                holes.add(hole);
+            }
+        }
+
+        return gf.createPolygon((LinearRing) shell, holes.toArray(new LinearRing[holes.size()]));
+    }
+
