@@ -21,22 +21,35 @@
             LOGGER.fine("Producing the final mosaic, step 1, loop through granule collectors");   
             final List<MosaicElement> mosaicInputs = new ArrayList<RasterLayerResponse.MosaicElement>();
             GranuleCollector first = null; // we take this apart to steal some val
-            final int size = granuleCollectors.size();
+            int size = granuleCollectors.size();
             for (GranuleCollector collector : granuleCollectors) {
                 if(LOGGER.isLoggable(Level.FINE)) {
                     LOGGER.fine("Using collector with filter:" + collector.granuleFilter.toString());
                 }
                 final MosaicElement preparedMosaic = new Mosaicker(collector.collectGranules(), MergeBehavior.FLAT).createMosaic();
-                mosaicInputs.add(preparedMosaic);
-                if (first == null) {
-                    first = collector;
+                if(preparedMosaic != null) {
+                    mosaicInputs.add(preparedMosaic);
+                    if (first == null) {
+                        first = collector;
+                    }
+                }else{
+                    // we were not able to mosaic these granules, e.g. we have ROIs and the requested area
+                    // fell outside the ROI
+                    size--;
                 }
             }
             LOGGER.fine("Producing the final mosaic, step 2, final mosaicking"); 
+            // optimization 
             if (size == 1) {
                 // we don't need to mosaick again
                 return mosaicInputs.get(0).source;
             }
+            // no mosaics produced, it might happen, see above
+            if(size==0){
+                return null;
+            }
+            
+            // normal situan
             return new Mosaicker(
                     new MosaicInputs(
                             first.doInputTransparency, 

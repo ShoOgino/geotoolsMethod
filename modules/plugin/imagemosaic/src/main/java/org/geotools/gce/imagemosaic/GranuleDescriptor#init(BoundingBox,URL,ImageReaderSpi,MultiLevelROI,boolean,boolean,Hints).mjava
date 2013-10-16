@@ -1,11 +1,11 @@
 	private void init(final BoundingBox granuleBBOX, final URL granuleUrl,
-			final ImageReaderSpi suggestedSPI, final Geometry inclusionGeometry,
+			final ImageReaderSpi suggestedSPI, final MultiLevelROI roiProvider,
 			final boolean heterogeneousGranules, final boolean handleArtifactsFiltering, final Hints hints) {
 		this.granuleBBOX = ReferencedEnvelope.reference(granuleBBOX);
 		this.granuleUrl = granuleUrl;
-		this.inclusionGeometry = inclusionGeometry;
+		this.roiProvider = roiProvider;
 		this.handleArtifactsFiltering = handleArtifactsFiltering;
-    		filterMe = handleArtifactsFiltering && inclusionGeometry != null;
+    		filterMe = handleArtifactsFiltering && roiProvider != null;
                 
 		
 		// create the base grid to world transformation
@@ -73,20 +73,9 @@
 			// somehow from the tile itself or from the index, but at the moment
 			// we do not have such info, hence we assume that it is a simple
 			// scale and translate
-			final GridToEnvelopeMapper geMapper= new GridToEnvelopeMapper(new GridEnvelope2D(originalDimension), granuleBBOX);
+			this.geMapper= new GridToEnvelopeMapper(new GridEnvelope2D(originalDimension), granuleBBOX);
 			geMapper.setPixelAnchor(PixelInCell.CELL_CENTER);//this is the default behavior but it is nice to write it down anyway
 			this.baseGridToWorld = geMapper.createAffineTransform();
-			
-			try {
-				if (inclusionGeometry != null) {
-				        geMapper.setPixelAnchor(PixelInCell.CELL_CORNER);
-				        Geometry mapped = JTS.transform(inclusionGeometry, geMapper.createTransform().inverse());
-				        this.granuleROIShape = new ROIGeometry(mapped);  
-				}
-
-			} catch (TransformException e1) {
-				throw new IllegalArgumentException(e1);
-			}
 			
 			// add the base level
 			this.granuleLevels.put(Integer.valueOf(0), new GranuleOverviewLevelDescriptor(1, 1, originalDimension.width, originalDimension.height));
@@ -117,7 +106,7 @@
 			    // Populating overviews and initializing overviewsController
 			    for (int i = 0; i < numberOfOvervies; i++){
 			        overviewsResolution[i][0]= (highestRes[0] * width) / reader.getWidth(i + 1);
-			        overviewsResolution[i][1]= (highestRes[1] * height) / reader.getWidth(i + 1);
+			        overviewsResolution[i][1]= (highestRes[1] * height) / reader.getHeight(i + 1);
 			    }
 			    overviewsController = new OverviewsController(highestRes, numberOfOvervies, overviewsResolution);
 			}
