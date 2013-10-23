@@ -24,7 +24,7 @@
 
         try {
             VPFFile fcsFile = (VPFFile) VPFFileFactory.getInstance().getFile(fcsFileName);
-            Iterator iter = fcsFile.readAllRows().iterator();
+            Iterator<SimpleFeature> iter = fcsFile.readAllRows().iterator();
 
             while (iter.hasNext()) {
                 SimpleFeature feature = (SimpleFeature) iter.next();
@@ -37,20 +37,16 @@
             }
 
             // Deal with the geometry column
-            iter = columns.iterator();
-
-            GeometryDescriptor gat = null;
+            Iterator<VPFColumn> iter2 = columns.iterator();
+            VPFColumn column;
+            String geometryName = null;
             AttributeDescriptor geometryColumn = null;
 
-            while (iter.hasNext()) {
-                geometryColumn = (AttributeDescriptor) iter.next();
-
-                if(Geometry.class.isAssignableFrom(geometryColumn.getType().getBinding())){
-                    if(geometryColumn instanceof GeometryDescriptor){
-                        gat = (GeometryDescriptor)geometryColumn;
-                    }else if (geometryColumn instanceof VPFColumn){
-                        gat = ((VPFColumn)geometryColumn).getGeometryAttributeType();
-                    }
+            while (iter2.hasNext()) {
+                column = (VPFColumn) iter2.next();
+                if( column == null ) continue;
+                if( column.isGeometry() ){
+                    geometryName = column.getName();
                     break;
                 }
             }
@@ -65,8 +61,11 @@
             b.setName(cName);
             b.setNamespaceURI(namespace);
             b.setSuperType(superType);
-            b.addAll(columns);
-            b.setDefaultGeometry(gat.getLocalName());
+            for( VPFColumn col : columns ){
+                if( col == null ) continue;
+                b.add( col.getDescriptor() );
+            }
+            b.setDefaultGeometry(geometryName);
             
             featureType = b.buildFeatureType();
         } catch (IOException exp) {
