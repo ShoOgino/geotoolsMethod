@@ -1,0 +1,75 @@
+    /**
+     * Default constructor
+     * 
+     * @throws
+     * @throws IllegalArgumentException
+     */
+    public ImageMosaicConfigHandler(final CatalogBuilderConfiguration configuration,
+            final ImageMosaicEventHandlers eventHandler) {
+        Utilities.ensureNonNull("runConfiguration", configuration);
+
+        Utilities.ensureNonNull("eventHandler", eventHandler);
+        this.eventHandler = eventHandler;
+        
+        
+        Indexer defaultIndexer = configuration.getIndexer();
+        ParametersType params = null;
+        String rootMosaicDir = null;
+        if (defaultIndexer != null) {
+            params = defaultIndexer.getParameters();
+            rootMosaicDir = IndexerUtils.getParam(params, Prop.ROOT_MOSAIC_DIR);
+            IndexerUtils.getParameterAsBoolean(Prop.USE_EXISTING_SCHEMA, defaultIndexer);
+        }
+
+        Utilities.ensureNonNull("root location", rootMosaicDir);
+
+        // look for and indexer.properties file
+        parent = new File(rootMosaicDir);
+        indexerFile = new File(parent, Utils.INDEXER_XML);
+        Indexer indexer = null;
+
+        Hints hints = configuration.getHints();
+        String ancillaryFile = null;
+        if (Utils.checkFileReadable(indexerFile)) {
+            try {
+                indexer = (Indexer) Utils.unmarshal(indexerFile);
+                if (indexer != null) {
+                    copyDefaultParams(params, indexer);
+                }
+            } catch (JAXBException e) {
+                LOGGER.log(Level.WARNING, e.getMessage(), e);
+            }
+        } else {
+            // Backward compatible with old indexing
+            indexerFile = new File(parent, Utils.INDEXER_PROPERTIES);
+
+            if (Utils.checkFileReadable(indexerFile)) {
+                // load it and parse it
+                final Properties props = Utils.loadPropertiesFromURL(DataUtilities
+                        .fileToURL(indexerFile));
+
+                indexer = createIndexer(props, params);
+
+            }
+        }
+        if (indexer != null) {
+            // Overwrite default indexer only when indexer is available
+            configuration.setIndexer(indexer);
+            String param = IndexerUtils.getParameter(Utils.Prop.AUXILIARY_FILE, indexer);
+            if (param != null) {
+                ancillaryFile = param;
+            }
+            if (IndexerUtils.getParameterAsBoolean(Utils.Prop.USE_EXISTING_SCHEMA, indexer)) {
+                this.useExistingSchema = true;
+            }
+        }
+
+        updateConfigurationHints(configuration, hints, ancillaryFile,
+                IndexerUtils.getParam(params, Prop.ROOT_MOSAIC_DIR));
+
+        // check config
+        configuration.check();
+
+        this.runConfiguration = new CatalogBuilderConfiguration(configuration);
+    }
+
