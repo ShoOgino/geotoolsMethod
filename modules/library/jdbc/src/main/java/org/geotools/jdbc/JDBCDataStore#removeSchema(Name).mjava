@@ -1,0 +1,43 @@
+    public void removeSchema(Name typeName) throws IOException {
+        if (entry(typeName) == null) {
+            String msg = "Schema '" + typeName + "' does not exist";
+            throw new IllegalArgumentException(msg);
+        }
+
+        //check for virtual table
+        if (virtualTables.containsKey(typeName.getLocalPart())) {
+            removeVirtualTable(typeName.getLocalPart());
+            return;
+        }
+
+        SimpleFeatureType featureType = getSchema(typeName);
+
+        //execute the drop table statement
+        Connection cx = createConnection();
+        try {
+            //give the dialect a chance to cleanup pre
+            dialect.preDropTable(databaseSchema, featureType, cx);
+
+            String sql = dropTableSQL(featureType, cx);
+            LOGGER.log(Level.FINE, "Drop schema: {0}", sql);
+
+            Statement st = cx.createStatement();
+
+            try {
+                st.execute(sql);
+            } finally {
+                closeSafe(st);
+            }
+
+            dialect.postDropTable(databaseSchema, featureType, cx);
+            removeEntry(typeName);
+        }
+        catch(Exception e) {
+            String msg = "Error occurred dropping table";
+            throw (IOException) new IOException(msg).initCause(e);
+        }
+        finally {
+            closeSafe(cx);
+        }
+    }
+
