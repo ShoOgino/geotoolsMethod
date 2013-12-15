@@ -16,12 +16,12 @@
      * 
      * 
      * @param geoms
+     * @param displayArea must be poly
      * @param removeOverlaps
-     * @param displayGeometry
-     *            must be poly
+     * @param partialsEnabled true if we don't want to clip lines on the displayArea
      */
     List<LineString> getLineSetRepresentativeLocation(List<Geometry> geoms, Rectangle displayArea,
-            boolean removeOverlaps) {
+                boolean removeOverlaps, boolean partialsEnabled) {
 
         // go through each geometry in the set.
         // if its a polygon or multipolygon, get the boundary (reduce to a line)
@@ -37,11 +37,18 @@
         // clip all the lines to the current bounds
         List<LineString> clippedLines = new ArrayList<LineString>();
         for (LineString ls : lines) {
-            // more robust clipper -- see its dox
-            MultiLineString ll = clipLineString(ls);
-            if ((ll != null) && (!(ll.isEmpty()))) {
-                for (int t = 0; t < ll.getNumGeometries(); t++)
-                    clippedLines.add((LineString) ll.getGeometryN(t));
+            // If we want labels to be entirely in the display area, clip the linestring
+            if (!partialsEnabled) {
+                // more robust clipper -- see its dox
+                MultiLineString ll = clipLineString(ls);
+                if ((ll != null) && (!(ll.isEmpty()))) {
+                    for (int t = 0; t < ll.getNumGeometries(); t++)
+                        clippedLines.add((LineString) ll.getGeometryN(t));
+                }
+            }
+            // If we want to draw partial labels on border, keep the whole linestring
+            else {
+                clippedLines.add(ls);
             }
         }
 

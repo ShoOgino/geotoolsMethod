@@ -4,9 +4,11 @@
      * geometries
      * 
      * @param geoms
-     * @param displayGeometry
+     * @param displayArea
+     * @param partialsEnabled true if we don't want to clip lines on the displayArea
      */
-    Polygon getPolySetRepresentativeLocation(List<Geometry> geoms, Rectangle displayArea) {
+    Polygon getPolySetRepresentativeLocation(List<Geometry> geoms,
+                Rectangle displayArea, boolean partialsEnabled) {
         List<Polygon> polys = new ArrayList<Polygon>(); // points that are
                                                         // inside the
         Geometry displayGeometry = gf.toGeometry(toEnvelope(displayArea));
@@ -36,10 +38,17 @@
         List<Polygon> clippedPolys = new ArrayList<Polygon>();
         Envelope displayGeomEnv = displayGeometry.getEnvelopeInternal();
         for (Polygon p : polys) {
-            MultiPolygon pp = clipPolygon(p, (Polygon) displayGeometry, displayGeomEnv);
-            if ((pp != null) && (!(pp.isEmpty()))) {
-                for (int t = 0; t < pp.getNumGeometries(); t++)
-                    clippedPolys.add((Polygon) pp.getGeometryN(t)); 
+            // If we want labels to be entirely in the display area, clip polygons
+            if (!partialsEnabled) {
+                MultiPolygon pp = clipPolygon(p, (Polygon) displayGeometry, displayGeomEnv);
+                if ((pp != null) && (!(pp.isEmpty()))) {
+                    for (int t = 0; t < pp.getNumGeometries(); t++)
+                        clippedPolys.add((Polygon) pp.getGeometryN(t));
+                }
+            }
+            // If we want to draw partial labels on border, keep the whole polygon
+            else {
+                clippedPolys.add(p);
             }
         }
         
