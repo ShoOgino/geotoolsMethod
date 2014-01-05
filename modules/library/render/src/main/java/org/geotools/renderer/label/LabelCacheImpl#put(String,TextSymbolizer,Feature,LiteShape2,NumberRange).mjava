@@ -21,42 +21,26 @@
             }
             double priorityValue = getPriority(symbolizer, feature);
             boolean group = voParser.getBooleanOption(symbolizer, TextSymbolizer.GROUP_KEY, false);
+            LabelCacheItem item = buildLabelCacheItem(layerId, symbolizer, feature, shape,
+                    scaleRange, label, priorityValue);
             if (!(group)) {
-                LabelCacheItem item = buildLabelCacheItem(layerId, symbolizer, feature, shape,
-                        scaleRange, label, priorityValue);
-                labelCacheNonGrouped.add(item);
+                labelCache.add(item);
             } else { // / --------- grouping case ----------------
-
-                // equals and hashcode of LabelCacheItem is the hashcode of
-                // label and the
-                // equals of the 2 labels so label can be used to find the
-                // entry.
-
-                // DJB: this is where the "grouping" of 'same label' features
-                // occurs
-                LabelCacheItem lci = (LabelCacheItem) labelCache.get(label);
-                if (lci == null) // nothing in there yet!
-                {
-                    lci = buildLabelCacheItem(layerId, symbolizer, feature, shape, scaleRange,
-                            label, priorityValue);
-                    labelCache.put(label, lci);
+                // LabelCacheItem equals and hashcode work based on the label equality and the
+                // TextSymbolizer identity
+                LabelCacheItem groupItem = groupedLabelsLookup.get(item);
+                if(groupItem == null) {
+                    labelCache.add(item);
+                    groupedLabelsLookup.put(item, item);
                 } else {
-                    // add only in the non-default case or non-literal. Ie.
+                    // add to the priority only in the non-default case or non-literal. Ie.
                     // area()
-                    if ((symbolizer.getPriority() != null)
-                            && (!(symbolizer.getPriority() instanceof Literal)))
-                        lci.setPriority(lci.getPriority() + priorityValue); // djb--
-                    // changed
-                    // because
-                    // you
-                    // do
-                    // not
-                    // always
-                    // want
-                    // to
-                    // add!
+                    Expression priority = symbolizer.getPriority();
+                    if ((priority != null) && (!(priority instanceof Literal))) {
+                        groupItem.setPriority(groupItem.getPriority() + priorityValue);
+                    }
 
-                    lci.getGeoms().add(shape.getGeometry());
+                    groupItem.getGeoms().add(shape.getGeometry());
                 }
             }
         } catch (Exception e) {
