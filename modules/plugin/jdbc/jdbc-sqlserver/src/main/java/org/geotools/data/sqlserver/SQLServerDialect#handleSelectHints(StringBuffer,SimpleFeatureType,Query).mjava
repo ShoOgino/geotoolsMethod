@@ -1,0 +1,57 @@
+    @Override
+    public void handleSelectHints(StringBuffer sql, SimpleFeatureType featureType, Query query) {
+        // optional feature, apply only if requested
+        if(!forceSpatialIndexes) {
+            return;
+        }
+        
+        // check we have a filter
+        Filter filter = query.getFilter();
+        if(filter == Filter.INCLUDE) {
+            return;
+        }
+        
+        // that is has spatial attributes
+        SpatialIndexAttributeExtractor attributesExtractor = new SpatialIndexAttributeExtractor();
+        filter.accept(attributesExtractor, null);
+        Map<String, Integer> attributes = attributesExtractor.getSpatialProperties();
+        if(attributes.isEmpty() || attributes.size() > 1) {
+            return;
+        }
+        
+        // and that those attributes have a spatial index
+        Set<String> indexes = new HashSet<String>();
+        for (Map.Entry<String, Integer> attribute : attributes.entrySet()) {
+            // we can only apply one index on one condition
+            if(attribute.getValue() > 1) {
+                continue;
+            }
+            AttributeDescriptor descriptor = featureType.getDescriptor(attribute.getKey());
+            if(descriptor instanceof GeometryDescriptor) {
+                String indexName = (String) descriptor.getUserData().get(SPATIAL_INDEX_KEY);
+                if(indexName != null) {
+                    indexes.add(indexName);
+                }
+            }
+        }
+        if(indexes.isEmpty()) {
+            return;
+        }
+        
+        // apply the index hints
+        String fromStatement = "FROM \"" + featureType.getTypeName() + "\"";
+        int idx = sql.indexOf(fromStatement);
+        if(idx > 0) {
+            int base = idx + fromStatement.length();
+            StringBuilder sb = new StringBuilder(" WITH( INDEX(");
+            for (String indexName : indexes) {
+                sb.append("\"").append(indexName).append("\"").append(",");
+            }
+            sb.setLength(sb.length() - 1);
+            sb.append("))");
+            String tableHint = sb.toString();
+            
+            sql.insert(base, tableHint);
+        }
+    }
+
