@@ -5,15 +5,19 @@
         try {
             Expression grSize = gr.getSize();
             int imageSize = -1;
-            boolean isSizeLiteral = false;
+            boolean isSizeNull = isNull(grSize);
+            boolean isSizeConstant = false;
 
-            if (grSize instanceof Literal) {
-                isSizeLiteral = true;
-                imageSize = (int) Math.ceil(grSize.evaluate(null, Double.class));
-            } else if(!(grSize == null || grSize instanceof NilExpression)) {
-                estimateAccurate = false;
-                return;
+            if(!isSizeNull) {
+                isSizeConstant = isConstant(grSize);
+                if (isSizeConstant) {
+                    imageSize = (int) Math.ceil(grSize.evaluate(null, Double.class));
+                } else {
+                    estimateAccurate = false;
+                    return;
+                }    
             }
+            
 
             for (GraphicalSymbol gs : gr.graphicalSymbols()) {
                 if(gs instanceof ExternalGraphic) {
@@ -54,13 +58,13 @@
                 } else if(gs instanceof Mark) {
                     Mark mark = (Mark) gs;
                     int markSize;
-                    if(isSizeLiteral) {
+                    if(isSizeConstant) {
                         markSize = imageSize;
                     } else {
                         markSize = SLDStyleFactory.DEFAULT_MARK_SIZE;
                     }
                     if(mark.getStroke() != null) {
-                        int strokeWidth = getWidth(mark.getStroke().getWidth());
+                        int strokeWidth = getPositiveValue(mark.getStroke().getWidth());
                         if(strokeWidth < 0) {
                             estimateAccurate = false;
                         } else {
