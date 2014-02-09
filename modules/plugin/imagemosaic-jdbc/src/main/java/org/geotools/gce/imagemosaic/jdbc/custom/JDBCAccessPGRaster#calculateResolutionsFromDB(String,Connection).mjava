@@ -21,7 +21,6 @@
         stmt = con.prepareStatement(getConfig().getSqlUpdateResStatement());
 
         List<ImageLevelInfo> toBeRemoved = new ArrayList<ImageLevelInfo>();
-        statementMap = new HashMap<ImageLevelInfo, String>();
 
         for (ImageLevelInfo li : getLevelInfos()) {
             if (li.getCoverageName().equals(coverageName) == false) {
@@ -67,31 +66,10 @@
             if (LOGGER.isLoggable(Level.INFO))
                 LOGGER.info("ResX: " + li.getResX() + " ResY: " + li.getResY());
 
-            // register statements
-
-            select = "select (ST_BandMetaData(" + getConfig().getBlobAttributeNameInTileTable()
-                    + ")).isoutdb " + " from " + li.getTileTableName() + " LIMIT 1";
-            ps = con.prepareStatement(select);
-            rs = ps.executeQuery();
-            if (rs.next()) {
-                Boolean isOut = (Boolean) rs.getObject("isoutdb");
-                String gridStatement = isOut ? "SELECT st_asbinary(st_envelope ("
-                        + getConfig().getBlobAttributeNameInTileTable() + ")),"
-                        + getConfig().getBlobAttributeNameInTileTable() + " from "
-                        + li.getTileTableName() + " where st_intersects("
-                        + getConfig().getBlobAttributeNameInTileTable() + " ,ST_GeomFromWKB(?,?))"
-                        : "SELECT st_asbinary(st_envelope ("
-                                + getConfig().getBlobAttributeNameInTileTable() + ")),st_astiff("
-                                + getConfig().getBlobAttributeNameInTileTable() + ") " + " from "
-                                + li.getTileTableName() + " where st_intersects("
-                                + getConfig().getBlobAttributeNameInTileTable()
-                                + " ,ST_GeomFromWKB(?,?))";
-
-                statementMap.put(li, gridStatement);
-            }
-            rs.close();
-            ps.close();
-
+            /*
+             moved code from here into method 'populateStatementsMap' below
+             which is called at initialisation. Otherwise this code was skipped in line #496
+             */
             stmt.setDouble(1, li.getResX().doubleValue());
             stmt.setDouble(2, li.getResY().doubleValue());
             stmt.setString(3, li.getCoverageName());
@@ -103,6 +81,7 @@
             if (LOGGER.isLoggable(Level.INFO))
                 LOGGER.info("Calculate resolutions for " + li.toString() + " finished in " + msecs
                         + " ms ");
+
         }
 
         getLevelInfos().removeAll(toBeRemoved);
