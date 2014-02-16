@@ -38,14 +38,27 @@
                     LOGGER.fine("Support for alpha on input granule " + result.granuleUrl);
                 }
                 granule = new ImageWorker(granule).makeColorTransparent(inputTransparentColor).getRenderedImage();
-                alphaIndex[0] = granule.getColorModel().getNumComponents() - 1;
+                hasAlpha=granule.getColorModel().hasAlpha();
+                if(!granule.getColorModel().hasAlpha()){
+                    // if the resulting image has no transparency (can happen with IndexColorModel then we need to try component
+                    // color model
+                    granule = new ImageWorker(granule).forceComponentColorModel(true).makeColorTransparent(inputTransparentColor).getRenderedImage();
+                    hasAlpha=granule.getColorModel().hasAlpha();
+                }
+                assert hasAlpha;
+                
             }
             PlanarImage alphaChannel=null;		
             if (hasAlpha || doInputTransparency) {
                 ImageWorker w = new ImageWorker(granule);
-                if (granule.getSampleModel() instanceof MultiPixelPackedSampleModel) {
+                if (granule.getSampleModel() instanceof MultiPixelPackedSampleModel||granule.getColorModel() instanceof IndexColorModel) {
                     w.forceComponentColorModel();
+                    granule=w.getRenderedImage();
                 }
+                // doing this here gives the guarantee that I get the correct index for the transparency band
+                alphaIndex[0] = granule.getColorModel().getNumComponents() - 1;
+                assert alphaIndex[0]< granule.getSampleModel().getNumBands();
+                
                 //
                 // ALPHA in INPUT
                 //
@@ -53,11 +66,7 @@
                 // mosaic operator. I have to force going to ComponentColorModel in
                 // case the image is indexed.
                 //
-                if (granule.getColorModel() instanceof IndexColorModel) {
-                    alphaChannel = w.forceComponentColorModel().retainLastBand().getPlanarImage();
-                } else {
-                    alphaChannel = w.retainBands(alphaIndex).getPlanarImage();
-                }
+                alphaChannel = w.retainBands(alphaIndex).getPlanarImage();
             }
         
         
