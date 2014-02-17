@@ -1,9 +1,39 @@
+    /**
+     * Retrieves the original grid to world transformation for this {@link AbstractGridCoverage2DReader}.
+     * 
+     * @param pixInCell specifies the datum of the transformation we want.
+     * @return the original grid to world transformation for this {@link AbstractGridCoverage2DReader}.
+     */
     @Override
     public MathTransform getOriginalGridToWorld(String coverageName, PixelInCell pixInCell) {
-        if(!checkName(coverageName)){
-            throw new IllegalArgumentException("The specified coverageName " + coverageName + "is not supported");
+        if (!checkName(coverageName)) {
+            throw new IllegalArgumentException("The specified coverageName " + coverageName
+                    + "is not supported");
         }
-        // Default implementation for backwards compatibility
-        return getOriginalGridToWorld(pixInCell);
+        synchronized (this) {
+            if (raster2Model == null) {
+                final GridToEnvelopeMapper geMapper = new GridToEnvelopeMapper(
+                        getOriginalGridRange(coverageName), getOriginalEnvelope(coverageName));
+                geMapper.setPixelAnchor(PixelInCell.CELL_CENTER);
+                raster2Model = geMapper.createTransform();
+            }
+        }
+
+        // we do not have to change the pixel datum
+        if (pixInCell == PixelInCell.CELL_CENTER)
+            return raster2Model;
+
+        // we do have to change the pixel datum
+        if (raster2Model instanceof AffineTransform) {
+            final AffineTransform tr = new AffineTransform((AffineTransform) raster2Model);
+            tr.concatenate(AffineTransform.getTranslateInstance(-0.5, -0.5));
+            return ProjectiveTransform.create(tr);
+        }
+        if (raster2Model instanceof IdentityTransform) {
+            final AffineTransform tr = new AffineTransform(1, 0, 0, 1, 0, 0);
+            tr.concatenate(AffineTransform.getTranslateInstance(-0.5, -0.5));
+            return ProjectiveTransform.create(tr);
+        }
+        throw new IllegalStateException("This reader's grid to world transform is invalud!");
     }
 

@@ -1,50 +1,34 @@
-        public RasterManager(final ImageMosaicReader parentReader, MosaicConfigurationBean configuration)
-                throws IOException {
+    public RasterManager(final ImageMosaicReader parentReader, MosaicConfigurationBean configuration)
+            throws IOException {
 
-            Utilities.ensureNonNull("ImageMosaicReader", parentReader);
+        Utilities.ensureNonNull("ImageMosaicReader", parentReader);
 
-            this.parentReader = parentReader;
-            this.expandMe = parentReader.expandMe;
-            this.heterogeneousGranules = parentReader.heterogeneousGranules;
-            this.configuration = configuration;
-            hints = parentReader.getHints();
-            if (configuration != null && configuration.getAuxiliaryFilePath() != null) {
-                hints.add(new RenderingHints(Utils.AUXILIARY_FILES_PATH, configuration.getAuxiliaryFilePath()));
-            }
-            
-            // take ownership of the index : TODO: REMOVE THAT ONCE DEALING WITH MORE CATALOGS/RASTERMANAGERS
-//            granuleCatalog = new HintedGranuleCatalog(parentReader.granuleCatalog, hints);   
-            granuleCatalog = parentReader.granuleCatalog; 
-            this.coverageFactory = parentReader.getGridCoverageFactory();
-            this.coverageIdentifier = configuration != null ? configuration.getName() : ImageMosaicReader.UNSPECIFIED;
-            this.pathType = parentReader.pathType;
+        this.parentReader = parentReader;
+        this.expandMe = parentReader.expandMe;
+        boolean checkAuxiliaryMetadata = configuration.isCheckAuxiliaryMetadata();
+        this.heterogeneousGranules = parentReader.heterogeneousGranules;
+        this.configuration = configuration;
+        hints = parentReader.getHints();
+        if (configuration != null && configuration.getAuxiliaryFilePath() != null) {
+            hints.add(new RenderingHints(Utils.AUXILIARY_FILES_PATH, configuration.getAuxiliaryFilePath()));
+        }
+        if (checkAuxiliaryMetadata) {
+            hints.add(new RenderingHints(Utils.CHECK_AUXILIARY_METADATA, checkAuxiliaryMetadata));
+        }
 
-            // resolution values
+        // take ownership of the index : TODO: REMOVE THAT ONCE DEALING WITH MORE CATALOGS/RASTERMANAGERS
+        // granuleCatalog = new HintedGranuleCatalog(parentReader.granuleCatalog, hints);
+        granuleCatalog = parentReader.granuleCatalog;
+        this.coverageFactory = parentReader.getGridCoverageFactory();
+        this.coverageIdentifier = configuration != null ? configuration.getName() : ImageMosaicReader.UNSPECIFIED;
+        this.pathType = configuration.getCatalogConfigurationBean().isAbsolutePath() ? PathType.ABSOLUTE : PathType.RELATIVE;
 
-            // instantiating controller for subsampling and overviews
-            //TODO: DR rasterManager don't need to ask info from the reader. It should only deal with the config.
-            // is the reader which ask info from the rasterManager
-            
-//            overviewsController = new OverviewsController(parentReader.getHighestRes(),
-//                    parentReader.getNumberOfOvervies(), parentReader.getOverviewsResolution());
-//        try {
-//			spatialDomainManager= new SpatialDomainManager(
-//			        parentReader.getOriginalEnvelope(),
-//					(GridEnvelope2D)parentReader.getOriginalGridRange(),
-//					parentReader.getCoordinateReferenceSystem(),
-//					parentReader.getOriginalGridToWorld(PixelInCell.CELL_CENTER),
-//					overviewsController);
-//		} catch (TransformException e) {
-//			throw new DataSourceException(e);
-//		} catch (FactoryException e) {
-//			throw new DataSourceException(e);
-//		}
         extractOverviewPolicy();
         extractDecimationPolicy();
-        
+
         // load defaultSM and defaultCM by using the sample_image if it was provided
         loadSampleImage(configuration);
-        
+
         if (configuration != null) {
             CatalogConfigurationBean catalogBean = configuration.getCatalogConfigurationBean();
             typeName = catalogBean != null ? catalogBean.getTypeName() : null;
