@@ -1,0 +1,33 @@
+    @Test
+    public void testWrapAnctartica() throws Exception {
+        ReferencedEnvelope world = new ReferencedEnvelope(-80, 80, -180, 180, ED50_LATLON);
+
+        // make sure the geometry is not wrapped, but it is preserved
+        ProjectionHandler handler = ProjectionHandlerFinder.getHandler(world, WGS84, true);
+
+        // a geometry that will cross the dateline and sitting in the same area as the
+        // rendering envelope (with wgs84 lon/latcoordinates)
+        String wkt = "POLYGON((180 -90, 180 90, -180 90, -180 -90, 180 -90))";
+        Geometry g = new WKTReader().read(wkt);
+        MathTransform mt = CRS.findMathTransform(WGS84, ED50_LATLON);
+        MathTransform prepared = handler.getRenderingTransform(mt);
+
+        
+        assertTrue(handler.requiresProcessing( g));
+        Geometry preProcessed = handler.preProcess( g);
+        Geometry reprojected = JTS.transform(preProcessed, prepared);
+        assertTrue(reprojected.isValid());
+        reprojected.apply(new CoordinateFilter() {
+            
+            @Override
+            public void filter(Coordinate coord) {
+                assertEquals(90.0, Math.abs(coord.getOrdinate(0)), 0.1);
+                assertEquals(180.0, Math.abs(coord.getOrdinate(1)), 5);
+            }
+        });
+        // post process, this should wrap the geometry, make sure it's valid, and avoid large jumps in its border
+        Geometry postProcessed = handler.postProcess(prepared, reprojected);
+        assertTrue(postProcessed instanceof MultiPolygon);
+        assertEquals(2, postProcessed.getNumGeometries());
+    }
+
