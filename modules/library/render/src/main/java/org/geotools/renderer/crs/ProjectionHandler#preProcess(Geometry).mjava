@@ -4,7 +4,7 @@
      */
     public Geometry preProcess(Geometry geometry) throws TransformException, FactoryException {
         // if there is no valid area, no cutting is required either
-        if(validArea == null)
+        if(validAreaBounds == null)
             return geometry;
         
         // if not reprojection is going on, we don't need to cut
@@ -12,44 +12,57 @@
         if (geometryCRS == null || CRS.equalsIgnoreMetadata(geometryCRS, renderingEnvelope.getCoordinateReferenceSystem())) {
             return geometry;
         }
-
-        // if the geometry is within the valid area for this projection
-        // just skip expensive cutting
-        ReferencedEnvelope ge = new ReferencedEnvelope(geometry.getEnvelopeInternal(), geometryCRS);
-        ReferencedEnvelope geWGS84 = ge.transform(WGS84, true);
-        if (validArea.contains((Envelope) geWGS84)) {
-            return geometry;
-        }
-
-        // we need to cut, first thing, we intersect the geometry envelope
-        // and the valid area in WGS84, which is a neutral, everything can
-        // be turned into it, and then turn back the intersection into
-        // the origin SRS
-        ReferencedEnvelope envIntWgs84 = new ReferencedEnvelope(validArea.intersection(geWGS84), WGS84);
         
-        // if the intersection is empty the geometry is completely outside of the valid area, skip it
-        if(envIntWgs84.isEmpty())
-            return null;
-            
-        ReferencedEnvelope envInt = envIntWgs84.transform(geometryCRS, true);
-
-        // turn the envelope into a geometry and perform the intersection
-        Polygon envelopeGeometry = JTS.toGeometry((Envelope) envInt);
-        Geometry result;
-        try {
-            result = geometry.intersection(envelopeGeometry);
-        } catch(Exception e1) {
-            try {
-                result = EnhancedPrecisionOp.intersection(geometry, envelopeGeometry);
-            } catch(Exception e2) {
-                result = geometry;
+        Geometry mask;
+        // fast path for the rectangular case, more complex one for the
+        // non rectangular one
+        if(validArea == null) {
+            // if the geometry is within the valid area for this projection
+            // just skip expensive cutting
+            ReferencedEnvelope ge = new ReferencedEnvelope(geometry.getEnvelopeInternal(), geometryCRS);
+            ReferencedEnvelope geWGS84 = ge.transform(WGS84, true);
+            if (validAreaBounds.contains((Envelope) geWGS84)) {
+                return geometry;
             }
+
+            // we need to cut, first thing, we intersect the geometry envelope
+            // and the valid area in WGS84, which is a neutral, everything can
+            // be turned into it, and then turn back the intersection into
+            // the origin SRS
+            ReferencedEnvelope envIntWgs84 = new ReferencedEnvelope(validAreaBounds.intersection(geWGS84), WGS84);
+            
+            // if the intersection is empty the geometry is completely outside of the valid area, skip it
+            if(envIntWgs84.isEmpty()) {
+                return null;
+            }
+                
+            ReferencedEnvelope envInt = envIntWgs84.transform(geometryCRS, true);
+            mask = JTS.toGeometry((Envelope) envInt);
+        } else {
+            // if the geometry is within the valid area for this projection
+            // just skip expensive cutting
+            ReferencedEnvelope ge = new ReferencedEnvelope(geometry.getEnvelopeInternal(), geometryCRS);
+            ReferencedEnvelope geWGS84 = ge.transform(WGS84, true);
+
+            // we need to cut, first thing, we intersect the geometry envelope
+            // and the valid area in WGS84, which is a neutral, everything can
+            // be turned into it, and then turn back the intersection into
+            // the origin SRS
+            ReferencedEnvelope envIntWgs84 = new ReferencedEnvelope(validAreaBounds.intersection(geWGS84), WGS84);
+            
+            // if the intersection is empty the geometry is completely outside of the valid area, skip it
+            if(envIntWgs84.isEmpty()) {
+                return null;
+            } 
+            
+            Polygon polyIntWgs84 = JTS.toGeometry(envIntWgs84);
+            Geometry maskWgs84 = intersect(validArea, polyIntWgs84);
+            if(maskWgs84 == null || maskWgs84.isEmpty()) {
+                return null;
+            }
+            mask = JTS.transform(maskWgs84, CRS.findMathTransform(WGS84, geometryCRS));
         }
         
-        // handle in special way empty intersections
-        if (result instanceof GeometryCollection && ((GeometryCollection) result).isEmpty())
-            return null;
-        else
-            return result;
+        return intersect(geometry, mask);
     }
 
