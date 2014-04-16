@@ -1,6 +1,6 @@
-    FeatureCollection applyRenderingTransformation(Expression transformation,
+    public Object applyRenderingTransformation(Expression transformation,
             FeatureSource featureSource, Query layerQuery, Query renderingQuery, 
-            GridGeometry2D gridGeometry, CoordinateReferenceSystem sourceCrs) throws IOException, SchemaException, TransformException, FactoryException  {
+            GridGeometry2D gridGeometry, CoordinateReferenceSystem sourceCrs, RenderingHints hints) throws IOException, SchemaException, TransformException, FactoryException  {
         Object result = null;
         
         // check if it's a wrapper coverage or a wrapped reader
@@ -25,8 +25,8 @@
                 Feature gridWrapper = DataUtilities.first( sample );
                 
                 if(FeatureUtilities.isWrappedCoverageReader(simpleSchema)) {
-                    final Object params = paramsPropertyName.evaluate(gridWrapper);
-                    final GridCoverage2DReader reader = (GridCoverage2DReader) gridPropertyName.evaluate(gridWrapper);
+                    final Object params = PARAMS_PROPERTY_NAME.evaluate(gridWrapper);
+                    final GridCoverage2DReader reader = (GridCoverage2DReader) GRID_PROPERTY_NAME.evaluate(gridWrapper);
                     // don't read more than the native resolution (in case we are oversampling)
                     if(CRS.equalsIgnoreMetadata(reader.getCoordinateReferenceSystem(), gridGeometry.getCoordinateReferenceSystem())) {
                          MathTransform g2w = reader.getOriginalGridToWorld(PixelInCell.CELL_CENTER);
@@ -51,7 +51,7 @@
                     }
                     coverage = readCoverage(reader, params, readGG);
                 } else {
-                    coverage = (GridCoverage2D) gridPropertyName.evaluate(gridWrapper);
+                    coverage = (GridCoverage2D) GRID_PROPERTY_NAME.evaluate(gridWrapper);
                 }
                 
                 // readers will return null if there is no coverage in the area
@@ -88,7 +88,7 @@
                                     param.parameter("Source").setValue(coverage);
                                     param.parameter("xScale").setValue(ratioX);
                                     param.parameter("yScale").setValue(ratioY);
-                                    final Interpolation interpolation = (Interpolation) java2dHints.get(JAI.KEY_INTERPOLATION);
+                                    final Interpolation interpolation = (Interpolation) hints.get(JAI.KEY_INTERPOLATION);
                                     if(interpolation != null) {
                                         param.parameter("Interpolation").setValue(interpolation);
                                     }
@@ -129,28 +129,12 @@
             // grab the original features
             Query mixedQuery = DataUtilities.mixQueries(layerQuery, optimizedQuery, null);
             originalFeatures = featureSource.getFeatures(mixedQuery);
-            prepFeatureCollection(originalFeatures, sourceCrs);
+            originalFeatures = RendererUtilities.fixFeatureCollectionReferencing(originalFeatures, sourceCrs);
             
             // transform them
             result = transformation.evaluate(originalFeatures);
-        } 
-        
-        // null safety, a transformation might be free to return null
-        if(result == null) {
-            return null;
         }
         
-        // what did we get? raster or vector?
-        if(result instanceof FeatureCollection) {
-            return (FeatureCollection) result;
-        } else if(result instanceof GridCoverage2D) {
-            return FeatureUtilities.wrapGridCoverage((GridCoverage2D) result);
-        } else if(result instanceof GridCoverage2DReader) {
-            return FeatureUtilities.wrapGridCoverageReader((GridCoverage2DReader) result, null);
-        } else {
-            throw new IllegalArgumentException("Don't know how to handle the results of the transformation, " +
-                    "the supported result types are FeatureCollection, GridCoverage2D " +
-                    "and GridCoverage2DReader, but we got: " + result.getClass());
-        }
+        return result;
     }
 
