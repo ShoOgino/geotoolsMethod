@@ -1,0 +1,52 @@
+    /**
+     * Returns a WKT shaoe given that its URL specifies a WKT geometry or contains a reference to a
+     * WKT geometry specfied in a properties file
+     * 
+     * @see org.geotools.renderer.style.MarkFactory#getShape(java.awt.Graphics2D,
+     * org.opengis.filter.expression.Expression, org.opengis.feature.Feature)
+     */
+    public Shape getShape(Graphics2D graphics, Expression symbolUrl, Feature feature)
+            throws Exception {
+
+        // cannot handle a null url
+        if (symbolUrl == null) {
+            return null;
+        }
+
+        // If it does not start with either prefix, it cannot create symbols
+        String wellKnown = symbolUrl.evaluate(feature, String.class);
+        if (!wellKnown.startsWith(WKT_PREFIX) && !wellKnown.startsWith(WKTLIB_PREFIX)) {
+            return null;
+        }
+
+        // See if it is a simple WKT, so that i can extract the WKT symbols
+        // directly
+        String wkt = null;
+        if (wellKnown.startsWith(WKT_PREFIX)) {
+            wkt = wellKnown.substring(WKT_PREFIX.length());
+        }
+
+        // See if it is a WKT library reference
+        if (wellKnown.startsWith(WKTLIB_PREFIX)) {
+            String[] urlComponents = wellKnown.substring(WKTLIB_PREFIX.length()).split(WKT_SEPARATOR);
+            synchronized (this) {
+                wkt = this.getFromCache(urlComponents[0], urlComponents[1]);
+                if (wkt == null) {
+                    this.addToCache(urlComponents[0]);
+                    wkt = this.getFromCache(urlComponents[0], urlComponents[1]);
+                }
+            }
+
+        }
+
+        if (wkt == null) {
+            LOGGER.info("This is not recognised a WKT symbol: " + wellKnown);
+        }
+
+        // Creates and return the symbol
+        WKTReader2 reader = new WKTReader2();
+        LiteShape shape = new LiteShape(reader.read(wkt), null, false);
+        LOGGER.info("Created symbol from WKT " + wkt);
+        return shape;
+    }
+
