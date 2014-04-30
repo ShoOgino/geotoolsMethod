@@ -1,15 +1,17 @@
     //put in more unPackOR's
     public void testComplex() throws IllegalFilterException {
-        Filter orFilter = likeFilter.or(btwnFilter);
-        Filter andFilter = orFilter.and(compFilter);
+        FilterFactory2 ff = CommonFactoryFinder.getFilterFactory2();
+        
+        Or orFilter = ff.or( likeFilter, btwnFilter);
+        And andFilter = ff.and( orFilter, compFilter);
         unpacker.unPackAND(andFilter);
 
         //compFilter supported, none of orFilter: (orFilter, compFilter)
         assertEquals(orFilter, unpacker.getUnSupported());
         assertEquals(compFilter, unpacker.getSupported());
 
-        Filter bigOrFilter = (andFilter.or(compFilter)).or(nullFilter);
-        Filter biggerOrFilter = bigOrFilter.or(nullFilter);
+        Or bigOrFilter = ff.or(ff.or(andFilter,compFilter),nullFilter);
+        Or biggerOrFilter = ff.or( bigOrFilter,nullFilter);
 
         //Top level or with one unsupported (like from orFilter)
         //makes all unsupported: (bigOrFilter, null)
@@ -17,28 +19,31 @@
         assertEquals(biggerOrFilter, unpacker.getUnSupported());
         assertNull(unpacker.getSupported());
 
-        Filter bigAndFilter = (geomFilter.and(compFilter)).and(orFilter);
+        And bigAndFilter = ff.and(ff.and(geomFilter,compFilter),orFilter);
 
         //comp supported, orFilter not, geomFilter not:
         //(orFilter AND geomFilter, compFilter)
         unpacker.unPackAND(bigAndFilter);
-        assertEquals((orFilter.and(geomFilter)), unpacker.getUnSupported());
+        assertEquals(ff.and(orFilter,geomFilter), unpacker.getUnSupported());
         assertEquals(compFilter, unpacker.getSupported());
         unpacker.unPackOR(bigAndFilter);
         assertEquals(bigAndFilter, unpacker.getUnSupported());
         assertNull(unpacker.getSupported());
 
-        Filter hugeAndFilter = (bigAndFilter.and(andFilter)).and(bigOrFilter);
+        And hugeAndFilter = ff.and(ff.and(bigAndFilter,andFilter),bigOrFilter);
         unpacker.unPackAND(hugeAndFilter);
 
         // two comps should be supported; geom, or and bigOr unsupported
         // (compFilter AND compFilter, geomFilter AND orFilter AND orFilter AND bigOrFilter)
-        assertEquals( (compFilter.and(compFilter)), unpacker.getSupported() );
+        assertEquals( ff.and(compFilter,compFilter), unpacker.getSupported() );
         
-        Filter expected = (((geomFilter.and(orFilter)).and(orFilter)).and(
-                bigOrFilter));
+        List<org.opengis.filter.Filter>combine = Arrays.asList( new org.opengis.filter.Filter[]{
+                geomFilter, orFilter, orFilter,bigOrFilter});
+        
+        And expected = ff.and(combine);
         org.opengis.filter.Filter unsupported = unpacker.getUnSupported();
-
+        
+        assertEquals( expected.toString(), unsupported.toString());
         assertEquals( expected, unsupported );
     }
 
