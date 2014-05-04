@@ -9,6 +9,7 @@
      * @throws FactoryException
      * @throws TransformException
      * @throws NoninvertibleTransformException
+     * @Deprecated
      */
     public RenderedImage renderImage(
             final GridCoverage2D gridCoverage,
@@ -19,60 +20,104 @@
             final int tileSizeY
             ) throws FactoryException, TransformException, NoninvertibleTransformException {
 
-        // Build the final image and the associated world to grid transformation
-        final GCpair couple = prepareFinalImage(gridCoverage, symbolizer);
-        if (couple == null)
-            return null;
-        // NOTICE that at this stage the image we get should be 8 bits, either RGB, RGBA, Gray, GrayA
-        // either multiband or indexed. It could also be 16 bits indexed!!!!
+        final Hints oldHints= this.hints.clone();
         
-        final RenderedImage finalImage = couple.getGridCoverage().getRenderedImage();
-        final AffineTransform finalRaster2Model = couple.getTransform();
-        
-        //paranoiac check to avoid that JAI freaks out when computing its internal layouT on images that are too small
-        Rectangle2D finalLayout= layoutHelper(
-                        finalImage, 
-                        (float)finalRaster2Model.getScaleX(), 
-                        (float)finalRaster2Model.getScaleY(), 
-                        (float)finalRaster2Model.getTranslateX(), 
-                        (float)finalRaster2Model.getTranslateY(), 
-                        interpolation);
-        if(finalLayout.isEmpty()){
-                if(LOGGER.isLoggable(java.util.logging.Level.FINE))
-                        LOGGER.fine("Unable to create a granuleDescriptor "+this.toString()+ " due to jai scale bug");
-                return null;
+        ////
+        //
+        // TILING
+        //
+        //// 
+        if(tileSizeX>0&&tileSizeY>0){
+            // Tile Size
+            final ImageLayout layout= new ImageLayout2();
+            layout.setTileGridXOffset(0).setTileGridYOffset(0).setTileHeight(tileSizeY).setTileWidth(tileSizeX);
+            hints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT,layout));            
         }
 
-        // final transformation
-        final ImageLayout2 layout = new ImageLayout2(finalImage);
-        layout.setTileGridXOffset(0).setTileGridYOffset(0).setTileHeight(tileSizeY).setTileWidth(tileSizeX);
-        final RenderingHints localHints = this.hints.clone(); 
-        localHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
         
-        // === interpolation management
-        if (interpolation instanceof InterpolationNearest) {
-            // nearest 
-            localHints.add(new RenderingHints(JAI.KEY_REPLACE_INDEX_COLOR_MODEL, Boolean.FALSE));
-            localHints.add(new RenderingHints(JAI.KEY_TRANSFORM_ON_COLORMAP, Boolean.TRUE));
-        } else {
-            // others, make sure we don't force the colormodel if it is indexed with layout as it might lead to NO color expansion 
-            if(finalImage.getColorModel() instanceof IndexColorModel){
-                layout.unsetValid(ImageLayout2.COLOR_MODEL_MASK).unsetValid(ImageLayout2.SAMPLE_MODEL_MASK);
+        ////
+        //
+        // INTERPOLATION
+        //
+        ////
+        if(interpolation!=null){
+            if (LOGGER.isLoggable(Level.FINE)){
+                LOGGER.fine("Rendering using interpolation "+interpolation);        
             }
+            this.interpolation=interpolation;
+            hints.add(new RenderingHints(JAI.KEY_INTERPOLATION,this.interpolation));
+            if (LOGGER.isLoggable(Level.FINE)){
+                LOGGER.fine("Rendering using interpolation "+interpolation);        
+            }
+            setInterpolationHints();
         }
-        //SG add hints for the border extender
-        localHints.add(new RenderingHints(JAI.KEY_BORDER_EXTENDER,BorderExtender.createInstance(BorderExtender.BORDER_COPY)));
-    	RenderedImage im=null;
-    	try {
-    	    ImageWorker iw = new ImageWorker(finalImage);
-    	    iw.setRenderingHints(localHints);
-    	    iw.affine(finalRaster2Model, interpolation, null);
-    	    im = iw.getRenderedImage();
-    	} finally {
-    		if(DEBUG)
-    			writeRenderedImage(im, "postAffine");
-    	}
-    	return im;
+ 
+        try{
+            return renderImage(gridCoverage, symbolizer,GridCoverageRendererUtilities.colorToArray(background));
+        } catch (Exception e) {
+            throw new FactoryException(e);
+        }finally{
+            this.hints=oldHints;
+        }
+     
+        
+//        // Build the final image and the associated world to grid transformation
+//        final GCpair couple = prepareFinalImage(gridCoverage, symbolizer);
+//        if (couple == null){
+//            return null;
+//        }
+//        // NOTICE that at this stage the image we get should be 8 bits, either RGB, RGBA, Gray, GrayA
+//        // either multiband or indexed. It could also be 16 bits indexed!!!!
+//        
+//        final RenderedImage finalImage = couple.getGridCoverage().getRenderedImage();
+//        final AffineTransform finalRaster2Model = couple.getTransform();
+//        
+//        //paranoiac check to avoid that JAI freaks out when computing its internal layouT on images that are too small
+//        Rectangle2D finalLayout= GridCoverageRendererUtilities.layoutHelper(
+//                        finalImage, 
+//                        (float)finalRaster2Model.getScaleX(), 
+//                        (float)finalRaster2Model.getScaleY(), 
+//                        (float)finalRaster2Model.getTranslateX(), 
+//                        (float)finalRaster2Model.getTranslateY(), 
+//                        interpolation);
+//        if(finalLayout.isEmpty()){
+//                if(LOGGER.isLoggable(java.util.logging.Level.FINE))
+//                        LOGGER.fine("Unable to create a granuleDescriptor "+this.toString()+ " due to jai scale bug");
+//                return null;
+//        }
+//
+//        // final transformation
+//        final ImageLayout2 layout = new ImageLayout2(finalImage);
+//        layout.setTileGridXOffset(0).setTileGridYOffset(0).setTileHeight(tileSizeY).setTileWidth(tileSizeX);
+//        final RenderingHints localHints = this.hints.clone(); 
+//        localHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
+//        
+//        // === interpolation management
+//        if (interpolation instanceof InterpolationNearest) {
+//            // nearest 
+//            localHints.add(new RenderingHints(JAI.KEY_REPLACE_INDEX_COLOR_MODEL, Boolean.FALSE));
+//            localHints.add(new RenderingHints(JAI.KEY_TRANSFORM_ON_COLORMAP, Boolean.TRUE));
+//        } else {
+//            // others, make sure we don't force the colormodel if it is indexed with layout as it might lead to NO color expansion 
+//            if(finalImage.getColorModel() instanceof IndexColorModel){
+//                layout.unsetValid(ImageLayout2.COLOR_MODEL_MASK).unsetValid(ImageLayout2.SAMPLE_MODEL_MASK);
+//            }
+//        }
+//        //SG add hints for the border extender
+//        localHints.add(new RenderingHints(JAI.KEY_BORDER_EXTENDER,BorderExtender.createInstance(BorderExtender.BORDER_COPY)));
+//    	RenderedImage im=null;
+//    	try {
+//    	    ImageWorker iw = new ImageWorker(finalImage);
+//    	    iw.setRenderingHints(localHints);
+//    	    iw.affine(finalRaster2Model, interpolation, null);
+//    	    im = iw.getRenderedImage();
+//    	} finally {
+//    		if(DEBUG){
+//    		    writeRenderedImage(im, "postAffine");
+//    		}
+//    	}
+//    	
+//    	return im;
 
     }
 

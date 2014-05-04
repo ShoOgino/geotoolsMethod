@@ -1,0 +1,93 @@
+    /**
+     * @param bkgValues 
+     * @param preResample
+     * @return
+     */
+    private GridCoverage2D affine(GridCoverage2D input, double[] bkgValues) {
+     // NOTICE that at this stage the image we get should be 8 bits, either RGB, RGBA, Gray, GrayA
+        // either multiband or indexed. It could also be 16 bits indexed!!!!
+        final RenderedImage finalImage = input.getRenderedImage();
+        final GridGeometry2D preSymbolizerGridGeometry = ((GridGeometry2D) input.getGridGeometry());
+        // I need to translate half of a pixel since in wms the envelope
+        // map to the corners of the raster space not to the center of the
+        // pixels.
+        final MathTransform2D finalGCTransform=preSymbolizerGridGeometry.getGridToCRS2D(PixelOrientation.UPPER_LEFT);
+        if (!(finalGCTransform instanceof AffineTransform)) {
+            throw new UnsupportedOperationException(
+                    "Non-affine transformations not yet implemented"); // TODO
+        }
+        final AffineTransform finalGCgridToWorld = new AffineTransform((AffineTransform) finalGCTransform);
+
+
+        // //
+        //
+        // I am going to concatenate the final world to grid transform for the
+        // screen area with the grid to world transform of the input coverage.
+        //
+        // This way i right away position the coverage at the right place in the
+        // area of interest for the device.
+        //
+        // //
+        final AffineTransform finalRasterTransformation = (AffineTransform) finalWorldToGrid.clone();
+        finalRasterTransformation.concatenate(finalGCgridToWorld);
+       
+        //paranoiac check to avoid that JAI freaks out when computing its internal layouT on images that are too small
+        Rectangle2D finalLayout= GridCoverageRendererUtilities.layoutHelper(
+                        finalImage, 
+                        (float)finalRasterTransformation.getScaleX(), 
+                        (float)finalRasterTransformation.getScaleY(), 
+                        (float)finalRasterTransformation.getTranslateX(), 
+                        (float)finalRasterTransformation.getTranslateY(), 
+                        interpolation);
+        if(finalLayout.isEmpty()){
+                if(LOGGER.isLoggable(java.util.logging.Level.FINE))
+                        LOGGER.fine("Unable to create a granuleDescriptor "+this.toString()+ " due to jai scale bug");
+                return null;
+        }
+//
+//        // final transformation
+//        final ImageLayout2 layout = new ImageLayout2(finalImage);
+//        if(tileDimension!=null){
+//            layout.unsetImageBounds();
+//            layout.unsetValid(ImageLayout.COLOR_MODEL_MASK&ImageLayout.SAMPLE_MODEL_MASK);
+//            layout.setTileGridXOffset(0).setTileGridYOffset(0).setTileHeight(tileDimension.height).setTileWidth(tileDimension.width);            
+//        }
+//        final RenderingHints localHints = this.hints.clone(); 
+//        localHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
+//        
+//        // === interpolation management
+//        // others, make sure we don't force the colormodel if it is indexed with layout as it might lead to NO color expansion        
+//        if (!(interpolation instanceof InterpolationNearest)&& finalImage.getColorModel() instanceof IndexColorModel){
+//            layout.unsetValid(ImageLayout2.COLOR_MODEL_MASK).unsetValid(ImageLayout2.SAMPLE_MODEL_MASK);
+//        }
+
+        RenderedImage im=null;
+        try {
+            ImageWorker iw = new ImageWorker(finalImage);
+            iw.setRenderingHints(hints);
+            iw.affine(finalRasterTransformation, interpolation, bkgValues);
+            im = iw.getRenderedImage();
+        } finally {
+                if(DEBUG){
+                    writeRenderedImage(im, "postAffine");
+                }
+        }        
+        // recreate gridCoverage
+        int numBands = im.getSampleModel().getNumBands();
+        GridSampleDimension[] sd = new GridSampleDimension[numBands];
+        for(int i=0;i<numBands;i++) {
+            sd[i]= new GridSampleDimension(TypeMap.getColorInterpretation(im.getColorModel(), i).name());
+        }
+        
+        // create a new grid coverage but preserve as much input as possible
+       return this.gridCoverageFactory.create(
+               input.getName(), 
+                im,
+                new GridGeometry2D(
+                        new GridEnvelope2D(PlanarImage.wrapRenderedImage(im).getBounds()), 
+                        input.getEnvelope()), 
+                sd, 
+                new GridCoverage[] { input },
+                input.getProperties());    
+    }
+

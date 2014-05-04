@@ -1,0 +1,53 @@
+    /**
+     * @param inputEnvelope
+     * @param targetCRS
+     * @return 
+     * @throws Exception 
+     */
+    static GeneralEnvelope reprojectEnvelopeWithWGS84Pivot(GeneralEnvelope inputEnvelope,
+            CoordinateReferenceSystem targetCRS) throws Exception {
+        
+        GridCoverageRendererUtilities.ensureNotNull(inputEnvelope, "destinationEnvelope");
+        GridCoverageRendererUtilities.ensureNotNull(targetCRS, "coverageCRS");
+        final CoordinateReferenceSystem destinationCRS=inputEnvelope.getCoordinateReferenceSystem();
+
+        // //
+        //
+        // Try to convert the destination envelope in the source crs. If
+        // this fails we pass through WGS84 as an intermediate step
+        //
+        // //
+        try {
+            // convert the destination envelope to the source coverage
+            // native crs in order to try and crop it. If we get an error we
+            // try to
+            // do this in two steps using WGS84 as a pivot. This introduces
+            // some erros (it usually
+            // increases the envelope we want to check) but it is still
+            // useful.
+            GeneralEnvelope output = CRS.transform(
+                    CRS.findMathTransform(destinationCRS, targetCRS, true),//lenient
+                    inputEnvelope);
+            output.setCoordinateReferenceSystem(targetCRS);
+            return output;
+        } catch (TransformException te) {
+            // //
+            //
+            // Convert the destination envelope to WGS84 if needed for safer
+            // comparisons later on with the original crs of this coverage.
+            //
+            // //
+            final GeneralEnvelope destinationEnvelopeWGS84=GridCoverageRendererUtilities.reprojectEnvelope(inputEnvelope,DefaultGeographicCRS.WGS84);
+
+            // //
+            //
+            // Convert the destination envelope from WGS84 to the source crs
+            // for cropping the provided coverage.
+            //
+            // //
+            return GridCoverageRendererUtilities.reprojectEnvelope(destinationEnvelopeWGS84,targetCRS);
+
+         }
+        
+    }
+
