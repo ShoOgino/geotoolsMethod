@@ -1,0 +1,51 @@
+    /**
+     * Method for checking if the coverage values outside ROI are NoData
+     * 
+     * @param coverage
+     * @param feature
+     * @throws MismatchedDimensionException
+     * @throws TransformException
+     */
+    private void ensureNoDataOutside(GridCoverage2D coverage, SimpleFeature feature)
+            throws MismatchedDimensionException, TransformException {
+        // World to Grid transform used to project the Geometry to the RasterSpace
+        MathTransform w2g = coverage.getGridGeometry().getCRSToGrid2D(PixelOrientation.UPPER_LEFT);
+        // ROI in raster space
+        ROI roi = new ROIGeometry(JTS.transform((Geometry) feature.getDefaultGeometry(), w2g));
+        // Approximate bounds by expanding them by one (coordinates are taken with a 0.5 offset)
+        Rectangle rect = roi.getBounds();
+        rect.grow(1, 1);
+        // No data value to use
+        double nodata = CoverageUtilities.getBackgroundValues(coverage)[0];
+
+        // Cycle on the image Bounds in order to search if No Data are present
+        RenderedImage img = coverage.getRenderedImage();
+        // Tile bounds
+        int minTileX = img.getMinTileX();
+        int minTileY = img.getMinTileY();
+        int maxTileX = minTileX + img.getNumXTiles();
+        int maxTileY = minTileY + img.getNumYTiles();
+
+        // Cycle on the tiles
+        for (int tx = minTileX; tx < maxTileX; tx++) {
+            for (int ty = minTileY; ty < maxTileY; ty++) {
+                Raster tile = img.getTile(tx, ty);
+
+                // Cycle on the tile values
+                int minx = tile.getMinX();
+                int miny = tile.getMinY();
+
+                int maxx = minx + tile.getWidth();
+                int maxy = miny + tile.getHeight();
+                // Check each pixel outside the ROI
+                for (int x = minx; x < maxx; x++) {
+                    for (int y = miny; y < maxy; y++) {
+                        if (!rect.contains(x, y)) {
+                            assertEquals(nodata, tile.getSampleDouble(x, y, 0), TOLERANCE);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
