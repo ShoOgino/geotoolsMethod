@@ -30,7 +30,13 @@
         if(att == null && !(visitor instanceof CountVisitor)){
             return null; // aggregate function optimization only supported for PropertyName expression
         }
-        // result of the function
+        // if the visitor is limiting the result to a given start - max, we will
+        // try to apply limits to the aggregate query
+        LimitingVisitor limitingVisitor = null;
+        if(visitor instanceof LimitingVisitor) {
+            limitingVisitor = (LimitingVisitor) visitor;
+        }
+        //result of the function
         try {
             Object result = null;
             List results = new ArrayList();
@@ -39,11 +45,11 @@
             
             try {
                 if ( dialect instanceof PreparedStatementSQLDialect ) {
-                    st = selectAggregateSQLPS(function, att, featureType, query, cx);
+                    st = selectAggregateSQLPS(function, att, featureType, query, limitingVisitor,  cx);
                     rs = ((PreparedStatement)st).executeQuery();
                 } 
                 else {
-                    String sql = selectAggregateSQL(function, att, featureType, query);
+                    String sql = selectAggregateSQL(function, att, featureType, query, limitingVisitor);
                     LOGGER.fine( sql );
                     
                     st = cx.createStatement();
