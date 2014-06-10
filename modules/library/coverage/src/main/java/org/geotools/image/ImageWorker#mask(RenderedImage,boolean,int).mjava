@@ -1,89 +1,76 @@
     /**
-     * Applies the specified mask over the current {@linkplain #image}. The mask should be
-     * {@linkplain #binarize() binarized} - if it is not, this method will do it itself.
-     * Then, for every pixels in the mask with value equals to {@code maskValue}, the
-     * corresponding pixel in the {@linkplain #image} will be set to the specified
-     * {@code newValue}.
+     * Applies the specified mask over the current {@linkplain #image}. The mask should be {@linkplain #binarize() binarized} - if it is not, this
+     * method will do it itself. Then, for every pixels in the mask with value equals to {@code maskValue}, the corresponding pixel in the
+     * {@linkplain #image} will be set to the specified {@code newValue}.
      * <p>
-     * <strong>Note:</strong> current implementation force the color model to an
-     * {@linkplain IndexColorModel indexed} one. Future versions may avoid this change.
-     *
-     * @param mask
-     *            The mask to apply, as a {@linkplain #binarize() binarized} image.
-     * @param maskValue
-     *            The mask value to search for ({@code false} for 0 or {@code true} for 1).
-     * @param newValue
-     *            The new value for every pixels in {@linkplain #image}
-     *            corresponding to {@code maskValue} in the mask.
-     *
+     * <strong>Note:</strong> current implementation force the color model to an {@linkplain IndexColorModel indexed} one. Future versions may avoid
+     * this change.
+     * 
+     * @param mask The mask to apply, as a {@linkplain #binarize() binarized} image.
+     * @param maskValue The mask value to search for ({@code false} for 0 or {@code true} for 1).
+     * @param newValue The new value for every pixels in {@linkplain #image} corresponding to {@code maskValue} in the mask.
+     * 
      * @return this {@link ImageWorker}.
-     *
-     * @todo This now should work only if {@code newValue} is 255
-     *       and {@code maskValue} is {@code false}.
+     * 
+     * @todo This now should work only if {@code newValue} is 255 and {@code maskValue} is {@code false}.
      */
-	public final ImageWorker mask(RenderedImage mask, final boolean maskValue,
-			int newValue) {
+    public final ImageWorker mask(RenderedImage mask, final boolean maskValue, int newValue) {
 
-		/*
-		 * Make sure that the underlying image is indexed.
-		 */
-		tileCacheEnabled(false);
-		forceIndexColorModel(true);
-		final RenderingHints hints = new RenderingHints(JAI.KEY_TILE_CACHE,
-				null);
+        /*
+         * Make sure that the underlying image is indexed.
+         */
+        tileCacheEnabled(false);
+        forceIndexColorModel(true);
+        final RenderingHints hints = new RenderingHints(JAI.KEY_TILE_CACHE, null);
 
-		/*
-		 * special case for newValue == 255 && !maskValue.
-		 */
-		if (newValue == 255 && !maskValue) {
-			/*
-			 * Build a lookup table in order to make the transparent pixels
-			 * equal to 255 and all the others equal to 0.
-			 *
-			 */
-			final byte[] lutData = new byte[256];
-			// mapping all the non-transparent pixels to opaque
-			Arrays.fill(lutData, (byte) 0);
-			// for transparent pixels
-			lutData[0] = (byte) 255;
-			final LookupTableJAI lut = new LookupTableJAI(lutData);
-			mask = LookupDescriptor.create(mask, lut, hints);
+        /*
+         * special case for newValue == 255 && !maskValue.
+         */
+        if (newValue == 255 && !maskValue) {
+            /*
+             * Build a lookup table in order to make the transparent pixels equal to 255 and all the others equal to 0.
+             */
+            final byte[] lutData = new byte[256];
+            // mapping all the non-transparent pixels to opaque
+            Arrays.fill(lutData, (byte) 0);
+            // for transparent pixels
+            lutData[0] = (byte) 255;
+            final LookupTableJAI lut = new LookupTableJAI(lutData);
+            mask = LookupDescriptor.create(mask, lut, hints);
 
-			/*
-			 * Adding to the other image exploiting the implict clamping
-			 *
-			 */
-			image = AddDescriptor.create(image, mask, getRenderingHints());
-			tileCacheEnabled(true);
-			invalidateStatistics();
-			return this;
-		} else {
-			// general case
+            /*
+             * Adding to the other image exploiting the implict clamping
+             */
+            image = AddDescriptor.create(image, mask, getRenderingHints());
+            tileCacheEnabled(true);
+            invalidateStatistics();
+            return this;
+        } else {
+            // general case
 
-			// it has to be binary
-			if (!isBinary())
-				binarize();
+            // it has to be binary
+            if (!isBinary())
+                binarize();
 
-			// now if we mask with 1 we have to invert the mask
-			if (maskValue)
-				mask = NotDescriptor.create(mask, new RenderingHints(
-						JAI.KEY_REPLACE_INDEX_COLOR_MODEL, Boolean.FALSE));
+            // now if we mask with 1 we have to invert the mask
+            if (maskValue)
+                mask = NotDescriptor.create(mask, new RenderingHints(
+                        JAI.KEY_REPLACE_INDEX_COLOR_MODEL, Boolean.FALSE));
 
-			// and with the image to zero the interested pixels
-			tileCacheEnabled(false);
-			image = AndDescriptor.create(mask, image, getRenderingHints());
+            // and with the image to zero the interested pixels
+            tileCacheEnabled(false);
+            image = AndDescriptor.create(mask, image, getRenderingHints());
 
-			// add the new value to the mask
-			mask = AddConstDescriptor.create(mask, new double[] { newValue },
-					new RenderingHints(JAI.KEY_REPLACE_INDEX_COLOR_MODEL,
-							Boolean.FALSE));
+            // add the new value to the mask
+            mask = AddConstDescriptor.create(mask, new double[] { newValue }, new RenderingHints(
+                    JAI.KEY_REPLACE_INDEX_COLOR_MODEL, Boolean.FALSE));
 
-			// add the mask to the image to mask with the new value
-			image = AddDescriptor.create(mask, image, getRenderingHints());
-			tileCacheEnabled(true);
-			invalidateStatistics();
-			return this;
-		}
+            // add the mask to the image to mask with the new value
+            image = AddDescriptor.create(mask, image, getRenderingHints());
+            tileCacheEnabled(true);
+            invalidateStatistics();
+            return this;
+        }
 
-	}
+    }
 

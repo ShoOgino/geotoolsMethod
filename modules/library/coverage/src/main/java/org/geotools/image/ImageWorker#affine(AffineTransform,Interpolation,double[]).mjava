@@ -1,7 +1,6 @@
     /**
-     * Performs an affine transform on the image, applying optimization such as affine removal in
-     * case the affine is an identity, affine merging if the affine is applied on top of another
-     * affine, and using optimized operations for integer translates
+     * Performs an affine transform on the image, applying optimization such as affine removal in case the affine is an identity, affine merging if
+     * the affine is applied on top of another affine, and using optimized operations for integer translates
      * 
      * @param tx
      * @param interpolation
@@ -16,32 +15,35 @@
         boolean hasScaleY = Math.abs(tx.getScaleY() - 1) * size > RS_EPS;
         boolean hasShearX = Math.abs(tx.getShearX()) * size > RS_EPS;
         boolean hasShearY = Math.abs(tx.getShearY()) * size > RS_EPS;
-        boolean hasTranslateX = Math.abs(tx.getTranslateX()) > RS_EPS; 
+        boolean hasTranslateX = Math.abs(tx.getTranslateX()) > RS_EPS;
         boolean hasTranslateY = Math.abs(tx.getTranslateY()) > RS_EPS;
-        if(!hasScaleX && !hasScaleY && !hasShearX && !hasShearY && !hasTranslateX && !hasTranslateY) {
+        if (!hasScaleX && !hasScaleY && !hasShearX && !hasShearY && !hasTranslateX
+                && !hasTranslateY) {
             return this;
         }
-        
+
         // apply defaults to allow for comparisong
-        ParameterListDescriptor pld = new AffineDescriptor().getParameterListDescriptor(RenderedRegistryMode.MODE_NAME);
-        if(interpolation == null) {
+        ParameterListDescriptor pld = new AffineDescriptor()
+                .getParameterListDescriptor(RenderedRegistryMode.MODE_NAME);
+        if (interpolation == null) {
             interpolation = (Interpolation) pld.getParamDefaultValue("interpolation");
         }
-        if(bgValues == null) {
+        if (bgValues == null) {
             bgValues = (double[]) pld.getParamDefaultValue("backgroundValues");
         }
-        
+
         // affine over affine/scale?
         RenderedImage source = image;
-        if(image instanceof RenderedOp) {
+        if (image instanceof RenderedOp) {
             RenderedOp op = (RenderedOp) image;
-            
+
             Object mtProperty = op.getProperty("MathTransform");
             Object sourceBoundsProperty = op.getProperty("SourceBoundingBox");
             String opName = op.getOperationName();
-            
+
             // check if we can do a warp-affine reduction
-            if (WARP_REDUCTION_ENABLED && "Warp".equals(opName) && mtProperty instanceof MathTransform2D 
+            if (WARP_REDUCTION_ENABLED && "Warp".equals(opName)
+                    && mtProperty instanceof MathTransform2D
                     && sourceBoundsProperty instanceof Rectangle) {
                 try {
                     // we can merge the affine into the warp
@@ -53,7 +55,7 @@
                                     tx));
                     MathTransform2D chained = (MathTransform2D) factory
                             .createConcatenatedTransform(affineMT.inverse(), originalTransform);
-                    
+
                     // setup the warp builder
                     Double tolerance = (Double) getRenderingHint(Hints.RESAMPLE_TOLERANCE);
                     if (tolerance == null) {
@@ -62,84 +64,89 @@
                     if (tolerance == null) {
                         tolerance = 0.333;
                     }
-            
+
                     // setup a warp builder that is not gong to use too much memory
                     WarpBuilder wb = new WarpBuilder(tolerance);
                     wb.setMaxPositions(4 * 1024 * 1024);
-            
+
                     // compute the target bbox the same way the affine would have to have a 1-1 match
-                    RenderedOp at = AffineDescriptor.create(source, tx, interpolation, bgValues, commonHints);
+                    RenderedOp at = AffineDescriptor.create(source, tx, interpolation, bgValues,
+                            commonHints);
                     Rectangle targetBB = at.getBounds();
                     at.dispose();
                     Rectangle sourceBB = (Rectangle) sourceBoundsProperty;
-                    
-                    // warp 
-                    Rectangle mappingBB; 
-                    if(source.getProperty("ROI") instanceof ROI) {
-                       // Due to a limitation in JAI we need to make sure the 
+
+                    // warp
+                    Rectangle mappingBB;
+                    if (source.getProperty("ROI") instanceof ROI) {
+                        // Due to a limitation in JAI we need to make sure the
                         // mapping bounding box covers both source and target bounding box
-                       // otherwise the warped roi image layout won't be computed properly
-                       mappingBB = sourceBB.union(targetBB);
+                        // otherwise the warped roi image layout won't be computed properly
+                        mappingBB = sourceBB.union(targetBB);
                     } else {
-                       mappingBB = targetBB;
+                        mappingBB = targetBB;
                     }
                     Warp warp = wb.buildWarp(chained, mappingBB);
-                    
+
                     // do the switch only if we get a warp that is as fast as the original one
                     Warp sourceWarp = (Warp) op.getParameterBlock().getObjectParameter(0);
-                    if(warp instanceof WarpGrid || warp instanceof WarpAffine 
-                           || !(sourceWarp instanceof WarpGrid || sourceWarp instanceof WarpAffine))  {
-                       // and then the JAI Operation
-                       PlanarImage sourceImage = op.getSourceImage(0);
-                       final ParameterBlock paramBlk = new ParameterBlock().addSource(sourceImage);
-                       Object property = sourceImage.getProperty("ROI");
-                       if ((property == null) || property.equals(java.awt.Image.UndefinedProperty)
-                               || !(property instanceof ROI)) {
-                           paramBlk.add(warp).add(interpolation).add(bgValues);
-                       } else {
-                           paramBlk.add(warp).add(interpolation).add(bgValues).add((ROI) property);
-                       }
-            
-                       // force in the image layout, this way we get exactly the same
-                       // as the affine we're eliminating
-                       Hints localHints = new Hints(commonHints);
-                       localHints.remove(JAI.KEY_IMAGE_LAYOUT);
-                       ImageLayout il = new ImageLayout();
-                       il.setMinX(targetBB.x);
-                       il.setMinY(targetBB.y);
-                       il.setWidth(targetBB.width);
-                       il.setHeight(targetBB.height);
-                       localHints.put(JAI.KEY_IMAGE_LAYOUT, il);
-            
-                       RenderedOp result = JAI.create("Warp", paramBlk, localHints);
-                       result.setProperty("MathTransform", chained);
-                       image = result;
-            
-                       return this;
+                    if (warp instanceof WarpGrid
+                            || warp instanceof WarpAffine
+                            || !(sourceWarp instanceof WarpGrid || sourceWarp instanceof WarpAffine)) {
+                        // and then the JAI Operation
+                        PlanarImage sourceImage = op.getSourceImage(0);
+                        final ParameterBlock paramBlk = new ParameterBlock().addSource(sourceImage);
+                        Object property = sourceImage.getProperty("ROI");
+                        if ((property == null) || property.equals(java.awt.Image.UndefinedProperty)
+                                || !(property instanceof ROI)) {
+                            paramBlk.add(warp).add(interpolation).add(bgValues);
+                        } else {
+                            paramBlk.add(warp).add(interpolation).add(bgValues).add((ROI) property);
+                        }
+
+                        // force in the image layout, this way we get exactly the same
+                        // as the affine we're eliminating
+                        Hints localHints = new Hints(commonHints);
+                        localHints.remove(JAI.KEY_IMAGE_LAYOUT);
+                        ImageLayout il = new ImageLayout();
+                        il.setMinX(targetBB.x);
+                        il.setMinY(targetBB.y);
+                        il.setWidth(targetBB.width);
+                        il.setHeight(targetBB.height);
+                        localHints.put(JAI.KEY_IMAGE_LAYOUT, il);
+
+                        RenderedOp result = JAI.create("Warp", paramBlk, localHints);
+                        result.setProperty("MathTransform", chained);
+                        image = result;
+
+                        return this;
                     }
-                } catch(Exception e) {
-                    LOGGER.log(Level.WARNING, "Failed to squash warp and affine into a single operation, chaining them instead", e);
+                } catch (Exception e) {
+                    LOGGER.log(
+                            Level.WARNING,
+                            "Failed to squash warp and affine into a single operation, chaining them instead",
+                            e);
                     // move on
                 }
             }
-            
+
             // see if we can merge affine with other affine types then
-            if("Affine".equals(opName)) {
+            if ("Affine".equals(opName)) {
                 ParameterBlock paramBlock = op.getParameterBlock();
                 RenderedImage sSource = paramBlock.getRenderedSource(0);
 
                 AffineTransform sTx = (AffineTransform) paramBlock.getObjectParameter(0);
                 Interpolation sInterp = (Interpolation) paramBlock.getObjectParameter(1);
                 double[] sBgValues = (double[]) paramBlock.getObjectParameter(2);
-                
-                if((sInterp == interpolation  && Arrays.equals(sBgValues, bgValues))) {
+
+                if ((sInterp == interpolation && Arrays.equals(sBgValues, bgValues))) {
                     // we can replace it
                     AffineTransform concat = new AffineTransform(tx);
                     concat.concatenate(sTx);
                     tx = concat;
                     source = sSource;
                 }
-            } else if("Scale".equals(opName)) {
+            } else if ("Scale".equals(opName)) {
                 ParameterBlock paramBlock = op.getParameterBlock();
                 RenderedImage sSource = paramBlock.getRenderedSource(0);
 
@@ -147,9 +154,9 @@
                 float yScale = paramBlock.getFloatParameter(1);
                 float xTrans = paramBlock.getFloatParameter(2);
                 float yTrans = paramBlock.getFloatParameter(3);
-                Interpolation sInterp = (Interpolation)paramBlock.getObjectParameter(4);
-                
-                if(sInterp == interpolation) {
+                Interpolation sInterp = (Interpolation) paramBlock.getObjectParameter(4);
+
+                if (sInterp == interpolation) {
                     // we can replace it
                     AffineTransform concat = new AffineTransform(tx);
                     concat.concatenate(new AffineTransform(xScale, 0, 0, yScale, xTrans, yTrans));
@@ -164,30 +171,31 @@
         hasScaleY = Math.abs(tx.getScaleY() - 1) * size > RS_EPS;
         hasShearX = Math.abs(tx.getShearX()) * size > RS_EPS;
         hasShearY = Math.abs(tx.getShearY()) * size > RS_EPS;
-        hasTranslateX = Math.abs(tx.getTranslateX()) > RS_EPS; 
+        hasTranslateX = Math.abs(tx.getTranslateX()) > RS_EPS;
         hasTranslateY = Math.abs(tx.getTranslateY()) > RS_EPS;
         boolean intTranslateX = Math.abs((tx.getTranslateX() - Math.round(tx.getTranslateX()))) < RS_EPS;
         boolean intTranslateY = Math.abs((tx.getTranslateY() - Math.round(tx.getTranslateY()))) < RS_EPS;
-        
+
         // did it become a identity after the combination?
-        if(!hasScaleX && !hasScaleY && !hasShearX && !hasShearY && !hasTranslateX && !hasTranslateY) {
+        if (!hasScaleX && !hasScaleY && !hasShearX && !hasShearY && !hasTranslateX
+                && !hasTranslateY) {
             this.image = source;
             return this;
         }
 
         if (!hasShearX && !hasShearY) {
-            if(!hasScaleX && !hasScaleY && intTranslateX && intTranslateY) {
+            if (!hasScaleX && !hasScaleY && intTranslateX && intTranslateY) {
                 // this will do an integer translate, but to get there we need to remove the image layout
                 Hints localHints = new Hints(commonHints);
                 localHints.remove(JAI.KEY_IMAGE_LAYOUT);
                 image = ScaleDescriptor.create(source, 1.0f, 1.0f,
-                        (float) Math.round(tx.getTranslateX()), (float) Math.round(tx.getTranslateY()), interpolation,
-                        localHints);
+                        (float) Math.round(tx.getTranslateX()),
+                        (float) Math.round(tx.getTranslateY()), interpolation, localHints);
             } else {
                 // generic scale
-                image = ScaleDescriptor.create(source, (float) tx.getScaleX(), (float) tx.getScaleY(),
-                        (float) tx.getTranslateX(), (float) tx.getTranslateY(), interpolation,
-                        commonHints);
+                image = ScaleDescriptor.create(source, (float) tx.getScaleX(),
+                        (float) tx.getScaleY(), (float) tx.getTranslateX(),
+                        (float) tx.getTranslateY(), interpolation, commonHints);
             }
         } else {
             image = AffineDescriptor.create(source, tx, interpolation, bgValues, commonHints);
