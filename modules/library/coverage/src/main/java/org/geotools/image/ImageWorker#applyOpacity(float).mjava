@@ -1,21 +1,20 @@
     /**
-     * Applies the specified opacity to the image by either adding an alpha band, or modifying
-     * the existing one by multiplication
+     * Applies the specified opacity to the image by either adding an alpha band, or modifying the existing one by multiplication
      * 
-     * @param opacity The opacity to be applied, between 0 and 1 
+     * @param opacity The opacity to be applied, between 0 and 1
      * 
      * @return this {@link ImageWorker}.
      */
     public ImageWorker applyOpacity(float opacity) {
         RenderedImage result;
         ColorModel colorModel = image.getColorModel();
-        
+
         // if it's an index color model we can just recompute the palette
         // and replace it
-        if(colorModel instanceof IndexColorModel) {
+        if (colorModel instanceof IndexColorModel) {
             // grab the original palette
             IndexColorModel index = (IndexColorModel) colorModel;
-            byte[] reds = new byte[index.getMapSize()]; 
+            byte[] reds = new byte[index.getMapSize()];
             byte[] greens = new byte[index.getMapSize()];
             byte[] blues = new byte[index.getMapSize()];
             byte[] alphas = new byte[index.getMapSize()];
@@ -28,14 +27,14 @@
             final int transparentPixel = index.getTransparentPixel();
             for (int i = 0; i < alphas.length; i++) {
                 alphas[i] = (byte) Math.round((0xFF & alphas[i]) * opacity);
-                if(i == transparentPixel) {
+                if (i == transparentPixel) {
                     alphas[i] = 0;
                 }
             }
-            
+
             // build a new palette
-            IndexColorModel newColorModel = new IndexColorModel(index.getPixelSize(), index.getMapSize(), 
-                    reds, greens, blues, alphas);
+            IndexColorModel newColorModel = new IndexColorModel(index.getPixelSize(),
+                    index.getMapSize(), reds, greens, blues, alphas);
             LookupTableJAI table = buildOpacityLookupTable(0, 1, -1);
             ImageLayout layout = new ImageLayout(image);
             layout.setColorModel(newColorModel);
@@ -44,24 +43,24 @@
         } else {
             // not indexed, then make sure it's some sort of component color model or turn it into one
             RenderedImage expanded;
-            if(!(colorModel instanceof ComponentColorModel)) {
+            if (!(colorModel instanceof ComponentColorModel)) {
                 expanded = new ImageWorker(image).forceComponentColorModel().getRenderedImage();
             } else {
                 expanded = image;
             }
-            
+
             // do we have to add the alpha band or it's there and we need to change it?
-            
-            if(!expanded.getColorModel().hasAlpha()) {
+
+            if (!expanded.getColorModel().hasAlpha()) {
                 // we just need to add it, so first build a constant image with the same structure
                 // as the original image
                 byte alpha = (byte) Math.round(255 * opacity);
-                ImageLayout layout = new ImageLayout(image.getMinX(), image.getMinY(), 
+                ImageLayout layout = new ImageLayout(image.getMinX(), image.getMinY(),
                         image.getWidth(), image.getHeight());
-                RenderedOp alphaBand = ConstantDescriptor.create(
-                        (float) image.getWidth(), (float) image.getHeight(), 
-                        new Byte[] {new Byte(alpha)}, new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
-                
+                RenderedOp alphaBand = ConstantDescriptor.create((float) image.getWidth(),
+                        (float) image.getHeight(), new Byte[] { new Byte(alpha) },
+                        new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
+
                 result = BandMergeDescriptor.create(expanded, alphaBand, null);
             } else {
                 // we need to transform the existing, we'll use a lookup
@@ -71,7 +70,7 @@
                 result = LookupDescriptor.create(expanded, table, null);
             }
         }
-        
+
         image = result;
         return this;
     }

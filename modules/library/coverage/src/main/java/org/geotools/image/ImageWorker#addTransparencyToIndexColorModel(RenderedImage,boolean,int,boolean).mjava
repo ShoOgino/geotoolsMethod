@@ -1,48 +1,33 @@
     /**
-     * Adds transparency to a preexisting image whose color model is {@linkplain IndexColorModel
-     * index color model}. First, this method creates a new index color model with the specified
-     * {@code transparent} pixel, if needed (this method may skip this step if the specified pixel
-     * is already transparent. Then for all pixels with the value {@code false} in the specified
-     * transparency mask, the corresponding pixel in the {@linkplain #image} is set to that
-     * transparent value. All other pixels are left unchanged.
-     *
-     * @param alphaChannel
-     *            The mask to apply as a {@linkplain #binarize() binarized} image.
-     * @param translucent
-     *            {@code true} if {@linkplain Transparency#TRANSLUCENT translucent} images are
-     *            allowed, or {@code false} if the resulting images must be a
-     *            {@linkplain Transparency#BITMASK bitmask}.
-     * @param transparent
-     *            The value for transparent pixels, to be given to every pixels in the
-     *            {@linkplain #image} corresponding to {@code false} in the mask. The
-     *            special value {@code -1} maps to the last pixel value allowed for the
-     *            {@linkplain IndexedColorModel indexed color model}.
-     * @param errorDiffusion
-     *            Tells if I should use {@link ErrorDiffusionDescriptor} or
-     *            {@link OrderedDitherDescriptor} JAi operations.
-     *
+     * Adds transparency to a preexisting image whose color model is {@linkplain IndexColorModel index color model}. First, this method creates a new
+     * index color model with the specified {@code transparent} pixel, if needed (this method may skip this step if the specified pixel is already
+     * transparent. Then for all pixels with the value {@code false} in the specified transparency mask, the corresponding pixel in the
+     * {@linkplain #image} is set to that transparent value. All other pixels are left unchanged.
+     * 
+     * @param alphaChannel The mask to apply as a {@linkplain #binarize() binarized} image.
+     * @param translucent {@code true} if {@linkplain Transparency#TRANSLUCENT translucent} images are allowed, or {@code false} if the resulting
+     *        images must be a {@linkplain Transparency#BITMASK bitmask}.
+     * @param transparent The value for transparent pixels, to be given to every pixels in the {@linkplain #image} corresponding to {@code false} in
+     *        the mask. The special value {@code -1} maps to the last pixel value allowed for the {@linkplain IndexedColorModel indexed color model}.
+     * @param errorDiffusion Tells if I should use {@link ErrorDiffusionDescriptor} or {@link OrderedDitherDescriptor} JAi operations.
+     * 
      * @return this {@link ImageWorker}.
      */
     public final ImageWorker addTransparencyToIndexColorModel(final RenderedImage alphaChannel,
-            final boolean translucent, int transparent, final boolean errorDiffusion)
-    {
+            final boolean translucent, int transparent, final boolean errorDiffusion) {
         tileCacheEnabled(false);
         forceIndexColorModel(errorDiffusion);
         tileCacheEnabled(true);
         /*
-         * Prepares hints and layout to use for mask operations. A color model
-         * hint will be set only if the block below is executed.
+         * Prepares hints and layout to use for mask operations. A color model hint will be set only if the block below is executed.
          */
         final ImageWorker worker = fork(image);
         final RenderingHints hints = worker.getRenderingHints();
         /*
-         * Gets the index color model. If the specified 'transparent' value is not fully
-         * transparent, replaces the color model by a new one with the transparent pixel
-         * defined. NOTE: the "transparent &= (1 << pixelSize) - 1" instruction below is
-         * a safety for making sure that the transparent index value can hold in the amount
-         * of bits allowed for this color model (the mapSize value may not use all bits).
-         * It works as expected with the -1 special value. It also make sure that
-         * "transparent + 1" do not exeed the maximum map size allowed.
+         * Gets the index color model. If the specified 'transparent' value is not fully transparent, replaces the color model by a new one with the
+         * transparent pixel defined. NOTE: the "transparent &= (1 << pixelSize) - 1" instruction below is a safety for making sure that the
+         * transparent index value can hold in the amount of bits allowed for this color model (the mapSize value may not use all bits). It works as
+         * expected with the -1 special value. It also make sure that "transparent + 1" do not exeed the maximum map size allowed.
          */
         final boolean forceBitmask;
         final IndexColorModel oldCM = (IndexColorModel) image.getColorModel();
@@ -53,16 +38,17 @@
             final int mapSize = Math.max(oldCM.getMapSize(), transparent + 1);
             final byte[][] RGBA = new byte[translucent ? 4 : 3][mapSize];
             // Note: we might use less that 256 values.
-            oldCM.getReds  (RGBA[0]);
+            oldCM.getReds(RGBA[0]);
             oldCM.getGreens(RGBA[1]);
-            oldCM.getBlues (RGBA[2]);
+            oldCM.getBlues(RGBA[2]);
             final IndexColorModel newCM;
             if (translucent) {
                 oldCM.getAlphas(RGBA[3]);
                 RGBA[3][transparent] = 0;
                 newCM = new IndexColorModel(pixelSize, mapSize, RGBA[0], RGBA[1], RGBA[2], RGBA[3]);
             } else {
-                newCM = new IndexColorModel(pixelSize, mapSize, RGBA[0], RGBA[1], RGBA[2], transparent);
+                newCM = new IndexColorModel(pixelSize, mapSize, RGBA[0], RGBA[1], RGBA[2],
+                        transparent);
             }
             /*
              * Set the color model hint.
