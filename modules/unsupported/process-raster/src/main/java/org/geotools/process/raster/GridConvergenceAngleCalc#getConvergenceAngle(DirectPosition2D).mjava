@@ -1,0 +1,86 @@
+    /**
+     * Estimates the grid convergence angle at a position within a Coordinate Reference System. The angle returned is as described in the
+     * documentation for the class. The Coordinate Reference System of the supplied position must be the same as was used when constructing the
+     * calculator, because using anything else would not make sense as convergence angle depends on projection.
+     * 
+     * @param position DirectPosition2D at which we want to estimate the grid convergence angle
+     * @return double containing grid convergence angle, as described in documentation for the class.
+     * @throws Exception
+     */
+    public double getConvergenceAngle(DirectPosition2D position) throws Exception {
+
+        //
+        // Check to make sure the coordinate reference system for the
+        // argument is the same as the calculator.
+        //
+
+        CoordinateReferenceSystem positionCRS = position.getCoordinateReferenceSystem();
+
+        if (!positionCRS.equals(crs)) {
+            throw new Exception("Position CRS does not match Calculator CRS");
+        }
+
+        //
+        // We will use the Geotools Geodetic calculator to estimate the
+        // convergence angle. We estimate this by taking the supplied point,
+        // moving "upward" along the proper upward map axis by 1 unit, and
+        // then having the Geodetic calculator tell us the azimuth from the
+        // starting point to the ending point. Since the azimuth is relative
+        // to true north ... and we are "walking" along a grid north
+        // parallel, the azimuth then essentially tells us the angle from
+        // true north to grid north, or the local grid convergence angle.
+        //
+
+        //
+        // Get the "up" axis
+        //
+
+        CoordinateSystemAxis upAxis = crs.getCoordinateSystem().getAxis(upAxisDimension);
+
+        //
+        // Need to make sure we're not going to go out of bounds along the
+        // axis by going up a little bit.
+        //
+        // Determine the maximum value along that axis
+        //
+
+        double upAxisMax = upAxis.getMaximumValue();
+
+        //
+        // Get the starting value along the up axis
+        //
+
+        double startValueUp = position.getOrdinate(upAxisDimension);
+
+        //
+        // If adding 1 to the up axis is going to push us out of bounds, then
+        // first subtract 1 from the starting position ... the estimate should
+        // still be close if units are close.
+        //
+
+        if ((startValueUp + 1) > upAxisMax) {
+            position.setOrdinate(upAxisDimension, position.getOrdinate(upAxisDimension) - 1);
+        }
+
+        //
+        // Set the starting position for the geodetic calculator to position.
+        //
+
+        geoCalc.setStartingPosition(position);
+
+        //
+        // Set the ending position to be the same as the starting position,
+        // except move "up" 1 unit along the "up" axis.
+        //
+
+        DirectPosition2D endingPosition = new DirectPosition2D((DirectPosition) position);
+        endingPosition.setOrdinate(upAxisDimension, position.getOrdinate(upAxisDimension) + 1);
+        geoCalc.setDestinationPosition(endingPosition);
+
+        //
+        // Now just ask for the azimuth, which is our convergence angle
+        // estimate.
+        //
+        return geoCalc.getAzimuth();
+    }
+
