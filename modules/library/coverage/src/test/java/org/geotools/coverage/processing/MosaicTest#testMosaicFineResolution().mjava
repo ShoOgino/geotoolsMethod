@@ -1,0 +1,63 @@
+    // Test which mosaics two input coverages and creates a final GridCoverage with the best resolution between those of the input GridCoverages
+    @Test
+    public void testMosaicFineResolution() {
+        /*
+         * Do the crop without conserving the envelope.
+         */
+        ParameterValueGroup param = processor.getOperation("Mosaic").getParameters();
+
+        // Creation of a List of the input Sources
+        List<GridCoverage2D> sources = new ArrayList<GridCoverage2D>(2);
+        sources.add(coverage1);
+
+        // Resampling of the second Coverage to an higher resolution
+        ParameterValueGroup paramResampling = processor.getOperation("resample").getParameters();
+        paramResampling.parameter("Source").setValue(coverage2);
+        GridEnvelope2D gridRange = coverage2.getGridGeometry().getGridRange2D();
+        gridRange.add(gridRange.getMaxX() + 100, gridRange.getMaxY() + 100);
+        GridGeometry2D ggNew = new GridGeometry2D(gridRange, coverage2.getEnvelope());
+        paramResampling.parameter("GridGeometry").setValue(ggNew);
+        GridCoverage2D resampled = (GridCoverage2D) processor.doOperation(paramResampling);
+
+        sources.add(resampled);
+        // Setting of the sources
+        param.parameter("Sources").setValue(sources);
+        param.parameter(Mosaic.POLICY).setValue("fine");
+        // Mosaic
+        GridCoverage2D mosaic = (GridCoverage2D) processor.doOperation(param);
+
+        // Check that the final GridCoverage BoundingBox is equal to the union of the separate coverages bounding box
+        Envelope2D expected = coverage1.getEnvelope2D();
+        expected.include(resampled.getEnvelope2D());
+        // Mosaic Envelope
+        Envelope2D actual = mosaic.getEnvelope2D();
+
+        // Check the same Bounding Box
+        assertEqualBBOX(expected, actual);
+
+        // Check that the final Coverage resolution is equal to that of the second coverage
+        double initialRes = calculateResolution(resampled);
+        double finalRes = calculateResolution(mosaic);
+        double percentual = Math.abs(initialRes - finalRes) / initialRes;
+        Assert.assertTrue(percentual < TOLERANCE);
+
+        // Check that on the center of the image there are nodata
+        DirectPosition point = new DirectPosition2D(mosaic.getCoordinateReferenceSystem(),
+                actual.getCenterX(), actual.getCenterY());
+        double nodata = CoverageUtilities.getBackgroundValues(coverage1)[0];
+        double result = ((int[]) mosaic.evaluate(point))[0];
+        Assert.assertEquals(nodata, result, TOLERANCE);
+
+        // Check that on the Upper Left border pixel there is valid data
+        point = new DirectPosition2D(mosaic.getCoordinateReferenceSystem(), actual.getMinX()
+                + finalRes, actual.getMinY() + finalRes);
+        result = ((int[]) mosaic.evaluate(point))[0];
+        Assert.assertNotEquals(nodata, result, TOLERANCE);
+
+        // Coverage and RenderedImage disposal
+        mosaic.dispose(true);
+        resampled.dispose(true);
+        disposeCoveragePlanarImage(mosaic);
+        disposeCoveragePlanarImage(resampled);
+    }
+

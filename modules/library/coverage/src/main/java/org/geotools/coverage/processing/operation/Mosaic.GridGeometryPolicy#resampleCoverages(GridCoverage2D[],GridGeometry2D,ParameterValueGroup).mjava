@@ -1,0 +1,67 @@
+        /**
+         * Private method for resampling the {@link GridCoverage2D}s to the same resolution imposed by the {@link GridGeometry2D} object.
+         * 
+         * @param sources
+         * @param external
+         * @param parameters
+         * @return
+         */
+        private static ResampledRasters resampleCoverages(GridCoverage2D[] sources,
+                GridGeometry2D external, ParameterValueGroup parameters) {
+            // Number of the sources to use
+            int numSources = sources.length;
+
+            // Creation of an array of the RenderedImages to use
+            RenderedImage[] rasters = new RenderedImage[numSources];
+
+            // Selection of the GridToWorld transformation associated to the External GG2D
+            MathTransform g2w = external.getGridToCRS2D(PixelOrientation.UPPER_LEFT);
+            // Initial null value for NoData
+            Double nodata = null;
+
+            // Check if the output nodata value is set as parameter
+            Object outputNodata = parameters.parameter(OUTNODATA_NAME).getValue();
+            if (outputNodata != null && outputNodata instanceof double[]) {
+                nodata = ((double[]) outputNodata)[0];
+            }
+
+            // Cycle around the various sources
+            for (int i = 0; i < numSources; i++) {
+                // For each source, create a new GridGeometry which at the same resolution of the imposed one
+                GridCoverage2D coverage = sources[i];
+                GridGeometry2D inputGG = coverage.getGridGeometry();
+
+                // Check if the transform from one gridGeometry to the other is an Identity transformation
+                MathTransform g2wS = inputGG.getGridToCRS2D(PixelOrientation.UPPER_LEFT);
+                MathTransform w2gD = external.getCRSToGrid2D(PixelOrientation.UPPER_LEFT);
+                // Creation of a Concatenated transformation in order to check if the final transformation from
+                // source space to the final space is an identity.
+                MathTransform concatenated = ConcatenatedTransform.create(g2wS, w2gD);
+
+                // No operation must be done if the transformation is an Identity
+                if (concatenated != null && concatenated.isIdentity()) {
+                    rasters[i] = coverage.getRenderedImage();
+                } else {
+                    // New GridGeometry
+                    GridGeometry2D newGG = new GridGeometry2D(PixelInCell.CELL_CORNER, g2w,
+                            inputGG.getEnvelope(), GeoTools.getDefaultHints());
+                    double fillValue = 0;
+                    // Selection of the nodata value
+                    if (nodata == null) {
+                        fillValue = CoverageUtilities.getBackgroundValues(coverage)[0];
+                    } else {
+                        fillValue = nodata;
+                    }
+
+                    // Resample to the new resolution
+                    rasters[i] = GridCoverage2DRIA.create(coverage, newGG, fillValue);
+                }
+            }
+
+            // Create the final object containing the final GridGeometry and the resampled RenderedImages
+            ResampledRasters rr = new ResampledRasters();
+            rr.setFinalGeometry(external);
+            rr.setRasters(rasters);
+            return rr;
+        }
+

@@ -1,0 +1,103 @@
+    /**
+     * Prepares the parameters to store in the {@link ParameterBlockJAI} object and resample the input {@link GridCoverage2D}.
+     * 
+     * @param parameters
+     * @param sources
+     * @param hints
+     * @return
+     */
+    private Params prepareParameters(final ParameterValueGroup parameters,
+            GridCoverage2D[] sources, Hints hints) {
+        final ImagingParameters copy = (ImagingParameters) descriptor.createValue();
+        final ParameterBlockJAI block = (ParameterBlockJAI) copy.parameters;
+
+        // org.geotools.parameter.Parameters.copy(parameters, copy);
+
+        // Object indicating the policy to use for resampling all the GridCoverages to the same GridGeometry
+        GridGeometryPolicy policy = null;
+
+        // Check if the External GridGeometry is present
+        Object externalGG = parameters.parameter(GEOMETRY).getValue();
+        GridGeometry2D gg = null;
+        if (externalGG != null && externalGG instanceof GridGeometry2D) {
+            gg = (GridGeometry2D) externalGG;
+            policy = GridGeometryPolicy.EXTERNAL;
+        } else {
+            // Check if the GridGeometry selection policy is present
+            Object ggPolicy = parameters.parameter(POLICY).getValue();
+            if (ggPolicy != null && ggPolicy instanceof String) {
+                policy = GridGeometryPolicy.getPolicyFromString((String) ggPolicy);
+            }
+        }
+        // No policy defined, the first GridCoverage is used.
+        if (policy == null) {
+            policy = GridGeometryPolicy.FIRST;
+        }
+        // Resample to the defined GridGeometry
+        ResampledRasters rr = policy.resampleGridGeometry(sources, gg, parameters);
+        // Get the resampled RenderedImages
+        RenderedImage[] rasters = rr.getRasters();
+
+        // Setting of the final GridGeometry
+        GridGeometry2D finalGeometry = rr.getFinalGeometry();
+        if (finalGeometry == null) {
+            throw new CoverageProcessingException("No final GridGeometry found");
+        }
+
+        // Setting the source rasters for the mosaic
+        int numSources = rasters.length;
+        for (int i = 0; i < numSources; i++) {
+            block.setSource(rasters[i], i);
+        }
+
+        // Setting the nodata values for the areas not covered by any GridCoverage.
+        double nodata = 0;
+        // Check if the output nodata value is present
+        Object outputNodata = parameters.parameter(OUTNODATA_NAME).getValue();
+        if (outputNodata != null && outputNodata instanceof double[]) {
+            nodata = ((double[]) outputNodata)[0];
+        } else {
+            nodata = CoverageUtilities.getBackgroundValues(sources[PRIMARY_SOURCE_INDEX])[0];
+        }
+        // Setting of the output nodata
+        block.setParameter("backgroundValues", new double[] { nodata });
+
+        // Setting of the Threshold to use
+        double threshold = CoverageUtilities.getMosaicThreshold(rasters[PRIMARY_SOURCE_INDEX]
+                .getSampleModel().getDataType());
+        // Setting of the Threshold object to use for the mosaic
+        block.setParameter("sourceThreshold", new double[][] { { threshold } });
+
+        // Setting of the Mosaic type as Overlay
+        block.setParameter("mosaicType", MosaicDescriptor.MOSAIC_TYPE_OVERLAY);
+
+        // Setting of the optional Alpha channels
+        PlanarImage[] alpha = new PlanarImage[numSources];
+        boolean alphaChannel = true;
+
+        for (int i = 0; i < numSources; i++) {
+            RenderedImage img = rasters[i];
+            // ImageWorker to use for elaborating each raster
+            ImageWorker w = new ImageWorker(img);
+            // I have to force going to ComponentColorModel in
+            // case the image is indexed.
+            if (img.getSampleModel() instanceof MultiPixelPackedSampleModel
+                    || img.getColorModel() instanceof IndexColorModel) {
+                w.forceComponentColorModel();
+                img = w.getRenderedImage();
+            }
+            boolean hasAlpha = img.getColorModel().hasAlpha();
+            if (hasAlpha) {
+                alphaChannel &= hasAlpha;
+                alpha[i] = w.retainLastBand().getPlanarImage();
+            }
+        }
+        // If at least one image contains Alpha channel, it is used for the mosaic
+        if (alphaChannel) {
+            block.setParameter("sourceAlpha", alpha);
+        }
+
+        // Creation of the finel Parameters
+        return new Params(block, hints, finalGeometry);
+    }
+
