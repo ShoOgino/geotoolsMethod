@@ -1,0 +1,99 @@
+    private RenderedImage renderImage(final GridCoverage2DReader reader,
+            GeneralParameterValue[] readParams, final RasterSymbolizer symbolizer,
+            final Interpolation interpolation, final Color background) throws FactoryException,
+            IOException, TransformException {
+        // see if we have a projection handler
+        CoordinateReferenceSystem sourceCRS = reader.getCoordinateReferenceSystem();
+        CoordinateReferenceSystem targetCRS = destinationEnvelope.getCoordinateReferenceSystem();
+
+        // read all the coverages we need, cut and whatnot
+        GridCoverageReaderHelper rh = new GridCoverageReaderHelper(reader, destinationSize,
+                ReferencedEnvelope.reference(destinationEnvelope), interpolation);
+        ProjectionHandler handler = ProjectionHandlerFinder.getHandler(rh.getReadEnvelope(),
+                sourceCRS, wrapEnabled);
+        if (handler instanceof WrappingProjectionHandler) {
+            // raster data is monolithic and can cover the whole world, disable
+            // the geometry wrapping heuristic
+            ((WrappingProjectionHandler) handler).setDatelineWrappingCheckEnabled(false);
+        }
+        List<GridCoverage2D> coverages = rh.readCoverages(readParams, handler);
+
+        // reproject if needed
+        final CoordinateReferenceSystem coverageCRS = reader.getCoordinateReferenceSystem();
+        List<GridCoverage2D> reprojectedCoverages = new ArrayList<GridCoverage2D>();
+        if (!CRS.equalsIgnoreMetadata(coverageCRS, destinationCRS)) {
+            double[] bgValues = GridCoverageRendererUtilities.colorToArray(background);
+            for (GridCoverage2D coverage : coverages) {
+                GridCoverage2D reprojected = reproject(coverage, true, bgValues);
+                if (reprojected != null) {
+                    reprojectedCoverages.add(reprojected);
+                }
+            }
+        } else {
+            reprojectedCoverages.addAll(coverages);
+        }
+
+        // displace them if needed via a projection handler
+        List<GridCoverage2D> displacedCoverages = new ArrayList<GridCoverage2D>();
+        if (handler != null) {
+            Envelope testEnvelope = ReferencedEnvelope.reference(destinationEnvelope);
+            MathTransform mt = CRS.findMathTransform(sourceCRS, targetCRS);
+            PolygonExtractor polygonExtractor = new PolygonExtractor();
+            for (GridCoverage2D coverage : reprojectedCoverages) {
+                Polygon polygon = JTS.toGeometry((BoundingBox) coverage.getEnvelope2D());
+                Geometry postProcessed = handler.postProcess(mt, polygon);
+                // extract sub-polygons and displace
+                List<Polygon> polygons = polygonExtractor.getPolygons(postProcessed);
+                for (Polygon displaced : polygons) {
+                    // check we are really inside the display area before moving one
+                    Envelope intersection = testEnvelope.intersection(displaced
+                            .getEnvelopeInternal());
+                    if (intersection == null || intersection.isNull()
+                            || intersection.getArea() == 0) {
+                        continue;
+                    }
+                    if (displaced.equals(polygon)) {
+                        displacedCoverages.add(coverage);
+                    } else {
+                        double[] tx = getTranslationFactors(polygon, displaced);
+                        if (tx != null) {
+                            GridCoverage2D displacedCoverage = displaceCoverage(coverage, tx[0],
+                                    tx[1]);
+                            displacedCoverages.add(displacedCoverage);
+                        }
+                    }
+                }
+            }
+        } else {
+            displacedCoverages.addAll(reprojectedCoverages);
+        }
+
+        // if more than one coverage, mosaic
+        GridCoverage2D mosaicked = null;
+        if (displacedCoverages.size() == 0) {
+            return null;
+        } else if (displacedCoverages.size() == 1) {
+            mosaicked = displacedCoverages.get(0);
+        } else {
+            mosaicked = GridCoverageRendererUtilities.mosaic(displacedCoverages,
+                    destinationEnvelope, hints);
+        }
+
+        // the mosaicking can cut off images that are just slightly out of the
+        // request (effect of the read buffer + a request touching the actual data area)
+        if (mosaicked == null) {
+            return null;
+        }
+
+        // render it
+        GridCoverage2D result = renderCoverage(mosaicked, symbolizer,
+                GridCoverageRendererUtilities.colorToArray(background));
+
+        if (result == null) {
+            return null;
+        } else {
+            // RenderedImageBrowser.showChain(result.getRenderedImage());
+            return result.getRenderedImage();
+        }
+    }
+
