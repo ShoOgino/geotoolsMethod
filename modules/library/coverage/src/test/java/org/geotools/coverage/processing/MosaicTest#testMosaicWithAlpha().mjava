@@ -1,0 +1,53 @@
+    // Test which mosaics two input coverages with alpha band
+    @Test
+    public void testMosaicWithAlpha() {
+        /*
+         * Do the crop without conserving the envelope.
+         */
+        ParameterValueGroup param = processor.getOperation("Mosaic").getParameters();
+
+        // Creation of a List of the input Sources
+        List<GridCoverage2D> sources = new ArrayList<GridCoverage2D>(2);
+        sources.add(coverage3);
+        sources.add(coverage4);
+        // Setting of the sources
+        param.parameter("Sources").setValue(sources);
+        // Mosaic
+        GridCoverage2D mosaic = (GridCoverage2D) processor.doOperation(param);
+
+        // Check that the final Coverage Bands are 2
+        Assert.assertEquals(2, mosaic.getNumSampleDimensions());
+
+        // Check that the final GridCoverage BoundingBox is equal to the union of the separate coverages bounding box
+        Envelope2D expected = coverage3.getEnvelope2D();
+        expected.include(coverage4.getEnvelope2D());
+        // Mosaic Envelope
+        Envelope2D actual = mosaic.getEnvelope2D();
+
+        // Check the same Bounding Box
+        assertEqualBBOX(expected, actual);
+
+        // Check that the final Coverage resolution is equal to that of the first coverage
+        double initialRes = calculateResolution(coverage3);
+        double finalRes = calculateResolution(mosaic);
+        double percentual = Math.abs(initialRes - finalRes) / initialRes;
+        Assert.assertTrue(percentual < TOLERANCE);
+
+        // Check that on the center of the image there are nodata
+        DirectPosition point = new DirectPosition2D(mosaic.getCoordinateReferenceSystem(),
+                actual.getCenterX(), actual.getCenterY());
+        double nodata = CoverageUtilities.getBackgroundValues(coverage1)[0];
+        double result = ((int[]) mosaic.evaluate(point))[0];
+        Assert.assertEquals(nodata, result, TOLERANCE);
+
+        // Check that on the Upper Left border pixel there is valid data
+        point = new DirectPosition2D(mosaic.getCoordinateReferenceSystem(), actual.getMinX()
+                + finalRes, actual.getMinY() + finalRes);
+        result = ((int[]) mosaic.evaluate(point))[0];
+        Assert.assertNotEquals(nodata, result, TOLERANCE);
+
+        // Coverage and RenderedImage disposal
+        mosaic.dispose(true);
+        disposeCoveragePlanarImage(mosaic);
+    }
+

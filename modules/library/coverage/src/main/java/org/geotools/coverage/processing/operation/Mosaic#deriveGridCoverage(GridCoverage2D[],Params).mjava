@@ -1,0 +1,77 @@
+    /**
+     * Applies a JAI operation to the coverages. This method is invoked by {@link #doOperation}. This implementation performs the following steps:
+     * 
+     * <ul>
+     * <li>Applied the JAI operation using {@link #createRenderedImage}.</li>
+     * <li>Wraps the result in a {@link GridCoverage2D} object.</li>
+     * </ul>
+     * 
+     * @param sources The source coverages.
+     * @param parameters Parameters, rendering hints and coordinate reference system to use.
+     * @return The result as a grid coverage.
+     * 
+     * @see #doOperation
+     * @see JAI#createNS
+     */
+    private GridCoverage2D deriveGridCoverage(final GridCoverage2D[] sources,
+            final Params parameters) {
+        GridCoverage2D primarySource = sources[PRIMARY_SOURCE_INDEX];
+
+        /*
+         * Set the rendering hints image layout. Only the following properties will be set:
+         * 
+         * - Width - Height
+         */
+        RenderingHints hints = ImageUtilities.getRenderingHints(parameters.getSource());
+        // Addition of the Hints
+        if (parameters.hints != null) {
+            if (hints != null) {
+                hints.add(parameters.hints); // May overwrite the image layout we have just set.
+            } else {
+                hints = parameters.hints;
+            }
+        }
+        // Layout associated to the input RenderingHints
+        ImageLayout layout = (hints != null) ? (ImageLayout) hints.get(JAI.KEY_IMAGE_LAYOUT) : null;
+
+        // Check on the ImageLayout
+        if (layout != null) {
+            // Unset the previous dimension parameters
+            layout.unsetValid(ImageLayout.MIN_X_MASK);
+            layout.unsetValid(ImageLayout.MIN_Y_MASK);
+            layout.unsetValid(ImageLayout.WIDTH_MASK);
+            layout.unsetValid(ImageLayout.HEIGHT_MASK);
+        } else {
+            // Create a new one
+            layout = new ImageLayout2();
+        }
+
+        // Get the GridRange associated to the final GridGeometry to use
+        GridEnvelope2D gridRange = parameters.finalGeometry.getGridRange2D();
+
+        // Then set the parameters associated to the final GridGeometry used
+        layout.setMinX(gridRange.x);
+        layout.setMinY(gridRange.y);
+        layout.setWidth(gridRange.width);
+        layout.setHeight(gridRange.height);
+        // Set the new layout for the rendering hints
+        hints.put(JAI.KEY_IMAGE_LAYOUT, layout);
+
+        /*
+         * Performs the operation using JAI and construct the new grid coverage. Uses the coordinate system from the main source coverage in order to
+         * preserve the extra dimensions (if any). The first two dimensions should be equal to the coordinate system set in the 'parameters' block.
+         */
+        final InternationalString name = deriveName(sources, -1, null);
+        final CoordinateReferenceSystem crs = primarySource.getCoordinateReferenceSystem();
+        final MathTransform toCRS = parameters.finalGeometry.getGridToCRS();
+        final RenderedImage data = createRenderedImage(parameters.parameters, hints);
+        final Map<String, ?> properties = getProperties(data, crs, name, toCRS, sources, null);
+        return getFactory(parameters.hints).create(name, // The grid coverage name
+                data, // The underlying data
+                crs, // The coordinate system (may not be 2D).
+                toCRS, // The grid transform (may not be 2D).
+                null, // The sample dimensions
+                sources, // The source grid coverages.
+                properties); // Properties
+    }
+
