@@ -1,0 +1,52 @@
+    private Shape getWindBarbForKnots(final String windBarbName, final double knots,
+            Map<String, String> params) {
+        // No module is signaled by NaN
+        // checking the barbs using our own limits
+        int index = -1;// no wind module is -1
+        if (!Double.isNaN(knots)) {
+            if (knots < 3) {
+                index = 0;
+            } else {
+                index = (int) ((knots - 3.0) / 5.0 + 1);
+            }
+        }
+
+        // get the barb
+        if (windBarbName.equalsIgnoreCase(DEFAULT_NAME)) {
+
+            WindBarbDefinition definition = parseWindBarbsDefinition(params);
+            Map<Integer, Shape> windbarbs = null;
+            synchronized (CACHE) {
+                windbarbs = CACHE.get(definition);
+                if (windbarbs == null) {
+                    windbarbs = new HashMap<Integer, Shape>();
+                    CACHE.put(definition, windbarbs);
+                    for (int i = 0; i <= 20; i++) { // we don't go over 100 knots (a square)
+                        windbarbs.put(i, new WindBarb(definition, i * 5).build()); // pass over the knots definition
+                    }
+
+                    // no module x----- symbol
+                    windbarbs.put(-1, new WindBarb(definition, -1).build());
+                }
+            }
+
+            // get shape from cached definitions.
+            final Shape shp = windbarbs.get(index);
+            if (params == null || params.isEmpty()) {
+                return shp;
+            }
+
+            if (params.containsKey("emisphere") && params.get("emisphere").equalsIgnoreCase("s")) {
+                // flip shape on Y axis
+                return SOUTHERN_EMISPHERE_FLIP.createTransformedShape(shp);
+            }
+            if (params.containsKey("hemisphere") && params.get("hemisphere").equalsIgnoreCase("s")) {
+                // flip shape on Y axis
+                return SOUTHERN_EMISPHERE_FLIP.createTransformedShape(shp);
+            }
+            return shp;
+        }
+
+        throw new IllegalArgumentException("Wrong windbard name:" + windBarbName);
+    }
+
