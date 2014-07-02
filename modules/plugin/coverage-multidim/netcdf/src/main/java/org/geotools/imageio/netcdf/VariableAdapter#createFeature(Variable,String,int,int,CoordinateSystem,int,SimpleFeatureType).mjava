@@ -1,0 +1,69 @@
+    /**
+     * Create a SimpleFeature on top of the provided variable and indexes.
+     * 
+     * @param variable the input variable 
+     * @param tIndex the time index 
+     * @param zIndex the zeta index
+     * @param cs the {@link CoordinateSystem} associated with that variable
+     * @param imageIndex the index to be associated to the feature in the index
+     * @param indexSchema the schema to be used to create the feature
+     * @param geometry the geometry to be attached to the feature
+     * @return the created {@link SimpleFeature}
+     * TODO move to variable wrapper
+     */
+    private SimpleFeature createFeature(
+            final Variable variable,
+            final String coverageName,
+            final int tIndex,
+            final int zIndex,
+            final CoordinateSystem cs,
+            final int imageIndex, 
+            final SimpleFeatureType indexSchema) {
+        
+        final Date date = getTimeValueByIndex(variable, tIndex, cs);
+        final Number verticalValue = getVerticalValueByIndex(variable, zIndex, cs);
+        final int dimSize = variable.getDimensions().size();
+
+        final SimpleFeature feature = DataUtilities.template(indexSchema);
+        feature.setAttribute(CoverageSlice.Attributes.GEOMETRY, NetCDFCRSUtilities.GEOM_FACTORY.toGeometry(reader.boundingBox));
+        feature.setAttribute(CoverageSlice.Attributes.INDEX, imageIndex);
+
+        // TIME management
+        // Check if we have time and elevation domain and set the attribute if needed
+        String timeAttribute = null;
+        if (date != null) {
+            timeAttribute = reader.dimensionsMapping.get(NetCDFUtilities.TIME_DIM);
+            feature.setAttribute(timeAttribute, date);
+        }
+
+        // ELEVATION or other dimension
+        final String elevationCVName = reader.dimensionsMapping.get(NetCDFUtilities.ELEVATION_DIM);
+        if (!Double.isNaN(verticalValue.doubleValue())) {
+            List<AttributeDescriptor> descriptors = indexSchema.getAttributeDescriptors();
+            String attribute = null;
+            
+            // Once we don't deal anymore with old coverage APIs, we can consider directly use the dimension name as attribute
+            for (AttributeDescriptor descriptor: descriptors) {
+                if (descriptor.getLocalName().equalsIgnoreCase(elevationCVName)) {
+                    attribute = elevationCVName;
+                    break;
+                }
+            }
+
+            // custom dimension, mapped to an attribute using its name
+            if (attribute == null) {
+                // Assuming the custom dimension is always the last attribute
+                String attrib = null;
+                for (int i = 0; i < dimSize; i++) {
+                    attrib = variable.getDimension(i).getShortName();
+                    if (!attrib.equalsIgnoreCase(timeAttribute)) {
+                        attribute = attrib;
+                        break;
+                    }
+                }
+            }
+            feature.setAttribute(attribute, verticalValue);
+        }
+        return feature;
+    }
+

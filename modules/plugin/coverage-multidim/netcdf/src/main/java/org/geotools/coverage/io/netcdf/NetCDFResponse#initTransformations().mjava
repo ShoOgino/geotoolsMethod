@@ -1,0 +1,35 @@
+    /**
+     * This method is responsible for initializing transformations g2w and back
+     * 
+     * @throws Exception in case we don't manage to instantiate some of them.
+     * 
+     */
+    private void initTransformations() throws Exception {
+        //compute final world to grid
+        // base grid to world for the center of pixels
+        final AffineTransform g2w;
+        CoverageProperties properties = request.spatialRequestHelper.getCoverageProperties();
+        baseGridToWorld = (AffineTransform) properties.getGridToWorld2D();
+        double[] coverageFullResolution = properties.getFullResolution();
+        final double resX = coverageFullResolution[0];
+        final double resY = coverageFullResolution[1];
+        final double[] requestRes = request.spatialRequestHelper.getRequestedResolution();
+
+        g2w = new AffineTransform((AffineTransform) baseGridToWorld);
+        g2w.concatenate(CoverageUtilities.CENTER_TO_CORNER);
+
+        if ((requestRes[0] < resX || requestRes[1] < resY)) {
+            // Using the best available resolution
+            oversampledRequest = true;
+        } else {
+                
+            // SG going back to working on a per level basis to do the composition
+            // g2w = new AffineTransform(request.getRequestedGridToWorld());
+            g2w.concatenate(AffineTransform.getScaleInstance(baseReadParameters.getSourceXSubsampling(), baseReadParameters.getSourceYSubsampling()));
+        }   
+        // move it to the corner
+        finalGridToWorldCorner = new AffineTransform2D(g2w);
+        finalWorldToGridCorner = finalGridToWorldCorner.inverse();// compute raster bounds
+        
+    }
+

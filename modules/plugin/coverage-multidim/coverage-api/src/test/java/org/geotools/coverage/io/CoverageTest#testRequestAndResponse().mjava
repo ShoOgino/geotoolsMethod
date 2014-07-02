@@ -1,0 +1,69 @@
+    @Test
+    public void testRequestAndResponse() throws IOException, MismatchedDimensionException,
+            TransformException {
+        Map<String, Serializable> connectionParams = new HashMap<String, Serializable>();
+        connectionParams.put(DefaultFileDriver.URL.key, new URL(TEST_URL));
+
+        CoverageAccess access = driver.access(DriverCapabilities.CONNECT, connectionParams, null,
+                null);
+
+        final CoverageSource source = access.access(TEST_NAME, null, AccessType.READ_ONLY, null,
+                null);
+
+        // Checking proper coverage name
+        final List<Name> names = access.getNames(null);
+        final Name coverageName = names.get(0);
+
+        // Creation of a dummy Request
+        CoverageReadRequest request = new CoverageReadRequest();
+        // Definition of the parameters
+        CoordinateReferenceSystem crs = source.getCoordinateReferenceSystem();
+        Rectangle rasterArea = new Rectangle(0, 0, 10, 10);
+        Hints hints = new Hints();
+        String handle = "test_handle";
+        DateRange range = new DateRange(new Date(10000), new Date(20000));
+        DateRangeTreeSet set = new DateRangeTreeSet();
+        set.add(range);
+        Filter filter = Filter.INCLUDE;
+        MathTransform2D gridToWorldTransform = new AffineTransform2D(
+                AffineTransform.getTranslateInstance(0, 0));
+        Set<NumberRange<Double>> verticalSubset = new HashSet<NumberRange<Double>>();
+        verticalSubset.add(new NumberRange<Double>(Double.class, 0.0d, 10000.0d));
+        // Setting of the request parameters
+        request.setName(coverageName);
+        request.setHints(hints);
+        request.setHandle(handle);
+        request.setDomainSubset(rasterArea, gridToWorldTransform, crs);
+        // Ensure that both geographic and raster area have been set
+        assertTrue(request.getRasterArea() != null);
+        assertTrue(request.getGeographicArea() != null);
+        // Check that there is no Filter already set
+        assertTrue(request.getFilter() == null);
+        // Setting the filter
+        request.setFilter(filter);
+        assertTrue(request.getFilter() != null);
+        // Check that there is no temporal subset already set
+        assertTrue(request.getTemporalSubset().isEmpty());
+        // Setting temporal subset
+        request.setTemporalSubset(set);
+        assertTrue(!request.getTemporalSubset().isEmpty());
+        // Check that there is no vertical subset already set
+        assertTrue(request.getVerticalSubset().isEmpty());
+        // Setting vertical subset
+        request.setVerticalSubset(verticalSubset);
+        assertTrue(!request.getVerticalSubset().isEmpty());
+        // Get the response
+        CoverageResponse response = source.read(request, null);
+        // Ensure the response status is success
+        assertTrue(response.getStatus() == Status.SUCCESS);
+        // Ensure the request is the same
+        assertTrue(response.getRequest().equals(request));
+        // Ensure the Handle is the same
+        assertTrue(response.getHandle().equalsIgnoreCase(handle));
+        // Ensure the result is not null
+        Collection<? extends Coverage> results = response.getResults(null);
+        assertTrue(results != null);
+        assertTrue(results.size() > 0);
+        assertTrue(results.iterator().next() instanceof GridCoverage2D);
+    }
+

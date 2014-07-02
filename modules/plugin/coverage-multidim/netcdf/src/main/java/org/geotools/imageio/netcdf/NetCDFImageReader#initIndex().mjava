@@ -1,0 +1,105 @@
+    /**
+     * Index Initialization. Scan the coverageDescriptorsCache and store indexing information.
+     * @param coverageDescriptorsCache
+     * @return
+     * @throws InvalidRangeException
+     * @throws IOException
+     */
+    protected int initIndex() throws InvalidRangeException, IOException {
+        DefaultTransaction transaction = new DefaultTransaction("indexTransaction" + System.nanoTime());
+        int numImages = 0;
+        try {
+
+            // init slice catalog
+            final File sliceIndexFile = ancillaryFileManager.getSlicesIndexFile(); 
+            initCatalog(sliceIndexFile.getParentFile(),
+                FilenameUtils.removeExtension(FilenameUtils.getName(sliceIndexFile.getCanonicalPath())).replace(".", ""));
+            final List<Variable> variables = dataset.getVariables();
+            if (variables != null) {
+
+                // cycle on all variables to get parse them
+                for (final Variable var_ : variables) {
+                    if (var_ != null && var_ instanceof VariableDS) {
+                        final VariableDS variable= (VariableDS) var_;
+                        
+                        // get the name
+                        // check if it is filtered or not
+                        String varName = variable.getFullName();
+                        if (!ancillaryFileManager.acceptsVariable(varName)) {
+                            continue;
+                        }
+
+                        // is it acceptable?
+                        if (!NetCDFUtilities.isVariableAccepted(variable, checkType)) {
+                            continue;
+                        }
+
+                        // COVERAGE NAME
+                        // Add the accepted variable to the list of coverages name
+                        final Name coverageName = getCoverageName(varName);
+                        final CoordinateSystem cs = NetCDFCRSUtilities.getCoordinateSystem(variable);
+
+                        final SimpleFeatureType indexSchema = getIndexSchema(coverageName, cs);
+                        // get variable adapter which maps to a coverage in the end
+                        final VariableAdapter vaAdapter = getCoverageDescriptor(coverageName);
+
+                        if (indexSchema == null) {
+                            throw new IllegalStateException("Unable to created index schema for coverage:"+coverageName);
+                        }
+
+                        final int variableImageStartIndex = numImages;
+                        final int numberOfSlices = vaAdapter.getNumberOfSlices();
+                        numImages += numberOfSlices;
+
+                        int startPagingIndex = 0;
+                        final int limit = INTERNAL_INDEX_CREATION_PAGE_SIZE;
+                        final ListFeatureCollection collection = new ListFeatureCollection(indexSchema);
+
+                        int writtenFeatures = 0;
+                        while (writtenFeatures < numberOfSlices) {
+                            // Get a bunch of features 
+                            vaAdapter.getFeatures(startPagingIndex, limit, collection);
+                            if (variableImageStartIndex != 0) {
+                                // Need to updated the imageIndex of the features since all indexes 
+                                // are zero based inside each variable but we need to index them inside
+                                // the whole NetCDF dataset. 
+                                updateFeaturesIndex(collection, variableImageStartIndex);
+                            }
+                            final int features = collection.size();
+                            if (features > 0) {
+                                // adding granules to the catalog and updating the number of written features
+                                getCatalog().addGranules(indexSchema.getTypeName(), collection, transaction);
+                                collection.clear();
+                                startPagingIndex += features;
+                            }
+                            writtenFeatures += features;
+                        }
+                    }
+                }
+            }
+            // write things to disk
+            ancillaryFileManager.writeToDisk();
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine("Committing changes to the DB");
+            }
+            transaction.commit();
+        } catch (Throwable e) {
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine("Rollback");
+            }
+            if (transaction != null) {
+                transaction.rollback();
+            }
+            throw new IOException(e);
+        } finally {
+            try {
+                if (transaction != null) {
+                    transaction.close();
+                }
+            } catch (Throwable t) {
+
+            }
+        }
+        return numImages;
+    }
+
