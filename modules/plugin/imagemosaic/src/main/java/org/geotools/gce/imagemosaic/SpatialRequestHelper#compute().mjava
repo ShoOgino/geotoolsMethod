@@ -1,0 +1,85 @@
+    /**
+     * Compute this specific request settings all the parameters needed by a visiting {@link RasterLayerResponse} object.
+     * 
+     * @throws DataSourceException
+     */
+    public void compute() throws DataSourceException {
+        //
+        // DO WE HAVE A REQUESTED AREA?
+        //
+        // Check if we have something to load by intersecting the
+        // requested envelope with the bounds of this data set.
+        //
+        if (requestedBBox == null) {
+
+            //
+            // In case we have nothing to look at we should get the whole coverage
+            //
+            requestedBBox = new ReferencedEnvelope(coverageProperties.bbox,coverageProperties.crs2D);
+            requestedRasterArea = (Rectangle) coverageProperties.rasterArea.clone();
+            computedResolution = coverageProperties.fullResolution.clone();
+            computedBBox = new ReferencedEnvelope(coverageProperties.bbox,coverageProperties.crs2D);
+            computedRasterArea = (Rectangle) coverageProperties.rasterArea.clone();
+            // TODO harmonize the various types of transformations
+            computedGridToWorld= requestedGridToWorld = (AffineTransform) coverageProperties.gridToWorld2D;
+            return;
+        }
+
+        //
+        // WE DO HAVE A REQUESTED AREA!
+        //
+
+        //
+        // Inspect the request and precompute transformation between CRS. We
+        // also check if we can simply adjust the requested GG in case the
+        // request CRS is different from the coverage native CRS but the
+        // transformation is simply an affine transformation.
+        //
+        // In such a case we can simplify our work by adjusting the
+        // requested grid to world, preconcatenating the coordinate
+        // operation to change CRS
+        //
+        inspectCoordinateReferenceSystems();
+
+
+        //
+        // Create the CROP BBOX in the coverage CRS for cropping it later on.
+        //
+        computeCropBBOX();
+        if (emptyRequest||computedBBox==null) {
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.log(Level.FINE, "RequestedBBox empty or null");
+            }
+            return;
+        }
+
+        //
+        // CROP SOURCE REGION using the refined requested envelope
+        //
+        computeRasterArea();
+        if (emptyRequest||computedRasterArea == null) {
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.log(Level.FINE, "CropRasterArea empty or null");
+            }
+            // this means that we do not have anything to load at all!
+            return;
+        }
+
+        if (LOGGER.isLoggable(Level.FINER)) {
+            StringBuilder sb = new StringBuilder("Adjusted Requested Envelope = ")
+                    .append(requestedBBox.toString()).append("\n")
+                    .append("Requested raster dimension = ")
+                    .append(requestedRasterArea.toString()).append("\n")
+                    .append("Corresponding raster source region = ")
+                    .append(computedRasterArea.toString()).append("\n")
+                    .append("Corresponding source Envelope = ")
+                    .append(computedBBox.toString());
+            LOGGER.log(Level.FINER, sb.toString());
+        }
+
+        //
+        // Compute the request resolution from the request
+        //
+        computeResolution();
+    }
+
