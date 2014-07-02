@@ -22,27 +22,16 @@
         // Envelope containing the bounding box for the two images
         ReferencedEnvelope reUnion = new ReferencedEnvelope(10, 350, -90, 90,
                 DefaultGeographicCRS.WGS84);
-        // Preparation of the mosaic operation
-        ParameterValueGroup param = MOSAIC.getParameters();
-        param.parameter("Sources").setValue(Arrays.asList(c1, shifted));
-
-        // External GridGeometry
-        GridGeometry2D ggStart = new GridGeometry2D(PixelInCell.CELL_CORNER, c1.getGridGeometry()
-                .getGridToCRS2D(PixelOrientation.UPPER_LEFT), reUnion, GeoTools.getDefaultHints());
-        // Setting the external Geometry
-        param.parameter("geometry").setValue(ggStart);
         // Mosaic operation
-        GridCoverage2D mosaic = (GridCoverage2D) processor.doOperation(param);
+        GridCoverage2D mosaic = mosaic(sortCoverages(Arrays.asList(c1, shifted)),
+                new GeneralEnvelope(reUnion), new Hints());
 
         // Ensure the mosaic Bounding box is equal to that expected
         Envelope2D expected = new Envelope2D(reUnion);
         assertEqualBBOX(expected, mosaic.getEnvelope2D());
 
         // Check that the final Coverage resolution is equal to that of the first coverage
-        double initialRes = calculateResolution(c1);
         double finalRes = calculateResolution(mosaic);
-        double percentual = Math.abs(initialRes - finalRes) / initialRes;
-        Assert.assertTrue(percentual < TOLERANCE);
 
         // Check that on the center of the image there is valid data
         DirectPosition point = new DirectPosition2D(mosaic.getCoordinateReferenceSystem(),
@@ -62,5 +51,9 @@
                 - finalRes, expected.getMinY() + finalRes);
         result = ((byte[]) mosaic.evaluate(point))[0];
         Assert.assertNotEquals(nodata, result, TOLERANCE);
+
+        // Coverage and RenderedImage disposal
+        mosaic.dispose(true);
+        disposeCoveragePlanarImage(mosaic);
     }
 

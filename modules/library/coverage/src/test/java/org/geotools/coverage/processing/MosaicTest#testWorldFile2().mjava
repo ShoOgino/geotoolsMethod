@@ -1,0 +1,67 @@
+    // Test which takes an input file, extracts 4 coverages from it, shifts them in order to created a replication.
+    @Test
+    public void testWorldFile2() throws FileNotFoundException, IOException {
+        // read the two coverages
+        GridEnvelope2D gridRange = new GridEnvelope2D(0, 0, 400, 200);
+        ReferencedEnvelope re = new ReferencedEnvelope(-180, 180, -85, 85,
+                DefaultGeographicCRS.WGS84);
+        GridGeometry2D gg = new GridGeometry2D(gridRange, re);
+
+        GridCoverage2D cStart = readInputFile("sample0");
+        GridCoverage2D cCrop = crop(cStart, new GeneralEnvelope(re));
+
+        // Resampling of the Coverage to the defined resolution
+        ParameterValueGroup paramResampling = processor.getOperation("resample").getParameters();
+        paramResampling.parameter("Source").setValue(cCrop);
+        paramResampling.parameter("GridGeometry").setValue(gg);
+        GridCoverage2D c = (GridCoverage2D) processor.doOperation(paramResampling);
+
+        // first shifted
+        ReferencedEnvelope re2 = new ReferencedEnvelope(-540, -180, -85, 85,
+                DefaultGeographicCRS.WGS84);
+        GridCoverage2D c2 = new GridCoverageFactory()
+                .create(c.getName(), c.getRenderedImage(), re2);
+
+        // second shifted
+        ReferencedEnvelope re3 = new ReferencedEnvelope(180, 540, -85, 85,
+                DefaultGeographicCRS.WGS84);
+        GridCoverage2D c3 = new GridCoverageFactory()
+                .create(c.getName(), c.getRenderedImage(), re3);
+
+        // third shifted
+        ReferencedEnvelope re4 = new ReferencedEnvelope(-540, -900, -85, 85,
+                DefaultGeographicCRS.WGS84);
+        GridCoverage2D c4 = new GridCoverageFactory()
+                .create(c.getName(), c.getRenderedImage(), re4);
+
+        ReferencedEnvelope reUnion = new ReferencedEnvelope(-900, 540, -85, 85,
+                DefaultGeographicCRS.WGS84);
+        List<GridCoverage2D> sorted = sortCoverages(Arrays.asList(c4, c2, c, c3));
+        GridCoverage2D mosaic = mosaic(sorted, new GeneralEnvelope(reUnion), new Hints());
+
+        // Ensure the mosaic Bounding box is equal to that expected
+        Envelope2D expected = new Envelope2D(reUnion);
+        assertEqualBBOX(expected, mosaic.getEnvelope2D());
+
+        // Calculate the mosaic resolution
+        double res = calculateResolution(mosaic);
+
+        // Ensure that no black lines are present on the border between the input images
+        // Check that on the center of the image there is valid data
+        DirectPosition point = new DirectPosition2D(mosaic.getCoordinateReferenceSystem(), -540,
+                -84);
+        double nodata = 0;
+        double result = ((byte[]) mosaic.evaluate(point))[0];
+        Assert.assertNotEquals(nodata, result, TOLERANCE);
+        point = new DirectPosition2D(mosaic.getCoordinateReferenceSystem(), -540 - res, -84);
+        result = ((byte[]) mosaic.evaluate(point))[0];
+        Assert.assertNotEquals(nodata, result, TOLERANCE);
+        point = new DirectPosition2D(mosaic.getCoordinateReferenceSystem(), -540 + res, -84);
+        result = ((byte[]) mosaic.evaluate(point))[0];
+        Assert.assertNotEquals(nodata, result, TOLERANCE);
+
+        // Coverage and RenderedImage disposal
+        mosaic.dispose(true);
+        disposeCoveragePlanarImage(mosaic);
+    }
+
