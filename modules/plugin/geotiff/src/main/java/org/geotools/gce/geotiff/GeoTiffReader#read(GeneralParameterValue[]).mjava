@@ -36,26 +36,26 @@
 						overviewPolicy=(OverviewPolicy) param.getValue();
 						continue;
 					}	
-                                        if (name.equals(AbstractGridFormat.INPUT_TRANSPARENT_COLOR.getName())) {
-                                            inputTransparentColor = (Color) param.getValue();
-                                            continue;
-                                        }	
-                                        if (name.equals(AbstractGridFormat.SUGGESTED_TILE_SIZE.getName())) {
-                                            String suggestedTileSize_= (String) param.getValue();
-                                            if(suggestedTileSize_!=null&&suggestedTileSize_.length()>0){
-                                                suggestedTileSize_=suggestedTileSize_.trim();
-                                                int commaPosition=suggestedTileSize_.indexOf(",");
-                                                if(commaPosition<0){
-                                                    int tileDim=Integer.parseInt(suggestedTileSize_);
-                                                    suggestedTileSize= new int[]{tileDim,tileDim};
-                                                } else {
-                                                    int tileW=Integer.parseInt(suggestedTileSize_.substring(0,commaPosition));
-                                                    int tileH=Integer.parseInt(suggestedTileSize_.substring(commaPosition+1));
-                                                    suggestedTileSize= new int[]{tileW,tileH};
-                                                }
-                                            }
-                                            continue;
-                                        }                                               
+                    if (name.equals(AbstractGridFormat.INPUT_TRANSPARENT_COLOR.getName())) {
+                        inputTransparentColor = (Color) param.getValue();
+                        continue;
+                    }	
+                    if (name.equals(AbstractGridFormat.SUGGESTED_TILE_SIZE.getName())) {
+                        String suggestedTileSize_= (String) param.getValue();
+                        if(suggestedTileSize_!=null&&suggestedTileSize_.length()>0){
+                            suggestedTileSize_=suggestedTileSize_.trim();
+                            int commaPosition=suggestedTileSize_.indexOf(",");
+                            if(commaPosition<0){
+                                int tileDim=Integer.parseInt(suggestedTileSize_);
+                                suggestedTileSize= new int[]{tileDim,tileDim};
+                            } else {
+                                int tileW=Integer.parseInt(suggestedTileSize_.substring(0,commaPosition));
+                                int tileH=Integer.parseInt(suggestedTileSize_.substring(commaPosition+1));
+                                suggestedTileSize= new int[]{tileW,tileH};
+                            }
+                        }
+                        continue;
+                    }                                               
 				}
 			}
 		}
@@ -74,28 +74,25 @@
 		//
 		// IMAGE READ OPERATION
 		//
-
-                Hints newHints = null;
+        Hints newHints = null;
 		if(suggestedTileSize!=null){
 		    newHints= (Hints) hints.clone();
-                    final ImageLayout layout = new ImageLayout();
-                    layout.setTileGridXOffset(0);
-                    layout.setTileGridYOffset(0);
-                    layout.setTileHeight(suggestedTileSize[1]);
-                    layout.setTileWidth(suggestedTileSize[0]);
-                    newHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
+            final ImageLayout layout = new ImageLayout();
+            layout.setTileGridXOffset(0);
+            layout.setTileGridYOffset(0);
+            layout.setTileHeight(suggestedTileSize[1]);
+            layout.setTileWidth(suggestedTileSize[0]);
+            newHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
 		}
 		final ParameterBlock pbjRead = new ParameterBlock();
         if (extOvrImgChoice >= 0 && imageChoice >= extOvrImgChoice) {
-            pbjRead.add(ovrInStreamSPI.createInputStreamInstance(ovrSource, ImageIO.getUseCache(),
-                    ImageIO.getCacheDirectory()));
+            pbjRead.add(ovrInStreamSPI.createInputStreamInstance(ovrSource, ImageIO.getUseCache(),ImageIO.getCacheDirectory()));
             pbjRead.add(imageChoice - extOvrImgChoice);
         } else {
-            pbjRead.add(inStreamSPI != null ? inStreamSPI.createInputStreamInstance(source, ImageIO.getUseCache(), 
-                    ImageIO.getCacheDirectory()) : ImageIO.createImageInputStream(source));
+            pbjRead.add(inStreamSPI != null ? inStreamSPI.createInputStreamInstance(source, ImageIO.getUseCache(), ImageIO.getCacheDirectory()) : ImageIO.createImageInputStream(source));
             pbjRead.add(imageChoice);
         }
-    		pbjRead.add(Boolean.FALSE);
+    	pbjRead.add(Boolean.FALSE);
 		pbjRead.add(Boolean.FALSE);
 		pbjRead.add(Boolean.FALSE);
 		pbjRead.add(null);
@@ -104,9 +101,9 @@
 		pbjRead.add(READER_SPI.createReaderInstance());
 		RenderedOp coverageRaster=JAI.create("ImageRead", pbjRead,newHints!=null?(RenderingHints) newHints:null);
 		
-                //
-                // MASKING INPUT COLOR as indicated
-                //
+        //
+        // MASKING INPUT COLOR as indicated
+        //
 		if(inputTransparentColor!=null){
 		    coverageRaster= new ImageWorker(coverageRaster).setRenderingHints(newHints).makeColorTransparent(inputTransparentColor).getRenderedOperation();
 		}
@@ -114,32 +111,43 @@
 		//
 		// BUILDING COVERAGE
 		//
-                // I need to calculate a new transformation (raster2Model)
-                // between the cropped image and the required
-                // adjustedRequestEnvelope
-                final int ssWidth = coverageRaster.getWidth();
-                final int ssHeight = coverageRaster.getHeight();
-                if (LOGGER.isLoggable(Level.FINE)) {
-                        LOGGER.log(Level.FINE, "Coverage read: width = " + ssWidth+ " height = " + ssHeight);
-                }
+        // I need to calculate a new transformation (raster2Model)
+        // between the cropped image and the required
+        // adjustedRequestEnvelope
+        final int ssWidth = coverageRaster.getWidth();
+        final int ssHeight = coverageRaster.getHeight();
+        if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.log(Level.FINE, "Coverage read: width = " + ssWidth+ " height = " + ssHeight);
+        }
 
-                // //
-                //
-                // setting new coefficients to define a new affineTransformation
-                // to be applied to the grid to world transformation
-                // -----------------------------------------------------------------------------------
-                //
-                // With respect to the original envelope, the obtained planarImage
-                // needs to be rescaled. The scaling factors are computed as the
-                // ratio between the cropped source region sizes and the read
-                // image sizes.
-                //
-                // //
-                final double scaleX = originalGridRange.getSpan(0) / (1.0 * ssWidth);
-                final double scaleY = originalGridRange.getSpan(1) / (1.0 * ssHeight);
-                final AffineTransform tempRaster2Model = new AffineTransform((AffineTransform) raster2Model);
-                tempRaster2Model.concatenate(new AffineTransform(scaleX, 0, 0, scaleY, 0, 0));
-                return createCoverage(coverageRaster, ProjectiveTransform.create((AffineTransform) tempRaster2Model));
+        // //
+        //
+        // setting new coefficients to define a new affineTransformation
+        // to be applied to the grid to world transformation
+        // -----------------------------------------------------------------------------------
+        //
+        // With respect to the original envelope, the obtained planarImage
+        // needs to be rescaled. The scaling factors are computed as the
+        // ratio between the cropped source region sizes and the read
+        // image sizes.
+        //
+        // //
+        final double scaleX = originalGridRange.getSpan(0) / (1.0 * ssWidth);
+        final double scaleY = originalGridRange.getSpan(1) / (1.0 * ssHeight);
+        final AffineTransform tempRaster2Model = new AffineTransform((AffineTransform) raster2Model);
+        tempRaster2Model.concatenate(new AffineTransform(scaleX, 0, 0, scaleY, 0, 0));
+        try{
+        	return createCoverage(coverageRaster, ProjectiveTransform.create((AffineTransform) tempRaster2Model));
+        }catch(Exception e){
+        	// dispose and close file
+        	ImageUtilities.disposePlanarImageChain(coverageRaster);
+        	
+        	// rethrow
+        	if(e instanceof DataSourceException){
+        		throw (DataSourceException)e;
+        	}
+        	throw new DataSourceException(e);
+        }
 
 
 	}
