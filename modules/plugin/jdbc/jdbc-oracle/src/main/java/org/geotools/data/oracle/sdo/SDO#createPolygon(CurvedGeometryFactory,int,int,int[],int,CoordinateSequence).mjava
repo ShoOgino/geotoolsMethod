@@ -66,8 +66,9 @@
      *         encoding that can not be captured by JTS
      * @throws IllegalArgumentException When faced with an invalid SDO encoding
      */
-    private static Polygon createPolygon(GeometryFactory gf, final int GTYPE,
-        final int SRID, final int[] elemInfo, final int triplet,
+    private static Polygon createPolygon(CurvedGeometryFactory gf, final int GTYPE,
+ final int SRID,
+            final int[] elemInfo, int triplet,
         CoordinateSequence coords) throws IllegalArgumentException  {
         final int STARTING_OFFSET = STARTING_OFFSET(elemInfo, triplet);
         final int eTYPE = ETYPE(elemInfo, triplet);
@@ -80,30 +81,44 @@
                     "ELEM_INFO STARTING_OFFSET "+STARTING_OFFSET+
                     "inconsistent with COORDINATES length "+ordinateSize( coords, GTYPE ) );
         } 
-        ensure( "ETYPE {0} must be expected POLYGON or POLYGON_EXTERIOR (one of {1})",
-                eTYPE, new int[]{ ETYPE.POLYGON, ETYPE.POLYGON_EXTERIOR, ETYPE.FACE_EXTERIOR, ETYPE.FACE_EXTERIOR } );
-        if (!(INTERPRETATION == 1) && !(INTERPRETATION == 3)){
-            LOGGER.warning( "Could not create JTS Polygon with INTERPRETATION "+INTERPRETATION+" - we can only support 1 for straight edges, and 3 for rectangle");
+        ensure("ETYPE {0} must be expected POLYGON or POLYGON_EXTERIOR (one of {1})", eTYPE,
+                new int[] { ETYPE.COMPOUND_POLYGON_EXTERIOR, ETYPE.COMPOUND_POLYGON, ETYPE.POLYGON,
+                        ETYPE.POLYGON_EXTERIOR,
+                        ETYPE.FACE_EXTERIOR, ETYPE.FACE_EXTERIOR });
+        if ((INTERPRETATION < 1) || (INTERPRETATION > 4)) {
+            LOGGER.warning("Could not create JTS Polygon with INTERPRETATION "
+                    + INTERPRETATION
+                    + " "
+                    + "- we can only support 1 for straight edges, 2 for circular ones, and 3 for rectangle");
             return null;
         }
 
         LinearRing exteriorRing = createLinearRing(gf, GTYPE, SRID, elemInfo,
                 triplet, coords);
+        if (eTYPE == ETYPE.COMPOUND_POLYGON_EXTERIOR) {
+            triplet = triplet + elemInfo[2];
+        }
 
         List rings = new LinkedList();
         int etype;
-HOLES: 
-        for (int i = triplet + 1; (etype = ETYPE(elemInfo, i)) != -1; i++) {
+        HOLES: for (int i = triplet + 1; (etype = ETYPE(elemInfo, i)) != -1;) {
             if (etype == ETYPE.POLYGON_INTERIOR) {
                 rings.add(createLinearRing(gf, GTYPE, SRID, elemInfo, i, coords));
-            } else if (etype == ETYPE.POLYGON) { // nead to test Clockwiseness of Ring to see if it is
-                                                 // interior or not - (use POLYGON_INTERIOR to avoid pain)
+                i++;
+            } else if (etype == ETYPE.COMPOUND_POLYGON_INTERIOR) {
+                int subelements = INTERPRETATION(elemInfo, i);
+                rings.add(createLinearRing(gf, GTYPE, SRID, elemInfo, i, coords));
+                i += subelements;
+            } else if (etype == ETYPE.POLYGON) { // nead to test Clockwiseness of Ring to see if it
+                                                 // is
+                                                 // interior or not - (use POLYGON_INTERIOR to avoid
+                                                 // pain)
 
-                LinearRing ring = createLinearRing(gf, GTYPE, SRID, elemInfo,
-                        i, coords);
+                LinearRing ring = createLinearRing(gf, GTYPE, SRID, elemInfo, i, coords);
 
                 if (clock.isCCW(ring.getCoordinates())) { // it is an Interior Hole
                     rings.add(ring);
+                    i++;
                 } else { // it is the next Polygon! - get out of here
 
                     break HOLES;

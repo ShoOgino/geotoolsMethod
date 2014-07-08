@@ -34,7 +34,7 @@
      *
      * @throws IllegalArgumentException If circle, or curve is requested
      */
-    private static LinearRing createLinearRing(GeometryFactory gf,
+    private static LinearRing createLinearRing(CurvedGeometryFactory gf,
         final int GTYPE, final int SRID, final int[] elemInfo,
         final int triplet, CoordinateSequence coords) {
             
@@ -46,36 +46,52 @@
         if (!(STARTING_OFFSET >= 1) || !(STARTING_OFFSET <= LENGTH))
             throw new IllegalArgumentException("ELEM_INFO STARTING_OFFSET "+STARTING_OFFSET+" inconsistent with ORDINATES length "+coords.size());
         
-        ensure( "ETYPE {0} must be expected POLYGON or POLYGON_EXTERIOR (one of {1})",
-                eTYPE, new int[]{ ETYPE.POLYGON, ETYPE.POLYGON_EXTERIOR, ETYPE.POLYGON_INTERIOR, ETYPE.FACE_EXTERIOR, ETYPE.FACE_EXTERIOR } );
-        if (!(INTERPRETATION == 1) && !(INTERPRETATION == 3)){
-            LOGGER.warning( "Could not create LinearRing with INTERPRETATION "+INTERPRETATION+" - we can only support 1 for straight edges");
+        ensure("ETYPE {0} must be expected POLYGON or POLYGON_EXTERIOR (one of {1})", eTYPE,
+                new int[] { ETYPE.COMPOUND_POLYGON, ETYPE.COMPOUND_POLYGON_EXTERIOR,
+                        ETYPE.COMPOUND_POLYGON_INTERIOR, ETYPE.POLYGON, ETYPE.POLYGON_EXTERIOR,
+                        ETYPE.POLYGON_INTERIOR, ETYPE.FACE_EXTERIOR, ETYPE.FACE_EXTERIOR });
+        if ((INTERPRETATION < 1) || (INTERPRETATION > 4)) {
+            LOGGER.warning("Could not create LinearRing with INTERPRETATION " + INTERPRETATION
+                    + " - we can only support 1, 2, 3 and 4");
             return null;
         }
         LinearRing ring;
 
         if (INTERPRETATION == 1) {
-            ring = gf.createLinearRing(subList(
-                        gf.getCoordinateSequenceFactory(), coords, GTYPE,
-                        elemInfo, triplet));
+            ring = gf.createLinearRing(subList(gf.getCoordinateSequenceFactory(), coords, GTYPE,
+                    elemInfo, triplet, false));
         } else if (INTERPRETATION == 3) {
             // rectangle does not maintain measures
             //
-            CoordinateSequence ext = subList(gf.getCoordinateSequenceFactory(),
-                    coords, GTYPE, elemInfo, triplet);
+            CoordinateSequence ext = subList(gf.getCoordinateSequenceFactory(), coords, GTYPE,
+                    elemInfo, triplet, false);
             Coordinate min = ext.getCoordinate(0);
             Coordinate max = ext.getCoordinate(1);
             ring = gf.createLinearRing(new Coordinate[] {
                         min, new Coordinate(max.x, min.y), max,
                         new Coordinate(min.x, max.y), min
                     });
-        } else {
-            // May be INTERPRETATION == 2 for curves, or 4 for circle
+        } else if (INTERPRETATION == 4) {
+            // rectangle does not maintain measures
             //
+            CoordinateSequence ext = subList(gf.getCoordinateSequenceFactory(), coords, GTYPE,
+                    elemInfo, triplet, false);
+            ring = gf.createCircle(ext);
+        } else if (eTYPE == ETYPE.COMPOUND_POLYGON_EXTERIOR
+                || eTYPE == ETYPE.COMPOUND_POLYGON_EXTERIOR) {
+            int triplets = INTERPRETATION;
+            List<LineString> components = new ArrayList<>(triplets);
+            for (int i = 1; i <= triplets; i++) {
+                LineString component = createLine(gf, GTYPE, SRID, elemInfo, triplet + i, coords,
+                        i < triplets);
+                components.add(component);
+            }
+            ring = (LinearRing) gf.createCurvedGeometry(components);
+        } else {
             throw new IllegalArgumentException("ELEM_INFO INTERPRETAION "
                 + elemInfo[2] + " not supported"
                 + "for JTS Polygon Linear Rings."
-                + "ELEM_INFO INTERPRETAION 1 and 3 are supported");
+                    + "ELEM_INFO INTERPRETATION 1,2 and 3 are supported");
         }
 
         ring.setSRID(SRID);
