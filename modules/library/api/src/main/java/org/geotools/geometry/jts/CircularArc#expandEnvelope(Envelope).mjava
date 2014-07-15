@@ -1,0 +1,63 @@
+    /**
+     * Expands the given envelope
+     * 
+     * @param envelope
+     */
+    void expandEnvelope(Envelope envelope) {
+        initializeCenterRadius();
+
+        // get the points
+        double sx = controlPoints[0];
+        double sy = controlPoints[1];
+        double mx = controlPoints[2];
+        double my = controlPoints[3];
+        double ex = controlPoints[4];
+        double ey = controlPoints[5];
+
+        // add start and end
+        envelope.expandToInclude(sx, sy);
+        envelope.expandToInclude(ex, ey);
+
+        // if it's not curved, we can exit now
+        if (radius == COLLINEARS) {
+            return;
+        }
+
+        // compute the reference angles
+        double sa = atan2(sy - centerY, sx - centerX);
+        double ma = atan2(my - centerY, mx - centerX);
+        double ea = atan2(ey - centerY, ex - centerX);
+
+        boolean clockwise = (sa > ma && ma > ea) || (sa < ma && sa > ea) || (ma < ea && sa > ea);
+        if (clockwise) {
+            // we want to go counter-clock wise to simplify the rest of the algorithm
+            double tx = sx;
+            sx = ex;
+            ex = tx;
+            double ty = sy;
+            sy = ey;
+            ey = ty;
+            double ta = sa;
+            sa = ea;
+            ea = ta;
+        }
+
+        // normalize angle so that we can treat steps like a linear progression
+        if (ma <= sa) {
+            ma += TAU;
+            ea += TAU;
+        } else if (ea <= sa) {
+            ea += TAU;
+        }
+
+        // scan the circle and add the points at 90° corners
+        double angle = (Math.floor(sa / HALF_PI) + 1) * HALF_PI;
+        while (angle < ea) {
+            double x = centerX + radius * cos(angle);
+            double y = centerY + radius * sin(angle);
+            envelope.expandToInclude(x, y);
+            angle += HALF_PI;
+        }
+
+    }
+

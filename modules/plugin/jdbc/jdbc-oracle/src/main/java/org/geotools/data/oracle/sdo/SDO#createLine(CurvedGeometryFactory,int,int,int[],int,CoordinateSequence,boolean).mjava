@@ -1,0 +1,48 @@
+    /**
+     * Create LineString as encoded.
+     *
+     * @param gf
+     * @param GTYPE Encoding of <b>D</b>imension, <b>L</b>RS and <b>TT</b>ype
+     * @param SRID
+     * @param elemInfo
+     * @param triplet
+     * @param coords
+     * @param compoundElement TODO
+     * @throws IllegalArgumentException If asked to create a curve
+     */
+    private static LineString createLine(CurvedGeometryFactory gf, final int GTYPE,
+        final int SRID, final int[] elemInfo, final int triplet,
+        CoordinateSequence coords, boolean compoundElement) {
+        final int etype = ETYPE(elemInfo, triplet);
+        final int INTERPRETATION = INTERPRETATION(elemInfo, triplet);
+
+        if (etype != ETYPE.LINE && etype != ETYPE.COMPOUND)
+            return null;
+            
+
+        LineString result;
+        if (etype == ETYPE.LINE && INTERPRETATION == 1) {
+            CoordinateSequence subList = subList(gf.getCoordinateSequenceFactory(), coords, GTYPE,
+                    elemInfo, triplet, compoundElement);
+            result = gf.createLineString(subList);
+        } else if (etype == ETYPE.LINE && INTERPRETATION == 2) {
+            CoordinateSequence subList = subList(gf.getCoordinateSequenceFactory(), coords, GTYPE,
+                    elemInfo, triplet, compoundElement);
+            result = gf.createCurvedGeometry(subList);
+        } else if (etype == ETYPE.COMPOUND) {
+            int triplets = INTERPRETATION;
+            List<LineString> components = new ArrayList<>(triplets);
+            for (int i = 1; i <= triplets; i++) {
+                LineString component = createLine(gf, GTYPE, SRID, elemInfo, triplet + i, coords, true);
+                components.add(component);
+            }
+            result = gf.createCurvedGeometry(components);
+        } else {
+            throw new IllegalArgumentException("ELEM_INFO ETYPE " + etype + " with INTERPRETAION "
+                    + INTERPRETATION + " not supported by this decoder");
+        }
+        result.setSRID(SRID);
+
+        return result;
+    }
+
