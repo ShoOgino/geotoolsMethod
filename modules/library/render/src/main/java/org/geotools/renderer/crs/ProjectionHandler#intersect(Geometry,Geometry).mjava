@@ -1,4 +1,9 @@
     private Geometry intersect(Geometry geometry, Geometry mask) {
+        // this seems to cause issues to JTS, reduce to
+        // single geometry when possible (http://jira.codehaus.org/browse/GEOS-6570)
+        if (geometry instanceof GeometryCollection && geometry.getNumGeometries() == 1) {
+            geometry = geometry.getGeometryN(0);
+        }
         Geometry result;
         try {
             result = geometry.intersection(mask);
@@ -10,8 +15,18 @@
             }
         }
         
+        // workaround for a JTS bug, sometimes it returns empty results
+        // even if the two geometries are indeed intersecting
+        if (result.isEmpty() && geometry.intersects(mask)) {
+            try {
+                result = EnhancedPrecisionOp.intersection(geometry, mask);
+            } catch (Exception e2) {
+                result = geometry;
+            }
+        }
+
         // handle in special way empty intersections
-        if (result instanceof GeometryCollection && ((GeometryCollection) result).isEmpty()) {
+        if (result.isEmpty()) {
             return null;
         } else {
             return result;
