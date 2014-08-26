@@ -1,0 +1,80 @@
+    /**
+     * Main mosaic configuration method: given a folder containing several tiles, this static helper method does this:
+     * i   - import raster tiles into the database
+     * ii  - create metadata table and put new tables on it
+     * iii - prepare configuration file from template 
+     * 
+     * @param configDir
+     * @param configBean
+     * @return
+     * @throws IOException
+     * @throws SQLException
+     */
+    private URL buildConfiguration() {
+        // Step 1: Validate configuration
+        validateConfiguration();
+
+        // Step 2: Check for/Create Config file
+        final File configFile = new File(DataUtilities.urlToFile(configDir).getAbsolutePath()
+                + File.separatorChar + configBean.getCoverageName() + ".pgraster.xml");
+
+        URL url = DataUtilities.fileToURL(configFile);
+        Config config = null;
+        Connection connection = null;
+        final List<File> filesToBeDeleted = new ArrayList<File>();
+
+        if (!configFile.exists()) {
+            // Config file doesn't exist. Need to create it
+            try {
+
+                // TODO: we may consider adding support for external folder where to store both config file
+                // and script file
+                createConfigFile(configFile);
+                config = Config.readFrom(url);
+                DBDialect dialect = DBDialect.getDBDialect(config);
+                connection = dialect.getConnection();
+
+                // Step 3: configure raster into DB in case they haven't been imported by hand
+                // Manual import may be preferred by the user when dealing with huge datasets
+                if (!isMosaicAlreadyInDB(connection)) {
+                    if (LOGGER.isLoggable(Level.FINE)) {
+                        LOGGER.fine("Proceeding with raster tiles automatic import using raster2pgsql");
+                    }
+                    importTilesIntoDB(connection, filesToBeDeleted);
+                } else {
+                    if (LOGGER.isLoggable(Level.INFO)) {
+                        LOGGER.info("Skipping raster tiles import " +
+                        "since metadata tables and tile tables already exists into the DB");
+                    }
+                }
+
+            } catch (Exception e) {
+
+                // Rollback on configFile (In case something went wrong, delete the configFile)
+                if (configFile.exists()) {
+                    configFile.delete();
+                }
+                throw new RuntimeException(e);
+            } finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (Throwable t) {
+                        // Does nothing
+                    }
+                }
+                for (File file : filesToBeDeleted) {
+                    try {
+                        file.delete();
+                    } catch (Exception e) {
+                        if (LOGGER.isLoggable(Level.FINE)) {
+                            LOGGER.fine("Exception occurred while deleting temp file: " + file.getAbsolutePath() + "\n" + e.getLocalizedMessage());
+                        }
+                    }
+                }
+            }
+        }
+        // Return the URL of the configuration xml 
+        return url;
+    }
+
