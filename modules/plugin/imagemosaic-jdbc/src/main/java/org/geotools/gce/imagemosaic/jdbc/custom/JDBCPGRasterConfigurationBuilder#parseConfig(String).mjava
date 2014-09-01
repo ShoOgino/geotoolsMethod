@@ -1,0 +1,82 @@
+    /**
+     * Extract configuration parameters from the provided string.
+     * See {@link JDBCPGRasterConfigurationBuilder#createConfiguration(String, Hints)} for the syntax
+     * of this string  
+     * 
+     * @param pgrasterUrl
+     * @return
+     */
+    private static JDBCPGrasterConfigurationBean parseConfig(final String pgrasterUrl) {
+        if (pgrasterUrl != null && pgrasterUrl.startsWith("pgraster:/")) {
+            final int fileURLIndex = pgrasterUrl.indexOf("#");
+            if (fileURLIndex < 0) {
+                throw new IllegalArgumentException("The specified URL doesn't contain the data folder");
+            }
+
+            // Not sure why the GeoserverDataDirectory.findDataFile eats a "/" char. 10 should be 11
+            final int prefix = pgrasterUrl.startsWith("pgraster://") ? 11 : 10;
+
+            // Parsing pgUser
+            final int pguserEndIndex = pgrasterUrl.indexOf(":", prefix);
+            final String pguser = pgrasterUrl.substring(prefix, pguserEndIndex);
+
+            // Parsing password
+            final int passwordEndIndex = pgrasterUrl.indexOf("@");
+            final String password = pgrasterUrl.substring(pguserEndIndex + 1, passwordEndIndex);
+
+            // Parsing host
+            final int hostEndIndex = pgrasterUrl.indexOf(":", passwordEndIndex + 1);
+            final String host = pgrasterUrl.substring(passwordEndIndex + 1, hostEndIndex);
+
+            // Parsing port
+            final int portEndIndex = pgrasterUrl.indexOf(":", hostEndIndex + 1);
+            final String port = pgrasterUrl.substring(hostEndIndex + 1, portEndIndex);
+
+            // Parsing Database
+            final int dbEndIndex = pgrasterUrl.indexOf(".", portEndIndex + 1);
+            final String db = pgrasterUrl.substring(portEndIndex + 1, dbEndIndex);
+
+            // Parsing schema
+            final int schemaEndIndex = pgrasterUrl.indexOf(".", dbEndIndex + 1);
+            final String schema = pgrasterUrl.substring(dbEndIndex + 1, schemaEndIndex);
+
+            // Parsing table
+            final int tableEndIndex = pgrasterUrl.indexOf(":", schemaEndIndex + 1);
+            
+            // Parsing EPSGCode
+            int epsgCode = DEFAULT_EPSG_CODE;
+            final int epsgStartIndex = pgrasterUrl.indexOf("@", schemaEndIndex + 1);
+            if (epsgStartIndex != -1) {
+                try {
+                    epsgCode = Integer.parseInt(pgrasterUrl.substring(epsgStartIndex +1, tableEndIndex));
+                } catch (NumberFormatException nfe) {
+                    if (LOGGER.isLoggable(Level.SEVERE)) {
+                        LOGGER.severe("Unable to parse the specified EPSGCode. Proceeding with DEFAULT:" 
+                    + DEFAULT_EPSG_CODE + " due to : " + nfe.getLocalizedMessage());
+                    }
+                }
+            }
+            
+            final String table = pgrasterUrl.substring(schemaEndIndex + 1, epsgStartIndex != -1 ? epsgStartIndex : tableEndIndex);
+
+            // Parsing options
+            final int optionsStartIndex = pgrasterUrl.indexOf("?", tableEndIndex + 1);
+            final String options = optionsStartIndex != -1 ? pgrasterUrl.substring(optionsStartIndex +1, fileURLIndex): DEFAULT_OPTIONS;
+
+            // Parsing file extensions of raster to be imported (if any)
+            final int fileExtensionEndIndex = optionsStartIndex != -1 ? optionsStartIndex : fileURLIndex;
+            final String fileExtension = pgrasterUrl.substring(tableEndIndex + 1, fileExtensionEndIndex);
+
+            Properties datastoreProperties = new Properties();
+            datastoreProperties.put(HOST_KEY.substring(1), host);
+            datastoreProperties.put(PGUSER_KEY.substring(1), pguser);
+            datastoreProperties.put(PORT_KEY.substring(1), port);
+            datastoreProperties.put(PASSWORD_KEY.substring(1), password);
+            datastoreProperties.put(DATABASE_KEY.substring(1), db);
+
+            JDBCPGrasterConfigurationBean bean = new JDBCPGrasterConfigurationBean(datastoreProperties, table, "rt" + table, fileExtension, table, options, schema, epsgCode);
+            return bean;
+        }
+        return null;
+    }
+
