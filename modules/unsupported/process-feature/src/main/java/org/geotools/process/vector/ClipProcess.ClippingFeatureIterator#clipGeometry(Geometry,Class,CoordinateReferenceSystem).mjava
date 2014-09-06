@@ -1,4 +1,4 @@
-        private Object clipGeometry(Geometry geom, Class target) {
+        private Object clipGeometry(Geometry geom, Class target, CoordinateReferenceSystem crs) {
             // first off, clip
             Geometry clipped = null;
             if(clipper != null) {
@@ -16,10 +16,11 @@
             
             // map the result to the target output type, removing the spurious lower dimensional
             // elements that might result out of the intersection
+            Geometry result;
             if(Point.class.isAssignableFrom(target) || MultiPoint.class.isAssignableFrom(target) 
                     || GeometryCollection.class.equals(target)) {
-                return clipped;
-            } else if(MultiLineString.class.isAssignableFrom(target)) {
+                result = clipped;
+            } else if(MultiLineString.class.isAssignableFrom(target) || LineString.class.isAssignableFrom(target)) {
                 final List<LineString> geoms = new ArrayList<LineString>();
                 clipped.apply(new GeometryComponentFilter() {
                     
@@ -30,9 +31,13 @@
                         }
                     }
                 });
-                LineString[] lsArray = (LineString[]) geoms.toArray(new LineString[geoms.size()]);
-                return geom.getFactory().createMultiLineString(lsArray);
-            } else if(MultiPolygon.class.isAssignableFrom(target)) {
+                if(geoms.size() == 0) {
+                    result = null;
+                } else {
+                    LineString[] lsArray = (LineString[]) geoms.toArray(new LineString[geoms.size()]);
+                    result = geom.getFactory().createMultiLineString(lsArray);
+                }
+            } else if(MultiPolygon.class.isAssignableFrom(target) || Polygon.class.isAssignableFrom(target)) {
                 final List<Polygon> geoms = new ArrayList<Polygon>();
                 clipped.apply(new GeometryComponentFilter() {
                     
@@ -43,11 +48,28 @@
                         }
                     }
                 });
-                Polygon[] lsArray = (Polygon[]) geoms.toArray(new Polygon[geoms.size()]);
-                return geom.getFactory().createMultiPolygon(lsArray);
-
+                if(geoms.size() == 0) {
+                    result = null;
+                } else {
+                    Polygon[] lsArray = (Polygon[]) geoms.toArray(new Polygon[geoms.size()]);
+                    result = geom.getFactory().createMultiPolygon(lsArray);
+                }
             } else {
                 throw new RuntimeException("Unrecognized target type " + target.getCanonicalName());
             }
+            
+            // manage Z preservation
+            if(preserveZ && !geom.equalsExact(clipped)) {
+                // for polygons we need to go idw, for points and multipoints idw will do and will not
+                // add much overhead (it has optimizations for points that were already in the input)
+                if(result instanceof MultiPolygon || result instanceof MultiPoint || result instanceof Point) {
+                    result.apply(new IDWElevationInterpolator(geom, crs));
+                } else if(result instanceof MultiLineString) {
+                    result.apply(new LinearElevationInterpolator(geom, crs));
+                }
+            }
+            
+            return result;
+
         }
 
