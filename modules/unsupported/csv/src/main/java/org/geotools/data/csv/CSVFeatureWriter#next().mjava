@@ -1,11 +1,33 @@
+    // next start
     @Override
-    public SimpleFeature next() throws IOException, IllegalArgumentException, NoSuchElementException {
-        if (this.append) {
-            this.builder.addAll(new Object[this.state.getEntry().getDataStore().getSchema(this.getFeatureType().getTypeName()).getAttributeCount()]);
-            this.each = this.buildFeature();
-            return this.each;
+    public SimpleFeature next() throws IOException, IllegalArgumentException,
+            NoSuchElementException {
+        if( csvWriter == null ){
+            throw new IOException("Writer has been closed");
         }
-        this.checkPendingWrite();
-        return this.each = super.next();
+        if (this.currentFeature != null) {
+            this.write(); // the previous one was not written, so do it now.
+        }
+        try {
+            if( !appending ){
+                if( delegate.reader != null && delegate.hasNext() ){
+                    this.currentFeature = delegate.next();
+                    return this.currentFeature;
+                }
+                else {
+                    this.appending = true;
+                }
+            }
+            SimpleFeatureType featureType = state.getFeatureType();
+            String fid = featureType.getTypeName()+"."+nextRow;
+            Object values[] = DataUtilities.defaultValues( featureType );
+            
+            this.currentFeature = SimpleFeatureBuilder.build( featureType, values, fid );
+            return this.currentFeature;
+        }
+        catch (IllegalArgumentException invalid ){
+            throw new IOException("Unable to create feature:"+invalid.getMessage(),invalid);
+        }
     }
+    // next end
 
