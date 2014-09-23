@@ -1,0 +1,66 @@
+    /**
+     * Builds the SolrJ query with support of subset of fields, limit/offset, sorting, OGC filter encoding and viewParams
+     * <br>
+     * The SOLR query always need the order by PK field to enable pagination and efficient data retrieving
+     * <br>
+     * Currently only additional "q" and "fq" SOLR parameters can be passed using vireParams, this conditions are added in AND with others
+     * 
+     * @param featureType the feature type to query
+     * @param q the OGC query to translate in SOLR request
+     * 
+     * @see {@link Hints#VIRTUAL_TABLE_PARAMETERS}
+     * 
+     */
+    protected SolrQuery select(SimpleFeatureType featureType, Query q) {
+        SolrQuery query = new SolrQuery();
+        query.setParam("omitHeader", true);
+        try{                 
+            //Column names
+            if(q.getPropertyNames() != null){
+                for(String prop : q.getPropertyNames()){
+                    query.addField(prop);
+                }            
+            }
+            query.setQuery( "*:*" );
+
+            //Encode limit/offset, if necessary
+            if(q.getStartIndex() != null && q.getStartIndex() >= 0){
+                query.setStart(q.getStartIndex());
+            }
+            if(q.getMaxFeatures() > 0){
+                query.setRows(q.getMaxFeatures());
+            } 
+
+            //Sort
+            ORDER naturalSortOrder = ORDER.asc;
+            if( q.getSortBy() != null){               
+                for(SortBy sort : q.getSortBy()){
+                    if(sort.getPropertyName() != null){
+                        query.addSort(sort.getPropertyName().getPropertyName(), sort.getSortOrder().equals(SortOrder.ASCENDING)?ORDER.asc:ORDER.desc);
+                    }else{
+                        naturalSortOrder = sort.getSortOrder().equals(SortOrder.ASCENDING)?ORDER.asc:ORDER.desc;
+                    }
+                }            
+            }
+
+            //Always add natural sort by PK to support pagination
+            query.addSort(getPrimaryKey(featureType.getTypeName()).getName(), naturalSortOrder);
+
+            //Encode OGC filer           
+            FilterToSolr f2s = initializeFilterToSolr(featureType);
+            String fq = this.field + ":" + featureType.getTypeName();
+            String ffq = f2s.encodeToString(q.getFilter());
+            if(ffq!=null && !ffq.isEmpty()){
+                fq = fq + " AND " + ffq ;
+            }
+            query.setFilterQueries(fq);  
+
+            //Add viewpPrams
+            addViewparams(q,query);
+
+        }catch(Exception e){
+            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+        }
+        return query;
+    }
+
