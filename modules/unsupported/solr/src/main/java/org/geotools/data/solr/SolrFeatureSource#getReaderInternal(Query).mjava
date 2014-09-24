@@ -1,32 +1,35 @@
     @Override
-    protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query) throws IOException {
+    protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query)
+            throws IOException {
         FeatureReader<SimpleFeatureType, SimpleFeature> reader;
-        try { 
+        try {
             SolrDataStore store = getDataStore();
-            Filter[] split = splitFilter(query.getFilter(),this);
+            Filter[] split = splitFilter(query.getFilter(), this);
             Filter preFilter = split[0];
             Filter postFilter = split[1];
             DefaultQuery preQuery = new DefaultQuery(query);
             preQuery.setFilter(preFilter);
 
-
-            // Build the feature type returned by this query. Also build an eventual extra feature type
+            // Build the feature type returned by this query. Also build an eventual extra feature
+            // type
             // containing the attributes we might need in order to evaluate the post filter
-            SimpleFeatureType[] types = buildQueryAndReturnFeatureTypes(getSchema(), query.getPropertyNames(), postFilter);
+            SimpleFeatureType[] types = buildQueryAndReturnFeatureTypes(getSchema(),
+                    query.getPropertyNames(), postFilter);
             SimpleFeatureType querySchema = types[0];
             SimpleFeatureType returnedSchema = types[1];
 
             SolrQuery q = store.select(querySchema, preQuery);
-            if(store.getLogger().isLoggable(Level.FINE)){
-                store.getLogger().log(Level.FINE, q.toString() );
+            if (store.getLogger().isLoggable(Level.FINE)) {
+                store.getLogger().log(Level.FINE, q.toString());
             }
             reader = new SolrFeatureReader(querySchema, store.getSolrServer(), q, store);
             if (postFilter != null && postFilter != Filter.INCLUDE) {
-                reader = new FilteringFeatureReader<SimpleFeatureType, SimpleFeature>(reader,postFilter);
-                if(!returnedSchema.equals(querySchema))
+                reader = new FilteringFeatureReader<SimpleFeatureType, SimpleFeature>(reader,
+                        postFilter);
+                if (!returnedSchema.equals(querySchema))
                     reader = new ReTypeFeatureReader(reader, returnedSchema);
             }
-        } catch (Throwable e) { 
+        } catch (Throwable e) {
             if (e instanceof Error) {
                 throw (Error) e;
             } else {
