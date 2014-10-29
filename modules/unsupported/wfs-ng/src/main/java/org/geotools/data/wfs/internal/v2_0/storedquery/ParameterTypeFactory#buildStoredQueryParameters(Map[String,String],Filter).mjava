@@ -1,0 +1,46 @@
+    public List<ParameterType> buildStoredQueryParameters(Map<String, String> viewParams,
+            Filter filter) {
+        final Wfs20Factory factory = Wfs20Factory.eINSTANCE;
+
+        if (filter == null) {
+            filter = Filter.INCLUDE;
+        }
+
+        ParameterMappingContext mappingContext = new ParameterMappingContext(filter, viewParams,
+                featureTypeInfo);
+
+        List<ParameterType> ret = new ArrayList<ParameterType>();
+
+        for (ParameterExpressionType parameter : desc.getParameter()) {
+            String value = null;
+
+            ParameterMapping mapping = getStoredQueryParameterMapping(parameter.getName());
+
+            // If mapping is forced, use that value over what the user provides
+            if (mapping != null && mapping.isForcible()) {
+                value = evaluateMapping(mappingContext, mapping);
+
+            } else {
+                // Use the one provided by the user
+                if (viewParams != null) {
+                    value = viewParams.get(parameter.getName());
+                }
+
+                // If no value given by the user, execute mapping
+                if (value == null && mapping != null) {
+                    value = evaluateMapping(mappingContext, mapping);
+                }
+            }
+
+            // If there is a value, add a parameter to the query
+            if (value != null) {
+                ParameterType tmp = factory.createParameterType();
+                tmp.setName(parameter.getName());
+                tmp.setValue(value);
+                ret.add(tmp);
+            }
+        }
+
+        return ret;
+    }
+
