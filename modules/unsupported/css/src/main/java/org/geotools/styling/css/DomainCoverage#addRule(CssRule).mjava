@@ -1,0 +1,49 @@
+    /**
+     * Adds a rule to the domain, and returns a list of rules representing bits of the domain that
+     * were still not covered by the previous rules
+     * 
+     * @param rule
+     * @return
+     */
+    public List<CssRule> addRule(CssRule rule) {
+        Selector selector = rule.getSelector();
+
+        // turns the rule in a set of domain coverage expressions (simplified selectors)
+        List<SLDSelector> ruleCoverage = toSLDSelectors(selector, targetFeatureType);
+
+        // for each rule we have in the domain, get the differences, if any, with this rule,
+        // emit them as derived rules, and increase the coverage
+        if (elements.isEmpty()) {
+            elements.addAll(ruleCoverage);
+            return Collections.singletonList(rule);
+        } else {
+            List<SLDSelector> reducedCoverage = new ArrayList<>(ruleCoverage);
+            for (SLDSelector element : elements) {
+                List<SLDSelector> difference = new ArrayList<>();
+                for (SLDSelector rc : reducedCoverage) {
+                    difference.addAll(rc.difference(element));
+                }
+                reducedCoverage = difference;
+                if (reducedCoverage.isEmpty()) {
+                    break;
+                }
+            }
+
+            if (!reducedCoverage.isEmpty()) {
+                List<CssRule> derivedRules = new ArrayList<>();
+                for (SLDSelector rc : reducedCoverage) {
+                    derivedRules.add(new CssRule(rc.toSelector(), rule.getProperties(), rule
+                            .getComment()));
+                }
+
+                elements.addAll(reducedCoverage);
+
+                // so far, this sorting done just for the sake of readability during debugging
+                Collections.sort(elements, new ScaleDependentFilterComparator());
+                return derivedRules;
+            } else {
+                return Collections.emptyList();
+            }
+        }
+    }
+

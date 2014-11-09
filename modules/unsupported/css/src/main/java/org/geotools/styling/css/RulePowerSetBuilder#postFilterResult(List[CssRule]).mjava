@@ -1,0 +1,35 @@
+    @Override
+    protected List<CssRule> postFilterResult(List<CssRule> result) {
+        List<CssRule> filtered = new ArrayList<>();
+        // first remove the rules that have no root pseudo selector, they are contributing nothing
+        for (CssRule cssRule : result) {
+            if (cssRule.getProperties().get(PseudoClass.ROOT) != null) {
+                filtered.add(cssRule);
+            }
+        }
+        if (filtered.size() <= 1) {
+            return filtered;
+        }
+
+        // sort by selectivity
+        Collections.sort(filtered, Collections.reverseOrder(new CssRuleComparator()));
+
+        // we can have rules with the same selector, generated when combining a rule with *,
+        // fold them if they are covering each other (and they should)
+        List<CssRule> folded = new ArrayList<>();
+        CssRule prev = filtered.get(0);
+        for (int i = 1; i < filtered.size(); i++) {
+            CssRule curr = filtered.get(i);
+            if (curr.covers(prev)) {
+                prev = curr;
+            } else if (prev.covers(curr)) {
+                // nothing to do, skip it
+            } else {
+                folded.add(prev);
+                prev = curr;
+            }
+        }
+        folded.add(prev);
+        return folded;
+    }
+
