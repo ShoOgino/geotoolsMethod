@@ -1,0 +1,76 @@
+    @Override
+    protected CssRule buildResult(List<CssRule> rules) {
+        boolean foundSymbolizerProperty = false;
+        for (CssRule rule : rules) {
+            if (rule.hasSymbolizerProperty()) {
+                foundSymbolizerProperty = true;
+                break;
+            }
+        }
+        // if none of the source rules has a symbolizer property, there is nothing to combine,
+        // the cascade still won't generate any output
+        if (!foundSymbolizerProperty) {
+            return null;
+        }
+
+        CssRule combined;
+        if (rules.size() == 1) {
+            combined = rules.get(0);
+        } else {
+            Selector combinedSelector = combineSelectors(rules);
+
+            // sort by specificity, from lowest to highest
+            // TODO: check if this is really needed
+            Collections.sort(rules, new CssRuleComparator());
+
+            // apply cascading on properties
+            Map<PseudoClass, Map<String, Property>> properties = new LinkedHashMap<>();
+            for (CssRule cssRule : rules) {
+                for (Map.Entry<PseudoClass, List<Property>> entry : cssRule.getProperties()
+                        .entrySet()) {
+                    PseudoClass ps = entry.getKey();
+                    Map<String, Property> psProperties = properties.get(ps);
+                    if (psProperties == null) {
+                        psProperties = new HashMap<String, Property>();
+                        properties.put(ps, psProperties);
+                    }
+                    for (Property p : entry.getValue()) {
+                        psProperties.put(p.getName(), p);
+                    }
+                    if (ps != PseudoClass.ROOT) {
+                        // we also have to fill values for the pseudo classes owned by this one
+                        for (PseudoClass containedClass : properties.keySet()) {
+                            if (ps.contains(containedClass)) {
+                                Map<String, Property> containedProperties = properties
+                                        .get(containedClass);
+                                for (Property p : entry.getValue()) {
+                                    containedProperties.put(p.getName(), p);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // build the new rule
+            Map<PseudoClass, List<Property>> newProperties = new LinkedHashMap<>();
+            for (Map.Entry<PseudoClass, Map<String, Property>> entry : properties.entrySet()) {
+                newProperties.put(entry.getKey(),
+                        new ArrayList<Property>(entry.getValue().values()));
+            }
+            String comment = getCombinedComment(rules);
+            CssRule result = new CssRule(combinedSelector, newProperties, comment);
+            result.setAncestry(rules);
+            combined = result;
+        }
+
+        // make sure we're not going beyond the max generated rules
+        if (maxCombinations > 0 && count++ > maxCombinations) {
+            throw new IllegalStateException(
+                    "The CSS rule combinations have already generated more than " + maxCombinations
+                            + " SLD rules, giving up. Please simplify your CSS style");
+        }
+
+        return combined;
+    }
+
