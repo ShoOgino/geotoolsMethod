@@ -10,18 +10,24 @@
 
         // turns the rule in a set of domain coverage expressions (simplified selectors)
         List<SLDSelector> ruleCoverage = toSLDSelectors(selector, targetFeatureType);
+        if (generatedSelectors.contains(ruleCoverage)) {
+            return Collections.emptyList();
+        } else {
+            generatedSelectors.add(ruleCoverage);
+        }
 
         // for each rule we have in the domain, get the differences, if any, with this rule,
         // emit them as derived rules, and increase the coverage
         if (elements.isEmpty()) {
             elements.addAll(ruleCoverage);
-            return Collections.singletonList(rule);
+            return coverageToRules(rule, ruleCoverage);
         } else {
             List<SLDSelector> reducedCoverage = new ArrayList<>(ruleCoverage);
             for (SLDSelector element : elements) {
                 List<SLDSelector> difference = new ArrayList<>();
                 for (SLDSelector rc : reducedCoverage) {
-                    difference.addAll(rc.difference(element));
+                    List<SLDSelector> ruleDifference = rc.difference(element);
+                    difference.addAll(ruleDifference);
                 }
                 reducedCoverage = difference;
                 if (reducedCoverage.isEmpty()) {
@@ -32,14 +38,14 @@
             if (!reducedCoverage.isEmpty()) {
                 List<CssRule> derivedRules = new ArrayList<>();
                 for (SLDSelector rc : reducedCoverage) {
-                    derivedRules.add(new CssRule(rc.toSelector(), rule.getProperties(), rule
-                            .getComment()));
+                    derivedRules.add(new CssRule(rc.toSelector(simplifier), rule.getProperties(),
+                            rule.getComment()));
                 }
 
                 elements.addAll(reducedCoverage);
 
                 // so far, this sorting done just for the sake of readability during debugging
-                Collections.sort(elements, new ScaleDependentFilterComparator());
+                Collections.sort(elements, new SLDSelectorComparator());
                 List<SLDSelector> combined = new ArrayList<>();
                 SLDSelector prev = null;
                 for (SLDSelector ss : elements) {

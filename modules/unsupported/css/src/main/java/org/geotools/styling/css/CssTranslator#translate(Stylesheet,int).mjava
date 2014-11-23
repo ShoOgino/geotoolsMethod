@@ -24,7 +24,7 @@
         }
 
         for (List<CssRule> rules : zIndexRules) {
-            Collections.sort(rules, Collections.reverseOrder(new CssRuleComparator()));
+            Collections.sort(rules, CssRuleComparator.DESCENDING);
             Map<String, List<CssRule>> typenameRules = organizeByTypeName(rules);
 
             // build the SLD
@@ -66,12 +66,17 @@
                             + "  rules for feature type: " + featureTypeName);
                 }
 
+                // The simplifying visitor that will cache the results to avoid re-computing
+                // over and over the same simplifications
+                CachedSimplifyingFilterVisitor cachedSimplifier = new CachedSimplifyingFilterVisitor(
+                        targetFeatureType);
+
                 // expand the css rules power set
                 RulePowerSetBuilder builder = new RulePowerSetBuilder(flattenedRules,
-                        maxCombinations);
+                        cachedSimplifier, maxCombinations);
                 List<CssRule> combinedRules = builder.buildPowerSet();
 
-                Collections.sort(combinedRules, Collections.reverseOrder(new CssRuleComparator()));
+                Collections.sort(combinedRules, CssRuleComparator.DESCENDING);
 
                 if (LOGGER.isLoggable(Level.FINE)) {
                     LOGGER.fine("Generated " + combinedRules.size()
@@ -80,7 +85,7 @@
 
                 // create a SLD rule for each css one, making them exclusive, that is,
                 // remove from each rule the union of the zoom/data domain matched by previous rules
-                DomainCoverage coverage = new DomainCoverage(targetFeatureType);
+                DomainCoverage coverage = new DomainCoverage(targetFeatureType, cachedSimplifier);
                 for (int i = 0; i < combinedRules.size(); i++) {
                     // skip eventual combinations that are not sporting any
                     // root pseudo class
