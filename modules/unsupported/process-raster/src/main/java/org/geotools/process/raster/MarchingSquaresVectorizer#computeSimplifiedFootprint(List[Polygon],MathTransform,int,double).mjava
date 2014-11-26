@@ -1,0 +1,61 @@
+    /**
+     * Compute the simplified version of the footprint, starting from a specific polygon.
+     * 
+     * @param geometriesList the list of available geometries
+     * @param polygonIndex the index of the polygon to be simplified.
+     * @param area the area of the reference polygon.
+     * @param transform
+     * @throws MismatchedDimensionException
+     * @throws TransformException
+     */
+    private void computeSimplifiedFootprint(final List<Polygon> geometriesList, 
+            final MathTransform transform, final int polygonIndex,
+            final double area) throws MismatchedDimensionException,
+            TransformException {
+        // Looking for the bigger polygon
+        if (computeSimplifiedFootprint && !geometriesList.isEmpty()) {
+            Geometry simplifiedFootprintGeometry = geometriesList.get(polygonIndex);
+            Geometry finalSimplifiedFootprint = null;
+            if (footprintCoordinates == FootprintCoordinates.MODEL_SPACE) {
+                finalSimplifiedFootprint = JTS.transform(simplifiedFootprintGeometry, transform);
+            } else {
+                simplifiedFootprintGeometry.setSRID(NO_SRID);
+                finalSimplifiedFootprint = simplifiedFootprintGeometry;
+            }
+
+            this.polygonArea = finalSimplifiedFootprint.getArea();
+
+            // reduce
+            final double tolerance = Math.max(xRes, yRes) * simplifierFactor;
+
+            // Avoid simplification on small polygons
+            simplifiedFootprintGeometry = (area > MIN_AREA_TO_BE_SIMPLIFIED) ? DouglasPeuckerSimplifier
+                    .simplify(finalSimplifiedFootprint, tolerance) : finalSimplifiedFootprint;
+
+            if (simplifiedFootprintGeometry == null) {
+                throw new IllegalStateException("No simplified Footprint can be computed");
+            }
+
+            // proceed
+            try {
+                final Integer srid = CRS.lookupEpsgCode(crs, false);
+                if (footprintCoordinates == FootprintCoordinates.MODEL_SPACE) {
+                    if (srid != null) {
+                        simplifiedFootprintGeometry.setSRID(srid);
+                    }
+                } else {
+                    simplifiedFootprintGeometry.setSRID(NO_SRID);
+                }
+            } catch (FactoryException fe) {
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.fine("Unable to lookup an EPSG code for the provided CRS");
+                }
+            }
+
+            this.simplifiedFootprint = simplifiedFootprintGeometry;
+
+        } else {
+            simplifiedFootprint = null;
+        }
+    }
+
