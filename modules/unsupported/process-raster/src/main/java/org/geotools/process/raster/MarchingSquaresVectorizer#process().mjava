@@ -1,0 +1,116 @@
+    /**
+     * Executes the MarchingSquares algorithm to find the footprint.
+     * 
+     * @throws Exception
+     */
+    public void process() throws Exception {
+        int sampleDataType = -1;
+        RandomIter iter = null;
+        RenderedImage inputRI = null;
+
+        try {
+            if (inGeodata != null) {
+                inputRI = inGeodata.getRenderedImage();
+            } else {
+                inputRI = inputRenderedImage;
+            }
+
+            // SG14112011
+            // wrap the input renderedimage so that we cannot release it
+            inputRI = new DisposeStopper(inputRI);
+
+            // setting up hints
+            final ImageLayout layout = new ImageLayout(inputRI);
+            RenderingHints localHints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout);
+            if (hints != null) {
+                localHints.add(hints);
+            }
+
+            inputRI = computeLuminance(inputRI, localHints);
+
+            // Prepare data to find inner area by binarizing and inverting so that if input is 
+            // in the exclusion range become 255, otherwise it gets turned into 0 which is 
+            // the value we are looking for
+            inputRI = prepareMaskingLookup(inputRI, localHints);
+
+            imagesStack.push(inputRI);
+            iter = RandomIterFactory.create(inputRI, null);
+
+            if (inGeodata != null) {
+                HashMap<String, Double> regionMap = CoverageUtilities
+                        .getRegionParamsFromGridCoverage(inGeodata);
+                imageProperties.init(regionMap, inputRI);
+                xRes = regionMap.get(CoverageUtilities.XRES);
+                yRes = regionMap.get(CoverageUtilities.YRES);
+                gridGeometry = inGeodata.getGridGeometry();
+                crs = inGeodata.getCoordinateReferenceSystem2D();
+            } else {
+                imageProperties.init(inputRI);
+            }
+
+            sampleDataType = inputRI.getSampleModel().getDataType();
+            bitSet = new DrawableBitSet(imageProperties.width, imageProperties.height);
+
+            List<Polygon> geometriesList = new ArrayList<Polygon>();
+
+            final ScanInfo scanInfo = new ScanInfo();
+            identifyGeometries(iter, sampleDataType, geometriesList, scanInfo);
+            scanInfo.isFullyInvalid(geometriesList, inputRI, localHints);
+
+            // Geometries validation
+            geometriesList = validateGeometries(geometriesList);
+            if (noGeometries(geometriesList, scanInfo.fullyInvalid)) {
+                return;
+            }
+
+            // Setup transformation to provide coordinates in the requested space 
+            // (MODEL_SPACE vs RASTER_SPACE)
+            MathTransform transform = null;
+            if (footprintCoordinates == FootprintCoordinates.MODEL_SPACE) {
+                transform = gridGeometry.getGridToCRS(PixelInCell.CELL_CORNER);
+
+                LinearTransform translation = ProjectiveTransform.createTranslation(2, 1);
+                transform = ConcatenatedTransform.create(translation, transform);
+            } else {
+                // transform = ProjectiveTransform.create(new AffineTransform(1,0,0,1,1,-1));
+            }
+
+            double area = 0;
+            int polygonIndex = 0;
+            int index = 0;
+
+            // Looking for the biggest polygon
+            for (Polygon polygon : geometriesList) {
+                double polygonArea = polygon.getArea();
+                if (polygonArea > area) {
+                    polygonIndex = index;
+                    area = polygonArea;
+                }
+                index++;
+            }
+
+            // //
+            //
+            // Compute the footprint
+            //
+            // //
+            computeFootprint(geometriesList, transform);
+
+            // //
+            //
+            // Compute the simplified footprint if needed, using the biggest one
+            //
+            // //
+            computeSimplifiedFootprint(geometriesList, transform, polygonIndex, area);
+        } catch (Exception ex) {
+            ImageAnalysisResultThdLocal.set(ex);
+            throw ex;
+        } finally {
+            // release iterator
+            if (iter != null) {
+                iter.done();
+                iter = null;
+            }
+        }
+    }
+

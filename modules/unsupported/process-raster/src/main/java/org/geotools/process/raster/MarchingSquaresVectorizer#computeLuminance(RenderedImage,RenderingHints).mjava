@@ -1,0 +1,41 @@
+    /**
+     * Compute the I (Luminance) component of (HSI) from the RGB image
+     * 
+     * @param inputRI
+     * @param localHints
+     * @return
+     */
+    private RenderedImage computeLuminance(RenderedImage inputRI, RenderingHints localHints) {
+        int numBands = inputRI.getSampleModel().getNumBands();
+        final int tr = inputRI.getColorModel().getTransparency();
+
+        if (numBands != 1) {
+            if (numBands == 3) {
+                inputRI = BandCombineDescriptor.create(inputRI,
+                        ImageUtilities.RGB_TO_GRAY_MATRIX, localHints);
+            } else {
+                // do we have transparency combination matrix
+
+                final double fillValue = (tr == Transparency.OPAQUE) ? (1.0 / numBands)
+                        : (1.0 / (numBands - 1));
+                final double[][] matrix = new double[1][numBands + 1];
+                for (int i = 0; i < numBands; i++) {
+                    matrix[0][i] = fillValue;
+                }
+
+                inputRI = BandCombineDescriptor.create(inputRI, matrix, localHints);
+            }
+            imagesStack.push(inputRI);
+            numBands = inputRI.getSampleModel().getNumBands();
+            assert numBands == 1;
+        }
+
+        // fix imagelayout to set gray color model
+        final ImageLayout layout2 = (ImageLayout) localHints.get(JAI.KEY_IMAGE_LAYOUT);
+        layout2.setColorModel(ColorUtilities.GRAY_CM);
+        layout2.setSampleModel(ColorUtilities.GRAY_CM.createCompatibleSampleModel(
+                inputRI.getTileWidth(), inputRI.getTileHeight()));
+
+        return inputRI;
+    }
+
