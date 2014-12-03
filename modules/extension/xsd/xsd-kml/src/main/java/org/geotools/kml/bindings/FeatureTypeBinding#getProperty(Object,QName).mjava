@@ -22,12 +22,12 @@
 	            return feature.getAttribute( "description" );
 	        }
 	      
-	        if ( KML.styleUrl.equals( name ) )  {
-	            URI uri = (URI) feature.getAttribute( "Style" );
-	            if ( uri != null ) {
-	                return styleMap.get( uri );
-	            }
-	        }
+                if (KML.styleUrl.getLocalPart().equals(name.getLocalPart())) {
+                    URI uri = (URI) feature.getAttribute("Style");
+                    if (uri != null) {
+                        return styleMap.get(uri);
+                    }
+                }
 	        
 	        //&lt;element default="1" minOccurs="0" name="visibility" type="boolean"/&gt;
 	        //&lt;element default="1" minOccurs="0" name="open" type="boolean"/&gt;
@@ -41,7 +41,22 @@
 	        //&lt;element maxOccurs="unbounded" minOccurs="0" ref="kml:StyleSelector"/&gt;
 	        //&lt;element minOccurs="0" ref="kml:Region"/&gt;
 	        //&lt;element minOccurs="0" name="Metadata" type="kml:MetadataType"/&gt;
-    	}
+
+                // this is KML 2.2-specific
+                if ("ExtendedData".equals(name.getLocalPart())) {
+                    SimpleFeatureType t = feature.getFeatureType();
+                    List<Map.Entry<Name, Object>> attributes = new LinkedList<Map.Entry<Name, Object>>();
+
+                    for (AttributeDescriptor ad : t.getAttributeDescriptors()) {
+                        Object obj = feature.getAttribute(ad.getName());
+                        // do not include geographic attributes
+                        if (!(obj instanceof Geometry))
+                            attributes
+                                    .add(new AbstractMap.SimpleEntry<Name, Object>(ad.getName(), obj));
+                    }
+                    return attributes;
+                }
+        }
         return super.getProperty(object, name);
     }
 
