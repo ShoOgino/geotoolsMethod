@@ -4,19 +4,22 @@
         }
 
         GeometryHeaderFlags flags = new GeometryHeaderFlags((byte)0);
-        flags.setVersion((byte)0);
-        flags.setEndianess(ByteOrderValues.BIG_ENDIAN);
-        flags.setEnvelopeIndicator(g instanceof Point ? EnvelopeType.NONE : EnvelopeType.XY);
-
+        
+        flags.setBinaryType(GeopackageBinaryType.StandardGeoPackageBinary);
+        flags.setEmpty(g.isEmpty());
+        flags.setEndianess(ByteOrderValues.BIG_ENDIAN);        
+        flags.setEnvelopeIndicator(config.isWriteEnvelope() ? EnvelopeType.XY : EnvelopeType.NONE);
+        
         GeometryHeader h = new GeometryHeader();
         h.setVersion((byte)0);
         h.setFlags(flags);
-        h.setEnvelope(g.getEnvelopeInternal());
         h.setSrid(g.getSRID());
+        if (config.isWriteEnvelope()) {
+            h.setEnvelope(g.getEnvelopeInternal());
+        }
         
         //write out magic + flags + srid + envelope
         byte[] buf = new byte[8];
-        //byte[] buf = new byte[4 + 4 + flags.getEnvelopeIndicator().length];
         buf[0] = 0x47;
         buf[1] = 0x50;
         buf[2] = h.getVersion();
@@ -42,8 +45,6 @@
             out.write(buf, 8);
         }
         
-        //out.write(buf, buf.length);
-
         new WKBWriter(2, order).write(g, out);
     }
 
