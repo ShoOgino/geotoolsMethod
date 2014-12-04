@@ -1,4 +1,5 @@
-    private void renderGraphicsStroke(Graphics2D graphics, double x, double y, Style2D style, double rotation, float opacity, boolean isLabelObstacle) {
+    private void renderGraphicsStroke(Graphics2D graphics, double x, double y, Style2D style,
+            double rotation, double graphicRotation, float opacity, boolean isLabelObstacle) {
         if (LOGGER.isLoggable(Level.FINEST)) {
             LOGGER.finest("drawing GraphicsStroke@" + x + "," + y);
         }
@@ -6,13 +7,17 @@
         graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, opacity));
         
         if(style instanceof GraphicStyle2D) {
-            BufferedImage image = ((GraphicStyle2D) style).getImage();
-            renderImage(graphics, x, y, image, rotation, opacity, isLabelObstacle);
+            GraphicStyle2D gstyle = (GraphicStyle2D) style;
+            BufferedImage image = gstyle.getImage();
+            double dx = -image.getWidth() * gstyle.getAnchorPointX() + gstyle.getDisplacementX();
+            double dy = -image.getHeight() * gstyle.getAnchorPointY() + gstyle.getDisplacementY();
+            renderImage(graphics, x, y, dx, dy, image, rotation, opacity, isLabelObstacle);
         } else if(style instanceof MarkStyle2D) {
             // almost like the code in the main paint method, but 
             // here we don't use the mark composite
             MarkStyle2D ms2d = (MarkStyle2D) style;
-            Shape transformedShape = ms2d.getTransformedShape((float) x, (float) y, (float) rotation);
+            Shape transformedShape = ms2d.getTransformedShape((float) x, (float) y,
+                    (float) rotation, (float) graphicRotation);
             if (transformedShape != null) {
                 if (ms2d.getFill() != null) {
                     graphics.setPaint(ms2d.getFill());
@@ -37,8 +42,10 @@
             markAT.translate(x, y);
             markAT.rotate(rotation);
             
-            double dx = -icon.getIconWidth() / 2.0;
-            double dy = -icon.getIconHeight() / 2.0;
+            // the displacement to be applied to all points, centers the icon and applies the
+            // Graphic displacement as well
+            float dx = -(icon.getIconWidth() * icons.getAnchorPointX()) + icons.getDisplacementX();
+            float dy = -(icon.getIconHeight() * icons.getAnchorPointY()) + icons.getDisplacementY();
             markAT.translate(dx, dy);
 
             AffineTransform temp = graphics.getTransform();
