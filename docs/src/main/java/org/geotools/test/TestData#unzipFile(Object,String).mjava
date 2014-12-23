@@ -1,0 +1,58 @@
+    /**
+     * Unzip a file in the {@code test-data} directory. The zip file content is inflated in place,
+     * i.e. inflated files are written in the same {@code test-data} directory. If a file to be
+     * inflated already exists in the {@code test-data} directory, then the existing file is left
+     * untouched and the corresponding ZIP entry is silently skipped. This approach avoid the
+     * overhead of inflating the same files many time if this {@code unzipFile} method is invoked
+     * before every tests.
+     * <p>
+     * Inflated files will be automatically {@linkplain File#deleteOnExit deleted on exit}
+     * if and only if they have been modified. Callers don't need to worry about cleanup,
+     * because the files are inflated in the {@code target/.../test-data} directory, which
+     * is not versionned by SVN and is cleaned by Maven on {@code mvn clean} execution.
+     *
+     * @param  caller The class of the object associated with named data.
+     * @param  name The file name to unzip in place.
+     * @throws FileNotFoundException if the specified zip file is not found.
+     * @throws IOException if an error occurs during an input or output operation.
+     *
+     * @since 2.2
+     */
+    public static void unzipFile(final Object caller, final String name)
+            throws FileNotFoundException, IOException
+    {
+        final File        file    = file(caller, name);
+        final File        parent  = file.getParentFile().getAbsoluteFile();
+        final ZipFile     zipFile = new ZipFile(file);
+        final Enumeration entries = zipFile.entries();
+        final byte[]      buffer  = new byte[4096];
+        while (entries.hasMoreElements()) {
+            final ZipEntry entry = (ZipEntry) entries.nextElement();
+            if (entry.isDirectory()) {
+                continue;
+            }
+            final File path = new File(parent, entry.getName());
+            if (path.exists()) {
+                continue;
+            }
+            final File directory = path.getParentFile();
+            if (directory != null && !directory.exists()) {
+                directory.mkdirs();
+            }
+            // Copy the file. Note: no need for a BufferedOutputStream,
+            // since we are already using a buffer of type byte[4096].
+            final InputStream  in  = zipFile.getInputStream(entry);
+            final OutputStream out = new FileOutputStream(path);
+            int len;
+            while ((len = in.read(buffer)) >= 0) {
+                out.write(buffer, 0, len);
+            }
+            out.close();
+            in.close();
+            // Call 'deleteOnExit' only after after we closed the file,
+            // because this method will save the modification time.
+            deleteOnExit(path, false);
+        }
+        zipFile.close();
+    }
+
