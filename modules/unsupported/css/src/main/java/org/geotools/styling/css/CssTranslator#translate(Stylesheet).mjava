@@ -5,6 +5,11 @@
      * @return
      */
     public Style translate(Stylesheet stylesheet) {
+        // get the directives influencing translation
+        int maxCombinations = getMaxCombinations(stylesheet);
+        TranslationMode mode = getTranslationMode(stylesheet);
+        
+
         List<CssRule> allRules = stylesheet.getRules();
 
         if (LOGGER.isLoggable(Level.FINE)) {
@@ -31,10 +36,11 @@
             for (Map.Entry<String, List<CssRule>> entry : typenameRules.entrySet()) {
                 // create the feature type style for this typename
                 FeatureTypeStyleBuilder ftsBuilder = styleBuilder.featureTypeStyle();
-                if (!exclusiveRulesEnabled) {
+                // regardless of the translation mode, the first rule matching is
+                // the only one that we want to be applied (in exclusive mode it will be
+                // the only one matching, the simple mode we want the evaluation to stop there)
                     ftsBuilder.option(FeatureTypeStyle.KEY_EVALUATION_MODE,
-                        FeatureTypeStyle.VALUE_EVALUATION_MODE_FIRST);
-                }
+                            FeatureTypeStyle.VALUE_EVALUATION_MODE_FIRST);
                 String featureTypeName = entry.getKey();
                 List<CssRule> localRules = entry.getValue();
                 if (featureTypeName != null) {
@@ -90,7 +96,7 @@
                 // create a SLD rule for each css one, making them exclusive, that is,
                 // remove from each rule the union of the zoom/data domain matched by previous rules
                 DomainCoverage coverage = new DomainCoverage(targetFeatureType, cachedSimplifier);
-                coverage.exclusiveRulesEnabled = exclusiveRulesEnabled;
+                coverage.exclusiveRulesEnabled = (mode == TranslationMode.Exclusive);
                 for (int i = 0; i < combinedRules.size(); i++) {
                     // skip eventual combinations that are not sporting any
                     // root pseudo class
