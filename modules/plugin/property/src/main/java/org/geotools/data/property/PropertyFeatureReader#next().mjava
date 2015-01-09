@@ -1,28 +1,36 @@
     /**
-     * DOCUMENT ME!
+     * Grab the next feature from the property file.
      * 
-     * @return DOCUMENT ME!
+     * @return feature
      * 
-     * @throws IOException DOCUMENT ME!
-     * @throws NoSuchElementException DOCUMENT ME!
+     * @throws IOException
+     * @throws NoSuchElementException Check hasNext() to avoid reading off the end of the file
      */
     public SimpleFeature next() throws IOException, NoSuchElementException {
-        reader.next();
-
-        SimpleFeatureType type = reader.type;
-        String fid = reader.getFeatureID();
-        Object[] values = new Object[reader.getAttributeCount()];
-
-        for (int i = 0; i < reader.getAttributeCount(); i++) {
+        if (hasNext()) {
+            line = next;
+            next = null;
+            
+            int split = line.indexOf('=');
+            fid = line.substring(0, split);
+            text = line.substring(split + 1).split("\\|", -1);// use -1 as limit to include empty trailing spaces
+            if (type.getAttributeCount() != text.length)
+                throw new DataSourceException("Format error: expected " + type.getAttributeCount()
+                        + " attributes, but found " + text.length + ". [" + line + "]");
+        } else {
+            throw new NoSuchElementException();
+        }
+        Object[] values = new Object[type.getAttributeCount()];
+        
+        for (int i = 0; i < type.getAttributeCount(); i++) {
             try {
-                values[i] = reader.read(i);
+                values[i] = read(i);
             } catch (RuntimeException e) {
                 values[i] = null;
             } catch (IOException e) {
                 throw e;
             }
         }
-
         return SimpleFeatureBuilder.build(type, values, fid);
     }
 
