@@ -18,10 +18,38 @@
         final GridCoverage2D gc1 = rescaleCoverage(gc);
 
         // get the non-geophysiscs view
-        final GridCoverage2D gc2 = gc1.geophysics(false);
+        final GridCoverage2D gc2 = gc1;
 
         // get the underlying image
-        final RenderedImage image = gc2.getRenderedImage();
+        RenderedImage image = gc2.getRenderedImage();
+        
+        ColorModel cm = image.getColorModel();
+        SampleModel sm = image.getSampleModel();
+
+        // Taking this code from previous rendering utilities on ViewsManager
+        if (!(cm instanceof IndexColorModel)) {
+            ImageLayout layout = ImageUtilities.getImageLayout(image);
+            cm = ColorUtilities.getIndexColorModel(new int[]{0});
+            int sourceType = sm.getDataType();
+            sm = cm.createCompatibleSampleModel(layout.getTileWidth(image), layout.getTileHeight(image));
+            int targetType = sm.getDataType();
+            MathTransform1D transform = LinearTransform1D.create(1, 9999);
+            layout.setColorModel(cm).setSampleModel(sm);
+            ParameterBlock param = new ParameterBlock().addSource(image);
+            RenderingHints hints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout);
+            hints.put(JAI.KEY_REPLACE_INDEX_COLOR_MODEL, Boolean.FALSE);
+            hints.put(JAI.KEY_TRANSFORM_ON_COLORMAP,     Boolean.FALSE);
+            try {
+                LookupTableJAI table = LookupTableFactory.create(sourceType, targetType, new MathTransform1D[]{transform});
+                String operation = "Lookup";
+                param = param.add(table);
+                image = JAI.create(operation, param, hints);
+                
+            } catch (TransformException e) {
+                LOGGER.severe(e.getLocalizedMessage());
+            }
+            
+        }
 
         // get the image out stream
 		if (dest instanceof File) {
