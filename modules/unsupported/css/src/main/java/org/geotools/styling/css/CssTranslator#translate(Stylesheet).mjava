@@ -22,31 +22,23 @@
 
         // split rules by index and typename, then build the power set for each group and
         // generate the rules and symbolizers
-        List<List<CssRule>> zIndexRules = organizeByZIndex(allRules);
+        Map<Integer, List<CssRule>> zIndexRules = organizeByZIndex(allRules);
 
         if (LOGGER.isLoggable(Level.FINE)) {
             LOGGER.fine("Split the rules into " + zIndexRules + "  sets after z-index separation");
         }
 
-        for (List<CssRule> rules : zIndexRules) {
+        for (Map.Entry<Integer, List<CssRule>> zEntry : zIndexRules.entrySet()) {
+            final Integer zIndex = zEntry.getKey();
+            List<CssRule> rules = zEntry.getValue();
             Collections.sort(rules, CssRuleComparator.DESCENDING);
             Map<String, List<CssRule>> typenameRules = organizeByTypeName(rules);
 
             // build the SLD
             for (Map.Entry<String, List<CssRule>> entry : typenameRules.entrySet()) {
-                // create the feature type style for this typename
-                FeatureTypeStyleBuilder ftsBuilder = styleBuilder.featureTypeStyle();
-                // regardless of the translation mode, the first rule matching is
-                // the only one that we want to be applied (in exclusive mode it will be
-                // the only one matching, the simple mode we want the evaluation to stop there)
-                ftsBuilder.option(FeatureTypeStyle.KEY_EVALUATION_MODE,
-                        FeatureTypeStyle.VALUE_EVALUATION_MODE_FIRST);
                 String featureTypeName = entry.getKey();
                 List<CssRule> localRules = entry.getValue();
-                if (featureTypeName != null) {
-                    ftsBuilder.setFeatureTypeNames(Arrays.asList((Name) new NameImpl(
-                            featureTypeName)));
-                }
+
                 final FeatureType targetFeatureType = getTargetFeatureType(featureTypeName,
                         localRules);
                 if (targetFeatureType != null) {
@@ -83,8 +75,34 @@
 
                 // expand the css rules power set
                 RulePowerSetBuilder builder = new RulePowerSetBuilder(flattenedRules,
-                        cachedSimplifier, maxCombinations);
+                        cachedSimplifier, maxCombinations) {
+                    protected java.util.List<CssRule> buildResult(java.util.List<CssRule> rules) {
+                        if (zIndex != null && zIndex > 0) {
+                            TreeSet<Integer> zIndexes = getZIndexesForRules(rules);
+                            if (!zIndexes.contains(zIndex)) {
+                                return null;
+                            }
+                        }
+                        return super.buildResult(rules);
+                    }
+                };
                 List<CssRule> combinedRules = builder.buildPowerSet();
+
+                if (combinedRules.isEmpty()) {
+                    continue;
+                }
+
+                // create the feature type style for this typename
+                FeatureTypeStyleBuilder ftsBuilder = styleBuilder.featureTypeStyle();
+                // regardless of the translation mode, the first rule matching is
+                // the only one that we want to be applied (in exclusive mode it will be
+                // the only one matching, the simple mode we want the evaluation to stop there)
+                ftsBuilder.option(FeatureTypeStyle.KEY_EVALUATION_MODE,
+                        FeatureTypeStyle.VALUE_EVALUATION_MODE_FIRST);
+                if (featureTypeName != null) {
+                    ftsBuilder.setFeatureTypeNames(Arrays.asList((Name) new NameImpl(
+                            featureTypeName)));
+                }
 
                 Collections.sort(combinedRules, CssRuleComparator.DESCENDING);
 

@@ -4,33 +4,31 @@
      * @param rules
      * @return
      */
-    private List<List<CssRule>> organizeByZIndex(List<CssRule> rules) {
-        // collect and sort all the indexes first
-        TreeSet<Integer> indexes = new TreeSet<>(new ZIndexComparator());
-        for (CssRule rule : rules) {
-            Set<Integer> ruleIndexes = rule.getZIndexes();
-            indexes.addAll(ruleIndexes);
-        }
-
-        // now for each level extract the sub-rules attached to that level,
-        // considering that properties not associated to a level, bind to all levels
-        List<List<CssRule>> result = new ArrayList<>();
-        int symbolizerPropertyCount = 0;
-        for (Integer index : indexes) {
-            List<CssRule> rulesByIndex = new ArrayList<>();
-            for (CssRule rule : rules) {
-                CssRule subRule = rule.getSubRuleByZIndex(index);
-                if (subRule != null) {
-                    if (subRule.hasSymbolizerProperty()) {
-                        symbolizerPropertyCount++;
+    private Map<Integer, List<CssRule>> organizeByZIndex(List<CssRule> rules) {
+        TreeSet<Integer> indexes = getZIndexesForRules(rules);
+        Map<Integer, List<CssRule>> result = new HashMap<>();
+        if (indexes.size() == 1) {
+            result.put(indexes.first(), rules);
+        } else {
+            // now for each level extract the sub-rules attached to that level,
+            // considering that properties not associated to a level, bind to all levels
+            int symbolizerPropertyCount = 0;
+            for (Integer index : indexes) {
+                List<CssRule> rulesByIndex = new ArrayList<>();
+                for (CssRule rule : rules) {
+                    CssRule subRule = rule.getSubRuleByZIndex(index);
+                    if (subRule != null) {
+                        if (subRule.hasSymbolizerProperty()) {
+                            symbolizerPropertyCount++;
+                        }
+                        rulesByIndex.add(subRule);
                     }
-                    rulesByIndex.add(subRule);
                 }
-            }
-            // do we have at least one property that will trigger the generation
-            // of a symbolizer in here?
-            if (symbolizerPropertyCount > 0) {
-                result.add(rulesByIndex);
+                // do we have at least one property that will trigger the generation
+                // of a symbolizer in here?
+                if (symbolizerPropertyCount > 0) {
+                    result.put(index, rulesByIndex);
+                }
             }
         }
 
