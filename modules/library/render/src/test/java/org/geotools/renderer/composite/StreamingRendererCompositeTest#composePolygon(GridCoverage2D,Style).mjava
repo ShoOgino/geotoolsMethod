@@ -1,0 +1,38 @@
+    private BufferedImage composePolygon(GridCoverage2D first, Style polygonStyle)
+            throws SchemaException, IOException {
+        // build the map content
+        MapContent mc = new MapContent();
+        StyleBuilder sb = new StyleBuilder();
+        // first layer is the usual coverage
+        Style baseStyle = sb.createStyle(sb.createRasterSymbolizer());
+        mc.addLayer(new GridCoverageLayer(first, baseStyle));
+
+        // second layer is a polygon covering the whole map
+        RenderedImage referenceImage = first.getRenderedImage();
+        int w = referenceImage.getWidth();
+        int h = referenceImage.getHeight();
+        LinearRing shell = new LinearRing(new LiteCoordinateSequence(0, 0, 0, h, w, h, w, 0, 0, 0),
+                GEOMETRY_FACTORY);
+        Polygon polygon = new Polygon(shell, null, GEOMETRY_FACTORY);
+        SimpleFeatureType ft = DataUtilities.createType("test", "geom:Polygon:srid=4326");
+        SimpleFeatureBuilder fb = new SimpleFeatureBuilder(ft);
+        fb.add(polygon);
+        SimpleFeature pointFeature = fb.buildFeature(null);
+        SimpleFeatureCollection collection = DataUtilities.collection(pointFeature);
+
+        // load the point style
+        mc.addLayer(new FeatureLayer(collection, polygonStyle));
+
+        // prepare the graphics for the streaming renderer and paint
+        BufferedImage blended = new BufferedImage(referenceImage.getWidth(),
+                referenceImage.getWidth(), BufferedImage.TYPE_4BYTE_ABGR);
+        Graphics2D graphics = blended.createGraphics();
+        StreamingRenderer sr = new StreamingRenderer();
+        sr.setMapContent(mc);
+        sr.paint(graphics,
+                new Rectangle(0, 0, referenceImage.getWidth(), referenceImage.getHeight()),
+                ReferencedEnvelope.reference(first.getEnvelope()));
+        graphics.dispose();
+        return blended;
+    }
+

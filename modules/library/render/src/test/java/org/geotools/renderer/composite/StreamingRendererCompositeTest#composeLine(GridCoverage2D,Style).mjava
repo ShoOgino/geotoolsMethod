@@ -1,0 +1,36 @@
+    private BufferedImage composeLine(GridCoverage2D first, Style lineStyle)
+            throws SchemaException, IOException {
+        // build the map content
+        MapContent mc = new MapContent();
+        StyleBuilder sb = new StyleBuilder();
+        // first layer is the usual coverage
+        Style baseStyle = sb.createStyle(sb.createRasterSymbolizer());
+        mc.addLayer(new GridCoverageLayer(first, baseStyle));
+
+        // second layer is a line in the middle of the map
+        RenderedImage referenceImage = first.getRenderedImage();
+        LineString midLine = new LineString(new LiteCoordinateSequence(0,
+                referenceImage.getHeight() / 2d, referenceImage.getWidth(),
+                referenceImage.getHeight() / 2d), GEOMETRY_FACTORY);
+        SimpleFeatureType ft = DataUtilities.createType("test", "geom:LineString:srid=4326");
+        SimpleFeatureBuilder fb = new SimpleFeatureBuilder(ft);
+        fb.add(midLine);
+        SimpleFeature pointFeature = fb.buildFeature(null);
+        SimpleFeatureCollection collection = DataUtilities.collection(pointFeature);
+
+        // load the point style
+        mc.addLayer(new FeatureLayer(collection, lineStyle));
+
+        // prepare the graphics for the streaming renderer and paint
+        BufferedImage blended = new BufferedImage(referenceImage.getWidth(),
+                referenceImage.getWidth(), BufferedImage.TYPE_4BYTE_ABGR);
+        Graphics2D graphics = blended.createGraphics();
+        StreamingRenderer sr = new StreamingRenderer();
+        sr.setMapContent(mc);
+        sr.paint(graphics,
+                new Rectangle(0, 0, referenceImage.getWidth(), referenceImage.getHeight()),
+                ReferencedEnvelope.reference(first.getEnvelope()));
+        graphics.dispose();
+        return blended;
+    }
+
