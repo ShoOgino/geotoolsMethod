@@ -1,22 +1,37 @@
     @Override
     public Set<String> getServerSupportedOutputFormats(WFSOperationType operation) {
-        OperationsMetadataType omt = this.capabilities.getOperationsMetadata();
-        omt.getOperation();
+         String parameterName;
 
-        trace("Looking suppoerted output formats for ", operation);
-
-        List<OperationType> operations = capabilities.getOperationsMetadata().getOperation();
-        for (OperationType op : operations) {
-            if (!operation.getName().equals(op.getName())) {
-                continue;
+        final Version serviceVersion = getServiceVersion();
+        final boolean wfs1_0 = Versions.v1_0_0.equals(serviceVersion);
+        switch (operation) {
+        case GET_FEATURE:
+            parameterName = wfs1_0 ? "ResultFormat" : "outputFormat";
+            break;
+        case DESCRIBE_FEATURETYPE:
+            parameterName = wfs1_0 ? "SchemaDescriptionLanguage" : "outputFormat";
+            break;
+        case GET_FEATURE_WITH_LOCK:
+            parameterName = wfs1_0 ? "ResultFormat" : "outputFormat";
+            break;
+        case TRANSACTION:
+            if (wfs1_0) {
+                //TODO: not sure what to do here.
+                //this is a hack, there appears to be no format info in the 1.0 capabilities for transaction
+                operation = GET_FEATURE;
+                parameterName = "ResultFormat";
+            } else {
+                parameterName = "inputFormat";
             }
-
-            for (Object o : op.getParameter()) {
-                System.out.println(o);
-            }
-
+            break;
+        default:
+            throw new UnsupportedOperationException("not yet implemented for " + operation);
         }
-        // TODO Auto-generated method stub
-        return null;
+        
+        final OperationType operationMetadata = getOperationMetadata(operation);
+
+        Set<String> serverSupportedFormats;
+        serverSupportedFormats = findParameters(operationMetadata, parameterName);
+        return serverSupportedFormats;
     }
 
