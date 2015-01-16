@@ -17,6 +17,7 @@
         ArrayList<LiteFeatureTypeStyle> result = new ArrayList<LiteFeatureTypeStyle>();
 
         LiteFeatureTypeStyle lfts;
+        boolean foundComposite = false;
         for (FeatureTypeStyle fts : featureStyles) {
             if (isFeatureTypeStyleActive(ftype, fts)) {
                 // DJB: this FTS is compatible with this FT.
@@ -28,16 +29,22 @@
 
                 // if none, skip it
                 if ((ruleList.isEmpty()) && (elseRuleList.isEmpty()))
-                    continue; 
+                    continue;
 
-                // we can optimize this one!
-                if (result.isEmpty() || !isOptimizedFTSRenderingEnabled()) {
+                // get the fts level composition, if any
+                Composite composite = styleFactory.getComposite(fts.getOptions());
+                foundComposite |= composite != null;
+
+                // we can optimize this one and draw directly on the graphics, assuming
+                // there is no composition
+                if (!foundComposite && (result.isEmpty() || !isOptimizedFTSRenderingEnabled())) {
                     lfts = new LiteFeatureTypeStyle(graphics, ruleList,
                             elseRuleList, fts.getTransformation());
                 } else {
                     lfts = new LiteFeatureTypeStyle(new DelayedBackbufferGraphic(graphics, screenSize), 
                             ruleList, elseRuleList, fts.getTransformation());
                 }
+                lfts.composite = composite;
                 if (FeatureTypeStyle.VALUE_EVALUATION_MODE_FIRST.equals(fts.getOptions().get(
                         FeatureTypeStyle.KEY_EVALUATION_MODE))) {
                     lfts.matchFirst = true;
