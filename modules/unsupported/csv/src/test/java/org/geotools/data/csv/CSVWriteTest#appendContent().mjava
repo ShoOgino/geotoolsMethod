@@ -1,8 +1,6 @@
     @Test
     public void appendContent() throws Exception {
-        System.out.println("appendContent start\n");
         File directory = tmp;
-        // appendContent start
         Map<String, Serializable> params = new HashMap<String, Serializable>();
         params.put("file", file);
         DataStore store = DataStoreFinder.getDataStore(params);
@@ -24,7 +22,6 @@
         reader = store.getFeatureReader(query, Transaction.AUTO_COMMIT);
         
         writer = duplicate.getFeatureWriterAppend("duplicate", Transaction.AUTO_COMMIT);
-        // writer = duplicate.getFeatureWriter("duplicate", Transaction.AUTO_COMMIT);
         try {
             while (reader.hasNext()) {
                 feature = reader.next();
@@ -37,11 +34,23 @@
             reader.close();
             writer.close();
         }
-
-        // appendContent end
-        System.out.println("\nappendContent end\n");
         
-        fileContents("appendContent",file2);
+        // Test that content was appended
+        SimpleFeatureStore featureStore = (SimpleFeatureStore) store.getFeatureSource("locations");
+        assertEquals(9, featureStore.getFeatures().size());
 
+        // Compare the new file written to with the old one
+        ByteArrayOutputStream baos1 = new ByteArrayOutputStream();
+        ByteArrayOutputStream baos2 = new ByteArrayOutputStream();
+        Files.copy(file.toPath(), baos1);
+        Files.copy(file2.toPath(), baos2);
+        String contents1 = new String(baos1.toByteArray(), StandardCharsets.UTF_8);
+        String contents2 = new String(baos2.toByteArray(), StandardCharsets.UTF_8);
+
+        // Making sure whitespace doesn't cause problems
+        contents1 = contents1.replace(" ", "").trim();
+        contents2 = contents2.replace(" ", "").trim();
+
+        assertEquals("Contents of both files should be the same", contents1, contents2);
     }
 
