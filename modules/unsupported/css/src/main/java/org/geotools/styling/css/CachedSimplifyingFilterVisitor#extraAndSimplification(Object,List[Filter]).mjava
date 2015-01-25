@@ -1,4 +1,32 @@
     protected List<Filter> extraAndSimplification(Object extraData, List<Filter> filters) {
+        if (filters.size() > 1) {
+            // if there are nested ors and top level filters, try factoring out common expression,
+            // e.g., (A | B) & A -> A
+            Set<Filter> topLevel = new HashSet<>();
+            for (Filter filter : filters) {
+                if (!(filter instanceof Or)) {
+                    topLevel.add(filter);
+                }
+            }
+            for (int i = 0; i < filters.size();) {
+                Filter f = filters.get(i);
+                boolean skip = false;
+                if (f instanceof Or) {
+                    Or or = ((Or) f);
+                    for (Filter child : or.getChildren()) {
+                        if (topLevel.contains(child)) {
+                            skip = true;
+                            break;
+                        }
+                    }
+                }
+                if (skip) {
+                    filters.remove(i);
+                } else {
+                    i++;
+                }
+            }
+        }
         // if there are nested Ors, try distribution, see if this helps reduce the
         // overall expression
         if (filters.size() > 1) {
