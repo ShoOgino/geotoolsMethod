@@ -24,9 +24,12 @@
 	        final RenderedImage sourceImage = sourceCoverage.getRenderedImage();
 	        GridCoverageRendererUtilities.ensureSourceNotNull(sourceImage, this.getName().toString());
 	        //prepare the colorMapTransform operation
-	        final ParameterBlock pbj = new ParameterBlock();
-	        pbj.addSource(sourceImage).add(colorMapTransform);
-	        final RenderedOp classified = JAI.create(RasterClassifier.OPERATION_NAME,pbj);
+	        ImageWorker w = new ImageWorker(sourceImage);
+	        w.setROI(CoverageUtilities.getROIProperty(sourceCoverage));
+	        NoDataContainer noDataProperty = CoverageUtilities.getNoDataProperty(sourceCoverage);
+                w.setNoData(noDataProperty != null ? noDataProperty.getAsRange() : null);
+	        w.classify(colorMapTransform, null);
+	        final RenderedOp classified = w.getRenderedOperation();//JAI.create(RasterClassifierOpImage.OPERATION_NAME,pbj);
 
 	        ////
 	        //
@@ -45,14 +48,21 @@
                 // Create the the output coverage by preserving its gridgeometry and its bands
                 //
                 ////
-		return getCoverageFactory().create(
-		        "color_mapped_"+sourceCoverage.getName().toString(), 
-		        classified,
-		        sourceCoverage.getGridGeometry(),
-		        sd,
-		        new GridCoverage[]{sourceCoverage},
-		        sourceCoverage.getProperties()
-		        );
+		Map properties = sourceCoverage.getProperties();
+		if(properties == null){
+		    properties = new HashMap<>();
+		}
+		CoverageUtilities.setROIProperty(properties, w.getROI());
+                CoverageUtilities.setNoDataProperty(properties, w.getNoData());
+
+                return getCoverageFactory().create(
+        		        "color_mapped_"+sourceCoverage.getName().toString(), 
+        		        classified,
+        		        sourceCoverage.getGridGeometry(),
+        		        sd,
+        		        new GridCoverage[]{sourceCoverage},
+        		        properties
+        		        );
 	    }
 	    return sourceCoverage;	
 

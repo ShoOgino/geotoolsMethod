@@ -39,6 +39,7 @@
 			ImageLayout layout = null;
 			final Hints hints = getHints();
 			final List<GridCoverage2D> sourceGridCoverages= new ArrayList<GridCoverage2D>();
+			ImageWorker w = new ImageWorker();
 			do {
 				// //
 				//
@@ -71,15 +72,36 @@
 				// merges
 				//
 				// //
-				if (op == null)
+				if (op == null){
 					op = currentSourceCoverage.getRenderedImage();
+					w.setImage(op);
+					w.setROI(CoverageUtilities.getROIProperty(currentSourceCoverage));
+					NoDataContainer container = CoverageUtilities.getNoDataProperty(currentSourceCoverage);
+					w.setNoData(container != null ? container.getAsRange() : null);
+				}
 				else {
-					op = BandMergeDescriptor.create(op, currentSourceCoverage.getRenderedImage(), hints);
+					w.setRenderingHints(hints);
+					// ROI handling
+					ROI roi = w.getROI();
+					ROI roiProperty = CoverageUtilities.getROIProperty(currentSourceCoverage);
+                                        if(roi != null){
+					    if(roiProperty != null){
+					        roi = roi.intersect(roiProperty);
+					    }
+					    
+					}else if(roiProperty != null){
+					    roi = roiProperty;
+					}
+                                        
+                                        w.setROI(roi);
+                                        NoDataContainer container = CoverageUtilities.getNoDataProperty(currentSourceCoverage);
+				        w.addBand(currentSourceCoverage.getRenderedImage(), false, false, container != null ? container.getAsRange() : null);
 					// //
 					//
 					// Save the intermediate image
 					//
 					// //
+				        op = w.getRenderedImage();
 					intermediateOps.add(op);
 				}
 
@@ -92,18 +114,22 @@
 			// /////////////////////////////////////////////////////////////////////
 			if (layout != null)
 				hints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
-			op = FormatDescriptor.create(op, Integer.valueOf(op.getSampleModel().getDataType()), hints);
+			op = w.format(op.getSampleModel().getDataType()).getRenderedImage();
 			final GridSampleDimension [] sd= new GridSampleDimension[op.getSampleModel().getNumBands()];
 			for(int i=0;i<sd.length;i++)
 			    sd[i]= new GridSampleDimension(TypeMap.getColorInterpretation(op.getColorModel(), i).name());
 		                
+			// Defining NoData and ROI properties
+			Map<String, Object> properties = new HashMap<>();
+			CoverageUtilities.setNoDataProperty(properties, w.getNoData());
+			CoverageUtilities.setROIProperty(properties, w.getROI());
 			return getCoverageFactory().create(
 			        "BandMerge",
 			        op,
 			        gridGeometry,
 			        null, 
 			        sourceGridCoverages.toArray(new GridCoverage[sourceGridCoverages.size()]),
-			        null);
+			        properties);
 
 		}
 		throw new IllegalStateException(Errors.format(

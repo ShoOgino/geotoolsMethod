@@ -37,6 +37,15 @@
 				//
 				// /////////////////////////////////////////////////////////////////////
 
+	                        // //
+                                //
+                                // Get the ROI and NoData from the input coverageS
+                                //
+                                ////
+				ROI roi = CoverageUtilities.getROIProperty(source);
+				NoDataContainer noDataContainer = CoverageUtilities.getNoDataProperty(source);
+                                Range nodata = noDataContainer != null ? noDataContainer.getAsRange() : null;
+				
 				// //
 				//
 				// Get the source image and if necessary convert it to use a
@@ -50,25 +59,25 @@
 				// apply HISTOGRAM anyway
 				//
 				////
-				RenderedImage initialImage;
+                                ImageWorker worker;
 				if(type!=null&&type.equalsIgnoreCase("HISTOGRAM"))
 				{
-					initialImage = 
+				        worker = 
 						new ImageWorker(sourceImage)
+					                .setROI(roi).setNoData(nodata)
 							.setRenderingHints(hints)
 							.forceComponentColorModel()
-							.rescaleToBytes()
-							.getRenderedImage();
+							.rescaleToBytes();
 				}
 				else
 				{
-					initialImage = 
+                                        worker =  
 						new ImageWorker(sourceImage)
+					                .setROI(roi).setNoData(nodata)
 							.setRenderingHints(hints)
-							.forceComponentColorModel()
-							.getRenderedImage();
+							.forceComponentColorModel();
 				}
-				final int numbands = initialImage.getSampleModel().getNumBands();
+				final int numbands = worker.getNumBands();
 
 
 				// //
@@ -81,13 +90,12 @@
 				RenderedImage alphaBand = null;
 				if (numbands % 2 == 0) {
 					// get the alpha band
-					alphaBand = new ImageWorker(initialImage)
+					alphaBand = new ImageWorker(worker.getRenderedImage())
 							.setRenderingHints(hints).retainLastBand()
 							.getRenderedImage();
 					// strip the alpha band from the original image
-					initialImage = new ImageWorker(initialImage)
-							.setRenderingHints(hints).retainBands(numbands - 1)
-							.getRenderedImage();
+					        worker
+							.setRenderingHints(hints).retainBands(numbands - 1);
 				}
 
 				// //
@@ -96,7 +104,7 @@
 				// intensity for RGB(A) or the GRAY channel for Gray(A)
 				//
 				// //
-				RenderedImage intensityImage = null;
+				ImageWorker intensityWorker;
 				RenderedImage hChannel = null;
 				RenderedImage sChannel = null;
 				final boolean intensity;
@@ -104,13 +112,12 @@
 				if (numbands > 1) {
 					// convert the prepared image to IHS colorspace to work
 					// on I band
-					IHS = new ImageWorker(initialImage)
+					IHS = worker
 							.setRenderingHints(hints).forceColorSpaceIHS()
 							.getRenderedImage();
 
 					// get the various singular bands
-					intensityImage = new ImageWorker(IHS).setRenderingHints(
-							hints).retainFirstBand().getRenderedImage();
+					intensityWorker = worker.setRenderingHints(hints).retainFirstBand();
 					sChannel = new ImageWorker(IHS).setRenderingHints(hints)
 							.retainLastBand().getRenderedImage();
 					hChannel = new ImageWorker(IHS).setRenderingHints(hints)
@@ -122,8 +129,8 @@
 					// we have only one band we don't need to go to IHS
 					//
 					// //
-					intensityImage = initialImage;
-					intensity = false;
+				        intensityWorker = worker;
+				        intensity = false;
 				}
 
 				// /////////////////////////////////////////////////////////////////////
@@ -133,8 +140,7 @@
 				// 
 				//
 				// /////////////////////////////////////////////////////////////////////
-				final RenderedImage heImage = performContrastEnhancement(intensityImage, hints);
-					
+				performContrastEnhancement(intensityWorker, hints);	
 
 				// /////////////////////////////////////////////////////////////////////
 				//
@@ -144,7 +150,7 @@
 				// correction function's values.
 				//
 				// /////////////////////////////////////////////////////////////////////
-				RenderedImage finalImage = performGammaCorrection(heImage,hints);
+				performGammaCorrection(intensityWorker,hints);
 
 				// /////////////////////////////////////////////////////////////////////
 				//
@@ -176,13 +182,8 @@
 					rendHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT,imageLayout));
 					
 					// merge and go to rgb again
-					final ParameterBlock pb = new ParameterBlock();
-					pb.addSource(finalImage);
-					pb.addSource(hChannel);
-					pb.addSource(sChannel);
-					finalImage = JAI.create("bandmerge", pb, rendHints);
-					finalImage = new ImageWorker(finalImage).setRenderingHints(hints).forceColorSpaceRGB().getRenderedImage();
-
+					intensityWorker.setRenderingHints(rendHints).addBands(new RenderedImage[]{hChannel, sChannel}, false, null);
+					intensityWorker.setRenderingHints(hints).forceColorSpaceRGB();
 				}
 
 				// //
@@ -203,14 +204,12 @@
 							Transparency.TRANSLUCENT, DataBuffer.TYPE_BYTE);
 					final ImageLayout imageLayout = new ImageLayout();
 					imageLayout.setColorModel(cm);
-					imageLayout.setSampleModel(cm.createCompatibleSampleModel(finalImage.getWidth(), finalImage.getHeight()));
+					imageLayout.setSampleModel(cm.createCompatibleSampleModel(intensityWorker.getRenderedImage().getWidth(), intensityWorker.getRenderedImage().getHeight()));
 					// merge and go to rgb
-					finalImage = 
-						new ImageWorker(finalImage)
+					intensityWorker
 							.setRenderingHints(hints)
 							.setRenderingHint(JAI.KEY_IMAGE_LAYOUT,imageLayout)
-							.addBand(alphaBand, false)
-							.getRenderedOperation();
+							.addBand(alphaBand, false, true, null);
 
 				}
 
@@ -220,12 +219,21 @@
 				//
 				// /////////////////////////////////////////////////////////////////////
 				final int numSourceBands=source.getNumSampleDimensions();
+				final RenderedImage finalImage = intensityWorker.getRenderedImage();
 				final int numActualBands= finalImage.getSampleModel().getNumBands();
 				final GridCoverageFactory factory = getCoverageFactory();
                 final HashMap<Object,Object> props = new HashMap<Object,Object>();
                 if(source.getProperties() != null) {
                     props.putAll(source.getProperties());
                 }
+                // Setting ROI and NODATA
+                if(intensityWorker.getNoData() != null){
+                    props.put(NoDataContainer.GC_NODATA, new NoDataContainer(intensityWorker.getNoData()));
+                }
+                if(intensityWorker.getROI() != null){
+                    props.put("GC_ROI", intensityWorker.getROI());
+                }
+                
                 if(numActualBands==numSourceBands) {
                     final String name = "ce_coverage" + source.getName();
                     output = factory.create(

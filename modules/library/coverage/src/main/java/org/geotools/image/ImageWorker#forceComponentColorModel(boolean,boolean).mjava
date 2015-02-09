@@ -29,7 +29,7 @@
              * If the image is grayscale, retain only the needed bands.
              */
             final int numDestinationBands = gray ? (alpha ? 2 : 1) : (alpha ? 4 : 3);
-            LookupTableJAI lut = null;
+            LookupTable lut = null;
 
             switch (datatype) {
             case DataBuffer.TYPE_BYTE: {
@@ -46,7 +46,7 @@
                 if (numDestinationBands == 4) {
                     icm.getAlphas(data[3]);
                 }
-                lut = new LookupTableJAI(data);
+                lut = LookupTableFactory.create(data, datatype);
 
             }
                 break;
@@ -68,7 +68,7 @@
                         data[3][i] = (short) icm.getAlpha(i);
                     }
                 }
-                lut = new LookupTableJAI(data, datatype == DataBuffer.TYPE_USHORT);
+                lut = LookupTableFactory.create(data, datatype == DataBuffer.TYPE_USHORT);
 
             }
                 break;
@@ -108,16 +108,34 @@
                     .createCompatibleSampleModel(image.getWidth(), image.getHeight());
             layout.setColorModel(destinationColorModel);
             layout.setSampleModel(destinationSampleModel);
-            image = LookupDescriptor.create(image, lut, hints);
+
+            // ParameterBlock definition
+            ParameterBlock pb = new ParameterBlock();
+            pb.setSource(image, 0);
+            pb.set(lut, 0);
+            pb.set(roi, 2);
+            pb.set(nodata, 3);
+            if (isNoDataNeeded()) {
+                if (background != null && background.length > 0) {
+                    pb.set(background[0], 1);
+                    // We must set the new NoData value
+                    setNoData(RangeFactory.create(background[0], background[0]));
+                }
+            }
+
+            image = JAI.create("Lookup", pb, hints);
 
         } else {
             // Most of the code adapted from jai-interests is in 'getRenderingHints(int)'.
             final int type = (cm instanceof DirectColorModel) ? DataBuffer.TYPE_BYTE : image
                     .getSampleModel().getTransferType();
             final RenderingHints hints = getRenderingHints(type);
-            // image=ColorConvertDescriptor.create(image, RIFUtil.getImageLayoutHint(hints).getColorModel(null), hints);
-            image = FormatDescriptor.create(image, type, hints);
-            ;
+            ParameterBlock pb = new ParameterBlock();
+            pb.setSource(image, 0); // The source image.
+            pb.set(type, 0);
+
+            image = JAI.create("Format", pb, hints);
+            setNoData(RangeFactory.convert(nodata, type));
         }
         invalidateStatistics();
 

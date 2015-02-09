@@ -1,0 +1,96 @@
+    /**
+     * Applies the BandMerge operation to a grid coverage. The following steps are performed:
+     * 
+     * <ul>
+     * <li>Gets the {@linkplain GridSampleDimension sample dimensions} for the target images by invoking the {@link #deriveSampleDimension
+     * deriveSampleDimension(...)} method.</li>
+     * <li>Applied the JAI operation using {@link #createRenderedImage}.</li>
+     * <li>Wraps the result in a {@link GridCoverage2D} object.</li>
+     * </ul>
+     * 
+     * @param sources The source coverages.
+     * @param parameters Parameters, rendering hints and coordinate reference system to use.
+     * @return The result as a grid coverage.
+     * 
+     * @see #doOperation
+     * @see JAI#createNS
+     */
+    private GridCoverage2D deriveGridCoverage(final GridCoverage2D[] sources,
+            final BandMergeParams parameters) {
+        GridCoverage2D primarySource = sources[PRIMARY_SOURCE_INDEX];
+        /*
+         * Gets the target SampleDimensions. If they are identical to the SampleDimensions of one of the source GridCoverage2D, then this
+         * GridCoverage2D will be used at the primary source. It will affect the target GridCoverage2D's name and the visible band. Then, a new color
+         * model will be constructed from the new SampleDimensions, taking in account the visible band.
+         */
+        final GridSampleDimension[][] list = new GridSampleDimension[sources.length][];
+        for (int i = 0; i < list.length; i++) {
+            if (sources[i] == null) {
+                continue;
+            }
+            list[i] = sources[i].getSampleDimensions();
+        }
+        // Newly ordered GridSampleDimensions
+        final GridSampleDimension[] sampleDims = deriveSampleDimension(list, null);
+        int primarySourceIndex = PRIMARY_SOURCE_INDEX;
+        /*
+         * Set the rendering hints image layout. Only the following properties will be set:
+         * 
+         * - Color model
+         */
+        RenderingHints hints = ImageUtilities.getRenderingHints(parameters.getSource());
+        ImageLayout layout = (hints != null) ? (ImageLayout) hints.get(JAI.KEY_IMAGE_LAYOUT) : null;
+
+        // Selection of the Bounding Box to use if present
+        Envelope2D bbox = parameters.bbox;
+
+        if (layout != null) {
+            // If BBOX is present the it is added to the layout
+            if (bbox != null) {
+                updateLayout(parameters, layout, bbox);
+            }
+
+            if (hints == null) {
+                hints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout);
+            } else {
+                hints.put(JAI.KEY_IMAGE_LAYOUT, layout);
+            }
+        } else if (bbox != null) {
+            // New Layout Creation
+            layout = new ImageLayout2();
+            // Setting of the layout associated to the Final BoundingBox
+            updateLayout(parameters, layout, bbox);
+
+            if (hints == null) {
+                hints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout);
+            } else {
+                hints.put(JAI.KEY_IMAGE_LAYOUT, layout);
+            }
+        }
+        // Setting of the Hints to use
+        if (parameters.hints != null) {
+            if (hints != null) {
+                hints.add(parameters.hints); // May overwrite the image layout we have just set.
+            } else {
+                hints = parameters.hints;
+            }
+        }
+
+        /*
+         * Performs the operation using JAI and construct the new grid coverage. Uses the coordinate system from the main source coverage in order to
+         * preserve the extra dimensions (if any). The first two dimensions should be equal to the coordinate system set in the 'parameters' block.
+         */
+        final InternationalString name = deriveName(sources, primarySourceIndex, null);
+        final CoordinateReferenceSystem crs = primarySource.getCoordinateReferenceSystem();
+        final MathTransform toCRS = parameters.gridToCRS;
+        final RenderedImage data = createRenderedImage(parameters.parameters, hints);
+        final Map properties = getProperties(data, crs, name, toCRS, sources, parameters);
+        return getFactory(parameters.hints).create(name, // The grid coverage name
+                data, // The underlying data
+                crs, // The coordinate system (may not be 2D).
+                toCRS, // The grid transform (may not be 2D).
+                sampleDims, // The sample dimensions
+                sources, // The source grid coverages.
+                properties); // Properties
+    }
+

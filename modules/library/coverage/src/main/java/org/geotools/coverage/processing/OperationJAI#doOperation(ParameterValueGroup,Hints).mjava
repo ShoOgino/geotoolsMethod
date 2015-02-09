@@ -1,0 +1,69 @@
+    /**
+     * Applies a process operation to a grid coverage.
+     * The default implementation performs the following steps:
+     *
+     * <ol>
+     *   <li>Ensures that every sources {@code GridCoverage2D}s use the same coordinate reference
+     *       system (at least for the two-dimensional part) with the same
+     *       {@link GridGeometry2D#getGridToCRS2D gridToCRS} relationship.</li>
+     *
+     *   <li>Invokes {@link #deriveGridCoverage}.
+     *       The sources in the {@code ParameterBlock} are {@link RenderedImage} objects
+     *       obtained from {@link GridCoverage2D#getRenderedImage()}.</li>
+     *
+     *   <li>If a changes from non-geophysics to geophysics view were performed at step 1,
+     *       converts the result back to the original view using
+     *       <code>{@linkplain GridCoverage2D#geophysics GridCoverage2D.geophysics}(false)</code>.
+     *       </li>
+     * </ol>
+     *
+     * @param  parameters List of name value pairs for the parameters required for the operation.
+     * @param  hints A set of rendering hints, or {@code null} if none.
+     * @return The result as a grid coverage.
+     * @throws CoverageProcessingException if the operation can't be applied.
+     *
+     * @see #deriveGridCoverage
+     */
+    public Coverage doOperation(final ParameterValueGroup parameters, final Hints hints)
+            throws CoverageProcessingException
+    {
+        final ParameterBlockJAI block = prepareParameters(parameters);
+        /*
+         * Extracts the source grid coverages now as an array. The sources will be set in the
+         * ParameterBlockJAI (as RenderedImages) later, after the reprojection performed in the
+         * next block.
+         */
+        final String[]     sourceNames = operation.getSourceNames();
+        final Collection<GridCoverage2D> sourceCollection = new ArrayList<GridCoverage2D>();
+        extractSources(parameters, sourceCollection, sourceNames);
+        int numSources = sourceCollection.size();
+        final GridCoverage2D[] sources = sourceCollection.toArray(new GridCoverage2D[numSources]);
+        /*
+         * Ensures that all coverages use the same CRS and has the same 'gridToCRS' relationship.
+         * After the reprojection, the method still checks all CRS in case the user overridden the
+         * {@link #resampleToCommonGeometry} method.
+         */
+        resampleToCommonGeometry(sources, null, null, hints);
+        GridCoverage2D coverage = sources[PRIMARY_SOURCE_INDEX];
+        final CoordinateReferenceSystem crs = coverage.getCoordinateReferenceSystem2D();
+        // TODO: remove the cast when we will be allowed to compile for J2SE 1.5.
+        final MathTransform2D gridToCRS = coverage.getGridGeometry().getGridToCRS2D();
+        for (int i=0; i<sources.length; i++) {
+            if (sources[i] == null) { 
+                continue;
+            }
+            final GridCoverage2D source = sources[i];
+            if (!CRS.equalsIgnoreMetadata(crs, source.getCoordinateReferenceSystem2D()) ||
+                !CRS.equalsIgnoreMetadata(gridToCRS, source.getGridGeometry().getGridToCRS2D()))
+            {
+                throw new IllegalArgumentException(Errors.format(ErrorKeys.INCOMPATIBLE_GRID_GEOMETRY));
+            }
+            block.setSource(source.getRenderedImage(), i);
+        }
+        /*
+         * Applies the operation. This delegates the work to the chain of 'deriveXXX' methods.
+         */
+        coverage = deriveGridCoverage(sources, new Parameters(crs, gridToCRS, block, hints));
+        return postProcessResult(coverage);
+    }
+

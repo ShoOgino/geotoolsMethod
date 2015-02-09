@@ -52,19 +52,20 @@
             if (newPixelSize > 16)
                 throw new IllegalArgumentException(
                         "Unable to create index color model with more than 65536 elements");
-            final LookupTableJAI lookupTable;
+            final LookupTable lookupTable;
             if (newPixelSize <= 8) {
                 final byte[] table = new byte[mapSize];
                 for (int i = 0; i < mapSize; i++) {
                     table[i] = (byte) ((oldCM.getAlpha(i) == 0) ? suggestedTransparent : i);
                 }
-                lookupTable = new LookupTableJAI(table);
+                lookupTable = LookupTableFactory
+                        .create(table, image.getSampleModel().getDataType());
             } else {
                 final short[] table = new short[mapSize];
                 for (int i = 0; i < mapSize; i++) {
                     table[i] = (short) ((oldCM.getAlpha(i) == 0) ? suggestedTransparent : i);
                 }
-                lookupTable = new LookupTableJAI(table, true);
+                lookupTable = LookupTableFactory.create(table, true);
             }
             /*
              * Now we need to perform the look up transformation. First of all we create the new color model with a bitmask transparency using the
@@ -82,10 +83,30 @@
             // we should not transform on color map here
             hints.put(JAI.KEY_TRANSFORM_ON_COLORMAP, Boolean.FALSE);
             hints.put(JAI.KEY_IMAGE_LAYOUT, layout);
-            image = LookupDescriptor.create(image, lookupTable, hints);
 
-            // workaround bug in Lookup since it looks like it is switching 255 and 254
-            image = FormatDescriptor.create(image, image.getSampleModel().getDataType(), hints);
+            // ParameterBlock definition
+            ParameterBlock pb = new ParameterBlock();
+            pb.setSource(image, 0);
+            pb.set(lookupTable, 0);
+            pb.set(roi, 2);
+            pb.set(nodata, 3);
+            if (isNoDataNeeded()) {
+                if (background != null && background.length > 0) {
+                    pb.set(background[0], 1);
+                    // We must set the new NoData value
+                    setNoData(RangeFactory.create(background[0], background[0]));
+                }
+            }
+
+            image = JAI.create("Lookup", pb, hints);
+            // New parameterblock for format operation
+            pb = new ParameterBlock();
+            pb.setSource(image, 0);
+            int dataType = image.getSampleModel().getDataType();
+            pb.set(dataType, 0);
+            image = JAI.create("Format", pb, hints);
+            // Converting NoData Range
+            setNoData(RangeFactory.convert(nodata, dataType));
         } else {
             // force component color model first
             forceComponentColorModel(true);
@@ -98,8 +119,11 @@
                 int numBands = getNumBands();
                 final RenderingHints hints = getRenderingHints();
 
-                final RenderedOp alphaChannel = BandSelectDescriptor.create(image,
-                        new int[] { --numBands }, hints);
+                // ParameterBlock creation
+                ParameterBlock pb = new ParameterBlock();
+                pb.setSource(image, 0);
+                pb.set(new int[] { --numBands }, 0);
+                final RenderedOp alphaChannel = JAI.create("BandSelect", pb, hints);
                 retainBands(numBands);
                 forceIndexColorModel(errorDiffusion);
                 tileCacheEnabled(true);

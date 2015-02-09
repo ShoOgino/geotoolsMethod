@@ -27,25 +27,53 @@
         forceColorSpaceRGB();
         final RenderingHints hints = getRenderingHints();
         if (error) {
-            // color quantization
-            // final RenderedOp temp = ColorQuantizerDescriptor.create(image,
-            // ColorQuantizerDescriptor.MEDIANCUT, new Integer(254),
-            // new Integer(200), null, new Integer(1), new Integer(1),
-            // getRenderingHints());
-            // final ImageLayout layout= new ImageLayout();
-            // layout.setColorModel(temp.getColorModel());
-            // hints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT,layout));
-
             // error diffusion
             final KernelJAI ditherMask = KernelJAI.ERROR_FILTER_FLOYD_STEINBERG;
             final LookupTableJAI colorMap = ColorCube.BYTE_496;
-            // (LookupTableJAI) temp.getProperty("JAI.LookupTable");
-            image = ErrorDiffusionDescriptor.create(image, colorMap, ditherMask, hints);
+
+            // Creation of the ParameterBlock
+            ParameterBlock pb = new ParameterBlock();
+            // Setting source
+            pb.setSource(image, 0);
+            // Setting parameters
+            pb.set(colorMap, 0);
+            pb.set(ditherMask, 1);
+            pb.set(roi, 2);
+            pb.set(nodata, 3);
+            if (isNoDataNeeded()) {
+                if (background != null && background.length > 0) {
+                    int dest = (int) background[0];
+                    pb.set(dest, 4);
+                    // We must set the new NoData value
+                    setNoData(RangeFactory.create(dest, dest));
+                }
+            }
+
+            image = JAI.create("ErrorDiffusion", pb, hints);
         } else {
             // ordered dither
             final KernelJAI[] ditherMask = KernelJAI.DITHER_MASK_443;
             final ColorCube colorMap = ColorCube.BYTE_496;
-            image = OrderedDitherDescriptor.create(image, colorMap, ditherMask, hints);
+
+            // Creation of the ParameterBlock
+            ParameterBlock pb = new ParameterBlock();
+            // Setting source
+            pb.setSource(image, 0);
+            // Setting parameters
+            pb.set(colorMap, 0);
+            pb.set(ditherMask, 1);
+            pb.set(roi, 2);
+            pb.set(nodata, 3);
+            if (isNoDataNeeded()) {
+                if (background != null && background.length > 0) {
+                    int dest = (int) background[0];
+                    pb.set(dest, 4);
+                    // We must set the new NoData value
+                    setNoData(RangeFactory.create(dest, dest));
+                }
+            }
+
+            image = JAI.create("OrderedDither", pb, hints);
         }
         tileCacheEnabled(true);
         invalidateStatistics();

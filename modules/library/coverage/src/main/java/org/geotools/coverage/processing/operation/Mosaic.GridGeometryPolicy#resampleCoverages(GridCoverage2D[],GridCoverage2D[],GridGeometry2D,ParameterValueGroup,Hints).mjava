@@ -15,6 +15,12 @@
 
             // Creation of an array of the RenderedImages to use
             RenderedImage[] rasters = new RenderedImage[numSources];
+            // Creation of an array of background values
+            double[] backgrounds = new double[numSources];
+            // Creation of an array of rois
+            ROI[] rois = new ROI[numSources];
+            // Creation of an array of NoData
+            boolean hasNoDataProp = false;
 
             // Selection of the GridToWorld transformation associated to the External GG2D
             MathTransform g2w = external.getGridToCRS2D(PixelOrientation.UPPER_LEFT);
@@ -29,6 +35,7 @@
             // Checking if the external alpha bands are defined
             boolean hasAlpha = alphas != null && alphas.length > 0;
             PlanarImage[] alphaArray = new PlanarImage[numSources];
+
             // Cycle around the various sources
             for (int i = 0; i < numSources; i++) {
                 // For each source, create a new GridGeometry which at the same resolution of the imposed one
@@ -46,11 +53,33 @@
                 if (concatenated != null && concatenated.isIdentity()) {
                     RenderedImage renderedImage = coverage.getRenderedImage();
                     rasters[i] = renderedImage;
+                    // Get ROI from the coverage
+                    rois[i] = CoverageUtilities.getROIProperty(coverage);
                     // Add the alpha band
                     if (hasAlpha && alphas[i] != null) {
                         checkAlpha(coverage, alphas[i]);
                         alphaArray[i] = PlanarImage.wrapRenderedImage(alphas[i].getRenderedImage());
+                        // Mask alpha band with ROI in order to see ROI during Mosaic operation
+                        if (rois[i] != null) {
+                            ImageWorker w = new ImageWorker(alphaArray[i]);
+                            // Expand ROI Image to alpha size
+                            ImageWorker w1 = new ImageWorker(rois[i].getAsImage());
+                            ImageLayout layout = new ImageLayout();
+                            layout.setMinX(alphaArray[i].getMinX());
+                            layout.setMinY(alphaArray[i].getMinY());
+                            layout.setWidth(alphaArray[i].getWidth());
+                            layout.setHeight(alphaArray[i].getHeight());
+                            w1.setRenderingHint(JAI.KEY_IMAGE_LAYOUT, layout);
+                            w1.translate(0f, 0f, null);
+                            // Mask Alpha
+                            w.mask(w1.getRenderedImage(), false, 0);
+                        }
                     }
+                    double fillValue = CoverageUtilities.getBackgroundValues(coverage)[0];
+                    backgrounds[i] = fillValue;
+                    // Get NoData as property if present
+                    NoDataContainer noDataProperty = CoverageUtilities.getNoDataProperty(coverage);
+                    hasNoDataProp |= noDataProperty != null;
                 } else {
                     // New GridGeometry
                     GridGeometry2D newGG = new GridGeometry2D(PixelInCell.CELL_CORNER, g2w,
@@ -82,14 +111,23 @@
                     }
 
                     // Resample to the new resolution
-                    rasters[i] = GridCoverage2DRIA.create(coverage, newGG, fillValue, hints);
+                    rasters[i] = GridCoverage2DRIA.create(coverage, newGG, fillValue, hints, CoverageUtilities.getROIProperty(coverage));
                     // Resample also the alpha band
                     if (hasAlpha && alphas[i] != null) {
                         checkAlpha(coverage, alphas[i]);
                         RenderedImage al = GridCoverage2DRIA.create(alphas[i], newGG,
-                                new double[1], hints);
+                                new double[1], hints, CoverageUtilities.getROIProperty(coverage));
                         alphaArray[i] = PlanarImage.wrapRenderedImage(al);
                     }
+                    backgrounds[i] = fillValue[0];
+                    // Resample to the new resolution
+                    GridCoverage2DRIA.GridCoverage2DRIAPropertyGenerator propertyGenerator = new GridCoverage2DRIA.GridCoverage2DRIAPropertyGenerator();
+                    Object property = propertyGenerator.getProperty("roi", rasters[i]);
+                    ROI roi = (property != null && property instanceof ROI ) ? (ROI) property : null;
+                    rois[i] = roi;
+                    // Get NoData as property if present
+                    NoDataContainer noDataProperty = CoverageUtilities.getNoDataProperty(coverage);
+                    hasNoDataProp |= noDataProperty != null;
                 }
             }
 
@@ -98,6 +136,9 @@
             rr.setFinalGeometry(external);
             rr.setRasters(rasters);
             rr.setAlphas(alphaArray);
+            rr.setBackgrounds(backgrounds);
+            rr.setRois(rois);
+            rr.setHasNoData(hasNoDataProp);
             return rr;
         }
 
