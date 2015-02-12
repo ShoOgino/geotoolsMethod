@@ -113,6 +113,9 @@
                             + " combined rules after filtered power set expansion");
                 }
 
+                String composite = null;
+                Boolean compositeBase = null;
+
                 // setup the tool that will eliminate redundant rules (if necessary)
                 DomainCoverage coverage = new DomainCoverage(targetFeatureType, cachedSimplifier);
                 if (mode == TranslationMode.Exclusive) {
@@ -156,6 +159,31 @@
                     for (CssRule derived : derivedRules) {
                         buildSldRule(derived, ftsBuilder, targetFeatureType);
                         translatedRuleCount++;
+
+                        // check if we have global composition going, and use the value of
+                        // the first rule providing the information (the one with the highest
+                        // priority)
+                        if (composite == null) {
+                            List<Value> values = derived.getPropertyValues(PseudoClass.ROOT,
+                                    COMPOSITE).get(COMPOSITE);
+                            if (values != null && !values.isEmpty()) {
+                                composite = values.get(0).toLiteral();
+                            }
+                        }
+                        if (compositeBase == null) {
+                            List<Value> values = derived.getPropertyValues(PseudoClass.ROOT,
+                                    COMPOSITE_BASE).get(COMPOSITE_BASE);
+                            if (values != null && !values.isEmpty()) {
+                                compositeBase = Boolean.valueOf(values.get(0).toLiteral());
+                            }
+                        }
+                    }
+                    
+                    if(composite != null) {
+                        ftsBuilder.option(COMPOSITE, composite);
+                    }
+                    if(Boolean.TRUE.equals(compositeBase)) {
+                        ftsBuilder.option(COMPOSITE_BASE, "true");
                     }
                 }
             }
