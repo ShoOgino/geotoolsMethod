@@ -1,5 +1,8 @@
-    // types start
-    /** Performs a full file scan attempting to guess the type of each column */
+    /** 
+     * Performs a full file scan attempting to guess the type of each column
+     * Specific strategy implementations will expand this functionality by
+     * overriding the buildFeatureType() method.
+     */
     protected static Map<String, Class<?>> findMostSpecificTypesFromData(CsvReader csvReader,
             String[] headers) throws IOException {
         Map<String, Class<?>> result = new HashMap<String, Class<?>>();
@@ -7,6 +10,7 @@
         for (String header : headers) {
             result.put(header, Integer.class);
         }
+        // Read through the whole file in case the type changes in later rows
         while (csvReader.readRecord()) {
             String[] record = csvReader.getValues();
             List<String> values = Arrays.asList(record);
@@ -17,6 +21,8 @@
             for (String value : values) {
                 String header = headers[i];
                 Class<?> type = result.get(header);
+                // For each value in the row, ensure we can still parse it as the 
+                // defined type for this column; if not, make it more general
                 if (type == Integer.class) {
                     try {
                         Integer.parseInt(value);
@@ -34,8 +40,6 @@
                     } catch (NumberFormatException e) {
                         type = String.class;
                     }
-                } else {
-                    type = String.class;
                 }
                 result.put(header, type);
                 i++;
