@@ -1,0 +1,36 @@
+    void visitGeoPointBinarySpatialOperator(BinarySpatialOperator filter, Expression e1, Expression e2, 
+            boolean swapped, Object extraData) throws IOException {
+
+        e1.accept(delegate, extraData);
+        final String key = (String) delegate.field;
+        e2.accept(delegate, extraData);
+        final Geometry geometry = delegate.currentGeometry;
+
+        if (geometry instanceof Polygon &&
+                ((!swapped && filter instanceof Within) 
+                        || (swapped && filter instanceof Contains)
+                        || filter instanceof Intersects)) {
+            final Polygon polygon = (Polygon) geometry;
+            final GeoPolygonFilterBuilder geoPolygonFilter;
+            geoPolygonFilter = FilterBuilders.geoPolygonFilter(key);
+            for (final Coordinate coordinate : polygon.getCoordinates()) {
+                geoPolygonFilter.addPoint(coordinate.y, coordinate.x);
+            }
+            delegate.filterBuilder = geoPolygonFilter;
+        } else if (filter instanceof BBOX) {
+            final Envelope envelope = geometry.getEnvelopeInternal();
+            final double minY = envelope.getMinY();
+            final double minX = envelope.getMinX();
+            final double maxY = envelope.getMaxY();
+            final double maxX = envelope.getMaxX();
+            delegate.filterBuilder = FilterBuilders.geoBoundingBoxFilter(key)
+                    .topLeft(maxY, minX)
+                    .bottomRight(minY, maxX);
+        } else {
+            FilterToElastic.LOGGER.fine(filter.getClass().getSimpleName() 
+                    + " is unsupported for geo_point types");
+            delegate.fullySupported = false;
+            delegate.filterBuilder = FilterBuilders.matchAllFilter();
+        }
+    }
+

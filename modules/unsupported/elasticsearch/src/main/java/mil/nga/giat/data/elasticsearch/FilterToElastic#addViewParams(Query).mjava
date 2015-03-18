@@ -1,0 +1,37 @@
+    protected void addViewParams(Query query) {
+        final Map<String,String> parameters;
+        if (query.getHints() != null) {
+            final Hints hints = query.getHints();
+            parameters = (Map) hints.get(Hints.VIRTUAL_TABLE_PARAMETERS);
+        } else {
+            parameters = null;
+        }
+        if (parameters != null) {
+            boolean nativeOnly = false;
+            for (final Map.Entry<String, String> entry : parameters.entrySet()) {
+                if (entry.getKey().equalsIgnoreCase("native-only")) {
+                    nativeOnly = Boolean.valueOf(entry.getValue());
+                }
+            }
+            if (nativeOnly) {
+                LOGGER.fine("Ignoring GeoServer filter (Elasticsearch native query/post filter only)");
+                filterBuilder = FilterBuilders.matchAllFilter();
+            }
+            for (final Map.Entry<String, String> entry : parameters.entrySet()) {
+                if (entry.getKey().equalsIgnoreCase("q")) {
+                    final String value = entry.getValue();
+                    queryBuilder = QueryBuilders.wrapperQuery(value);
+                }
+                if (entry.getKey().equalsIgnoreCase("f")) {
+                    final String value = entry.getValue();
+                    if (nativeOnly || filterBuilder.toString().equals(FilterBuilders.matchAllFilter().toString())) {
+                        filterBuilder = FilterBuilders.wrapperFilter(value);
+                    } else {
+                        filterBuilder = FilterBuilders.andFilter(filterBuilder, 
+                                FilterBuilders.wrapperFilter(value));
+                    }
+                }
+            }
+        }
+    }
+

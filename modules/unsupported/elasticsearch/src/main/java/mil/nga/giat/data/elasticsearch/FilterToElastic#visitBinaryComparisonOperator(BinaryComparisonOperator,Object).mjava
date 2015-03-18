@@ -1,0 +1,96 @@
+    /**
+     * Common implementation for BinaryComparisonOperator filters.
+     *
+     * @param filter the comparison.
+     *
+     */
+    protected void visitBinaryComparisonOperator(BinaryComparisonOperator filter, Object extraData) {
+        LOGGER.finer("exporting FilterBuilder ComparisonFilter");
+
+        Expression left = filter.getExpression1();
+        Expression right = filter.getExpression2();
+        Class leftContext = null, rightContext = null;
+        if (left instanceof PropertyName) {
+            // It's a propertyname, we should get the class and pass it in
+            // as context to the tree walker.
+            AttributeDescriptor attType = (AttributeDescriptor)left.evaluate(featureType);
+            if (attType != null) {
+                rightContext = attType.getType().getBinding();
+            }
+        }
+        else if (left instanceof Function) {
+            //check for a function return type
+            Class ret = getFunctionReturnType((Function)left);
+            if (ret != null) {
+                rightContext = ret;
+            }
+        }
+
+        if (right instanceof PropertyName) {
+            AttributeDescriptor attType = (AttributeDescriptor)right.evaluate(featureType);
+            if (attType != null) {
+                leftContext = attType.getType().getBinding();
+            }
+        }
+        else if (right instanceof Function){
+            Class ret = getFunctionReturnType((Function)right);
+            if (ret != null) {
+                leftContext = ret;
+            }
+        }
+
+        //case sensitivity
+        boolean matchCase = true;
+        if ( !filter.isMatchingCase() ) {
+            //we only do for = and !=
+            if ( filter instanceof PropertyIsEqualTo || 
+                    filter instanceof PropertyIsNotEqualTo ) {
+                //and only for strings
+                if ( String.class.equals( leftContext ) 
+                        || String.class.equals( rightContext ) ) {
+                    //matchCase = false;
+                    LOGGER.fine("Case insensitive filter not supported");
+                }
+            }
+        }
+
+        String type = (String) extraData;
+
+        if ( matchCase ) {
+            if (leftContext != null && isBinaryExpression(left)) {
+                writeBinaryExpression(left, leftContext);
+            }
+            else {
+                left.accept(this, leftContext);
+            }
+            final String key = (String) field;
+
+            if (rightContext != null && isBinaryExpression(right)) {
+                writeBinaryExpression(right, rightContext);
+            }
+            else {
+                right.accept(this, rightContext);
+            }
+
+            if (type.equals("=")) {
+                filterBuilder = FilterBuilders.termFilter(key, field);
+            } else if (type.equals("!=")) {
+                TermFilterBuilder equalsFilter;
+                equalsFilter = FilterBuilders.termFilter(key, field);
+                filterBuilder = FilterBuilders.notFilter(equalsFilter);
+            } else if (type.equals(">")) {
+                filterBuilder = FilterBuilders.rangeFilter(key).gt(field);
+            } else if (type.equals(">=")) {
+                filterBuilder = FilterBuilders.rangeFilter(key).gte(field);
+            } else if (type.equals("<")) {
+                filterBuilder = FilterBuilders.rangeFilter(key).lt(field);
+            } else if (type.equals("<=")) {
+                filterBuilder = FilterBuilders.rangeFilter(key).lte(field);
+            }
+        }
+        else {
+            // should never get here
+            throw new FilterToElasticException("Case insensitive filter not supported");
+        }
+    }
+

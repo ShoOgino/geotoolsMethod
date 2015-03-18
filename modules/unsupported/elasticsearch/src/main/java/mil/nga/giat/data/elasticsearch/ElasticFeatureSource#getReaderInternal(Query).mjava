@@ -1,0 +1,24 @@
+    @Override
+    protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query)
+            throws IOException {
+
+        FeatureReader<SimpleFeatureType, SimpleFeature> reader = null;
+        try {
+            final SearchRequestBuilder searchRequest;
+            searchRequest = prepareSearchRequest(query, SearchType.DFS_QUERY_THEN_FETCH);
+            reader = new ElasticFeatureReader(getState(), searchRequest.execute().get());
+            if (!filterFullySupported) {
+                reader = new FilteringFeatureReader<SimpleFeatureType, SimpleFeature>(reader, query.getFilter());
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            if (LOGGER.isLoggable(Level.FINE)) {
+                StringWriter stringWriter = new StringWriter();
+                PrintWriter printWriter = new PrintWriter(stringWriter);
+                e.printStackTrace(printWriter);
+                LOGGER.fine(stringWriter.toString());
+            }
+            throw new IOException("Error executing query search");
+        }
+        return reader;
+    }
+

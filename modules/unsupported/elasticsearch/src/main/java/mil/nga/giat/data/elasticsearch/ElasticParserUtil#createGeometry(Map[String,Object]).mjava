@@ -1,0 +1,81 @@
+    /**
+     * Create geometry given property map defining geo_shape type and coordinates
+     * or geo_point lat and lon.
+     * @param properties Properties
+     * @return Geometry
+     */
+    public Geometry createGeometry(final Map<String, Object> properties) {
+        final Geometry geometry;
+        switch (String.valueOf(properties.get("type")).toUpperCase()) {
+        case "POINT": {
+            final List posList;
+            posList = (List) properties.get("coordinates");
+            final Coordinate coordinate = createCoordinate(posList);
+            geometry = geometryFactory.createPoint(coordinate);
+            break;
+        } case "LINESTRING": {
+            final List<List> posList;
+            posList = (List) properties.get("coordinates");
+            final Coordinate[] coordinates = createCoordinates(posList);
+            geometry = geometryFactory.createLineString(coordinates);
+            break;
+        } case "POLYGON": {
+            final List<List<List>> posList;
+            posList = (List) properties.get("coordinates");
+            geometry = createPolygon(posList);
+            break;
+        } case "MULTIPOINT": {
+            final List<List> posList;
+            posList = (List) properties.get("coordinates");
+            final Coordinate[] coordinates = createCoordinates(posList);
+            geometry = geometryFactory.createMultiPoint(coordinates);
+            break;
+        } case "MULTILINESTRING": {
+            final List<List<List>> posList;
+            posList = (List) properties.get("coordinates");
+            final LineString[] lineStrings = new LineString[posList.size()];
+            for (int i=0; i<posList.size(); i++) {
+                final Coordinate[] coordinates = createCoordinates(posList.get(i));
+                lineStrings[i] = geometryFactory.createLineString(coordinates);
+            }
+            geometry = geometryFactory.createMultiLineString(lineStrings);
+            break;
+        } case "MULTIPOLYGON": {
+            final List<List<List<List>>> posList;
+            posList = (List) properties.get("coordinates");
+            final Polygon[] polygons = new Polygon[posList.size()];
+            for (int i=0; i<posList.size(); i++) {
+                polygons[i] = createPolygon(posList.get(i));
+            }
+            geometry = geometryFactory.createMultiPolygon(polygons);
+            break;
+        } case "GEOMETRYCOLLECTION": {
+            final List<Map<String,Object>> list;
+            list = (List) properties.get("geometries");
+            final Geometry[] geometries = new Geometry[list.size()];
+            for (int i=0; i<geometries.length; i++) {
+                geometries[i] = createGeometry(list.get(i));
+            }
+            geometry = geometryFactory.createGeometryCollection(geometries);
+            break;
+        } case "ENVELOPE": {
+            final List<List> posList;
+            posList = (List) properties.get("coordinates");
+            final Coordinate[] coords = createCoordinates(posList);
+            final Envelope envelope = new Envelope(coords[0], coords[1]);
+            geometry = geometryFactory.toGeometry(envelope);
+            break;
+        } default:
+            // check if this is a geo_point
+            final Double lat = (Double) properties.get("lat");
+            final Double lon = (Double) properties.get("lon");
+            if (lat != null && lon != null) {
+                geometry = geometryFactory.createPoint(new Coordinate(lon,lat));
+            } else {
+                geometry = null;
+            }
+            break;
+        }
+        return geometry;
+    }
+

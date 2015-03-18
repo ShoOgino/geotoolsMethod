@@ -1,0 +1,111 @@
+    /**
+     * Handles the common case of a PropertyName,Literal geometry binary temporal operator.
+     * <p>
+     * Subclasses should override if they support more temporal operators than what is handled in 
+     * this base class. 
+     * </p>
+     */
+    protected Object visitBinaryTemporalOperator(BinaryTemporalOperator filter, 
+            PropertyName property, Literal temporal, boolean swapped, Object extraData) { 
+
+        Class typeContext = null;
+        AttributeDescriptor attType = (AttributeDescriptor)property.evaluate(featureType);
+        dateFormatter = DEFAULT_DATE_FORMATTER;
+        if (attType != null) {
+            typeContext = attType.getType().getBinding();
+            final String format = (String) attType.getUserData().get(DATE_FORMAT);
+            if (format != null) {
+                dateFormatter = Joda.forPattern(format).printer();
+            }
+        }
+
+        //check for time period
+        Period period = null;
+        if (temporal.evaluate(null) instanceof Period) {
+            period = (Period) temporal.evaluate(null);
+        }
+
+        //verify that those filters that require a time period have one
+        if ((filter instanceof Begins || filter instanceof BegunBy || filter instanceof Ends ||
+                filter instanceof EndedBy || filter instanceof During || filter instanceof TContains) &&
+                period == null) {
+            if (period == null) {
+                throw new IllegalArgumentException("Filter requires a time period");
+            }
+        }
+        if (filter instanceof TEquals && period != null) {
+            throw new IllegalArgumentException("TEquals filter does not accept time period");
+        }
+
+        //ensure the time period is the correct argument
+        if ((filter instanceof Begins || filter instanceof Ends || filter instanceof During) && 
+                swapped) {
+            throw new IllegalArgumentException("Time period must be second argument of Filter");
+        }
+        if ((filter instanceof BegunBy || filter instanceof EndedBy || filter instanceof TContains) && 
+                !swapped) {
+            throw new IllegalArgumentException("Time period must be first argument of Filter");
+        }
+
+        if (filter instanceof After || filter instanceof Before) {
+            String op = filter instanceof After ? " > " : " < ";
+
+            if (period != null) {
+                property.accept(this, extraData);
+                final String key = (String) field;
+
+                visitBegin(period, extraData);
+                final Object begin = field;
+                visitEnd(period, extraData);
+                final Object end = field;
+
+                if ((op.equals(" > ") && !swapped) || (op.equals(" < ") && swapped)) {
+                    filterBuilder = FilterBuilders.rangeFilter(key).gt(end);
+                } else {
+                    filterBuilder = FilterBuilders.rangeFilter(key).lt(begin);
+                }
+            }
+            else {
+                property.accept(this, extraData);
+                final String key = (String) field;
+                temporal.accept(this, typeContext);
+
+                if (op.equals(" < ") || swapped) {
+                    filterBuilder = FilterBuilders.rangeFilter(key).lt(field);
+                } else {
+                    filterBuilder = FilterBuilders.rangeFilter(key).gt(field);
+                }
+            }
+        }
+        else if (filter instanceof Begins || filter instanceof Ends || 
+                filter instanceof BegunBy || filter instanceof EndedBy ) {
+            property.accept(this, extraData);
+            final String key = (String) field;
+
+            if (filter instanceof Begins || filter instanceof BegunBy) {
+                visitBegin(period, extraData);
+            }
+            else {
+                visitEnd(period, extraData);
+            }
+            filterBuilder = FilterBuilders.termFilter(key, field);
+        }
+        else if (filter instanceof During || filter instanceof TContains){
+            property.accept(this, extraData);
+            final String key = (String) field;
+
+            visitBegin(period, extraData);
+            final Object lower = field;
+            visitEnd(period, extraData);
+            filterBuilder = FilterBuilders.rangeFilter(key).gt(lower).lt(field);
+        }
+        else if (filter instanceof TEquals) {
+            property.accept(this, extraData);
+            final String key = (String) field;
+            temporal.accept(this, typeContext);
+            filterBuilder = FilterBuilders.termFilter(key, field);
+        }
+
+        return extraData;
+    }
+

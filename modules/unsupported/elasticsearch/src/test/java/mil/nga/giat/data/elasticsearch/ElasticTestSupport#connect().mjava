@@ -1,0 +1,71 @@
+    private static void connect() throws Exception {
+        Path path = Files.createTempDirectory("gt_es_test");
+
+        LOGGER.info("Creating local test Elasticsearch cluster (path.home=" + path + ")");
+        Settings build = ImmutableSettings.builder()
+                .put("path.home", path)
+                .put("path.data", path + File.separator + "data")
+                .build();
+        node = nodeBuilder().settings(build).node();
+        Client client = node.client();
+        
+        // get transport port
+        ClusterStateResponse state;
+        state = client.admin().cluster().prepareState().setNodes(true).execute().actionGet();
+        ImmutableOpenMap<String, DiscoveryNode> dataNodes = state.getState().getNodes().dataNodes();
+        String key = dataNodes.keys().iterator().next().value;
+        TransportAddress address = dataNodes.get(key).getAddress();
+        Matcher matcher = Pattern.compile(".*?:(93..).*").matcher(address.toString());
+        if (matcher.matches()) {
+            port = Integer.valueOf(matcher.group(1));
+        } else {
+            String m;
+            m = "Elasticsearch initialization failed "
+                    + "(unable to parse port from local node transport_address)";
+            throw new RuntimeException(m);
+        }
+        
+        // create index and add mappings
+        CreateIndexRequestBuilder builder = client.admin().indices().prepareCreate(indexName);
+        try (Scanner s = new Scanner(ClassLoader.getSystemResourceAsStream(ACTIVE_MAPPINGS_FILE))) {
+            s.useDelimiter("\\A");
+            builder.addMapping("active", s.next());
+        }
+        try (Scanner s = new Scanner(ClassLoader.getSystemResourceAsStream(INACTIVE_MAPPINGS_FILE))) {
+            s.useDelimiter("\\A");
+            builder.addMapping("not-active", s.next());
+        }
+        builder.execute().actionGet();
+
+        // index documents
+        InputStream inputStream = ClassLoader.getSystemResourceAsStream(TEST_FILE);
+        try (Scanner scanner = new Scanner(inputStream)) {
+            scanner.useDelimiter("\\n");
+            while (scanner.hasNext()) {
+                final String line = scanner.next();
+                if (!line.startsWith("#")) {
+                    final Matcher idMatcher = ID_PATTERN.matcher(line);
+                    final String id;
+                    if (idMatcher.matches()) {
+                        id = idMatcher.group(1);
+                    } else {
+                        id = null;
+                    }
+                    final String layerName;
+                    final Matcher statusMatcher = STATUS_PATTERN.matcher(line);
+                    if (statusMatcher.matches()) {
+                        layerName = statusMatcher.group(1);
+                    } else {
+                        layerName = null;
+                    }
+
+                    client.prepareIndex(indexName, layerName)
+                    .setSource(line)
+                    .setId(id)
+                    .execute().actionGet();
+                }
+            }
+        }
+        LOGGER.info("Done setting up Elasticsearch");
+    }
+

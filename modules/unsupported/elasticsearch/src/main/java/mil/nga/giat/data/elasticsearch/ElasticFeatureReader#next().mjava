@@ -1,0 +1,68 @@
+    @Override
+    public SimpleFeature next() {
+        if (!searchHitIterator.hasNext()) {
+            return null;
+        }
+        final SearchHit hit = searchHitIterator.next();
+        final SimpleFeatureType type = getFeatureType();
+        final Map<String, Object> source = hit.getSource();
+        
+        final Float score;
+        final Float relativeScore;
+        if (!Float.isNaN(hit.getScore())) {
+            score = hit.getScore();
+            relativeScore = score/maxScore;
+        } else {
+            score = null;
+            relativeScore = null;
+        }
+
+        for (final AttributeDescriptor descriptor : type.getAttributeDescriptors()) {
+            final String name = descriptor.getType().getName().getLocalPart();
+            final String sourceName = (String) descriptor.getUserData().get(FULL_NAME);
+
+            final SearchHitField field = hit.field(sourceName);
+            List<Object> values = null;
+            if (field != null) {
+                // hit field
+                values = field.values();
+            }
+            if (values == null && source != null) {
+                // read field from source
+                values = parserUtil.readField(source, sourceName);
+            }
+
+            if (values == null && name.equals("_id")) {
+                builder.set(name, hit.getId());
+            } else if (values == null && name.equals("_index")) {
+                builder.set(name, hit.getIndex());
+            } else if (values == null && name.equals("_type")) {
+                builder.set(name,  hit.getType());
+            } else if (values == null && name.equals("_score")) {
+                builder.set(name, score);
+            } else if (values == null && name.equals("_relative_score")) {
+                builder.set(name, relativeScore);
+            } else if (values == null) {
+                // skip missing attribute
+            } else if (Geometry.class.isAssignableFrom(descriptor.getType().getBinding())) {
+                builder.set(name, parserUtil.createGeometry(values.get(0)));
+            } else if (Date.class.isAssignableFrom(descriptor.getType().getBinding())) {
+                final String format = (String) descriptor.getUserData().get(DATE_FORMAT);
+                final DateTimeFormatter dateFormatter = Joda.forPattern(format).parser();
+                Date date = dateFormatter.parseDateTime((String) values.get(0)).toDate();
+                builder.set(name, date);
+            } else if (values.size() == 1){
+                builder.set(name, values.get(0));
+            } else if (String.class.isAssignableFrom(descriptor.getType().getBinding())) {
+                builder.set(name, Joiner.on(';').join(values));
+            } else {
+                builder.set(name, values);
+            }
+        }
+
+        final String typeName = state.getEntry().getTypeName();
+        final SimpleFeature feature;
+        feature = builder.buildFeature(typeName + "." + hit.getId());
+        return feature;
+    }
+

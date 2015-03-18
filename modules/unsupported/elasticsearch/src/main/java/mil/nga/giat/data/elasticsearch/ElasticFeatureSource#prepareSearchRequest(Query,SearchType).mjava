@@ -1,0 +1,75 @@
+    private SearchRequestBuilder prepareSearchRequest(Query query, SearchType searchType) throws IOException {
+        final ElasticDataStore dataStore = getDataStore();
+
+        // setup request
+        final SearchRequestBuilder searchRequest;
+        searchRequest = dataStore.getClient()
+                .prepareSearch(dataStore.getSearchIndices())
+                .setTypes(getName().toString())
+                .setSearchType(searchType);
+
+        // add fields
+        final List<ElasticAttribute> attributes;
+        attributes = dataStore.getElasticAttributes(entry.getTypeName());
+        List<String> sourceIncludes = new ArrayList<>();
+        for (final ElasticAttribute attribute : attributes) {
+            if (attribute.isUse() && attribute.isStored()) {
+                searchRequest.addField(attribute.getName());
+            } else if (attribute.isUse()) {
+                sourceIncludes.add(attribute.getName());
+            }
+        }
+        if (sourceIncludes.size() == 1) {
+            searchRequest.setFetchSource(sourceIncludes.get(0), null);
+        } else if (!sourceIncludes.isEmpty()) {
+            final String[] includes;
+            includes = sourceIncludes.toArray(new String[sourceIncludes.size()]);
+            searchRequest.setFetchSource(includes, null);
+        }
+
+        // add query and post filter
+        final FilterToElastic filterToElastic;
+        filterToElastic = new FilterToElastic();
+        filterToElastic.setFeatureType(buildFeatureType());
+        filterToElastic.encode(query);
+        filterFullySupported = filterToElastic.getFullySupported();
+        if (!filterFullySupported) {
+            LOGGER.fine("Filter is not fully supported by nativeElasticsearch."
+                    + " Additional post-query filtering will be performed.");
+        }
+        final QueryBuilder elasticQuery = filterToElastic.getQueryBuilder();
+        final FilterBuilder postFilter = filterToElastic.getFilterBuilder();
+        searchRequest.setQuery(elasticQuery).setPostFilter(postFilter);
+
+        // sort
+        SortOrder naturalSortOrder = SortOrder.ASC;
+        if (query.getSortBy() != null) {
+            for (final SortBy sort : query.getSortBy()) {
+                final SortOrder sortOrder;
+                if (sort.getSortOrder() == ASCENDING) {
+                    sortOrder = SortOrder.ASC;
+                } else {
+                    sortOrder = SortOrder.DESC;
+                }
+
+                if (sort.getPropertyName() != null) {
+                    final String name = sort.getPropertyName().getPropertyName();
+                    searchRequest.addSort(name, sortOrder);
+                } else {
+                    naturalSortOrder = sortOrder;
+                }
+            }
+        }
+        if (elasticQuery.toString().equals(QueryBuilders.matchAllQuery().toString())) {
+            searchRequest.addSort("_uid", naturalSortOrder);
+        }
+
+        // pagination
+        searchRequest.setSize(getSize(query));
+        searchRequest.setFrom(getStartIndex(query));
+        
+        LOGGER.fine(searchRequest.toString());
+
+        return searchRequest;
+    }
+
