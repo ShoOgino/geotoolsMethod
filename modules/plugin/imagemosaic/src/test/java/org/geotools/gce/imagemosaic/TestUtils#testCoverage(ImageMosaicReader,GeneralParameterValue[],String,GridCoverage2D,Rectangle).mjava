@@ -1,7 +1,7 @@
 	@SuppressWarnings("unchecked")
 	static GridCoverage2D testCoverage(final ImageMosaicReader reader,
 			GeneralParameterValue[] values, String title,
-			final GridCoverage2D coverage, final Rectangle rect) {
+			final GridCoverage2D coverage, final Rectangle rect) throws FactoryException {
 	    final RenderedImage image = coverage.getRenderedImage(); 
 		if (ImageMosaicReaderTest.INTERACTIVE)
 			show(image, title);
@@ -14,9 +14,15 @@
 					
 					Parameter<GridGeometry2D> param= (Parameter<GridGeometry2D>) pv;
 					// check envelope if it has been requested
-					assertTrue(CRS.equalsIgnoreMetadata(
-							param.getValue().getEnvelope().getCoordinateReferenceSystem(), 
-							coverage.getCoordinateReferenceSystem()));
+					
+					CoordinateReferenceSystem envCRS = param.getValue().getEnvelope().getCoordinateReferenceSystem();
+					CoordinateReferenceSystem coverageCRS = coverage.getCoordinateReferenceSystem();
+					boolean equalsIgnoreMetadata = CRS.equalsIgnoreMetadata(envCRS, coverageCRS);
+					if (!equalsIgnoreMetadata) {
+					    MathTransform destinationToSourceTransform = CRS.findMathTransform(envCRS, coverageCRS, true);
+					    equalsIgnoreMetadata = destinationToSourceTransform != null && destinationToSourceTransform.isIdentity();
+					}
+					assertTrue(equalsIgnoreMetadata);
 	
 				}
 			}
