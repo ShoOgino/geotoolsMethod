@@ -1,24 +1,10 @@
-    /**
-     * Do some more local union test that should return an exception
-     *
-     * @throws ServiceException
-     * @throws IOException
-     * @throws ParseException
-     */
-    @Test
-    public void testBADExecuteLocalUnion() throws ServiceException, IOException, ParseException, ProcessException
+    private void runExecuteProcessBufferLocal(Geometry geom1) throws ServiceException, IOException, ParseException,
+        ProcessException
     {
         if (fixture == null)
         {
             return;
         }
-
-        if (DISABLE)
-        {
-            return;
-        }
-
-        String processIdenLocal = "Union";
 
         WPSCapabilitiesType capabilities = wps.getCapabilities();
 
@@ -33,7 +19,7 @@
         while (iterator.hasNext())
         {
             ProcessBriefType process = (ProcessBriefType) iterator.next();
-            if (process.getIdentifier().getValue().equalsIgnoreCase(processIdenLocal))
+            if (process.getIdentifier().getValue().equalsIgnoreCase(processIden))
             {
                 found = true;
 
@@ -49,7 +35,26 @@
 
         // do a full describeprocess on my process
         DescribeProcessRequest descRequest = wps.createDescribeProcessRequest();
-        descRequest.setIdentifier(processIdenLocal);
+        descRequest.setIdentifier(processIden);
+
+        ExecuteProcessRequest execRequest = wps.createExecuteProcessRequest();
+        execRequest.setIdentifier(processIden);
+
+        execRequest.addInput("buffer", Arrays.asList(wps.createLiteralInputValue("350")));
+        execRequest.addInput("geom1", Arrays.asList(wps.createBoundingBoxInputValue(
+                    "EPSG:4326", 2, Arrays.asList(-180.0, -90.0), Arrays.asList(-180.0, -90.0))));
+
+
+        ResponseDocumentType respDoc = wps.createResponseDocumentType(false, true, true, "result");
+
+        OutputDefinitionType rawOutput = wps.createOutputDefinitionType("test");
+
+        ResponseFormType responseForm = wps.createResponseForm(respDoc, rawOutput);
+
+        responseForm.setResponseDocument(respDoc);
+        execRequest.setResponseForm(responseForm);
+
+        execRequest.performPostOutput(System.out);
 
         DescribeProcessResponse descResponse = wps.issueRequest(descRequest);
 
@@ -59,14 +64,23 @@
         WPSFactory wpsfactory = new WPSFactory(pdt, this.url);
         Process process = wpsfactory.create();
 
-        // setup the inputs as empty (which should return an exception)
+        // setup the inputs
         Map<String, Object> map = new TreeMap<String, Object>();
+        map.put("buffer", 350);
+        map.put("geom1", geom1);
 
         // execute/send-request for the process
         Map<String, Object> results = process.execute(map, null);
 
-        // check that the result is expected (null)
-        assertNull(results);
+        // check that the result is expected
+        assertNotNull(results);
+
+        Geometry expected = geom1.buffer(350);
+        Geometry result = (Geometry) results.get("result");
+        assertNotNull(result);
+        // System.out.println(expected);
+        // System.out.println(result);
+        // assertTrue(expected.equals(result));
 
     }
 

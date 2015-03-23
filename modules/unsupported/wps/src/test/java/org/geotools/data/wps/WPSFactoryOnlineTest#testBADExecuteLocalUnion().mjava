@@ -1,16 +1,19 @@
-    public void testExecuteProcessBuffer52N() throws ServiceException, IOException, ParseException
+    /**
+     * Do some more local union test that should return an exception
+     *
+     * @throws ServiceException
+     * @throws IOException
+     * @throws ParseException
+     */
+    @Test
+    public void testBADExecuteLocalUnion() throws ServiceException, IOException, ParseException, ProcessException
     {
-
-        // don't run the test if the server is not up or if we are doing local tests
         if (fixture == null)
         {
             return;
         }
 
-        if (DISABLE)
-        {
-            return;
-        }
+        String processIdenLocal = "Union";
 
         WPSCapabilitiesType capabilities = wps.getCapabilities();
 
@@ -25,7 +28,7 @@
         while (iterator.hasNext())
         {
             ProcessBriefType process = (ProcessBriefType) iterator.next();
-            if (process.getIdentifier().getValue().equalsIgnoreCase(processIden))
+            if (process.getIdentifier().getValue().equalsIgnoreCase(processIdenLocal))
             {
                 found = true;
 
@@ -40,29 +43,25 @@
         }
 
         // do a full describeprocess on my process
-        // http://geoserver.itc.nl:8080/wps100/WebProcessingService?REQUEST=DescribeProcess&IDENTIFIER=org.n52.wps.server.algorithm.collapse.SimplePolygon2PointCollapse&VERSION=1.0.0&SERVICE=WPS
         DescribeProcessRequest descRequest = wps.createDescribeProcessRequest();
-        descRequest.setIdentifier(processIden);
+        descRequest.setIdentifier(processIdenLocal);
 
         DescribeProcessResponse descResponse = wps.issueRequest(descRequest);
 
         // based on the describeprocess, setup the execute
         ProcessDescriptionsType processDesc = descResponse.getProcessDesc();
-        ExecuteProcessRequest exeRequest = wps.createExecuteProcessRequest();
-        exeRequest.setIdentifier(processIden);
+        ProcessDescriptionType pdt = (ProcessDescriptionType) processDesc.getProcessDescription().get(0);
+        WPSFactory wpsfactory = new WPSFactory(pdt, this.url);
+        Process process = wpsfactory.create();
 
-        // set input data
-        set52NInputData(exeRequest, processDesc);
+        // setup the inputs as empty (which should return an exception)
+        Map<String, Object> map = new TreeMap<String, Object>();
 
-        // send the request
-        ExecuteProcessResponse response = wps.issueRequest(exeRequest);
+        // execute/send-request for the process
+        Map<String, Object> results = process.execute(map, null);
 
-        // response should not be null and no exception should occur.
-        assertNotNull(response);
-        assertNotNull(response.getExecuteResponse());
-
-        ExceptionReportType exceptionResponse = response.getExceptionResponse();
-        assertNull(exceptionResponse);
+        // check that the result is expected (null)
+        assertNull(results);
 
     }
 

@@ -1,25 +1,5 @@
-    /**
-     * Do some more local process tests, such as double addtion
-     *
-     * @throws ServiceException
-     * @throws IOException
-     * @throws ParseException
-     */
-    public void testExecuteLocalAdd() throws ServiceException, IOException, ParseException
-    {
-
-        // don't run the test if the server is not up
-        if (fixture == null)
-        {
-            return;
-        }
-
-        if (DISABLE)
-        {
-            return;
-        }
-
-        String processIdenLocal = "DoubleAddition";
+    private void runExecuteProcessBufferLocal(Geometry geom1) throws ServiceException, IOException,
+            ParseException {
 
         WPSCapabilitiesType capabilities = wps.getCapabilities();
 
@@ -31,11 +11,9 @@
         // does the server contain the specific process I want
         boolean found = false;
         Iterator iterator = processes.iterator();
-        while (iterator.hasNext())
-        {
+        while (iterator.hasNext()) {
             ProcessBriefType process = (ProcessBriefType) iterator.next();
-            if (process.getIdentifier().getValue().equalsIgnoreCase(processIdenLocal))
-            {
+            if (process.getIdentifier().getValue().equalsIgnoreCase(processIden)) {
                 found = true;
 
                 break;
@@ -43,23 +21,24 @@
         }
 
         // exit test if my process doesn't exist on server
-        if (!found)
-        {
+        if (!found) {
             return;
         }
 
         // do a full describeprocess on my process
+        // http://geoserver.itc.nl:8080/wps100/WebProcessingService?REQUEST=DescribeProcess&IDENTIFIER=org.n52.wps.server.algorithm.collapse.SimplePolygon2PointCollapse&VERSION=1.0.0&SERVICE=WPS
         DescribeProcessRequest descRequest = wps.createDescribeProcessRequest();
-        descRequest.setIdentifier(processIdenLocal);
+        descRequest.setIdentifier(processIden);
 
         DescribeProcessResponse descResponse = wps.issueRequest(descRequest);
 
         // based on the describeprocess, setup the execute
         ProcessDescriptionsType processDesc = descResponse.getProcessDesc();
         ExecuteProcessRequest exeRequest = wps.createExecuteProcessRequest();
-        exeRequest.setIdentifier(processIdenLocal);
+        exeRequest.setIdentifier(processIden);
 
-        setLocalInputDataAdd(exeRequest, processDesc);
+        // set input data
+        setLocalInputDataBufferPoly(exeRequest, processDesc, geom1);
 
         // send the request
         ExecuteProcessResponse response = wps.issueRequest(exeRequest);
@@ -73,16 +52,14 @@
         ExceptionReportType exceptionResponse = response.getExceptionResponse();
         assertNull(exceptionResponse);
 
-        // check result correctness
+        // check that the result is expected
+        Geometry expected = geom1.buffer(350);
         EList outputs = executeResponse.getProcessOutputs().getOutput();
-        assertTrue(!outputs.isEmpty());
-
         OutputDataType output = (OutputDataType) outputs.get(0);
-        LiteralDataType literalData = output.getData().getLiteralData();
-        String value = literalData.getValue();
-        Double result = new Double(value);
-        Double expected = 77.84 + 40039.229;
-        assertEquals(result, expected);
+        Geometry result = (Geometry) output.getData().getComplexData().getData().get(0);
+        // System.out.println(expected);
+        // System.out.println(result);
+        // assertTrue(expected.equals(result));
 
     }
 
