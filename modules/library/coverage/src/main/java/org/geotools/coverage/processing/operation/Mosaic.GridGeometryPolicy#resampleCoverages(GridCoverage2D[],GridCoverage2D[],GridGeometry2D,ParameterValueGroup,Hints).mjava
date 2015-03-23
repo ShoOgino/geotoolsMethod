@@ -2,12 +2,14 @@
          * Private method for resampling the {@link GridCoverage2D}s to the same resolution imposed by the {@link GridGeometry2D} object.
          * 
          * @param sources
+         * @param alphas
          * @param external
          * @param parameters
          * @return
          */
         private static ResampledRasters resampleCoverages(GridCoverage2D[] sources,
-                GridGeometry2D external, ParameterValueGroup parameters, Hints hints) {
+                GridCoverage2D[] alphas, GridGeometry2D external, ParameterValueGroup parameters,
+                Hints hints) {
             // Number of the sources to use
             int numSources = sources.length;
 
@@ -17,14 +19,16 @@
             // Selection of the GridToWorld transformation associated to the External GG2D
             MathTransform g2w = external.getGridToCRS2D(PixelOrientation.UPPER_LEFT);
             // Initial null value for NoData
-            Double nodata = null;
+            double[] nodata = null;
 
             // Check if the output nodata value is set as parameter
             Object outputNodata = parameters.parameter(OUTNODATA_NAME).getValue();
             if (outputNodata != null && outputNodata instanceof double[]) {
-                nodata = ((double[]) outputNodata)[0];
+                nodata = ((double[]) outputNodata);
             }
-
+            // Checking if the external alpha bands are defined
+            boolean hasAlpha = alphas != null && alphas.length > 0;
+            PlanarImage[] alphaArray = new PlanarImage[numSources];
             // Cycle around the various sources
             for (int i = 0; i < numSources; i++) {
                 // For each source, create a new GridGeometry which at the same resolution of the imposed one
@@ -40,7 +44,13 @@
 
                 // No operation must be done if the transformation is an Identity
                 if (concatenated != null && concatenated.isIdentity()) {
-                    rasters[i] = coverage.getRenderedImage();
+                    RenderedImage renderedImage = coverage.getRenderedImage();
+                    rasters[i] = renderedImage;
+                    // Add the alpha band
+                    if (hasAlpha && alphas[i] != null) {
+                        checkAlpha(coverage, alphas[i]);
+                        alphaArray[i] = PlanarImage.wrapRenderedImage(alphas[i].getRenderedImage());
+                    }
                 } else {
                     // New GridGeometry
                     GridGeometry2D newGG = new GridGeometry2D(PixelInCell.CELL_CORNER, g2w,
@@ -63,16 +73,23 @@
                         throw new CoverageProcessingException(e);
                     }
                     // Initialization of the nodata value
-                    double fillValue = 0;
+                    double[] fillValue = null;
                     // Selection of the nodata value
                     if (nodata == null) {
-                        fillValue = CoverageUtilities.getBackgroundValues(coverage)[0];
+                        fillValue = CoverageUtilities.getBackgroundValues(coverage);
                     } else {
                         fillValue = nodata;
                     }
 
                     // Resample to the new resolution
                     rasters[i] = GridCoverage2DRIA.create(coverage, newGG, fillValue, hints);
+                    // Resample also the alpha band
+                    if (hasAlpha && alphas[i] != null) {
+                        checkAlpha(coverage, alphas[i]);
+                        RenderedImage al = GridCoverage2DRIA.create(alphas[i], newGG,
+                                new double[1], hints);
+                        alphaArray[i] = PlanarImage.wrapRenderedImage(al);
+                    }
                 }
             }
 
@@ -80,6 +97,7 @@
             ResampledRasters rr = new ResampledRasters();
             rr.setFinalGeometry(external);
             rr.setRasters(rasters);
+            rr.setAlphas(alphaArray);
             return rr;
         }
 
