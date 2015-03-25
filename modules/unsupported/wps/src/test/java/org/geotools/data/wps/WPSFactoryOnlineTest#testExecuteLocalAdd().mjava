@@ -1,0 +1,78 @@
+    /**
+     * Do some more local process tests, such as double addition
+     *
+     * @throws ServiceException
+     * @throws IOException
+     * @throws ParseException
+     */
+    @Test
+    public void testExecuteLocalAdd() throws ServiceException, IOException, ParseException, ProcessException
+    {
+        if (fixture == null)
+        {
+            return;
+        }
+
+        String processIdenLocal = "DoubleAddition";
+
+        WPSCapabilitiesType capabilities = wps.getCapabilities();
+
+        // get the first process and execute it
+        ProcessOfferingsType processOfferings = capabilities.getProcessOfferings();
+        EList processes = processOfferings.getProcess();
+        // ProcessBriefType process = (ProcessBriefType) processes.get(0);
+
+        // does the server contain the specific process I want
+        boolean found = false;
+        Iterator iterator = processes.iterator();
+        while (iterator.hasNext())
+        {
+            ProcessBriefType process = (ProcessBriefType) iterator.next();
+            if (process.getIdentifier().getValue().equalsIgnoreCase(processIdenLocal))
+            {
+                found = true;
+
+                break;
+            }
+        }
+
+        // exit test if my process doesn't exist on server
+        if (!found)
+        {
+            return;
+        }
+
+        // do a full describeprocess on my process
+        DescribeProcessRequest descRequest = wps.createDescribeProcessRequest();
+        descRequest.setIdentifier(processIdenLocal);
+
+        DescribeProcessResponse descResponse = wps.issueRequest(descRequest);
+
+        // based on the describeprocess, setup the execute
+        ProcessDescriptionsType processDesc = descResponse.getProcessDesc();
+        ProcessDescriptionType pdt = (ProcessDescriptionType) processDesc.getProcessDescription().get(0);
+        WPSFactory wpsfactory = new WPSFactory(pdt, this.url);
+        Process process = wpsfactory.create();
+
+        // setup the inputs
+        Map<String, Object> map = new TreeMap<String, Object>();
+        Double d1 = 77.84;
+        Double d2 = 40039.229;
+        map.put("input_a", d1);
+        map.put("input_b", d2);
+
+        // execute/send-request for the process
+        Map<String, Object> results = process.execute(map, null);
+
+        // check that the result is expected
+        assertNotNull(results);
+
+        Double result = (Double) results.get("result");
+        // Double result = new Double(value);
+        Double expected = 77.84 + 40039.229;
+        // System.out.println(expected);
+        // System.out.println(result);
+        assertEquals(result, expected);
+
+    }
+

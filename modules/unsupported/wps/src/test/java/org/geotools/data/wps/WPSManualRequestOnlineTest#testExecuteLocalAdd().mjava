@@ -1,0 +1,78 @@
+    /**
+     * Do some more local process tests, such as double addtion
+     * 
+     * @throws ServiceException
+     * @throws IOException
+     * @throws ParseException
+     */
+    public void testExecuteLocalAdd() throws ServiceException, IOException, ParseException {
+
+        // don't run the test if the server is not up
+        if (fixture == null) {
+            return;
+        }
+
+        String processIdenLocal = "DoubleAddition";
+
+        WPSCapabilitiesType capabilities = wps.getCapabilities();
+
+        // get the first process and execute it
+        ProcessOfferingsType processOfferings = capabilities.getProcessOfferings();
+        EList processes = processOfferings.getProcess();
+        // ProcessBriefType process = (ProcessBriefType) processes.get(0);
+
+        // does the server contain the specific process I want
+        boolean found = false;
+        Iterator iterator = processes.iterator();
+        while (iterator.hasNext()) {
+            ProcessBriefType process = (ProcessBriefType) iterator.next();
+            if (process.getIdentifier().getValue().equalsIgnoreCase(processIdenLocal)) {
+                found = true;
+
+                break;
+            }
+        }
+
+        // exit test if my process doesn't exist on server
+        if (!found) {
+            return;
+        }
+
+        // do a full describeprocess on my process
+        DescribeProcessRequest descRequest = wps.createDescribeProcessRequest();
+        descRequest.setIdentifier(processIdenLocal);
+
+        DescribeProcessResponse descResponse = wps.issueRequest(descRequest);
+
+        // based on the describeprocess, setup the execute
+        ProcessDescriptionsType processDesc = descResponse.getProcessDesc();
+        ExecuteProcessRequest exeRequest = wps.createExecuteProcessRequest();
+        exeRequest.setIdentifier(processIdenLocal);
+
+        setLocalInputDataAdd(exeRequest, processDesc);
+
+        // send the request
+        ExecuteProcessResponse response = wps.issueRequest(exeRequest);
+
+        // response should not be null and no exception should occur.
+        assertNotNull(response);
+
+        ExecuteResponseType executeResponse = response.getExecuteResponse();
+        assertNotNull(executeResponse);
+
+        ExceptionReportType exceptionResponse = response.getExceptionResponse();
+        assertNull(exceptionResponse);
+
+        // check result correctness
+        EList outputs = executeResponse.getProcessOutputs().getOutput();
+        assertTrue(!outputs.isEmpty());
+
+        OutputDataType output = (OutputDataType) outputs.get(0);
+        LiteralDataType literalData = output.getData().getLiteralData();
+        String value = literalData.getValue();
+        Double result = new Double(value);
+        Double expected = 77.84 + 40039.229;
+        assertEquals(result, expected);
+
+    }
+

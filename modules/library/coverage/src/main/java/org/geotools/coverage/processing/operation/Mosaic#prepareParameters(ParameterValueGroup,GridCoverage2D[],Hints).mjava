@@ -33,8 +33,18 @@
         if (policy == null) {
             policy = GridGeometryPolicy.FIRST;
         }
+
+        // Getting Alpha bands if present
+        Object alphaBandList = parameters.parameter(ALPHA_NAME).getValue();
+        GridCoverage2D[] alphaCovs = null;
+        if (alphaBandList != null && alphaBandList instanceof Collection) {
+            Collection<GridCoverage2D> alphas = (Collection<GridCoverage2D>) alphaBandList;
+            alphaCovs = new GridCoverage2D[alphas.size()];
+            alphas.toArray(alphaCovs);
+        }
+
         // Resample to the defined GridGeometry
-        ResampledRasters rr = policy.resampleGridGeometry(sources, gg, parameters, hints);
+        ResampledRasters rr = policy.resampleGridGeometry(sources, alphaCovs, gg, parameters, hints);
         // Get the resampled RenderedImages
         RenderedImage[] rasters = rr.getRasters();
 
@@ -51,16 +61,16 @@
         }
 
         // Setting the nodata values for the areas not covered by any GridCoverage.
-        double nodata = 0;
+        double[] nodata = null;
         // Check if the output nodata value is present
         Object outputNodata = parameters.parameter(OUTNODATA_NAME).getValue();
         if (outputNodata != null && outputNodata instanceof double[]) {
-            nodata = ((double[]) outputNodata)[0];
+            nodata = ((double[]) outputNodata);
         } else {
-            nodata = CoverageUtilities.getBackgroundValues(sources[PRIMARY_SOURCE_INDEX])[0];
+            nodata = CoverageUtilities.getBackgroundValues(sources[PRIMARY_SOURCE_INDEX]);
         }
         // Setting of the output nodata
-        block.setParameter("backgroundValues", new double[] { nodata });
+        block.setParameter("backgroundValues", nodata);
 
         // Setting of the Threshold to use
         double threshold = CoverageUtilities.getMosaicThreshold(rasters[PRIMARY_SOURCE_INDEX]
@@ -79,31 +89,9 @@
 
         // Setting of the Mosaic type as Overlay
         block.setParameter("mosaicType", MosaicDescriptor.MOSAIC_TYPE_OVERLAY);
-
-        // Setting of the optional Alpha channels
-        PlanarImage[] alpha = new PlanarImage[numSources];
-        boolean alphaChannel = true;
-
-        for (int i = 0; i < numSources; i++) {
-            RenderedImage img = rasters[i];
-            // ImageWorker to use for elaborating each raster
-            ImageWorker w = new ImageWorker(img);
-            // I have to force going to ComponentColorModel in
-            // case the image is indexed.
-            if (img.getSampleModel() instanceof MultiPixelPackedSampleModel
-                    || img.getColorModel() instanceof IndexColorModel) {
-                w.forceComponentColorModel();
-                img = w.getRenderedImage();
-            }
-            boolean hasAlpha = img.getColorModel() != null ? img.getColorModel().hasAlpha() : false;
-            if (hasAlpha) {
-                alphaChannel |= hasAlpha;
-                alpha[i] = w.retainLastBand().getPlanarImage();
-            }
-        }
         // If at least one image contains Alpha channel, it is used for the mosaic
-        if (alphaChannel) {
-            block.setParameter("sourceAlpha", alpha);
+        if (rr.getAlphas() != null) {
+            block.setParameter("sourceAlpha", rr.getAlphas());
         }
 
         // Creation of the finel Parameters
