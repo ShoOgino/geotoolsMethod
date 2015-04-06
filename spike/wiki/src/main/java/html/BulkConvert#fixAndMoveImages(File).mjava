@@ -1,0 +1,196 @@
+    /**
+     * Process the generated markdown file and perform a few fixes.
+     * 
+     * @param markdownFile
+     */
+    private boolean fixAndMoveImages(File markdownFile) {
+        File imageDir = new File(markdownFile.getParent(), "images");
+        String page = baseName(markdownFile);
+        String title = baseTitle(markdownFile);
+
+        // Fix image location
+        // BEFORE: .. |image0| image:: download/attachments/3536/view.gif
+        //  AFTER: .. |image0| image:: /image/active_part/view.gif
+        //
+        // Use http://www.regexplanet.com/advanced/java/index.html to work out
+        //
+        // pattern: .. \|image(\d)\| image:: (download/attachments/.+?)/(.+)
+        // replace: .. |image$1| image:: /page/$3
+        Pattern imagePattern = Pattern
+                .compile(".. \\|image(\\d+)\\| image:: (download/attachments/.+?)/(.+)");
+        String imageReplace = ".. |image$1| image:: /images/" + page + "/$3";
+
+        // BEFORE: .. |image10| image:: download/attachments/4523/delete_feature_mode.gif
+        //  AFTER: .. |image10| image:: /image/edit_tools/delete_feature_mode.gif
+        
+        Pattern figurePattern = Pattern.compile(".. figure:: (download/attachments/.+?)/(.+)");
+        String figureReplace = ".. figure:: /images/" + page + "/$2";
+
+        // Fix Related cross references
+        // .. figure:: http://udig.refractions.net/image/EN/ngrelc.gif
+        Map<Pattern, String> replace = new HashMap<Pattern, String>();
+//        replace.put(Pattern.compile(".. figure:: http://udig.refractions.net/image/EN/ngrelt.gif"),
+//                "**Related tasks**");
+//        replace.put(Pattern.compile(".. figure:: http://udig.refractions.net/image/EN/ngrelr.gif"),
+//                "**Related reference**");
+//        replace.put(Pattern.compile(".. figure:: http://udig.refractions.net/image/EN/ngrelc.gif"),
+//                "**Related concepts**");
+
+        
+        Pattern linkPattern = Pattern.compile("([a-zA-Z\\-0-9]+)\\_(\\d+)\\.html");
+        String linkReplace = "$1";
+        
+        Pattern strightLinkPattern = Pattern.compile("(\\s*)`(.*) <(.*)>`_");
+        String straightLinkReplace = "$1:doc:`$2`";
+
+//        Pattern heading = Pattern.compile("(=|-|~|\\^|\\')+");
+//        final String LEVEL = "=-~^'";
+
+        StringBuilder contents = new StringBuilder();
+        BufferedReader reader = null;
+        String line;
+
+        int pageLevel = -1; // no heading encountered yet
+        boolean lineFeedNeeded = false;
+
+        String previousLine = null;
+        try {
+            reader = new BufferedReader(new FileReader(markdownFile));
+            
+            // Skip Header Stuff
+            while ((line = reader.readLine()) != null) {
+                if( line.contains("<div id=\"main-content\" class=\"wiki-content group\">")){
+                    // Wiki pages include page name at the top so no need to repeat header as part of the
+                    // document 
+                    break;
+                }
+            }
+            
+            while ((line = reader.readLine()) != null) {
+                if( line.contains("<div id=\"footer\" role=\"contentinfo\">")){
+                    // no need to include the footer 
+                    break;
+                }
+                if( line.startsWith("<div class") ){
+                    if( line.startsWith("<div class=\"columnMacro\">") ||
+                        line.startsWith("<div class=\"sectionColumnWrapper\">") ||
+                        line.startsWith("<div class=\"sectionMacro\">") ||
+                        line.startsWith("<div class=\"sectionMacroRow\">") ||
+                        line.startsWith("<div class=\"columnMacro\"") ||
+                        line.startsWith("<div class=\"refresh-issues-bottom\">")){
+                        continue;
+                    }
+                    continue;
+                }
+                if( line.startsWith("</div>")){
+                    continue; // skip divs
+                }
+                if( line.contains("FeatureCollection cleanup")){
+                    // breakpoint for debugging
+                    System.out.println("Check delete_feature_mode.gif ");
+                }
+                // Fix common replacements
+                for (Entry<Pattern, String> entry : replace.entrySet()) {
+                    Matcher matcher = entry.getKey().matcher(line);
+                    if (matcher.matches()) {
+                        line = matcher.replaceAll(entry.getValue());
+                        reader.readLine(); // skip :align: center
+                        reader.readLine(); // skip :alt:
+
+                        lineFeedNeeded = true;
+                    }
+                }
+                // Fix document links
+                Matcher linkMatcher = linkPattern.matcher(line);
+                line = linkMatcher.replaceAll(linkReplace);
+                Matcher straightLinkMatcher = strightLinkPattern.matcher(line);
+                if (straightLinkMatcher.matches()) {
+                    String indent = straightLinkMatcher.group(1);
+                    String pageRef = straightLinkMatcher.group(2);
+                    String htmlRef = straightLinkMatcher.group(3);
+                    // BEFORE: `some page <some%20page.html>`_
+                    // AFTER: :doc:`some page`
+                    // line = straightLinkMatcher.replaceAll(straightLinkReplace);
+                    // lineFeedNeeded = true;
+                    String fixed_page_ref = fixPageReference(pageRef);
+                    if( htmlRef.startsWith("http")){
+                        // external link `
+                        // $1`$2 <$3>`_
+                        line = indent+"`"+pageRef+" <"+htmlRef+">`_";
+                    }
+                    else {
+                        line = indent+":doc:`"+fixed_page_ref+"`";
+                        lineFeedNeeded = true;
+                    }
+                }
+                // check for image references
+                //
+                Matcher imageMatcher = imagePattern.matcher(line);
+                if (imageMatcher.matches()) {
+                    String image = imageMatcher.group(1);
+                    String path = imageMatcher.group(2);
+                    String file = imageMatcher.group(3);
+
+                    File attachementImage = new File(new File(htmlDirectory, path), file);
+                    File pageDir = new File(imageDir, page);
+                    File pageImage = new File(pageDir, file);
+
+                    duplicateImage(attachementImage, pageImage);
+                    boolean moved = pageImage.exists();
+                    if (moved) {
+                        line = imageMatcher.replaceAll(imageReplace);
+                    }
+                }
+                // check for figure references
+                //
+                Matcher figureMatcher = figurePattern.matcher(line);
+                if (figureMatcher.matches()) {
+                    String path = figureMatcher.group(1);
+                    String file = figureMatcher.group(2);
+
+                    File attachementImage =new File( new File(htmlDirectory,path), file);
+                    File pageDir = new File(imageDir, page);
+                    File pageImage = new File(pageDir, file);
+
+                    duplicateImage(attachementImage, pageImage);
+                    boolean moved = pageImage.exists();
+                    if (moved) {
+                        line = figureMatcher.replaceAll(figureReplace);
+                    }
+                }
+                contents.append(line);
+                contents.append("\n");
+                if (lineFeedNeeded) {
+                    contents.append("\n");
+                    lineFeedNeeded = false;
+                }
+                previousLine = line; // remember for next time in case this is a heading!
+            }
+        } catch (FileNotFoundException e) {
+            System.out.println("Unable to read '" + markdownFile + "':" + e);
+            return false;
+        } catch (IOException e) {
+            System.out.println("Trouble reading '" + markdownFile + "':" + e);
+            return false;
+        } finally {
+            close(reader);
+        }
+
+        String text = contents.toString();
+        boolean deleted = markdownFile.delete();
+        if (deleted) {
+            // write out modified copy
+            try {
+                OutputStream modifiedCopy = new BufferedOutputStream(new FileOutputStream(markdownFile));
+
+                InputStream textSteram = new ByteArrayInputStream(text.getBytes(Charset
+                        .defaultCharset()));
+                bufferedStreamsCopy(textSteram, modifiedCopy);
+            } catch (IOException eek) {
+                System.out.println("Trouble writing modified '" + markdownFile + "':" + eek);
+                return false;
+            }
+        }
+        return true;
+    }
+
