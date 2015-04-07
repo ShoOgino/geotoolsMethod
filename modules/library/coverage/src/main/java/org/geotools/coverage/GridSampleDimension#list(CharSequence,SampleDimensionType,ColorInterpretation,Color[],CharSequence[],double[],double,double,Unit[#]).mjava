@@ -1,0 +1,191 @@
+    /** Constructs a list of categories. Used by constructors only. */
+    @SuppressWarnings("deprecation")
+	private static CategoryList list(CharSequence  description,
+                                     SampleDimensionType  type,
+                                     ColorInterpretation color,
+                               final Color[]           palette,
+                               final CharSequence[] categories,
+                               final double[]           nodata,
+                                     double            minimum,
+                                     double            maximum,
+                               final Unit<?>              unit)
+    {
+        if (description == null) {
+            description = Vocabulary.formatInternational(VocabularyKeys.UNTITLED);
+        }
+        if (Double.isInfinite(minimum) || Double.isInfinite(maximum) || !(minimum < maximum)) {
+            throw new IllegalArgumentException(Errors.format(ErrorKeys.BAD_RANGE_$2, minimum, maximum));
+        }
+        if (type == null) {
+            type = TypeMap.getSampleDimensionType(minimum, maximum);
+        }
+        if (color == null) {
+            color = ColorInterpretation.PALETTE_INDEX;
+        }
+        final int  nameCount    = (categories != null) ? categories.length : 0;
+        final int  nodataCount  = (nodata     != null) ?     nodata.length : 0;
+        final List<Category> categoryList = new ArrayList<Category>(nameCount + nodataCount + 2);
+        /*
+         * STEP 1 - Add a qualitative category for each 'nodata' value.
+         *   NAME: Fetched from 'categories' if available, otherwise default to the value.
+         *   COLOR: Fetched from 'palette' if available, otherwise use Category default.
+         */
+        for (int i=0; i<nodataCount; i++) {
+            CharSequence name = null;
+            final double padValue = nodata[i];
+            final int intValue = (int) Math.floor(padValue);
+            if (intValue >= 0 && intValue < nameCount) {
+                if (intValue == padValue) {
+                    // This category will be added in step 2 below.
+                    continue;
+                }
+                name = categories[intValue];
+            }
+            final Number value = TypeMap.wrapSample(padValue, type, false);
+            if (name == null) {
+                name = value.toString();
+            }
+            final NumberRange<?> range = new NumberRange(value.getClass(), value, value);
+            final Color[] colors = ColorUtilities.subarray(palette, intValue, intValue + 1);
+            categoryList.add(new Category(name, colors, range, false));
+        }
+        /*
+         * STEP 2 - Add a qualitative category for each category name.
+         *   RANGE: Fetched from the index (position) in the 'categories' array.
+         *   COLOR: Fetched from 'palette' if available, otherwise use Category default.
+         */
+        if (nameCount != 0) {
+            int lower = 0;
+            final int length = categories.length;
+            for (int upper=1; upper<=length; upper++) {
+                if (upper != length) {
+                    final String nameLower = categories[lower].toString().trim();
+                    final String nameUpper = categories[upper].toString().trim();
+                    if (nameLower.equalsIgnoreCase(nameUpper)) {
+                        /*
+                         * If there is a suite of categories with identical name,  create only one
+                         * category with range [lower..upper] instead of one new category for each
+                         * sample value.
+                         */
+                        continue;
+                    }
+                }
+                final CharSequence name = categories[lower];
+                Number min = TypeMap.wrapSample(lower,   type, false);
+                Number max = TypeMap.wrapSample(upper-1, type, false);
+                final Class<? extends Number> classe;
+                if (min.equals(max)) {
+                    min = max;
+                    classe = max.getClass();
+                } else {
+                    classe = ClassChanger.getWidestClass(min, max);
+                    min    = ClassChanger.cast(min, classe);
+                    max    = ClassChanger.cast(max, classe);
+                }
+                final NumberRange<?> range = new NumberRange(classe, min, max);
+                final Color[] colors = ColorUtilities.subarray(palette, lower, upper);
+                categoryList.add(new Category(name, colors, range, false));
+                lower = upper;
+            }
+        }
+        /*
+         * STEP 3 - Changes some qualitative categories into quantitative ones.  The hard questions
+         *          is: do we want to mark a category as "quantitative"?   OpenGIS has no notion of
+         *          "qualitative" versus "quantitative" category. As an heuristic approach, we will
+         *          look for quantitative category if:
+         *
+         *          - 'scale' and 'offset' do not map to an identity transform. Those
+         *            coefficients can be stored in quantitative category only.
+         *
+         *          - 'nodata' were specified. If the user wants to declare "nodata" values,
+         *            then we can reasonably assume that he have real values somewhere else.
+         *
+         *          - Only 1 category were created so far. A classified raster with only one
+         *            category is useless. Consequently, it is probably a numeric raster instead.
+         */
+        boolean needQuantitative = false;
+        if (nodataCount != 0 || categoryList.size() <= 1) {
+            needQuantitative = true;
+            for (int i = categoryList.size(); --i >= 0;) {
+                Category category = categoryList.get(i);
+                if (!category.isQuantitative()) {
+                    final NumberRange range = category.getRange();
+                    final Comparable  min   = range.getMinValue();
+                    final Comparable  max   = range.getMaxValue();
+                    @SuppressWarnings("unchecked")
+                    final int c = min.compareTo(max);
+                    if (c != 0) {
+                        final double xmin = ((Number) min).doubleValue();
+                        final double xmax = ((Number) max).doubleValue();
+                        if (!rangeContains(xmin, xmax, nodata)) {
+                            final InternationalString name = category.getName();
+                            final Color[] colors = category.getColors();
+                            category = new Category(name, colors, range);
+                            categoryList.set(i, category);
+                            needQuantitative = false;
+                        }
+                    }
+                }
+            }
+        }
+        /*
+         * STEP 4 - Create at most one quantitative category for the remaining sample values.
+         *          The new category will range from 'minimum' to 'maximum' inclusive, minus
+         *          all ranges used by previous categories.  If there is no range left, then
+         *          no new category will be created.  This step will be executed only if the
+         *          information provided by the user seem to be incomplete.
+         *
+         *          Note that substractions way break a range into many smaller ranges.
+         *          The naive algorithm used here try to keep the widest range.
+         */
+        if (needQuantitative) {
+            boolean minIncluded = true;
+            boolean maxIncluded = true;
+            for (int i = categoryList.size(); --i >= 0;) {
+                final NumberRange range = categoryList.get(i).getRange();
+                final double min = range.getMinimum();
+                final double max = range.getMaximum();
+                if (max-minimum < maximum-min) {
+                    if (max >= minimum) {
+                        // We are loosing some sample values in
+                        // the lower range because of nodata values.
+                        minimum = max;
+                        minIncluded = !range.isMaxIncluded();
+                    }
+                } else {
+                    if (min <= maximum) {
+                        // We are loosing some sample values in
+                        // the upper range because of nodata values.
+                        maximum = min;
+                        maxIncluded = !range.isMinIncluded();
+                    }
+                }
+            }
+            // If the remaining range is wide enough, add the category.
+            if (maximum - minimum > (minIncluded && maxIncluded ? 0 : 1)) {
+                Number min = TypeMap.wrapSample(minimum, type, false);
+                Number max = TypeMap.wrapSample(maximum, type, false);
+                final Class<? extends Number> classe = ClassChanger.getWidestClass(min, max);
+                min = ClassChanger.cast(min, classe);
+                max = ClassChanger.cast(max, classe);
+                final NumberRange range = new NumberRange(classe, min, minIncluded,
+                                                                  max, maxIncluded);
+                final Color[] colors = ColorUtilities.subarray(palette,
+                        (int) Math.ceil(minimum), (int) Math.floor(maximum));
+                categoryList.add(new Category(description, colors, range));
+                needQuantitative = false;
+            }
+        }
+        /*
+         * STEP 5 - Now, the list of categories should be complete. Construct a
+         *          sample dimension appropriate for the type of palette used.
+         */
+        final Category[] cl = categoryList.toArray(new Category[categoryList.size()]);
+        if (ColorInterpretation.PALETTE_INDEX.equals(color) ||
+            ColorInterpretation.GRAY_INDEX.equals(color))
+        {
+            return list(cl, unit);
+        }
+        throw new UnsupportedOperationException("Not yet implemented");
+    }
+

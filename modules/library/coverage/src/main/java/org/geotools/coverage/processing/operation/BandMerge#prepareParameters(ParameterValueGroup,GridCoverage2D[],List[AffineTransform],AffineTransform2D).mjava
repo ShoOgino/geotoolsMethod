@@ -1,0 +1,90 @@
+    /**
+     * This method prepares the {@link ParameterBlockJAI} to pass to JAI in order to execute the {@link BandMerge} operation.
+     * 
+     * @param parameters
+     * @param sources
+     * @param tr
+     * @param crsToGRID
+     * @return
+     * @throws MismatchedDimensionException
+     * @throws ParameterNotFoundException
+     * @throws TransformException
+     */
+    private ParameterBlockJAI prepareParameters(final ParameterValueGroup parameters,
+            GridCoverage2D[] sources, List<AffineTransform> tr, AffineTransform2D crsToGRID)
+            throws MismatchedDimensionException, ParameterNotFoundException, TransformException {
+        final ImagingParameters copy = (ImagingParameters) descriptor.createValue();
+        final ParameterBlockJAI block = (ParameterBlockJAI) copy.parameters;
+
+        Range[] nodata = new Range[sources.length];
+        // Image dataType
+        int dataType = sources[0].getRenderedImage().getSampleModel().getDataType();
+
+        // No Data check
+        for (int i = 0; i < sources.length; i++) {
+            GridCoverage2D cov = sources[i];
+            // Setting of the Source
+            block.setSource(cov.getRenderedImage(), i);
+            // Check on the image datatype
+            int dataTypeCov = cov.getRenderedImage().getSampleModel().getDataType();
+            if (dataType != dataTypeCov) {
+                throw new IllegalArgumentException("Input Coverages must have the same data type");
+            }
+
+            // Creation of the NoData range associated
+            nodata[i] = createNoDataRange(cov, dataType);
+        }
+
+        if (JAIExt.isJAIExtOperation("BandMerge")) {
+            // Setting NoData
+            block.setParameter("noData", nodata);
+
+            // Setting Transformations
+            block.setParameter("transformations", tr);
+
+            // Setting ROI
+            ROI roi = null;
+            if (parameters.parameter(GEOMETRY).getValue() != null) {
+                // Creation of a ROI geometry object from the Geometry
+                roi = new ROIGeometry(JTS.transform((Geometry) parameters.parameter(GEOMETRY)
+                        .getValue(), crsToGRID));
+            }
+            // Check if the coverages contains a ROI property
+            for (int i = 0; i < sources.length; i++) {
+                GridCoverage2D cov = sources[i];
+                ROI covROI = CoverageUtilities.getROIProperty(cov);
+                if (covROI != null) {
+                    ROI newROI = null;
+                    // Check if it must be transformed
+                    if (tr != null) {
+                        try {
+                            AffineTransform trans = tr.get(i).createInverse();
+                            newROI = covROI.transform(trans);
+                        } catch (NoninvertibleTransformException e) {
+                            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                        }
+                    } else {
+                        newROI = covROI;
+                    }
+
+                    if (roi == null) {
+                        roi = newROI;
+                    } else {
+                        roi = roi.intersect(newROI);
+                    }
+                }
+            }
+
+            // Addition of the ROI to the ParameterBlock
+            if (roi != null) {
+                block.setParameter("roi", roi);
+            }
+
+            // Setting the destination No Data Value as the NoData of the principal coverage selected
+            block.setParameter("destinationNoData", nodata[getIndex(parameters)].getMin()
+                    .doubleValue());
+        }
+
+        return block;
+    }
+

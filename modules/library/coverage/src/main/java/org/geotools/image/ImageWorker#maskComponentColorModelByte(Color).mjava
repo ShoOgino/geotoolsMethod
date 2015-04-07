@@ -52,7 +52,11 @@
             for (int i = 0; i < opaqueBands.length; i++) {
                 opaqueBands[i] = i;
             }
-            image = BandSelectDescriptor.create(image, opaqueBands, hints);
+            // ParameterBlock creation
+            ParameterBlock pb = new ParameterBlock();
+            pb.setSource(image, 0);
+            pb.set(opaqueBands, 0);
+            image = JAI.create("BandSelect", pb, hints);
             numBands = numColorBands;
         }
 
@@ -82,11 +86,27 @@
             }
         }
         // Create a LookupTableJAI object to be used with the "lookup" operator.
-        LookupTableJAI table = new LookupTableJAI(tableData);
+        LookupTable table = LookupTableFactory.create(tableData, image.getSampleModel()
+                .getDataType());
         // Do the lookup operation.
         // we should not transform on color map here
         hints.put(JAI.KEY_TRANSFORM_ON_COLORMAP, Boolean.FALSE);
-        PlanarImage luImage = LookupDescriptor.create(image, table, hints);
+        // ParameterBlock definition
+        ParameterBlock pb = new ParameterBlock();
+        pb.setSource(image, 0);
+        pb.set(table, 0);
+        pb.set(roi, 2);
+        pb.set(nodata, 3);
+        if(isNoDataNeeded()){
+            if (background != null && background.length > 0) {
+                pb.set(background[0], 1);
+                // We must set the new NoData value
+                setNoData(RangeFactory.create(background[0], background[0]));
+            }
+        }
+
+        PlanarImage luImage = JAI.create("Lookup", pb, hints);
+        // PlanarImage luImage = LookupDescriptor.create(image, table, hints);
 
         /*
          * Now that we have performed the lookup operation we have to remember what we stated here above.
@@ -102,9 +122,35 @@
             final double[][] matrix = new double[1][4];
             // Values at index 0,1,2 are set to 1.0, value at index 3 is left to 0.
             Arrays.fill(matrix[0], 0, 3, 1.0);
-            luImage = BandCombineDescriptor.create(luImage, matrix, hints);
+            // ParameterBlock definition
+            pb = new ParameterBlock();
+            pb.setSource(luImage, 0);
+            pb.set(matrix, 0);
+            pb.set(roi, 1);
+            pb.set(nodata, 2);
+            if (background != null && background.length > 0) {
+                pb.set(background[0], 3);
+            }
+
+            luImage = JAI.create("BandCombine", pb, getRenderingHints());
+            // luImage = BandCombineDescriptor.create(luImage, matrix, hints);
         }
-        image = BandMergeDescriptor.create(image, luImage, hints);
+        pb = new ParameterBlock();
+        pb.setSource(image, 0);
+        pb.setSource(luImage, 1);
+        pb.set(new Range[] { nodata }, 0);
+        if (isNoDataNeeded()) {
+            if (background != null && background.length > 0) {
+                double dest = background[0];
+                pb.set(dest, 1);
+                // We must set the new NoData value
+                setNoData(RangeFactory.create(dest, dest));
+            }
+        }
+        pb.set(roi, 3);
+        pb.set(true, 4);
+        image = JAI.create("BandMerge", pb, hints);
+        // image = BandMergeDescriptor.create(image, luImage, hints);
 
         invalidateStatistics();
         return this;

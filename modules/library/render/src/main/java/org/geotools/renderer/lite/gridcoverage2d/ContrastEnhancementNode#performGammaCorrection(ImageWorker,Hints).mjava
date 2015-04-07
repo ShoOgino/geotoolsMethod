@@ -1,0 +1,91 @@
+	/**
+	 * Performs a gamma correction operation on the input image.
+	 * 
+	 * @param inputImage the input {@link RenderedImage} to work on.
+	 * @param hints {@link Hints} to control the contrast enhancement process.
+	 * @return a {@link RenderedImage} on which a gamma correction has been performed.
+	 */
+	private RenderedImage performGammaCorrection(
+			ImageWorker worker,
+	                final Hints hints) {
+	        worker.setRenderingHints(hints);
+		//note that we should work on a single band
+	        RenderedImage inputImage = worker.getRenderedOperation();
+		assert inputImage.getSampleModel().getNumBands() == 1:inputImage;
+		
+		final int dataType=inputImage.getSampleModel().getDataType();
+		RenderedImage result=inputImage;
+		if (!Double.isNaN(gammaValue) && Math.abs(gammaValue - 1.0) > 1E-6) {
+			if (dataType == DataBuffer.TYPE_BYTE) {
+
+				////
+				//
+				// Byte case, use lookup to optimize
+				// 
+				////
+				final byte[] lut = new byte[256];
+				for (int i = 1; i < lut.length; i++)
+					lut[i] = (byte) (255.0 * Math.pow(i / 255.0, gammaValue) + 0.5d);
+
+				// apply the operation now
+				LookupTable table = LookupTableFactory.create(lut, dataType);
+                                worker.looukp(table);
+			}
+			else
+			{
+				////
+				//
+				// Generic case
+				// 
+				////
+				//
+				// STEP 1 do the extrema
+				//
+				////
+				//step 1 do the extrema to get the statistics for this image
+			        final double[] minimum=worker.getMinimums();
+                                final double[] maximum=worker.getMaximums();
+			        final double scale  = (maximum[0]-minimum[0])/(MAX_VALUE-MIN_VALUE);
+		                final double offset = minimum[0] - MIN_VALUE*scale;
+				////
+				//
+				// STEP 2 do the gamma correction by using generic piecewise
+				//
+				////
+				final DefaultPiecewiseTransform1DElement mainElement = DefaultPiecewiseTransform1DElement.create(
+						"gamma-correction-transform", RangeFactory.create(minimum[0],maximum[0]), 
+						new MathTransformationAdapter() {
+
+									/*
+									 * (non-Javadoc)
+									 * @see org.opengis.referencing.operation.MathTransform1D#derivative(double)
+									 */
+									public double derivative(double value)
+											throws TransformException {
+										
+										throw new UnsupportedOperationException(Errors.format(ErrorKeys.UNSUPPORTED_OPERATION_$1));
+									}
+									public boolean isIdentity() {
+										return false;
+									}
+									/*
+									 * (non-Javadoc)
+									 * @see org.opengis.referencing.operation.MathTransform1D#transform(double)
+									 */
+									public double transform(double value) {
+										value = (value-offset)/scale;
+										return offset+Math.pow(value, gammaValue)*scale;
+									}
+
+						});
+				
+				final PiecewiseTransform1D<DefaultPiecewiseTransform1DElement>  transform = new DefaultPiecewiseTransform1D<DefaultPiecewiseTransform1DElement> (
+						new DefaultPiecewiseTransform1DElement[] {mainElement},0);
+				worker.piecewise(transform, Integer.valueOf(0));
+			}
+		}
+		result = worker.getRenderedImage();
+		assert result.getSampleModel().getNumBands() == 1:result;
+		return result;
+	}
+

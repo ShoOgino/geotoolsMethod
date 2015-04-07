@@ -42,15 +42,30 @@
             }
         }
         final RenderingHints hints = getRenderingHints(DataBuffer.TYPE_BYTE);
-        if (computeRescale)
-            image = RescaleDescriptor.create(image, // The source image.
-                    scale, // The per-band constants to multiply by.
-                    offset, // The per-band offsets to be added.
-                    hints); // The rendering hints.
-        else
-            image = FormatDescriptor.create(image, // The source image.
-                    DataBuffer.TYPE_BYTE, // The destination image data type (BYTE)
-                    hints); // The rendering hints.
+        if (computeRescale) {
+            ParameterBlock pb = new ParameterBlock();
+            pb.setSource(image, 0); // The source image.
+            pb.set(scale, 0); // The per-band constants to multiply by.
+            pb.set(offset, 1); // The per-band offsets to be added.
+            pb.set(roi, 2); // ROI
+            pb.set(nodata, 3); // NoData range
+            if (isNoDataNeeded()) {
+                if (background != null && background.length > 0) {
+                    pb.set(background[0], 5); // destination No Data value
+                    // We must set the new NoData value
+                    setNoData(RangeFactory.create((byte) background[0], (byte) background[0]));
+                }
+            }
+
+            image = JAI.create("Rescale", pb, hints);
+        } else {
+            ParameterBlock pb = new ParameterBlock();
+            pb.setSource(image, 0); // The source image.
+            pb.set(DataBuffer.TYPE_BYTE, 0); // The destination image data type (BYTE)
+
+            image = JAI.create("Format", pb, hints);
+            setNoData(RangeFactory.convert(nodata, DataBuffer.TYPE_BYTE));
+        }
         invalidateStatistics(); // Extremas are no longer valid.
 
         // All post conditions for this method contract.

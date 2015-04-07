@@ -11,6 +11,8 @@
         final int dataType = inputRI.getSampleModel().getDataType();
         double scale = 1;
         double offset = 0;
+        ImageWorker worker = new ImageWorker(inputRI);
+        worker.setRenderingHints(localHints);
         if (dataType != DataBuffer.TYPE_BYTE) {
             if (LOGGER.isLoggable(Level.FINE)) {
                 LOGGER.fine("Rescaling dynamic to fit BYTE datatype from "
@@ -19,24 +21,21 @@
 
             switch (dataType) {
             case DataBuffer.TYPE_USHORT:
-                inputRI = LookupDescriptor.create(inputRI, createLookupTableUShort(exclusionLuminanceRanges),
-                        localHints);
+                inputRI = worker.looukp(createLookupTableUShort(exclusionLuminanceRanges, dataType)).getRenderedImage();
                 break;
             case DataBuffer.TYPE_SHORT:
                 scale = MAX_8BIT_VALUE / Short.MAX_VALUE;
                 offset = MAX_8BIT_VALUE * Short.MIN_VALUE / (Short.MIN_VALUE - Short.MAX_VALUE);
-                inputRI = RescaleDescriptor.create(inputRI, new double[] { scale },
-                        new double[] { offset }, localHints);
-                imagesStack.push(inputRI);
-                inputRI = LookupDescriptor.create(inputRI, createLookupTableByte(exclusionLuminanceRanges), localHints);
+                worker.rescale(new double[] { scale }, new double[] { offset });
+                imagesStack.push(worker.getRenderedImage());
+                inputRI = worker.looukp(createLookupTableByte(exclusionLuminanceRanges, dataType)).getRenderedImage();
                 break;
             case DataBuffer.TYPE_INT:
                 scale = MAX_8BIT_VALUE / Integer.MAX_VALUE;
                 offset = MAX_8BIT_VALUE * Integer.MIN_VALUE / (Integer.MIN_VALUE - Integer.MAX_VALUE);
-                inputRI = RescaleDescriptor.create(inputRI, new double[] { scale },
-                        new double[] { offset }, localHints);
-                imagesStack.push(inputRI);
-                inputRI = LookupDescriptor.create(inputRI, createLookupTableByte(exclusionLuminanceRanges), localHints);
+                worker.rescale(new double[] { scale }, new double[] { offset });
+                imagesStack.push(worker.getRenderedImage());
+                inputRI = worker.looukp(createLookupTableByte(exclusionLuminanceRanges, dataType)).getRenderedImage();
                 break;
             default:
                 throw new UnsupportedOperationException("Wrong data type:" + dataType);
@@ -45,7 +44,7 @@
 
             assert inputRI.getSampleModel().getDataType() == DataBuffer.TYPE_BYTE;
         } else {
-            inputRI = LookupDescriptor.create(inputRI, createLookupTableByte(exclusionLuminanceRanges), localHints);
+            inputRI = worker.looukp(createLookupTableByte(exclusionLuminanceRanges, dataType)).getRenderedImage();
         }
         return inputRI;
     }

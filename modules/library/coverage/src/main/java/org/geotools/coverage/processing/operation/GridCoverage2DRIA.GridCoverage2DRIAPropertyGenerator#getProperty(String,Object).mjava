@@ -1,0 +1,87 @@
+        /**
+         * Returns the specified property.
+         * 
+         * @param name Property name.
+         * @param opNode Operation node.
+         */
+        public Object getProperty(String name, Object opNode) {
+            validate(name, opNode);
+
+            if (opNode instanceof GridCoverage2DRIA && name.equalsIgnoreCase("roi")) {
+                GridCoverage2DRIA op = (GridCoverage2DRIA) opNode;
+
+                // Retrieve the rendered source image and its ROI.
+                RenderedImage src = (RenderedImage) op.src.getRenderedImage();
+                Object property = op.getProperty("ROI");
+                if (property == null || property.equals(java.awt.Image.UndefinedProperty)
+                        || !(property instanceof ROI)) {
+                    return java.awt.Image.UndefinedProperty;
+                }
+
+                // Return undefined also if source ROI is empty.
+                ROI srcROI = (ROI) property;
+                if (srcROI.getBounds().isEmpty()) {
+                    return java.awt.Image.UndefinedProperty;
+                }
+
+                // Retrieve the Interpolation object.
+                InterpolationNearest interp = (InterpolationNearest) Interpolation.getInstance(Interpolation.INTERP_NEAREST);
+
+                // Determine the effective source bounds.
+                Rectangle srcBounds = null;
+                PlanarImage dst = op;
+                if (dst instanceof GeometricOpImage
+                        && ((GeometricOpImage) dst).getBorderExtender() == null) {
+                    srcBounds = new Rectangle(src.getMinX() + interp.getLeftPadding(), src.getMinY()
+                            + interp.getTopPadding(), src.getWidth() - interp.getWidth() + 1,
+                            src.getHeight() - interp.getHeight() + 1);
+                } else {
+                    srcBounds = new Rectangle(src.getMinX(), src.getMinY(), src.getWidth(),
+                            src.getHeight());
+                }
+
+                // If necessary, clip the ROI to the effective source bounds.
+                if (!srcBounds.contains(srcROI.getBounds())) {
+                    srcROI = srcROI.intersect(new ROIShape(srcBounds));
+                }
+
+                // Setting constant image to be warped as a ROI
+                Rectangle dstBounds = op.getBounds();
+
+                // Setting layout of the constant image
+                ImageLayout2 layout = new ImageLayout2();
+                int minx = (int) srcBounds.getMinX();
+                int miny = (int) srcBounds.getMinY();
+                int w = (int) srcBounds.getWidth();
+                int h = (int) srcBounds.getHeight();
+                layout.setMinX(minx);
+                layout.setMinY(miny);
+                layout.setWidth(w);
+                layout.setHeight(h);
+                RenderingHints hints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout);
+
+                final PlanarImage constantImage = ConstantDescriptor.create(new Float(w), new Float(h),
+                        new Byte[] { (byte) 255 }, hints);
+                
+                GridCoverage2D input = new GridCoverageFactory(GeoTools.getDefaultHints()).create(
+                        name, constantImage, op.src.getEnvelope());
+                PlanarImage roiImage = null;
+
+                // Creating warped roi by the same way (Warp, Interpolation, source ROI) we warped the
+                // input image.
+                roiImage = create(input, op.dst, new double[]{0d}, null, srcROI);
+
+                ROI dstROI = new ROI(roiImage, 1);
+
+                // If necessary, clip the warped ROI to the destination bounds.
+                if (!dstBounds.contains(dstROI.getBounds())) {
+                    dstROI = dstROI.intersect(new ROIShape(dstBounds));
+                }
+
+                // Return the warped and possibly clipped ROI.
+                return dstROI;
+            }
+
+            return java.awt.Image.UndefinedProperty;
+        }
+

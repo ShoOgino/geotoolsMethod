@@ -18,7 +18,10 @@
         }
         final AffineTransform finalGCgridToWorld = new AffineTransform((AffineTransform) finalGCTransform);
 
-
+        // Getting NOData adn ROI
+        Range noData = CoverageUtilities.getNoDataProperty(input) != null ? CoverageUtilities.getNoDataProperty(input).getAsRange() : null;
+        ROI roi = CoverageUtilities.getROIProperty(input);
+        
         // //
         //
         // I am going to concatenate the final world to grid transform for the
@@ -49,8 +52,12 @@
         try {
             ImageWorker iw = new ImageWorker(finalImage);
             iw.setRenderingHints(hints);
+            iw.setROI(roi);
+            iw.setNoData(noData);
             iw.affine(finalRasterTransformation, interpolation, bkgValues);
             im = iw.getRenderedImage();
+            roi = iw.getROI();
+            noData = iw.getNoData();
         } finally {
                 if(DEBUG){
                     writeRenderedImage(im, "postAffine");
@@ -63,15 +70,22 @@
             sd[i]= new GridSampleDimension(TypeMap.getColorInterpretation(im.getColorModel(), i).name());
         }
         
+        Map properties = input.getProperties();
+        if(properties == null){
+            properties = new HashMap<>();
+        }
+        CoverageUtilities.setNoDataProperty(properties, noData);
+        CoverageUtilities.setROIProperty(properties, roi);
+        
         // create a new grid coverage but preserve as much input as possible
-       return this.gridCoverageFactory.create(
-               input.getName(), 
-                im,
-                new GridGeometry2D(
-                        new GridEnvelope2D(PlanarImage.wrapRenderedImage(im).getBounds()), 
-                        input.getEnvelope()), 
-                sd, 
-                new GridCoverage[] { input },
-                input.getProperties());    
+        return this.gridCoverageFactory.create(
+                   input.getName(), 
+                    im,
+                    new GridGeometry2D(
+                            new GridEnvelope2D(PlanarImage.wrapRenderedImage(im).getBounds()), 
+                            input.getEnvelope()), 
+                    sd, 
+                    new GridCoverage[] { input },
+                    properties);    
     }
 

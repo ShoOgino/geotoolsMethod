@@ -1,4 +1,4 @@
-	/**
+    /**
 	 * Interpolates at the specified position. If {@code fallback!=null},
 	 * then {@code dest} <strong>must</strong> have been initialized with
 	 * {@code super.evaluate(...)} prior to invoking this method.
@@ -19,6 +19,9 @@
 	    final int    iy = (int)y0;
 	    if (!(ix>=xmin && ix<xmax && iy>=ymin && iy<ymax))
 	    	return null;
+	    
+	    
+	    
 	    /*
 	     * Create buffers, if not already created.
 	     */
@@ -34,6 +37,12 @@
 	    if (dest == null) {
 	        dest = new float[bandUp];
 	    }
+	       // ROI Check
+            if (hasROI && !roiBounds.contains(ix, iy) && !roi.contains(ix, iy)) {
+                // Outside the ROI. fill it with background values
+                Arrays.fill(dest, (float)background);
+                return dest;
+            }
 	    /*
 	     * Builds up a RectIter and use it for interpolating all bands.
 	     * There is very few points, so the cost of creating a RectIter
@@ -43,19 +52,33 @@
 	    bounds.x = ix - left;
 	    bounds.y = iy - top;
 	    final RectIter iter = RectIterFactory.create(image.getExtendedData(bounds, this.borderExtender), bounds);
+	    boolean[][] gaps = hasNoData ? new boolean[samples.length][samples[0].length] : null;
 	    for (; band<bandUp; band++) {
 	        iter.startLines();
 	        int j=0; do {
 	            iter.startPixels();
+	            final boolean[] nodLine=hasNoData ? gaps[j] : null;
 	            final float[] row=samples[j++];
 	            int i=0; do {
-	                row[i++] = iter.getSampleFloat(band);
+	                float sampleFloat = iter.getSampleFloat(band);
+	                    // NoData Check
+                        if(hasNoData && !nodata.contains(sampleFloat)){
+                            nodLine[i] = true;
+                        }
+                        row[i++] = sampleFloat;
 	            }
 	            while (!iter.nextPixelDone());
 	            assert i == row.length;
 	        }
 	        while (!iter.nextLineDone());
 	        assert j == samples.length;
+	        // If has NoData the gas must be filled
+                boolean result = fixNoData(samples, gaps);
+                if (!result) {
+                    // Totally nodata. fill it with background values
+                    Arrays.fill(dest, (float)background);
+                    return dest;
+                }
 	        float dx = (float)(x-x0); if (dx==1) dx=ONE_EPSILON;
 	        float dy = (float)(y-y0); if (dy==1) dy=ONE_EPSILON;
 	        final float value = interpolation.interpolate(samples, dx, dy);
