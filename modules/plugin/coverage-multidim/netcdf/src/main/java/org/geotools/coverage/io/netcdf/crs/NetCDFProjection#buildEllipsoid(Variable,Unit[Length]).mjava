@@ -1,0 +1,53 @@
+    /**
+     * Build a custom ellipsoid, looking for definition parameters from a 
+     * GridMapping variable
+     * @param gridMappingVariable the variable to be analyzed
+     * @param linearUnit the linear Unit to be used for the ellipsoid 
+     * @return
+     */
+    private static Ellipsoid buildEllipsoid(Variable gridMappingVariable, Unit<Length> linearUnit) {
+        Number semiMajorAxis = null;
+        Number semiMinorAxis = null;
+        Double inverseFlattening = Double.NEGATIVE_INFINITY;
+
+        // Preparing ellipsoid params to be sent to the NetCDFProjectionBuilder class
+        // in order to get back an Ellipsoid
+        Map<String, Number> ellipsoidParams = new HashMap<String, Number>();
+
+        // Looking for semiMajorAxis first
+        Attribute semiMajorAxisAttribute = gridMappingVariable.findAttribute(CF.SEMI_MAJOR_AXIS);
+        if (semiMajorAxisAttribute != null) {
+            semiMajorAxis = semiMajorAxisAttribute.getNumericValue();
+            ellipsoidParams.put(NetCDFUtilities.SEMI_MAJOR, semiMajorAxis); 
+        }
+
+        // If not present, maybe it's a sphere. Looking for the radius
+        if (semiMajorAxis == null) {
+            semiMajorAxisAttribute = gridMappingVariable.findAttribute(CF.EARTH_RADIUS);
+            if (semiMajorAxisAttribute != null) {
+                semiMajorAxis = semiMajorAxisAttribute.getNumericValue();
+                ellipsoidParams.put(NetCDFUtilities.SEMI_MAJOR, semiMajorAxis);
+            }
+        }
+
+        // Looking for semiMinorAxis
+        Attribute semiMinorAxisAttribute = gridMappingVariable.findAttribute(CF.SEMI_MINOR_AXIS);
+        if (semiMinorAxisAttribute != null) {
+            semiMinorAxis = semiMinorAxisAttribute.getNumericValue();
+            ellipsoidParams.put(NetCDFUtilities.SEMI_MINOR, semiMinorAxis);
+        }
+
+        if (semiMinorAxis == null) {
+            // Looking for inverse Flattening
+            Attribute inverseFlatteningAttribute = gridMappingVariable.findAttribute(CF.INVERSE_FLATTENING);
+            if (inverseFlatteningAttribute != null) {
+                inverseFlattening = inverseFlatteningAttribute.getNumericValue().doubleValue();
+            }
+            ellipsoidParams.put(NetCDFUtilities.INVERSE_FLATTENING, inverseFlattening);
+        }
+
+        // Ellipsoid parameters have been set. Getting back an Ellipsoid from the 
+        // builder
+        return ProjectionBuilder.createEllipsoid(NetCDFUtilities.UNKNOWN, ellipsoidParams);
+    }
+

@@ -1,0 +1,50 @@
+    /**
+     * Extract the georeferencing projection information from the specified variable 
+     * and setup a {@link CoordinateReferenceSystem} instance
+     * @throws FactoryException 
+     * */
+    public static CoordinateReferenceSystem parseProjection(Variable var) throws FactoryException {
+        // Preliminar check on spatial_ref attribute which may contain a fully defined WKT
+        // as an instance, being set from GDAL, or a GeoTools NetCDF ouput 
+
+        Attribute spatialRef = var.findAttribute(NetCDFUtilities.SPATIAL_REF);
+        CoordinateReferenceSystem crs = parseSpatialRef(spatialRef);
+        if (crs != null) {
+            return crs;
+        }
+
+        // Spatial ref is missing: fallback on GridMapping 
+        Attribute gridMappingName = var.findAttribute(NetCDFUtilities.GRID_MAPPING_NAME);
+        if (gridMappingName == null) {
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine("No grid_mapping_name attribute has been found.\n "
+                        + "Unable to parse a CF projection from this variable.\n"
+                        + "This probably means that is WGS84 or unsupported");
+            }
+            return null;
+        }
+
+        // special Management for multiple standard parallels to use 
+        // the proper projection
+        String mappingName = gridMappingName.getStringValue();
+        String projectionName = getProjectionName(mappingName, var);
+
+        // Getting the proper projection and set the projection parameters
+        NetCDFProjection projection = supportedProjections.get(projectionName);
+        String ogcName = projection.getOGCName();
+
+        // The OGC projection parameters
+        ParameterValueGroup ogcParameters = ProjectionBuilder.getDefaultparameters(ogcName);
+
+        // Get the OGC to NetCDF projection parameters
+        Map<String, String> netCDFParamsMapping = projection.getParameters();
+        Set<String> ogcParameterKeys = netCDFParamsMapping.keySet();
+        for (String ogcParameterKey: ogcParameterKeys) {
+            handleParam(netCDFParamsMapping, ogcParameters, ogcParameterKey, var);
+        }
+
+        // Ellipsoid
+        Ellipsoid ellipsoid = buildEllipsoid(var, SI.METER);
+        return ProjectionBuilder.buildCRS(java.util.Collections.singletonMap(NetCDFUtilities.NAME, projectionName), ogcParameters, ellipsoid);
+    }
+
