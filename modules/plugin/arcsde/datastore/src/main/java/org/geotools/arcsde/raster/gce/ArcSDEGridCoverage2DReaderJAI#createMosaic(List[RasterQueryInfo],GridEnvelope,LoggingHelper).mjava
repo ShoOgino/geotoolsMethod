@@ -24,6 +24,7 @@
 
         for (RasterQueryInfo query : queries) {
             RenderedImage image = query.getResultImage();
+            ImageWorker worker = new ImageWorker(image);
             log.log(image, query.getRasterId(), "01_original");
             if (expandCM) {
                 if (LOGGER.isLoggable(Level.FINER)) {
@@ -34,16 +35,14 @@
                 /*
                  * reformat the image as a 4 band rgba backed by byte data
                  */
-                image = FormatDescriptor.create(image, Integer.valueOf(DataBuffer.TYPE_BYTE), null);
-
+                image = worker.format(Integer.valueOf(DataBuffer.TYPE_BYTE)).getRenderedImage();
                 log.log(image, query.getRasterId(), "04_1_colorExpanded");
             }
 
-            image = cropToRequiredDimension(image, query.getResultGridRange());
+            cropToRequiredDimension(worker, query.getResultGridRange());
+            image = worker.getRenderedImage();
             log.log(image, query.getRasterId(), "02_crop");
 
-            // Raster data = image.getData();
-            // image = new BufferedImage(image.getColorModel(), (WritableRaster) data, false, null);
             if (queries.size() == 1) {
                 return image;
             }
@@ -55,15 +54,11 @@
             Float translateY = Float.valueOf(0);
 
             if (!(Float.valueOf(1.0F).equals(scaleX) && Float.valueOf(1.0F).equals(scaleY))) {
-                ParameterBlock pb = new ParameterBlock();
-                pb.addSource(image);
-                pb.add(scaleX);
-                pb.add(scaleY);
-                pb.add(translateX);
-                pb.add(translateY);
-                pb.add(new InterpolationNearest());
+                
+                worker.scale(scaleX, scaleY, translateX, translateY,
+                        Interpolation.getInstance(Interpolation.INTERP_NEAREST));
 
-                image = JAI.create("scale", pb);
+                image = worker.getRenderedImage();
                 log.log(image, query.getRasterId(), "03_scale");
 
                 int width = image.getWidth();
@@ -75,14 +70,9 @@
 
             if (image.getMinX() != mosaicLocation.getLow(0)
                     || image.getMinY() != mosaicLocation.getLow(1)) {
-                // translate
-                ParameterBlock pb = new ParameterBlock();
-                pb.addSource(image);
-                pb.add(Float.valueOf(mosaicLocation.getLow(0) - image.getMinX()));
-                pb.add(Float.valueOf(mosaicLocation.getLow(1) - image.getMinY()));
-                pb.add(null);
-
-                image = JAI.create("translate", pb);
+                worker.translate(Float.valueOf(mosaicLocation.getLow(0) - image.getMinX()),
+                        Float.valueOf(mosaicLocation.getLow(1) - image.getMinY()), null);
+                image = worker.getRenderedImage();
                 log.log(image, query.getRasterId(), "04_translate");
 
                 assert image.getMinX() == mosaicLocation.getLow(0) : image.getMinX() + " != "
@@ -111,8 +101,7 @@
             /*
              * adapted from RasterLayerResponse.java in the imagemosaic module
              */
-            ParameterBlockJAI mosaicParams = new ParameterBlockJAI("Mosaic");
-            mosaicParams.setParameter("mosaicType", MosaicDescriptor.MOSAIC_TYPE_OVERLAY);
+            ImageWorker w = new ImageWorker();
 
             // set background values to raster's no-data
             double[] backgroundValues;
@@ -128,7 +117,6 @@
                     backgroundValues[bn] = noDataValue.doubleValue();
                 }
             }
-            mosaicParams.setParameter("backgroundValues", backgroundValues);
 
             final ImageLayout layout = new ImageLayout(mosaicGeometry.getLow(0),
                     mosaicGeometry.getLow(1), mosaicGeometry.getSpan(0), mosaicGeometry.getSpan(1));
@@ -139,15 +127,20 @@
 
             final RenderingHints hints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout);
 
+            RenderedImage[] images = new RenderedImage[transformed.size()];
+            int i = 0;
             for (RenderedImage img : transformed) {
-                mosaicParams.addSource(img);
+                images[i] = img;
                 log.appendLoggingGeometries(LoggingHelper.MOSAIC_RESULT, img);
+                i++;
             }
             log.log(LoggingHelper.MOSAIC_RESULT);
 
             LOGGER.fine("Creating mosaic out of " + queries.size() + " raster tiles");
-            mosaic = JAI.create("Mosaic", mosaicParams, hints);
-
+            w.setRenderingHints(hints);
+            w.setBackground(backgroundValues);
+            mosaic = w.mosaic(images, MosaicDescriptor.MOSAIC_TYPE_OVERLAY, null, null, null, null)
+                    .getRenderedImage();
             log.log(mosaic, 0L, "05_mosaic_result");
         }
         return mosaic;

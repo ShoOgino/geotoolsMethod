@@ -1,65 +1,58 @@
     /**
      * Returns the specified property.
-     *
-     * @param name  Property name.
+     * 
+     * @param name Property name.
      * @param opNode Operation node.
      */
-    public Object getProperty(String name,
-                              Object opNode) {
+    public Object getProperty(String name, Object opNode) {
         validate(name, opNode);
 
-        if(opNode instanceof RenderedOp &&
-           name.equalsIgnoreCase("roi")) {
-            RenderedOp op = (RenderedOp)opNode;
+        if (opNode instanceof RenderedOp && name.equalsIgnoreCase("roi")) {
+            RenderedOp op = (RenderedOp) opNode;
 
             ParameterBlock pb = op.getParameterBlock();
 
             // Retrieve the rendered source image and its ROI.
-            RenderedImage src = (RenderedImage)pb.getRenderedSource(0);
+            RenderedImage src = (RenderedImage) pb.getRenderedSource(0);
             Object property = src.getProperty("ROI");
-            if (property == null ||
-                property.equals(java.awt.Image.UndefinedProperty) ||
-                !(property instanceof ROI)) {
+            if (property == null || property.equals(java.awt.Image.UndefinedProperty)
+                    || !(property instanceof ROI)) {
                 return java.awt.Image.UndefinedProperty;
             }
 
             // Return undefined also if source ROI is empty.
-            ROI srcROI = (ROI)property;
+            ROI srcROI = (ROI) property;
             if (srcROI.getBounds().isEmpty()) {
                 return java.awt.Image.UndefinedProperty;
             }
 
             // Retrieve the Interpolation object.
-            Interpolation interp = (Interpolation)pb.getObjectParameter(1);
+            Interpolation interp = (Interpolation) pb.getObjectParameter(1);
 
             // Determine the effective source bounds.
             Rectangle srcBounds = null;
             PlanarImage dst = op.getRendering();
-            if (dst instanceof GeometricOpImage &&
-                ((GeometricOpImage)dst).getBorderExtender() == null) {
-                srcBounds =
-                    new Rectangle(src.getMinX() + interp.getLeftPadding(),
-                                  src.getMinY() + interp.getTopPadding(),
-                                  src.getWidth() - interp.getWidth() + 1,
-                                  src.getHeight() - interp.getHeight() + 1);
+            if (dst instanceof GeometricOpImage
+                    && ((GeometricOpImage) dst).getBorderExtender() == null) {
+                srcBounds = new Rectangle(src.getMinX() + interp.getLeftPadding(), src.getMinY()
+                        + interp.getTopPadding(), src.getWidth() - interp.getWidth() + 1,
+                        src.getHeight() - interp.getHeight() + 1);
             } else {
-                srcBounds = new Rectangle(src.getMinX(),
-                     src.getMinY(),
-                     src.getWidth(),
-                     src.getHeight());
+                srcBounds = new Rectangle(src.getMinX(), src.getMinY(), src.getWidth(),
+                        src.getHeight());
             }
 
             // If necessary, clip the ROI to the effective source bounds.
-            if(!srcBounds.contains(srcROI.getBounds())) {
+            if (!srcBounds.contains(srcROI.getBounds())) {
                 srcROI = srcROI.intersect(new ROIShape(srcBounds));
             }
 
             // Retrieve the Warp object.
-            Warp warp = (Warp)pb.getObjectParameter(0);
+            Warp warp = (Warp) pb.getObjectParameter(0);
 
             // Setting constant image to be warped as a ROI
             Rectangle dstBounds = op.getBounds();
-            
+
             // Setting layout of the constant image
             ImageLayout2 layout = new ImageLayout2();
             int minx = (int) srcBounds.getMinX();
@@ -72,16 +65,17 @@
             layout.setHeight(h);
             RenderingHints hints = op.getRenderingHints();
             hints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
-            
-            final PlanarImage constantImage = ConstantDescriptor.create(new Float(w), new Float(h), new Byte[]{(byte)255}, hints); 
-            
+
+            final PlanarImage constantImage = ConstantDescriptor.create(new Float(w), new Float(h),
+                    new Byte[] { (byte) 255 }, hints);
+
             PlanarImage roiImage = null;
-            
+
             // Make sure to specify tileCache, tileScheduler, tileRecyclier, by cloning hints.
             RenderingHints warpingHints = op.getRenderingHints();
             warpingHints.remove(JAI.KEY_IMAGE_LAYOUT);
-            
-            // Creating warped roi by the same way (Warp, Interpolation, source ROI) we warped the 
+
+            // Creating warped roi by the same way (Warp, Interpolation, source ROI) we warped the
             // input image.
             final ParameterBlock paramBlk = new ParameterBlock();
             paramBlk.addSource(constantImage);
@@ -104,7 +98,7 @@
             ROI dstROI = new ROI(roiImage, 1);
 
             // If necessary, clip the warped ROI to the destination bounds.
-            if(!dstBounds.contains(dstROI.getBounds())) {
+            if (!dstBounds.contains(dstROI.getBounds())) {
                 dstROI = dstROI.intersect(new ROIShape(dstBounds));
             }
 

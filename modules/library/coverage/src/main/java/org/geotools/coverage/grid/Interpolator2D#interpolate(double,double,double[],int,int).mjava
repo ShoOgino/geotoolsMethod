@@ -19,7 +19,6 @@
 	    final int    iy = (int)y0;
 	    if (!(ix>=xmin && ix<=xmax && iy>=ymin && iy<=ymax)) 
 	        return null;
-	    
 	    /*
 	     * Creates buffers, if not already created.
 	     */
@@ -35,6 +34,12 @@
 	    if (dest == null) {
 	        dest = new double[bandUp];
 	    }
+	    // ROI Check
+            if (hasROI && !roiBounds.contains(ix, iy) && !roi.contains(ix, iy)) {
+                // Outside the ROI. fill it with background values
+                Arrays.fill(dest, background);
+                return dest;
+            }
 	    /*
 	     * Builds up a RectIter and use it for interpolating all bands.
 	     * There is very few points, so the cost of creating a RectIter
@@ -44,19 +49,33 @@
 	    bounds.x = ix - left;
 	    bounds.y = iy - top;
 	    final RectIter iter = RectIterFactory.create(image.getExtendedData(bounds, this.borderExtender), bounds);
+	    boolean[][] gaps = hasNoData ? new boolean[samples.length][samples[0].length] : null;
 	    for (; band<bandUp; band++) {
 	        iter.startLines();
 	        int j=0; do {
 	            iter.startPixels();
+	            final boolean[] nodLine=hasNoData ? gaps[j] : null;
 	            final double[] row=samples[j++];
 	            int i=0; do {
-	                row[i++] = iter.getSampleDouble(band);
+	                double sampleDouble = iter.getSampleDouble(band);
+                        // NoData Check
+                        if(hasNoData && !nodata.contains(sampleDouble)){
+                            nodLine[i] = true;
+                        }
+                        row[i++] = sampleDouble;
 	            }
 	            while (!iter.nextPixelDone());
 	            assert i == row.length;
 	        }
 	        while (!iter.nextLineDone());
 	        assert j == samples.length;
+	        // If has NoData the gas must be filled
+                boolean result = fixNoData(samples, gaps);
+                if (!result) {
+                    // Totally nodata. fill it with background values
+                    Arrays.fill(dest, background);
+                    return dest;
+                }
 	        float dx = (float)(x-x0); if (dx==1) dx=ONE_EPSILON;
 	        float dy = (float)(y-y0); if (dy==1) dy=ONE_EPSILON;
 	        final double value = interpolation.interpolate(samples, dx, dy);

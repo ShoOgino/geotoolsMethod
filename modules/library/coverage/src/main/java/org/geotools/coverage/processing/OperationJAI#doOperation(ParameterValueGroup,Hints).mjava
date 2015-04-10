@@ -3,13 +3,6 @@
      * The default implementation performs the following steps:
      *
      * <ol>
-     *   <li>Converts source grid coverages to their <cite>geophysics</cite> view using
-     *       <code>{@linkplain GridCoverage2D#geophysics GridCoverage2D.geophysics}(true)</code>.
-     *       This allow to performs all computation on geophysics values instead of encoded
-     *       samples. <strong>Note:</strong> this step is disabled if
-     *       {@link #computeOnGeophysicsValues computeOnGeophysicsValues} returns
-     *       {@code false}.</li>
-     *
      *   <li>Ensures that every sources {@code GridCoverage2D}s use the same coordinate reference
      *       system (at least for the two-dimensional part) with the same
      *       {@link GridGeometry2D#getGridToCRS2D gridToCRS} relationship.</li>
@@ -41,8 +34,10 @@
          * next block.
          */
         final String[]     sourceNames = operation.getSourceNames();
-        final GridCoverage2D[] sources = new GridCoverage2D[sourceNames.length];
-        ViewType     primarySourceType = extractSources(parameters, sourceNames, sources);
+        final Collection<GridCoverage2D> sourceCollection = new ArrayList<GridCoverage2D>();
+        extractSources(parameters, sourceCollection, sourceNames);
+        int numSources = sourceCollection.size();
+        final GridCoverage2D[] sources = sourceCollection.toArray(new GridCoverage2D[numSources]);
         /*
          * Ensures that all coverages use the same CRS and has the same 'gridToCRS' relationship.
          * After the reprojection, the method still checks all CRS in case the user overridden the
@@ -63,12 +58,12 @@
             {
                 throw new IllegalArgumentException(Errors.format(ErrorKeys.INCOMPATIBLE_GRID_GEOMETRY));
             }
-            block.setSource(sourceNames[i], source.getRenderedImage());
+            block.setSource(source.getRenderedImage(), i);
         }
         /*
          * Applies the operation. This delegates the work to the chain of 'deriveXXX' methods.
          */
         coverage = deriveGridCoverage(sources, new Parameters(crs, gridToCRS, block, hints));
-        return postProcessResult(coverage, primarySourceType);
+        return postProcessResult(coverage);
     }
 

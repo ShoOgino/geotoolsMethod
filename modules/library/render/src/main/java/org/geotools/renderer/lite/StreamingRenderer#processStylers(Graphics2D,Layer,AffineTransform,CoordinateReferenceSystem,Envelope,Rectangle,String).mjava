@@ -1,0 +1,199 @@
+    /**
+     * Applies each feature type styler in turn to all of the features. This
+     * perhaps needs some explanation to make it absolutely clear.
+     * featureStylers[0] is applied to all features before featureStylers[1] is
+     * applied. This can have important consequences as regards the painting
+     * order.
+     * <p>
+     * In most cases, this is the desired effect. For example, all line features
+     * may be rendered with a fat line and then a thin line. This produces a
+     * 'cased' effect without any strange overlaps.
+     * </p>
+     * <p>
+     * This method is internal and should only be called by render.
+     * </p>
+     * <p>
+     * </p>
+     * 
+     * @param graphics
+     *            DOCUMENT ME!
+     * @param features
+     *            An array of features to be rendered
+     * @param featureStylers
+     *            An array of feature stylers to be applied
+     * @param at
+     *            DOCUMENT ME!
+     * @param destinationCrs -
+     *            The destination CRS, or null if no reprojection is required
+     * @param screenSize
+     * @param layerId 
+     * @throws IOException
+     * @throws IllegalFilterException
+     */
+    private void processStylers(final Graphics2D graphics,
+            final Layer layer, AffineTransform at,
+            CoordinateReferenceSystem destinationCrs, Envelope mapArea,
+            Rectangle screenSize, String layerId) throws Exception {
+        /*
+         * DJB: changed this a wee bit so that it now does the layer query AFTER
+         * it has evaluated the rules for scale inclusion. This makes it so that
+         * geometry columns (and other columns) will not be queried unless they
+         * are actually going to be required. see geos-469
+         */
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Preparing feature information and styles
+        //
+        // /////////////////////////////////////////////////////////////////////
+        final MapLayer currLayer = new MapLayer(layer);        
+        final Style style = currLayer.getStyle();
+        final FeatureSource featureSource = currLayer.getFeatureSource();
+
+        final CoordinateReferenceSystem sourceCrs;
+        final NumberRange scaleRange = NumberRange.create(scaleDenominator,scaleDenominator);
+        final ArrayList<LiteFeatureTypeStyle> lfts ;
+
+        if ( featureSource != null ) {
+            FeatureCollection features = null;
+            final FeatureType schema = featureSource.getSchema();
+
+            final GeometryDescriptor geometryAttribute = schema.getGeometryDescriptor();
+            if(geometryAttribute != null && geometryAttribute.getType() != null) {
+                sourceCrs = geometryAttribute.getType().getCoordinateReferenceSystem();
+            } else {
+                sourceCrs = null;
+            }
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine("Processing " + style.featureTypeStyles().size() + 
+                        " stylers for " + featureSource.getSchema().getName());
+            }
+
+            lfts = createLiteFeatureTypeStyles(style.featureTypeStyles(), schema, graphics);
+            if(lfts.isEmpty())
+                return;
+            
+            // make sure all spatial filters in the feature source native SRS 
+            reprojectSpatialFilters(lfts, featureSource);
+            
+            // apply the uom and dpi rescale
+            applyUnitRescale(lfts);
+            
+            // classify by transformation
+            List<List<LiteFeatureTypeStyle>> txClassified = classifyByTransformation(lfts);
+            
+            // render groups by uniform transformation
+            for (List<LiteFeatureTypeStyle> uniform : txClassified) {
+                Expression transform = uniform.get(0).transformation;
+                
+                // ... assume we have to do the generalization, the query layer process will
+                // turn down the flag if we don't 
+                inMemoryGeneralization = true;
+                boolean hasTransformation = transform != null;
+                Query styleQuery = getStyleQuery(featureSource, schema,
+                        uniform, mapArea, destinationCrs, sourceCrs, screenSize,
+                        geometryAttribute, at, hasTransformation);
+                Query definitionQuery = getDefinitionQuery(currLayer, featureSource, sourceCrs);
+                if(hasTransformation) {
+                    // prepare the stage for the raster transformations
+                    GridGeometry2D gridGeometry = getRasterGridGeometry(destinationCrs, sourceCrs);
+                    // vector transformation wise, we have to account for two separate queries,
+                    // the one attached to the layer and then one coming from SLD.
+                    // The first source attributes, the latter talks tx output attributes
+                    // so they have to be applied before and after the transformation respectively
+                    
+                    RenderingTransformationHelper helper = new RenderingTransformationHelper() {
+                        
+                        @Override
+                        protected GridCoverage2D readCoverage(GridCoverage2DReader reader, Object params, GridGeometry2D readGG) throws IOException {
+                            GeneralParameterValue[] readParams = (GeneralParameterValue[]) params;
+                            Interpolation interpolation = getRenderingInterpolation(layer);
+                            GridCoverageReaderHelper helper;
+                            try {
+                                helper = new GridCoverageReaderHelper(reader,
+                                        readGG.getGridRange2D(),
+                                        ReferencedEnvelope.reference(readGG.getEnvelope2D()),
+                                        interpolation);
+                                return helper.readCoverage(readParams);
+                            } catch (InvalidGridGeometryException | FactoryException e) {
+                                throw new IOException("Failure reading the coverage", e);
+                            }
+
+                        }
+                    };
+                    
+                    Object result = helper.applyRenderingTransformation(transform, featureSource, definitionQuery, 
+                            styleQuery, gridGeometry, sourceCrs, java2dHints);
+                    if(result == null) {
+                        return;
+                    } else if (result instanceof FeatureCollection) {
+                        features = (FeatureCollection) result;
+                    } else if (result instanceof GridCoverage2D) {
+                        GridCoverage2D coverage = (GridCoverage2D) result;
+                        // we only avoid disposing if the input was a in memory GridCovereage2D
+                        if((schema instanceof SimpleFeatureType && !FeatureUtilities.isWrappedCoverage((SimpleFeatureType) schema))) {
+                            coverage = new DisposableGridCoverage(coverage);
+                        }
+                        features = FeatureUtilities.wrapGridCoverage(coverage);
+                    } else if (result instanceof GridCoverage2DReader) {
+                        features = FeatureUtilities.wrapGridCoverageReader(
+                                (GridCoverage2DReader) result, null);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "Don't know how to handle the results of the transformation, "
+                                        + "the supported result types are FeatureCollection, GridCoverage2D "
+                                        + "and GridCoverage2DReader, but we got: "
+                                        + result.getClass());
+                    }                    
+                } else {
+                    Query mixed = DataUtilities.mixQueries(definitionQuery, styleQuery, null);
+                    checkAttributeExistence(featureSource.getSchema(), mixed);
+                    features = featureSource.getFeatures(mixed);
+                    features = RendererUtilities.fixFeatureCollectionReferencing(features, sourceCrs);
+                }
+
+                // HACK HACK HACK
+                // For complex features, we need the targetCrs and version in scenario where we have
+                // a top level feature that does not contain a geometry(therefore no crs) and has a
+                // nested feature that contains geometry as its property.Furthermore it is possible
+                // for each nested feature to have different crs hence we need to reproject on each
+                // feature accordingly.
+                // This is a Hack, this information should not be passed through feature type
+                // appschema will need to remove this information from the feature type again
+                if (!(features instanceof SimpleFeatureCollection)) {
+                    features.getSchema().getUserData().put("targetCrs", destinationCrs);
+                    features.getSchema().getUserData().put("targetVersion", "wms:getmap");
+                }
+
+                // finally, perform rendering
+                if (isOptimizedFTSRenderingEnabled() && lfts.size() > 1) {
+                    drawOptimized(graphics, currLayer, at, destinationCrs, layerId, null, features,
+                            scaleRange, uniform);
+                } else {
+                    drawPlain(graphics, currLayer, at, destinationCrs, layerId, null, features,
+                            scaleRange, uniform);
+                }
+            }
+        } else {
+            Collection collection = null;
+
+            CollectionSource source = currLayer.getSource();
+            collection = queryLayer( currLayer, currLayer.getSource() );
+
+            sourceCrs = null;
+            lfts = createLiteFeatureTypeStyles( 
+                    style.featureTypeStyles(), source.describe(), graphics );
+            applyUnitRescale(lfts);
+            
+            if (lfts.isEmpty()) return; // nothing to do
+
+            // finally, perform rendering
+            if(isOptimizedFTSRenderingEnabled() && lfts.size() > 1) {
+                drawOptimized(graphics, currLayer, at, destinationCrs, layerId, collection, null,
+                        scaleRange, lfts);
+            } else {
+                drawPlain(graphics, currLayer, at, destinationCrs, layerId, collection, null,
+                        scaleRange, lfts);
+            }
+        }
+    }
+

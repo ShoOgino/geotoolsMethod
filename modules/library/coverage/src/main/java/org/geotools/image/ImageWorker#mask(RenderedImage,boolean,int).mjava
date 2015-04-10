@@ -35,13 +35,35 @@
             Arrays.fill(lutData, (byte) 0);
             // for transparent pixels
             lutData[0] = (byte) 255;
-            final LookupTableJAI lut = new LookupTableJAI(lutData);
-            mask = LookupDescriptor.create(mask, lut, hints);
+            final LookupTable lut = LookupTableFactory.create(lutData, mask.getSampleModel()
+                    .getDataType());
+
+            // ParameterBlock definition
+            ParameterBlock pb = new ParameterBlock();
+            pb.setSource(mask, 0);
+            pb.set(lut, 0);
+            if (background != null && background.length > 0) {
+                pb.set(background[0], 1);
+            }
+            pb.set(roi, 2);
+
+            mask = JAI.create("Lookup", pb, hints);
+
+            // mask = LookupDescriptor.create(mask, lut, hints);
 
             /*
              * Adding to the other image exploiting the implict clamping
              */
-            image = AddDescriptor.create(image, mask, getRenderingHints());
+            pb = new ParameterBlock();
+            pb.setSource(image, 0);
+            pb.setSource(mask, 1);
+            if (JAIExt.isJAIExtOperation(ALGEBRIC_OP_NAME)) {
+                prepareAlgebricOperation(Operator.SUM, pb, roi, nodata, true);
+                image = JAI.create(ALGEBRIC_OP_NAME, pb, getRenderingHints());
+            } else {
+                image = JAI.create("Add", pb, getRenderingHints());
+            }
+            // image = AddDescriptor.create(image, mask, getRenderingHints());
             tileCacheEnabled(true);
             invalidateStatistics();
             return this;
@@ -52,25 +74,63 @@
             if (!isBinary())
                 binarize();
 
-            // now if we mask with 1 we have to invert the mask
-            if (maskValue)
-                mask = NotDescriptor.create(mask, new RenderingHints(
-                        JAI.KEY_REPLACE_INDEX_COLOR_MODEL, Boolean.FALSE));
+            // Split between JAI and JAI-EXT operations
+            boolean algebricJAIExt = JAIExt.isJAIExtOperation(ALGEBRIC_OP_NAME);
+            boolean opConstJAIExt = JAIExt.isJAIExtOperation(OPERATION_CONST_OP_NAME);
 
+            ParameterBlock pb;
+            // now if we mask with 1 we have to invert the mask
+            RenderingHints renderingHints = new RenderingHints(JAI.KEY_REPLACE_INDEX_COLOR_MODEL,
+                    Boolean.FALSE);
+            if (maskValue) {
+                pb = new ParameterBlock();
+                pb.setSource(mask, 0);
+                if (algebricJAIExt) {
+                    prepareAlgebricOperation(Operator.NOT, pb, roi, null, false);
+                    mask = JAI.create(ALGEBRIC_OP_NAME, pb, renderingHints);
+                } else {
+                    mask = JAI.create("Not", pb, renderingHints);
+                }
+            }
             // and with the image to zero the interested pixels
             tileCacheEnabled(false);
-            image = AndDescriptor.create(mask, image, getRenderingHints());
+            pb = new ParameterBlock();
+            pb.setSource(mask, 0);
+            pb.setSource(image, 1);
+            if (algebricJAIExt) {
+                prepareAlgebricOperation(Operator.AND, pb, roi, nodata, true);
+                image = JAI.create(ALGEBRIC_OP_NAME, pb, getRenderingHints());
+            } else {
+                image = JAI.create("And", pb, getRenderingHints());
+            }
+            // image = AndDescriptor.create(mask, image, getRenderingHints());
 
             // add the new value to the mask
-            mask = AddConstDescriptor.create(mask, new double[] { newValue }, new RenderingHints(
-                    JAI.KEY_REPLACE_INDEX_COLOR_MODEL, Boolean.FALSE));
+            pb = new ParameterBlock();
+            pb.setSource(mask, 0);
+            if (opConstJAIExt) {
+                prepareOpConstOperation(Operator.SUM, new double[] { newValue }, pb, roi, null,
+                        false);
+                image = JAI.create(OPERATION_CONST_OP_NAME, pb, renderingHints);
+            } else {
+                image = JAI.create("AddConst", pb, renderingHints);
+            }
+            // mask = AddConstDescriptor.create(mask, new double[] { newValue }, renderingHints);
 
             // add the mask to the image to mask with the new value
-            image = AddDescriptor.create(mask, image, getRenderingHints());
+            pb = new ParameterBlock();
+            pb.setSource(mask, 0);
+            pb.setSource(image, 1);
+            if (algebricJAIExt) {
+                prepareAlgebricOperation(Operator.SUM, pb, roi, nodata, true);
+                image = JAI.create(ALGEBRIC_OP_NAME, pb, getRenderingHints());
+            } else {
+                image = JAI.create("Add", pb, getRenderingHints());
+            }
+            // image = AddDescriptor.create(mask, image, getRenderingHints());
             tileCacheEnabled(true);
             invalidateStatistics();
             return this;
         }
-
     }
 
