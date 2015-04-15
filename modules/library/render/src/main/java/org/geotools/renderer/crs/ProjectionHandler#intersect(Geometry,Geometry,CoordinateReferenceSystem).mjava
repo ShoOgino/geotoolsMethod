@@ -1,4 +1,5 @@
-    private Geometry intersect(Geometry geometry, Geometry mask) {
+    private Geometry intersect(Geometry geometry, Geometry mask,
+            CoordinateReferenceSystem geometryCRS) {
         // this seems to cause issues to JTS, reduce to
         // single geometry when possible (http://jira.codehaus.org/browse/GEOS-6570)
         if (geometry instanceof GeometryCollection) {
@@ -14,7 +15,7 @@
                 for (int i = 0; i < numGeometries; i++) {
                     Geometry g = geometry.getGeometryN(i);
                     if (g.getEnvelopeInternal().intersects(mask.getEnvelopeInternal())) {
-                        Geometry intersected = intersect(g, mask);
+                        Geometry intersected = intersect(g, mask, geometryCRS);
                         if (intersected != null) {
                             if (intersected.getGeometryType().equals(geometryType)) {
                                 elements.add(intersected);
@@ -45,13 +46,41 @@
                 }
             }
         }
-        Geometry result;
+        Geometry result = null;
         try {
             result = geometry.intersection(mask);
         } catch(Exception e1) {
-            try {
-                result = EnhancedPrecisionOp.intersection(geometry, mask);
-            } catch (Exception e2) {
+            // try a precision reduction approach, starting from mm and scaling up to km
+            double precision;
+            if (CRS.getProjectedCRS(geometryCRS) != null) {
+                precision = 1e-3;
+            } else {
+                precision = 1e-3 / 100000; // 1 degree roughly 100km
+            }
+            // from mm to km
+            for (int i = 0; i < 6; i++) {
+                GeometryPrecisionReducer reducer = new GeometryPrecisionReducer(new PrecisionModel(
+                        1 / precision));
+                Geometry reduced = reducer.reduce(geometry);
+                try {
+                    if (LOGGER.isLoggable(Level.FINE)) {
+                        LOGGER.log(
+                                Level.FINE,
+                                "Failed to intersect the geometry with the projection area of "
+                                        + "validity mask, trying a precision reduction approach with a precision of "
+                                        + precision);
+                    }
+                    result = reduced.intersection(mask);
+                    break;
+                } catch (Exception e3) {
+                    precision *= 10;
+                }
+            }
+
+            if (result == null) {
+                LOGGER.log(Level.WARNING,
+                        "Failed to intersect the geometry with the projection area of "
+                                + "validity mask, returning the original geometry: " + geometry);
                 result = geometry;
             }
         }
