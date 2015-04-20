@@ -7,8 +7,15 @@
 		this.singleDimensionalGranule = true;
 		this.handleArtifactsFiltering = handleArtifactsFiltering;
     		filterMe = handleArtifactsFiltering && roiProvider != null;
-                
-		
+
+                // When looking for formats which may parse this file, make sure to exclude the ImageMosaicFormat as return
+                File granuleFile = DataUtilities.urlToFile(granuleUrl);
+                AbstractGridFormat format = (AbstractGridFormat) GridFormatFinder.findFormat(granuleFile,
+                        EXCLUDE_MOSAIC);
+                AbstractGridCoverage2DReader gcReader = format.getReader(granuleFile);
+                // Getting Dataset Layout
+                layout = gcReader.getDatasetLayout();
+
 		// create the base grid to world transformation
 		ImageInputStream inStream = null;
 		ImageReader reader = null;
@@ -16,10 +23,11 @@
 			//
 			//get info about the raster we have to read
 			//
+		        ovrProvider = new MaskOverviewProvider(layout, granuleFile, suggestedSPI);
 			
 			// get a stream
 		        if(cachedStreamSPI==null){
-		            cachedStreamSPI = Utils.getInputStreamSPIFromURL(granuleUrl);
+		            cachedStreamSPI = ovrProvider.getInputStreamSpi();
 		        }
 		        assert cachedStreamSPI!=null:"no cachedStreamSPI available!";
 			inStream = cachedStreamSPI.createInputStreamInstance(granuleUrl, ImageIO.getUseCache(), ImageIO.getCacheDirectory());
@@ -35,8 +43,7 @@
 			
 			// get a reader and try to cache the suggested SPI first
 			if(cachedReaderSPI == null){
-			    cachedReaderSPI = Utils.getReaderSpiFromStream(suggestedSPI, inStream);
-				
+			    cachedReaderSPI = ovrProvider.getImageReaderSpi();
 			}
 			if (reader == null) {
 			    if (cachedReaderSPI == null) {
@@ -64,6 +71,7 @@
 			this.granuleLevels.put(Integer.valueOf(0), new GranuleOverviewLevelDescriptor(1, 1, originalDimension.width, originalDimension.height));
 			
 			////////////////////// Setting overviewController ///////////////////////
+			
 			if (heterogeneousGranules) {
 			    // //
 			    //
@@ -77,20 +85,17 @@
                             final GranuleOverviewLevelDescriptor baseOverviewLevelDescriptor = granuleLevels.get(0);
 
                             // Variables initialization
-			    final int numberOfOvervies = reader.getNumImages(true) - 1;
+                            final int numberOfOvervies = ovrProvider.getNumOverviews();
 			    final AffineTransform2D baseG2W = baseOverviewLevelDescriptor.getGridToWorldTransform();
 			    final int width = baseOverviewLevelDescriptor.getWidth();
 			    final int height = baseOverviewLevelDescriptor.getHeight();
 			    final double resX = AffineTransform2D.getScaleX0(baseG2W);
 			    final double resY = AffineTransform2D.getScaleY0(baseG2W);
 			    final double[] highestRes = new double[]{resX, resY};
-			    final double[][] overviewsResolution = new double[numberOfOvervies][2];
 			    
 			    // Populating overviews and initializing overviewsController
-			    for (int i = 0; i < numberOfOvervies; i++){
-			        overviewsResolution[i][0]= (highestRes[0] * width) / reader.getWidth(i + 1);
-			        overviewsResolution[i][1]= (highestRes[1] * height) / reader.getHeight(i + 1);
-			    }
+                            final double[][] overviewsResolution = ovrProvider.getOverviewResolutions(
+                                    highestRes[0] * width, highestRes[1] * height);
 			    overviewsController = new OverviewsController(highestRes, numberOfOvervies, overviewsResolution);
 			}
                         //////////////////////////////////////////////////////////////////////////
