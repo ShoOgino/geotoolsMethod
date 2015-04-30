@@ -1,0 +1,69 @@
+    public ROI getTransformedROI(AffineTransform at, int imageIndex, Rectangle imgBounds,
+            ImageReadParam params, ReadType readType) {
+        // Getting MaskInfo
+        Rectangle sourceRegion = imgBounds;
+        if (params.getSourceRegion() != null) {
+            sourceRegion = params.getSourceRegion();
+        }
+        MaskInfo info = maskOvrProvider.getMaskInfo(imageIndex, sourceRegion);
+        // Define which File must be used for reading mask info
+        File inFile = info.file;
+        // Defining imageIndex based on the imageIndex
+        int index = info.index;
+
+        // No file found?
+        if (inFile == null) {
+            throw new IllegalArgumentException("Unable to load Raster Footprint for granule: "
+                    + file.getAbsolutePath());
+        }
+        URL granuleUrl = DataUtilities.fileToURL(inFile);
+        // Getting input stream and reader from File
+        ImageInputStream inStream = null;
+        ImageReader reader = null;
+        try {
+            // Getting input Stream
+            inStream = info.streamSpi.createInputStreamInstance(granuleUrl, ImageIO.getUseCache(),
+                    ImageIO.getCacheDirectory());
+            // Getting Reader
+            reader = info.readerSpi.createReaderInstance();
+            // Setting input
+            reader.setInput(inStream, false, false);
+            // Reading file
+            RenderedImage raster = null;
+            if (readType.equals(ReadType.DIRECT_READ)) {
+                // read data directly
+                raster = reader.read(index, info.readParameters);
+            } else {
+                // read data
+                inStream.seek(0);
+                raster = ImageReadDescriptor.create(inStream, index, false, false, false, null,
+                        null, info.readParameters, reader, null);
+            }
+            return MaskOverviewProvider.scaleROI(raster, imgBounds);
+        } catch (IOException e) {
+            if (LOGGER.isLoggable(Level.SEVERE)) {
+                LOGGER.log(Level.SEVERE, e.getMessage(), e);
+            }
+        } finally {
+            if (readType != ReadType.JAI_IMAGEREAD && reader != null) {
+                try {
+                    reader.dispose();
+                } catch (Exception e) {
+                    if (LOGGER.isLoggable(Level.SEVERE)) {
+                        LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                    }
+                }
+            }
+            if (readType != ReadType.JAI_IMAGEREAD && inStream != null) {
+                try {
+                    inStream.close();
+                } catch (Exception e) {
+                    if (LOGGER.isLoggable(Level.SEVERE)) {
+                        LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                    }
+                }
+            }
+        }
+        return null;
+    }
+

@@ -85,13 +85,33 @@
             newHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
 		}
 		final ParameterBlock pbjRead = new ParameterBlock();
-        if (extOvrImgChoice >= 0 && imageChoice >= extOvrImgChoice) {
-            pbjRead.add(ovrInStreamSPI.createInputStreamInstance(ovrSource, ImageIO.getUseCache(),ImageIO.getCacheDirectory()));
-            pbjRead.add(imageChoice - extOvrImgChoice);
-        } else {
-            pbjRead.add(inStreamSPI != null ? inStreamSPI.createInputStreamInstance(source, ImageIO.getUseCache(), ImageIO.getCacheDirectory()) : ImageIO.createImageInputStream(source));
-            pbjRead.add(imageChoice);
-        }
+            // Image Index used for the Overview management
+            if (maskOvrProvider != null) {
+                if (maskOvrProvider.isExternalOverview(imageChoice)) {
+                    pbjRead.add(maskOvrProvider.getExternalOverviewInputStreamSpi()
+                            .createInputStreamInstance(maskOvrProvider.getOvrURL(),
+                                    ImageIO.getUseCache(), ImageIO.getCacheDirectory()));
+                } else {
+                    pbjRead.add(maskOvrProvider.getInputStreamSpi().createInputStreamInstance(
+                            maskOvrProvider.getFileURL(), ImageIO.getUseCache(),
+                            ImageIO.getCacheDirectory()));
+                }
+                pbjRead.add(maskOvrProvider.getOverviewIndex(imageChoice));
+            } else {
+                if (extOvrImgChoice >= 0 && imageChoice >= extOvrImgChoice) {
+                    pbjRead.add(ovrInStreamSPI.createInputStreamInstance(ovrSource,
+                            ImageIO.getUseCache(), ImageIO.getCacheDirectory()));
+                    pbjRead.add(imageChoice - extOvrImgChoice);
+                } else {
+                    pbjRead.add(inStreamSPI != null ? inStreamSPI.createInputStreamInstance(source,
+                            ImageIO.getUseCache(), ImageIO.getCacheDirectory()) : ImageIO
+                            .createImageInputStream(source));
+                    // Setting correct ImageChoice (taking into account overviews and masks)
+                    int overviewImageIndex = dtLayout.getInternalOverviewImageIndex(imageChoice);
+                    int index = overviewImageIndex >= 0 ? overviewImageIndex : 0;
+                    pbjRead.add(index);
+                }
+            }
     	pbjRead.add(Boolean.FALSE);
 		pbjRead.add(Boolean.FALSE);
 		pbjRead.add(Boolean.FALSE);
@@ -100,7 +120,7 @@
 		pbjRead.add(readP);
 		pbjRead.add(READER_SPI.createReaderInstance());
 		RenderedOp coverageRaster=JAI.create("ImageRead", pbjRead,newHints!=null?(RenderingHints) newHints:null);
-		
+	
         //
         // MASKING INPUT COLOR as indicated
         //
@@ -120,6 +140,29 @@
                 LOGGER.log(Level.FINE, "Coverage read: width = " + ssWidth+ " height = " + ssHeight);
         }
 
+        //
+        // External/Internal Masking
+        //
+        // ROI definition
+        ROI roi = null;
+        // Using MaskOvrProvider
+        if (hasMaskOvrProvider) {
+            Rectangle sourceRegion = coverageRaster.getBounds();
+            if (readP.getSourceRegion() != null) {
+                sourceRegion = readP.getSourceRegion();
+            }
+            // Parameter definiton
+            MaskInfo info = maskOvrProvider.getMaskInfo(imageChoice, sourceRegion);
+            if (info != null) {
+                // Reading Mask
+                RenderedOp roiRaster = readROIRaster(info.streamSpi,
+                        DataUtilities.fileToURL(info.file), info.index, newHints,
+                        info.readParameters);
+                // Creating ROI
+                roi = MaskOverviewProvider.scaleROI(roiRaster, coverageRaster.getBounds());
+            }
+        }
+
         // //
         //
         // setting new coefficients to define a new affineTransformation
@@ -137,7 +180,7 @@
         final AffineTransform tempRaster2Model = new AffineTransform((AffineTransform) raster2Model);
         tempRaster2Model.concatenate(new AffineTransform(scaleX, 0, 0, scaleY, 0, 0));
         try{
-        	return createCoverage(coverageRaster, ProjectiveTransform.create(tempRaster2Model));
+        	return createCoverage(coverageRaster, ProjectiveTransform.create(tempRaster2Model), roi);
         }catch(Exception e){
         	// dispose and close file
         	ImageUtilities.disposePlanarImageChain(coverageRaster);
