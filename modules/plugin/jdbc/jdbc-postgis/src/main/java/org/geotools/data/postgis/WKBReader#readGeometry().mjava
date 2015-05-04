@@ -1,0 +1,30 @@
+    protected Geometry readGeometry() throws IOException, ParseException {
+        // determine byte order
+        byte byteOrderWKB = dis.readByte();
+        // always set byte order, since it may change from geometry to geometry
+        int byteOrder = byteOrderWKB == WKBConstants.wkbNDR ? ByteOrderValues.LITTLE_ENDIAN
+                : ByteOrderValues.BIG_ENDIAN;
+        dis.setOrder(byteOrder);
+
+        int typeInt = dis.readInt();
+        int geometryType = typeInt & 0xff;
+        // determine if Z values are present
+        boolean hasZ = (typeInt & 0x80000000) != 0;
+        inputDimension = hasZ ? 3 : 2;
+        // determine if SRIDs are present
+        hasSRID = (typeInt & 0x20000000) != 0;
+
+        int SRID = 0;
+        if (hasSRID) {
+            SRID = dis.readInt();
+        }
+
+        // only allocate ordValues buffer if necessary
+        if (ordValues == null || ordValues.length < inputDimension)
+            ordValues = new double[inputDimension];
+
+        Geometry geom = readGeometry(geometryType);
+        setSRID(geom, SRID);
+        return geom;
+    }
+
