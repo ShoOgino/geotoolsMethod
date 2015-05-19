@@ -1,0 +1,54 @@
+        /**
+         * Collects features domain to be exposed as metadata
+         *  
+         * @param filePath
+         * @param aggregate
+         * @param firstFeature
+         * @return
+         */
+        private Map<String, Object> computeGroupMetadata(String filePath, boolean aggregate, SimpleFeature firstFeature) {
+            Map<String, Object> metadataMap = null;
+            List<DimensionDescriptor> dimensionDescriptors = rasterManager
+                    .getDimensionDescriptors();
+            // extract metadata for the available domains
+            if (dimensionDescriptors != null && !dimensionDescriptors.isEmpty()) {
+                Filter filter = FF.equals(FF.property("location"), FF.literal(filePath));
+                metadataMap = new HashMap<String, Object>();
+                try {
+                    // scan dimensions
+                    for (DimensionDescriptor descriptor : dimensionDescriptors) {
+                        String attribute = descriptor.getStartAttribute();
+                        String name = descriptor.getName();
+                        Comparable max = null;
+                        Comparable min = null;
+                        if (aggregate) {
+                            Query query = new Query(typeName);
+                            query.setFilter(filter);
+                            query.setPropertyNames(Arrays.asList(attribute));
+                            // Repeat the queries to avoid using a in-Memory
+                            // featureCollection
+                            // We may consider caching the features in case 
+                            // the collection size isn't too big
+
+                            final MaxVisitor maxVisitor = new MaxVisitor(attribute);
+                            granuleCatalog.computeAggregateFunction(query, maxVisitor);
+                            max = maxVisitor.getMax();
+                            MinVisitor minVisitor = new MinVisitor(attribute);
+                            granuleCatalog.computeAggregateFunction(query, minVisitor);
+                            min = minVisitor.getMin();
+                        } else {
+                            max = min = (Comparable) firstFeature.getAttribute(attribute);
+                        }
+                        addMetadaElement(name, min, max, metadataMap);
+                    }
+
+                    addBBOX(aggregate, filter, firstFeature, metadataMap); 
+                } catch (IOException e) {
+                    throw new RuntimeException(
+                            "Exception occurred while parsing the feature domains", e);
+                }
+
+            }
+            return metadataMap;
+        }
+
