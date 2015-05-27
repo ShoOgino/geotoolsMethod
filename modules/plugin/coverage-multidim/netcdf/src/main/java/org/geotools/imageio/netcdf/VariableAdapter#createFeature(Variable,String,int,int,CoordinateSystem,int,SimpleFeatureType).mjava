@@ -19,13 +19,14 @@
             final CoordinateSystem cs,
             final int imageIndex, 
             final SimpleFeatureType indexSchema) {
-        
+
         final Date date = getTimeValueByIndex(variable, tIndex, cs);
         final Number verticalValue = getVerticalValueByIndex(variable, zIndex, cs);
         final int dimSize = variable.getDimensions().size();
 
         final SimpleFeature feature = DataUtilities.template(indexSchema);
-        feature.setAttribute(CoverageSlice.Attributes.GEOMETRY, NetCDFCRSUtilities.GEOM_FACTORY.toGeometry(reader.boundingBox));
+        feature.setAttribute(CoverageSlice.Attributes.GEOMETRY, 
+                NetCDFCRSUtilities.GEOM_FACTORY.toGeometry(reader.georeferencing.getBoundingBox(variable.getShortName())));
         feature.setAttribute(CoverageSlice.Attributes.INDEX, imageIndex);
 
         // TIME management
@@ -37,11 +38,10 @@
         }
 
         // ELEVATION or other dimension
-        final String elevationCVName = reader.dimensionsMapping.get(NetCDFUtilities.ELEVATION_DIM);
         if (!Double.isNaN(verticalValue.doubleValue())) {
             List<AttributeDescriptor> descriptors = indexSchema.getAttributeDescriptors();
             String attribute = null;
-            
+            final String elevationCVName = reader.georeferencing.getDimension(NetCDFUtilities.ELEVATION_DIM);
             // Once we don't deal anymore with old coverage APIs, we can consider directly use the dimension name as attribute
             for (AttributeDescriptor descriptor: descriptors) {
                 if (descriptor.getLocalName().equalsIgnoreCase(elevationCVName)) {

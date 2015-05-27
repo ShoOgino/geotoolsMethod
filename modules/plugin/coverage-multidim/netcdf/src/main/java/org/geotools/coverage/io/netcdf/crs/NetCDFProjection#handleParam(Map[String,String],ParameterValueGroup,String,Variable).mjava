@@ -1,0 +1,48 @@
+    /**
+     * Get the NetCDF Attribute related to the specified OGC parameter and set the
+     * proper value within the OGC parameters map.
+     * 
+     * @param parametersMapping
+     * @param ogcParameters
+     * @param ogcParameterKey
+     * @param var
+     */
+    private static void handleParam(Map<String, String> parametersMapping, 
+            ParameterValueGroup ogcParameters, 
+            String ogcParameterKey, Variable var) {
+        String netCDFattributeName = getInputAttribute(parametersMapping.get(ogcParameterKey));
+
+        Double value = null;
+
+        // Special case for standard parallels
+        if (ogcParameterKey.equalsIgnoreCase(NetCDFUtilities.STANDARD_PARALLEL_1)
+                || ogcParameterKey.equalsIgnoreCase(NetCDFUtilities.STANDARD_PARALLEL_2)) {
+            Attribute attribute = var.findAttribute(netCDFattributeName);
+            if (attribute != null) {
+                final int numValues = attribute.getLength();
+                if (numValues > 1) {
+                    // Get the proper standard parallel if that's the case
+                    int index = ogcParameterKey.equalsIgnoreCase(NetCDFUtilities.STANDARD_PARALLEL_1) ? 0 : 1;
+                    Number number = (Number) attribute.getValue(index);
+                    value = number.doubleValue();
+                } else {
+                    value = attribute.getNumericValue().doubleValue();
+                }
+            }
+        } else {
+
+            Attribute attribute = var.findAttribute(netCDFattributeName);
+            if (attribute != null) {
+                // Get the parameter value and handle special management for longitudes outside -180, 180
+                value = attribute.getNumericValue().doubleValue();
+                if (netCDFattributeName.contains("meridian") || netCDFattributeName.contains("longitude")) {
+                    value = value - (360) * Math.floor(value / (360) + 0.5);
+                }
+            }
+        }
+        if (value != null) {
+            // Set the OGC parameter 
+            ogcParameters.parameter(ogcParameterKey).setValue(value);
+        }
+    }
+

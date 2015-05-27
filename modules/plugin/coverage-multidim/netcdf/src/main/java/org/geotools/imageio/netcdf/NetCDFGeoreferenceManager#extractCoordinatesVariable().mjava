@@ -1,28 +1,34 @@
-    private void extractCoordinatesVariable( ) throws IOException {
+    /**
+     * Parse the CoordinateAxes of the dataset and setup proper {@link CoordinateVariable} instances
+     * on top of it.
+     */
+    private void extractCoordinatesVariable() {
         // get the coordinate variables
-        for( CoordinateAxis axis : dataset.getCoordinateAxes() ) {
+        Map<String, CoordinateVariable<?>> coordinates = new HashMap<String, CoordinateVariable<?>>();
+        for (CoordinateAxis axis : dataset.getCoordinateAxes()) {
             if (axis instanceof CoordinateAxis1D && axis.getAxisType() != null) {
-                coordinatesVariables.put(axis.getFullName(), CoordinateVariable.create((CoordinateAxis1D)axis));
+                coordinates.put(axis.getFullName(), CoordinateVariable.create((CoordinateAxis1D)axis));
             } else {
                 // Workaround for Unsupported Axes
                 Set<String> unsupported = NetCDFUtilities.getUnsupportedDimensions();
                 if (axis instanceof CoordinateAxis1D && unsupported.contains(axis.getFullName())) {
                     axis.setAxisType(AxisType.GeoZ);
-                    coordinatesVariables.put(axis.getFullName(),
+                    coordinates.put(axis.getFullName(),
                             CoordinateVariable.create((CoordinateAxis1D) axis));
                 // Workaround for files that have a time dimension, but in a format that could not be parsed
                 } else if ("time".equals(axis.getFullName())) {
                     LOGGER.warning("Detected unparseable unit string in time axis: '"
                             + axis.getUnitsString() + "'.");
                     axis.setAxisType(AxisType.Time);
-                    coordinatesVariables.put(axis.getFullName(),
+                    coordinates.put(axis.getFullName(),
                             CoordinateVariable.create((CoordinateAxis1D) axis));
                 } else {
-                    LOGGER.warning("Unsupported axis: " + axis + " in input: " + this.getInput()
+                    LOGGER.warning("Unsupported axis: " + axis + " in input: " + dataset.getLocation()
                             + " has been found");
                 }
             }
         }
+        coordinatesVariables = coordinates;
         initMapping(dataset.getCoordinateAxes());
     }
 
