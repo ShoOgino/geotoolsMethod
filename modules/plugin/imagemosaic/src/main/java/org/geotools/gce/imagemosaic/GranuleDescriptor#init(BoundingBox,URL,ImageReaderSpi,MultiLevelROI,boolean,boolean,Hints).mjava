@@ -12,7 +12,7 @@
                 File granuleFile = DataUtilities.urlToFile(granuleUrl);
                 AbstractGridFormat format = (AbstractGridFormat) GridFormatFinder.findFormat(granuleFile,
                         EXCLUDE_MOSAIC);
-                AbstractGridCoverage2DReader gcReader = format.getReader(granuleFile);
+                AbstractGridCoverage2DReader gcReader = format.getReader(granuleFile, hints);
                 // Getting Dataset Layout
                 layout = gcReader.getDatasetLayout();
 
@@ -23,7 +23,10 @@
 			//
 			//get info about the raster we have to read
 			//
-		        ovrProvider = new MaskOverviewProvider(layout, granuleFile, suggestedSPI);
+		        SpiHelper spiProvider = new SpiHelper(granuleFile, suggestedSPI);
+	                boolean isMultidim = spiProvider.isMultidim();
+
+		        ovrProvider = new MaskOverviewProvider(layout, granuleFile, spiProvider);
 			
 			// get a stream
 		        if(cachedStreamSPI==null){
@@ -54,7 +57,8 @@
 			
 			if(reader == null)
 				throw new IllegalArgumentException("Unable to get an ImageReader for the provided file "+granuleUrl.toString());
-			boolean ignoreMetadata = customizeReaderInitialization(reader, hints);
+			
+			boolean ignoreMetadata = isMultidim ? customizeReaderInitialization(reader, hints) : false;
 			reader.setInput(inStream, false, ignoreMetadata);
 			//get selected level and base level dimensions
 			final Rectangle originalDimension = Utils.getDimension(0, reader);
