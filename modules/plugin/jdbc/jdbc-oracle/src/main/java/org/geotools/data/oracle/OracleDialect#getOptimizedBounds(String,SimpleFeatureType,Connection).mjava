@@ -1,69 +1,92 @@
     @Override
     public List<ReferencedEnvelope> getOptimizedBounds(String schema, SimpleFeatureType featureType,
             Connection cx) throws SQLException, IOException {
-        if (!estimatedExtentsEnabled || dataStore.getVirtualTables().get(featureType.getTypeName()) != null)
+        if (dataStore.getVirtualTables().get(featureType.getTypeName()) != null)
             return null;
-
-        String tableName;
-        if(schema != null && !"".equals(schema)) {
-            tableName = schema + "." + featureType.getTypeName();
-        } else {
-            tableName = featureType.getTypeName();
-        }
-
         
-        Statement st = null;
-        ResultSet rs = null;
-
-        List<ReferencedEnvelope> result = new ArrayList<ReferencedEnvelope>();
-        Savepoint savePoint = null;
-        try {
-            st = cx.createStatement();
-            if(!cx.getAutoCommit()) {
-                savePoint = cx.setSavepoint();
-            }
-
-            for (AttributeDescriptor att : featureType.getAttributeDescriptors()) {
-                if (att instanceof GeometryDescriptor) {
-                    // use estimated extent (optimizer statistics)
-                    StringBuffer sql = new StringBuffer();
-                    sql.append("select SDO_TUNE.EXTENT_OF('");
-                    sql.append(tableName);
-                    sql.append("', '");
-                    sql.append(att.getName().getLocalPart());
-                    sql.append("') FROM DUAL");
-                    LOGGER.log(Level.FINE, "Getting the full extent of the table using optimized search: {0}", sql);
-                    rs = st.executeQuery(sql.toString());
-
-                    if (rs.next()) {
-                        // decode the geometry
-                        GeometryDescriptor descriptor = (GeometryDescriptor) att;
-                        Geometry geometry = readGeometry(rs, 1, new GeometryFactory(), cx);
-                        
-                        // Either a ReferencedEnvelope or ReferencedEnvelope3D will be generated here
-                        ReferencedEnvelope env = JTS.bounds(geometry, descriptor.getCoordinateReferenceSystem() );
-
-                        // reproject and merge
-                        if (env != null && !env.isNull()) {
-                            result.add(env);
-                        }
-                    }
-                    rs.close();
+        // get the bounds very fast from SDO_GEOM_METADATA, if not use SDO_TUNE.EXTENT_OF
+        if(metadataBboxEnabled) {
+            String tableName = featureType.getTypeName();
+        
+            Statement st = null;
+            ResultSet rs = null;
+         
+            List<ReferencedEnvelope> result = new ArrayList<ReferencedEnvelope>();
+            Savepoint savePoint = null;
+            try {
+                st = cx.createStatement();
+                if(!cx.getAutoCommit()) {
+                    savePoint = cx.setSavepoint();
                 }
+    
+                for (AttributeDescriptor att : featureType.getAttributeDescriptors()) {
+                    if (att instanceof GeometryDescriptor) {
+                        String columnName = att.getName().getLocalPart();
+                        StringBuffer sql = new StringBuffer();
+                        // check if we can access the MDSYS.USER_SDO_GEOM_METADATA table
+                        if (canAccessUserViews(cx)) {
+                            sql.append("SELECT DIMINFO FROM MDSYS.USER_SDO_GEOM_METADATA WHERE ");
+                            sql.append( "TABLE_NAME='").append( tableName.toUpperCase() ).append("' AND ");
+                            sql.append( "COLUMN_NAME='").append( columnName.toUpperCase() ).append( "'");
+                            
+                            rs = st.executeQuery(sql.toString());
+                            
+                            if (rs.next()) {
+                                // decode the dimension info
+                                Envelope env = decodeDiminfoEnvelope(rs, 1);
+        
+                                // reproject and merge
+                                if (env != null && !env.isNull()) {
+                                    CoordinateReferenceSystem crs = ((GeometryDescriptor) att)
+                                            .getCoordinateReferenceSystem();
+                                    result.add(new ReferencedEnvelope(env, crs));
+                                    rs.close();
+                                    continue;
+                                }
+                            }
+                            rs.close();
+                        }
+                        // if we could not retrieve the envelope from USER_SDO_GEOM_METADATA,
+                        // try from ALL_SDO_GEOM_METADATA
+                        sql = new StringBuffer("SELECT DIMINFO FROM MDSYS.ALL_SDO_GEOM_METADATA WHERE ");
+                        sql.append( "TABLE_NAME='").append( tableName.toUpperCase() ).append("' AND ");
+                        sql.append( "COLUMN_NAME='").append( columnName.toUpperCase() ).append( "'");
+                        if(schema != null)
+                            sql.append(" AND OWNER='" + schema + "'");                  
+                                
+                        rs = st.executeQuery(sql.toString());
+
+                        if (rs.next()) {
+                            // decode the dimension info
+                            Envelope env = decodeDiminfoEnvelope(rs, 1);
+    
+                            // reproject and merge
+                            if (env != null && !env.isNull()) {
+                                CoordinateReferenceSystem crs = ((GeometryDescriptor) att)
+                                        .getCoordinateReferenceSystem();
+                                result.add(new ReferencedEnvelope(env, crs));
+                            }
+                        }
+                        rs.close();
+                    }
+                }
+            } catch(SQLException e) {
+                if(savePoint != null) {
+                    cx.rollback(savePoint);
+                }
+                LOGGER.log(Level.WARNING, "Failed to use METADATA DIMINFO, falling back on SDO_TUNE.EXTENT_OF", e);
+                return getOptimizedBoundsSDO_TUNE(schema, featureType, cx);
+            } finally {
+                if(savePoint != null) {
+                    cx.rollback(savePoint);
+                }
+                dataStore.closeSafe(rs);
+                dataStore.closeSafe(st);
             }
-        } catch(SQLException e) {
-            if(savePoint != null) {
-                cx.rollback(savePoint);
-            }
-            LOGGER.log(Level.WARNING, "Failed to use SDO_TUNE.EXTENT_OF, falling back on envelope aggregation", e);
-            return null;
-        } finally {
-            if(savePoint != null) {
-                cx.rollback(savePoint);
-            }
-            dataStore.closeSafe(rs);
-            dataStore.closeSafe(st);
+            return result;
         }
-        return result;
+        // could not retrieve bounds from SDO_GEOM_METADATA table or did not want to
+        // falling back on SDO_TUNE.EXTENT_OF
+        return getOptimizedBoundsSDO_TUNE(schema, featureType, cx);
     }
 
