@@ -1,0 +1,22 @@
+    // Mongo doesn't have LIKE but it does have Regex. So
+    // I'm converting it like this:
+    //
+    // filter.getWildCard() returns SQL-like '%'
+    // filter.getSingleChar() returns SQL-like '_'
+    // So I'm converting "foo_bar%" to /foo.bar.*/
+    @Override
+    public Object visit(PropertyIsLike filter, Object extraData) {
+        BasicDBObject output = asDBObject(extraData);
+        String expr = convert(filter.accept(this, null), String.class);
+
+        String multi = filter.getWildCard();
+        String single = filter.getSingleChar();
+        int flags = (filter.isMatchingCase()) ? 0 : Pattern.CASE_INSENSITIVE;
+
+        String regex = filter.getLiteral().replaceAll(multi, ".*").replaceAll(single, ".");
+        Pattern p = Pattern.compile(regex, flags);
+        output.put((String) expr, p);
+
+        return output;
+    }
+
