@@ -1,0 +1,34 @@
+    static CoordinateReferenceSystem decodeCRSFromGeoJSON(DBObject crsDBO) {
+        if (crsDBO == null) {
+            return null;
+        }
+        String type = extractString(crsDBO, KEY_type, false);
+        if (type == null || !VALUE_name.equals(type)) {
+            return null;
+        }
+        DBObject pDBO = extractDBObject(crsDBO, KEY_properties, false);
+        if (pDBO == null) {
+            return null;
+        }
+        String name = extractString(pDBO, KEY_name, false);
+        if (name == null) {
+            return null;
+        }
+        CoordinateReferenceSystem crs = null;
+        if (name.startsWith(PREFIX_URN_OGC)) {
+            // GeoJSON 1.0 spec says:
+            // 1) authority must be namespaced with OGC URN.
+            // 2) for geographic CRS axis ordering is (longitude, latitude).
+            // This is a problem as use of the OGC URN will force CRS with *authority*
+            // defined axis ordering. For urn:ogc:def:crs:EPSG:4326 this is
+            // (latitude, longitude). For now just strip off OGC URN as this will
+            // allow geotools to return a CRS with desired axis ordering...
+            name = name.substring(PREFIX_URN_OGC.length());
+        }
+        try {
+            crs = CRS.decode(name, true);
+        } catch (FactoryException ignore) {
+        }
+        return crs;
+    }
+
