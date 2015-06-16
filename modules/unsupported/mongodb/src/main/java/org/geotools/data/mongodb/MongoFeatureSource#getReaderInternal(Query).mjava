@@ -2,12 +2,23 @@
     protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query)
             throws IOException {
 
-        List<Filter> postFilter = new ArrayList<Filter>();
-        DBCursor cursor = toCursor(query, postFilter);
-        SimpleFeatureReader r = new MongoFeatureReader(cursor, this);
+        List<Filter> postFilterList = new ArrayList<Filter>();
+        List<String> postFilterAttributes = new ArrayList<String>();
+        DBCursor cursor = toCursor(query, postFilterList, postFilterAttributes);
+        FeatureReader<SimpleFeatureType, SimpleFeature> r = new MongoFeatureReader(cursor, this);
 
-        if (!postFilter.isEmpty()) {
-            r = new FilteringSimpleFeatureReader(r, postFilter.get(0));
+        if (!postFilterList.isEmpty() && !isAll(postFilterList.get(0))) {
+            r = new FilteringFeatureReader<SimpleFeatureType, SimpleFeature>(r, postFilterList.get(0));
+
+            // check whether attributes not present in the original query have been
+            // added to the set of retrieved attributes for the sake of
+            // post-filters; if so, wrap the FeatureReader in a ReTypeFeatureReader
+            if (!postFilterAttributes.isEmpty()) {
+                // build the feature type returned by this query
+                SimpleFeatureType returnedSchema = SimpleFeatureTypeBuilder.retype(
+                        getSchema(), query.getPropertyNames());
+                r = new ReTypeFeatureReader(r, returnedSchema);
+            }
         }
         return r;
     }
