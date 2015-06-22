@@ -1,30 +1,20 @@
     private static void connect() throws Exception {
-        Path path = Files.createTempDirectory("gt_es_test");
-
-        LOGGER.info("Creating local test Elasticsearch cluster (path.home=" + path + ")");
+        Path baseDir = Paths.get("target/elasticsearch");
+        baseDir.toFile().mkdirs();
+        dataPath = Files.createTempDirectory(baseDir, null).toAbsolutePath().toString();
+        
+        LOGGER.info("Creating local test Elasticsearch cluster (path.home=" + dataPath + ")");
         Settings build = ImmutableSettings.builder()
-                .put("path.home", path)
-                .put("path.data", path + File.separator + "data")
+                .put("path.data", dataPath)
+                .put("http.enabled", false)
                 .build();
-        node = nodeBuilder().settings(build).node();
+        node = nodeBuilder()
+                .settings(build)
+                .local(true)
+                .clusterName(clusterName)
+                .node();
         Client client = node.client();
-        
-        // get transport port
-        ClusterStateResponse state;
-        state = client.admin().cluster().prepareState().setNodes(true).execute().actionGet();
-        ImmutableOpenMap<String, DiscoveryNode> dataNodes = state.getState().getNodes().dataNodes();
-        String key = dataNodes.keys().iterator().next().value;
-        TransportAddress address = dataNodes.get(key).getAddress();
-        Matcher matcher = Pattern.compile(".*?:(93..).*").matcher(address.toString());
-        if (matcher.matches()) {
-            port = Integer.valueOf(matcher.group(1));
-        } else {
-            String m;
-            m = "Elasticsearch initialization failed "
-                    + "(unable to parse port from local node transport_address)";
-            throw new RuntimeException(m);
-        }
-        
+
         // create index and add mappings
         CreateIndexRequestBuilder builder = client.admin().indices().prepareCreate(indexName);
         try (Scanner s = new Scanner(ClassLoader.getSystemResourceAsStream(ACTIVE_MAPPINGS_FILE))) {

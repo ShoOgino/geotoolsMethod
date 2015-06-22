@@ -11,11 +11,15 @@
         Class typeContext = null;
         AttributeDescriptor attType = (AttributeDescriptor)property.evaluate(featureType);
         dateFormatter = DEFAULT_DATE_FORMATTER;
+        boolean nested = false;
         if (attType != null) {
             typeContext = attType.getType().getBinding();
             final String format = (String) attType.getUserData().get(DATE_FORMAT);
             if (format != null) {
                 dateFormatter = Joda.forPattern(format).printer();
+            }
+            if (attType.getUserData().containsKey(NESTED)) {
+                nested = (Boolean) attType.getUserData().get(NESTED);
             }
         }
 
@@ -47,12 +51,13 @@
             throw new IllegalArgumentException("Time period must be first argument of Filter");
         }
 
+        String key = "";
         if (filter instanceof After || filter instanceof Before) {
             String op = filter instanceof After ? " > " : " < ";
 
             if (period != null) {
                 property.accept(this, extraData);
-                final String key = (String) field;
+                key = (String) field;
 
                 visitBegin(period, extraData);
                 final Object begin = field;
@@ -67,7 +72,7 @@
             }
             else {
                 property.accept(this, extraData);
-                final String key = (String) field;
+                key = (String) field;
                 temporal.accept(this, typeContext);
 
                 if (op.equals(" < ") || swapped) {
@@ -80,7 +85,7 @@
         else if (filter instanceof Begins || filter instanceof Ends || 
                 filter instanceof BegunBy || filter instanceof EndedBy ) {
             property.accept(this, extraData);
-            final String key = (String) field;
+            key = (String) field;
 
             if (filter instanceof Begins || filter instanceof BegunBy) {
                 visitBegin(period, extraData);
@@ -92,7 +97,7 @@
         }
         else if (filter instanceof During || filter instanceof TContains){
             property.accept(this, extraData);
-            final String key = (String) field;
+            key = (String) field;
 
             visitBegin(period, extraData);
             final Object lower = field;
@@ -101,9 +106,14 @@
         }
         else if (filter instanceof TEquals) {
             property.accept(this, extraData);
-            final String key = (String) field;
+            key = (String) field;
             temporal.accept(this, typeContext);
             filterBuilder = FilterBuilders.termFilter(key, field);
+        }
+        
+        if (nested) {
+            String path = extractNestedPath(key);
+            filterBuilder = FilterBuilders.nestedFilter(path,filterBuilder);
         }
 
         return extraData;

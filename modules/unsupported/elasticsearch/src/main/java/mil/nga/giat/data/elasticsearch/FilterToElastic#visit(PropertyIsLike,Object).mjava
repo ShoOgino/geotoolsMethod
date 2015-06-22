@@ -8,10 +8,9 @@
         char esc = filter.getEscape().charAt(0);
         char multi = filter.getWildCard().charAt(0);
         char single = filter.getSingleChar().charAt(0);
-        boolean matchCase = filter.isMatchingCase();
-        if (matchCase) {
+        boolean matchCase = false;
+        if (filter.isMatchingCase()) {
             LOGGER.fine("Case sensitive search not supported");
-            matchCase = false;
         }
 
         String literal = filter.getLiteral();
@@ -21,11 +20,13 @@
         final String key = (String) field;
 
         AttributeDescriptor attType = (AttributeDescriptor) att.evaluate(featureType);
-        final boolean analyzed;
-        if (attType.getUserData().containsKey(ANALYZED)) {
+        boolean analyzed = false;
+        boolean nested = false;
+        if (attType != null && attType.getUserData().containsKey(ANALYZED)) {
             analyzed = (Boolean) attType.getUserData().get(ANALYZED);
-        } else {
-            analyzed = false;
+        }
+        if (attType != null && attType.getUserData().containsKey(NESTED)) {
+            nested = (Boolean) attType.getUserData().get(NESTED);
         }
         if (analyzed) {
             // use query string query post filter for analyzed fields
@@ -35,6 +36,10 @@
             // default to regexp filter
             String pattern = convertToRegex(esc, multi, single, matchCase, literal);
             filterBuilder = FilterBuilders.regexpFilter(key, pattern);
+        }
+        if (nested) {
+            String path = extractNestedPath(key);
+            filterBuilder = FilterBuilders.nestedFilter(path,filterBuilder);
         }
 
         return extraData;

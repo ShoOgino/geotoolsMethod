@@ -1,16 +1,19 @@
-    private SearchRequestBuilder prepareSearchRequest(Query query, SearchType searchType) throws IOException {
+    private SearchRequestBuilder prepareSearchRequest(Query query, 
+            SearchType searchType) throws IOException {
         final ElasticDataStore dataStore = getDataStore();
+        final String docType = dataStore.getDocType(entry.getName());
 
         // setup request
+        LOGGER.fine("Preparing " + docType + " (" + entry.getName() + ") "  + searchType + " query");
         final SearchRequestBuilder searchRequest;
         searchRequest = dataStore.getClient()
                 .prepareSearch(dataStore.getSearchIndices())
-                .setTypes(getName().toString())
+                .setTypes(docType)
                 .setSearchType(searchType);
 
         // add fields
         final List<ElasticAttribute> attributes;
-        attributes = dataStore.getElasticAttributes(entry.getTypeName());
+        attributes = dataStore.getElasticAttributes(entry.getName());
         List<String> sourceIncludes = new ArrayList<>();
         for (final ElasticAttribute attribute : attributes) {
             if (attribute.isUse() && attribute.isStored()) {
@@ -39,7 +42,7 @@
         }
         final QueryBuilder elasticQuery = filterToElastic.getQueryBuilder();
         final FilterBuilder postFilter = filterToElastic.getFilterBuilder();
-        LOGGER.info(String.format("postFilter: %s", postFilter.toString()));
+        LOGGER.fine(String.format("postFilter: %s", postFilter.toString()));
         searchRequest.setQuery(elasticQuery).setPostFilter(postFilter);
 
         // sort

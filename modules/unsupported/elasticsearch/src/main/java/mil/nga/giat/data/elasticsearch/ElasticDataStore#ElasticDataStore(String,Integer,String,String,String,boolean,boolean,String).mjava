@@ -1,0 +1,75 @@
+    public ElasticDataStore(String searchHost, Integer hostPort, 
+            String indexName, String searchIndices, String clusterName,
+            boolean localNode, boolean storeData, String dataPath) {
+
+        LOGGER.fine("initializing data store " + searchHost + ":" + hostPort + "/" + indexName);
+
+        this.indexName = indexName;
+        
+        if (searchIndices != null) {
+            this.searchIndices = searchIndices;
+        } else {
+            this.searchIndices = indexName;
+        }
+
+        if (dataPath != null) {
+            Settings build = ImmutableSettings.builder()
+                    .put("path.data", dataPath)
+                    .put("http.enabled", false)
+                    .build();
+            node = nodeBuilder()
+                    .settings(build)
+                    .local(true)
+                    .clusterName(clusterName)
+                    .node();
+            client = node.client();
+            isLocal = true;
+        } else if (localNode) {
+            node = nodeBuilder()
+                    .data(storeData)
+                    .clusterName(clusterName)
+                    .node();
+            client = node.client();
+            isLocal = false;
+        } else {
+            final TransportAddress address;
+            address = new InetSocketTransportAddress(searchHost, hostPort);
+            Builder settings = ImmutableSettings.settingsBuilder()
+                    .put("cluster.name", clusterName);
+            client = new TransportClient(settings);
+            ((TransportClient) client).addTransportAddress(address);
+            node = null;
+            isLocal = false;
+        }
+        LOGGER.fine("client connection established");
+
+        final ClusterStateRequest clusterStateRequest;
+        clusterStateRequest = Requests.clusterStateRequest()
+                .local(isLocal)
+                .indices(indexName);
+
+        LOGGER.fine("querying cluster state");
+        final ClusterState state;
+        state = client.admin()
+                .cluster()
+                .state(clusterStateRequest)
+                .actionGet().getState();
+
+        IndexMetaData metadata = state.metaData().index(indexName);
+        if (metadata != null) {
+            final ImmutableOpenMap<String, MappingMetaData> mappings;
+            mappings = state.metaData().index(indexName).mappings();
+            final Iterator<String> elasticTypes = mappings.keysIt();
+            final Vector<Name> names = new Vector<Name>();
+            while (elasticTypes.hasNext()) {
+                names.add(new NameImpl(elasticTypes.next()));
+            }
+            baseTypeNames = names;
+        } else {
+            baseTypeNames = new ArrayList<>();
+        }
+        
+        layerConfigurations = new ConcurrentHashMap<>();
+        docTypes = new HashMap<>();
+    }
+

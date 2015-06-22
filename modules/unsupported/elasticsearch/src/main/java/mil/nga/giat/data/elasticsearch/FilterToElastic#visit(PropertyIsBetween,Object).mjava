@@ -12,9 +12,13 @@
         Expression upperbounds = (Expression) filter.getUpperBoundary();
 
         Class context;
+        boolean nested = false;
         AttributeDescriptor attType = (AttributeDescriptor)expr.evaluate(featureType);
         if (attType != null) {
             context = attType.getType().getBinding();
+            if (attType.getUserData().containsKey(NESTED)) {
+                nested = (Boolean) attType.getUserData().get(NESTED);
+            }
         } else {
             //assume it's a string?
             context = String.class;
@@ -27,6 +31,10 @@
         upperbounds.accept(this, context);
         final Object upper = field;
         filterBuilder = FilterBuilders.rangeFilter(key).gte(lower).lte(upper);
+        if(nested) {
+            String path = extractNestedPath(key);
+            filterBuilder = FilterBuilders.nestedFilter(path,filterBuilder);
+        }
 
         return extraData;
     }
