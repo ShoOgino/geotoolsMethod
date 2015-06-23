@@ -1,0 +1,26 @@
+    public static GranuleCatalog createGranuleCatalogFromDatastore(File parent,
+            Properties properties, boolean create, boolean wraps, Hints hints) throws IOException {
+        GranuleCatalog catalog = null;
+        // SPI
+        final String SPIClass = properties.getProperty("SPI");
+        try {
+            // create a datastore as instructed
+            final DataStoreFactorySpi spi = (DataStoreFactorySpi) Class.forName(SPIClass).newInstance();
+
+            // set ParentLocation parameter since for embedded database like H2 we must change the database
+            // to incorporate the path where to write the db
+            properties.put("ParentLocation", DataUtilities.fileToURL(parent).toExternalForm());
+            if (wraps) {
+                properties.put(Utils.Prop.WRAP_STORE, wraps);
+            }
+
+            catalog = GranuleCatalogFactory.createGranuleCatalog(properties, false, create, spi,hints);
+            MultiLevelROIProvider rois = MultiLevelROIProviderFactory.createFootprintProvider(parent);
+            catalog.setMultiScaleROIProvider(rois);
+        } catch (Exception e) {
+            final IOException ioe = new IOException();
+            throw (IOException) ioe.initCause(e);
+        } 
+        return catalog;
+    }
+
