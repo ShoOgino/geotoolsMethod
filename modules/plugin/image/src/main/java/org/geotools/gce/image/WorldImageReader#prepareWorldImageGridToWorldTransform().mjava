@@ -1,56 +1,52 @@
-	/**
-	 * This method is in charge for reading the metadata file and for creating a
-	 * valid envelope (whether possible);
-	 * 
-	 * TODO it would be great to having a centralized management for the world
-	 * file
-	 * 
-	 * @throws IOException
-	 */
-	private void prepareWorldImageGridToWorldTransform() throws IOException {
+    /**
+     * This method is in charge for reading the metadata file and for creating a valid envelope
+     * (whether possible);
+     * 
+     * TODO it would be great to having a centralized management for the world file
+     * 
+     * @throws IOException
+     */
+    private void prepareWorldImageGridToWorldTransform() throws IOException {
 
-		// getting name and extension
-		final String base = (parentPath != null) ? new StringBuffer(
-				this.parentPath).append(File.separator).append(coverageName)
-				.toString() : coverageName;
+        // getting name and extension
+        final String base = (parentPath != null) ? new StringBuffer(this.parentPath)
+                .append(File.separator).append(coverageName).toString() : coverageName;
 
-		// We can now construct the baseURL from this string.
-		File file2Parse = new File(new StringBuffer(base).append(".wld")
-				.toString());
+        // We can now construct the baseURL from this string.
+        File file2Parse = new File(new StringBuffer(base).append(".wld").toString());
 
-		if (file2Parse.exists()) {
-			final WorldFileReader reader = new WorldFileReader(file2Parse);
-			raster2Model = reader.getTransform();
-		} else {
-			// looking for another extension
-			final Set<String> ext=WorldImageFormat.getWorldExtension(extension);
-			final Iterator<String> it=ext.iterator();
-			if(!it.hasNext())
-				throw new DataSourceException("Unable to parse extension "+extension);
-			do{
-			file2Parse = new File(new StringBuffer(base).append(it.next()
-					).toString());
-			}while(!file2Parse.exists()&&it.hasNext());
-			
-			if (file2Parse.exists()) {
-				// parse world file
-				final WorldFileReader reader = new WorldFileReader(file2Parse);
-				raster2Model = reader.getTransform();
-				metaFile = false;
-			} else {
-				// looking for a meta file
-				file2Parse = new File(new StringBuffer(base).append(".meta")
-						.toString());
+        if (file2Parse.exists()) {
+            final WorldFileReader reader = new WorldFileReader(file2Parse);
+            raster2Model = reader.getTransform();
+        } else {
+            // looking for another extension
+            final Set<String> ext = WorldImageFormat.getWorldExtension(extension);
+            final Iterator<String> it = ext.iterator();
+            if (!it.hasNext())
+                throw new DataSourceException("Unable to parse extension " + extension);
+            do {
+                file2Parse = new File(new StringBuffer(base).append(it.next()).toString());
+            } while (!file2Parse.exists() && it.hasNext());
 
-				if (file2Parse.exists()) {
-					parseMetaFile(file2Parse);
-					metaFile = true;
-				} else {
+            if (file2Parse.exists()) {
+                // parse world file
+                final WorldFileReader reader = new WorldFileReader(file2Parse);
+                raster2Model = reader.getTransform();
+                metaFile = false;
+            } else {
+                // looking for a meta file
+                file2Parse = new File(new StringBuffer(base).append(".meta").toString());
+
+                if (file2Parse.exists()) {
+                    parseMetaFile(file2Parse);
+                    metaFile = true;
+                } else {
                     LOGGER.warning("Could not find a world transform file for " + coverageName
                             + ", assuming the identity transform");
-                    raster2Model = ProjectiveTransform.create(new AffineTransform());
-				}
-			}
-		}
-	}
+                    raster2Model = ProjectiveTransform.create(
+                            new AffineTransform(1, 0, 0, -1, 0, originalGridRange.getHigh(1)));
+                }
+            }
+        }
+    }
 
