@@ -2,23 +2,30 @@
     public String getSequenceForColumn(String schemaName, String tableName,
             String columnName, Connection cx) throws SQLException {
         String sequenceName = (tableName + "_" + columnName + "_SEQUENCE").toUpperCase();
-        Statement st = cx.createStatement();
+        PreparedStatement st = null;
+        String sql;
+        
         try {
+            sql = "SELECT * FROM USER_SEQUENCES WHERE SEQUENCE_NAME = ?";
+            st = cx.prepareStatement(sql);
+            st.setString(1, sequenceName);
+            
             // check the user owned sequences
-            ResultSet rs = st.executeQuery( "SELECT * FROM USER_SEQUENCES" +
-                " WHERE SEQUENCE_NAME = '" + sequenceName + "'");
+            ResultSet rs = st.executeQuery();
             try {
                 if ( rs.next() ) {
                     return sequenceName; 
                 }    
             } finally {
                 dataStore.closeSafe( rs );
+                dataStore.closeSafe( st );
             }
-            dataStore.closeSafe( rs );
             
             // that did not work, let's see if the sequence is available in someone else schema
-            rs = st.executeQuery( "SELECT * FROM ALL_SEQUENCES" +
-                    " WHERE SEQUENCE_NAME = '" + sequenceName + "'");
+            sql = "SELECT * FROM ALL_SEQUENCES WHERE SEQUENCE_NAME = ?";
+            st = cx.prepareStatement(sql);
+            st.setString(1, sequenceName);
+            rs = st.executeQuery();
             try {
                 if ( rs.next() ) {
                     String schema = rs.getString("SEQUENCE_OWNER");
