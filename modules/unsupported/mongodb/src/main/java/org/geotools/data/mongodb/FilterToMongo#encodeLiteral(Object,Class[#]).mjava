@@ -1,0 +1,28 @@
+    Object encodeLiteral(Object literal, Class<?> targetType) {
+        if (literal instanceof Envelope) {
+            return geometryBuilder.toObject((Envelope) literal);
+        } else if (literal instanceof Geometry) {
+            return geometryBuilder.toObject((Geometry) literal);
+        } else if (literal instanceof Date) {
+            if (targetType != null && Date.class.isAssignableFrom(targetType)) {
+                // return date object as is, will be correctly encoded by BasicDBObject
+                return literal;
+            }
+            // by default, convert date to ISO-8601 string
+            return ISO8601_SDF.format((Date)literal);
+        } else if (literal instanceof String) {
+            if (targetType != null && Date.class.isAssignableFrom(targetType)) {
+                // try parse string assuming it's ISO-8601 formatted
+                try {
+                    return ISO8601_SDF.parse((String) literal);
+                } catch (ParseException e) {
+                    LOGGER.log(Level.WARNING, "Could not parse String literal as ISO-8601 date", e);
+                }
+            }
+            // by default, return string as is
+            return literal;
+        } else {
+            return literal.toString();
+        }
+    }
+
