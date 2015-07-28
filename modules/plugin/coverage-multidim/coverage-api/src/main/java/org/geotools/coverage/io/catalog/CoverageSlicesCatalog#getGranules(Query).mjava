@@ -6,7 +6,7 @@
             lock.lock();
             checkStore();
             final String typeName = q.getTypeName();
-            
+
             //
             // Load tiles informations, especially the bounds, which will be reused
             //
@@ -15,17 +15,29 @@
                 throw new NullPointerException(
                         "The provided SimpleFeatureSource is null, it's impossible to create an index!");
             }
-            final SimpleFeatureCollection features = featureSource.getFeatures(q);
-            if (features == null)
-                throw new NullPointerException(
-                        "The provided SimpleFeatureCollection is null, it's impossible to create an index!");
-
-            if (LOGGER.isLoggable(Level.FINE))
-                LOGGER.fine("Index Loaded");
-
-            // load the feature from the underlying datastore as needed
-            final SimpleFeatureIterator it = features.features();
+            Transaction tx = null;
+            SimpleFeatureIterator it = null;
             try {
+
+                // Transform feature stores will use an autoCommit transaction which doesn't
+                // have any state. Getting the features iterator may throw an exception  
+                // by interpreting a null state as a closed transaction. Therefore
+                // we use a DefaultTransaction instance when dealing with stores. 
+                if (featureSource instanceof FeatureStore) {
+                    tx = new DefaultTransaction("getGranulesTransaction" + System.nanoTime());
+                    ((FeatureStore) featureSource).setTransaction(tx);
+                }
+                final SimpleFeatureCollection features = featureSource.getFeatures(q);
+                if (features == null)
+                    throw new NullPointerException(
+                            "The provided SimpleFeatureCollection is null, it's impossible to create an index!");
+
+                if (LOGGER.isLoggable(Level.FINE))
+                    LOGGER.fine("Index Loaded");
+
+                // load the feature from the underlying datastore as needed
+                it = features.features();
+
                 if (!it.hasNext()) {
                     if (LOGGER.isLoggable(Level.FINE))
                         LOGGER.fine("The provided SimpleFeatureCollection  or empty, it's impossible to create an index!");
@@ -53,6 +65,10 @@
                 }
             } finally {
                 it.close();
+
+                if (tx != null) {
+                    tx.close();
+                }
             }
             // return
             return returnValue;

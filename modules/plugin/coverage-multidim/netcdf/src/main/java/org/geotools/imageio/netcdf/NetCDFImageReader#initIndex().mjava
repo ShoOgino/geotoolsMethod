@@ -1,6 +1,6 @@
     /**
-     * Index Initialization. Scan the coverageDescriptorsCache and store indexing information.
-     * @param coverageDescriptorsCache
+     * Index Initialization. store indexing information.
+     * 
      * @return
      * @throws InvalidRangeException
      * @throws IOException
@@ -11,9 +11,9 @@
         try {
 
             // init slice catalog
-            final File sliceIndexFile = ancillaryFileManager.getSlicesIndexFile(); 
-            initCatalog(sliceIndexFile.getParentFile(),
-                FilenameUtils.removeExtension(FilenameUtils.getName(sliceIndexFile.getCanonicalPath())).replace(".", ""));
+            DataStoreConfiguration datastoreConfig = ancillaryFileManager.getDatastoreConfiguration();
+            boolean isShared = datastoreConfig.isShared();
+            initCatalog(datastoreConfig);
             final List<Variable> variables = dataset.getVariables();
             if (variables != null) {
 
@@ -39,7 +39,7 @@
                         final Name coverageName = getCoverageName(varName);
                         final CoordinateSystem cs = NetCDFCRSUtilities.getCoordinateSystem(variable);
 
-                        final SimpleFeatureType indexSchema = getIndexSchema(coverageName, cs);
+                        final SimpleFeatureType indexSchema = getIndexSchema(coverageName, cs, isShared);
                         // get variable adapter which maps to a coverage in the end
                         final VariableAdapter vaAdapter = getCoverageDescriptor(coverageName);
 
@@ -59,11 +59,11 @@
                         while (writtenFeatures < numberOfSlices) {
                             // Get a bunch of features 
                             vaAdapter.getFeatures(startPagingIndex, limit, collection);
-                            if (variableImageStartIndex != 0) {
+                            if (variableImageStartIndex != 0 || isShared) {
                                 // Need to updated the imageIndex of the features since all indexes 
                                 // are zero based inside each variable but we need to index them inside
                                 // the whole NetCDF dataset. 
-                                updateFeaturesIndex(collection, variableImageStartIndex);
+                                updateFeaturesIndex(collection, variableImageStartIndex, isShared);
                             }
                             final int features = collection.size();
                             if (features > 0) {
