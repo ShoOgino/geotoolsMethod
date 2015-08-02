@@ -1,15 +1,17 @@
     @Override
     public void postDropTable(String schemaName, SimpleFeatureType featureType, Connection cx)
             throws SQLException {
-        Statement st = cx.createStatement();
+        PreparedStatement st = null;
         String tableName = featureType.getTypeName();
 
         try {
             // remove all the geometry metadata (no need for schema as we can only play against
             // the current user's table)
-            String sql = "DELETE FROM USER_SDO_GEOM_METADATA WHERE TABLE_NAME = '" + tableName + "'";
-            LOGGER.fine( sql );
-            st.execute( sql );
+            String sql = "DELETE FROM USER_SDO_GEOM_METADATA WHERE TABLE_NAME = ?";
+            st = cx.prepareStatement(sql);
+            st.setString(1, tableName);
+            LOGGER.log(Level.FINE, "Post drop table: {0} [ TABLE_NAME = {1} ]", new Object[] { sql, tableName });
+            st.execute();
         } finally {
             dataStore.closeSafe(st);
         }
