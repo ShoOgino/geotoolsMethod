@@ -1,12 +1,11 @@
     /**
-     * Builds a raster symbolizer into the current rule, if a <code>raster-channels</code> property
-     * is found
+     * Builds a raster symbolizer into the current rule, if a <code>raster-channels</code> property is found
      * 
      * @param cssRule
      * @param ruleBuilder
      */
     private void addRasterSymbolizer(CssRule cssRule, RuleBuilder ruleBuilder) {
-        Map<String, List<Value>> values = cssRule.getPropertyValues(PseudoClass.ROOT, "raster");
+        Map<String, List<Value>> values = cssRule.getPropertyValues(PseudoClass.ROOT, "raster","rce");
         if (values == null || values.isEmpty()) {
             return;
         }
@@ -17,34 +16,41 @@
             String[] channelNames = getStringArray(values, "raster-channels", i);
             String[] constrastEnhancements = getStringArray(values, "raster-contrast-enhancement",
                     i);
-            String[] constrastAlgorithms = getStringArray(values, "raster-contrast-enhancement-algorithm",
-                    i);
-            String[] constrastParameters = getStringArray(values, "raster-contrast-enhancement-parameter",
-                    i);
+            HashMap<String, Expression> constrastParameters = new HashMap<>();
+            for (String cssKey : values.keySet()) {
+                String sldKey = CONTRASTENHANCMENT_VENDOR_OPTIONS.get(cssKey);
+                if (sldKey != null) {
+                    constrastParameters.put(sldKey, getExpression(values, cssKey, i));
+                }
+            }
             double[] gammas = getDoubleArray(values, "raster-gamma", i);
             if (!"auto".equals(channelNames[0])) {
                 ChannelSelectionBuilder cs = rb.channelSelection();
                 if (channelNames.length == 1) {
-                    applyContrastEnhancement(cs.gray().channelName(channelNames[0])
-                            .contrastEnhancement(), constrastEnhancements, constrastAlgorithms, constrastParameters, gammas, 0);
+                    applyContrastEnhancement(
+                            cs.gray().channelName(channelNames[0]).contrastEnhancement(),
+                            constrastEnhancements, constrastParameters, gammas, 0);
                 } else if (channelNames.length == 2 || channelNames.length > 3) {
                     throw new IllegalArgumentException(
                             "raster-channels can accept the name of one or three bands, not "
                                     + channelNames.length);
                 } else {
-                    applyContrastEnhancement(cs.red().channelName(channelNames[0])
-                            .contrastEnhancement(), constrastEnhancements, 
-                            constrastAlgorithms, constrastParameters, gammas, 0);
-                    applyContrastEnhancement(cs.green().channelName(channelNames[1])
-                            .contrastEnhancement(), constrastEnhancements, 
-                            constrastAlgorithms, constrastParameters, gammas, 1);
-                    applyContrastEnhancement(cs.blue().channelName(channelNames[2])
-                            .contrastEnhancement(), constrastEnhancements, 
-                            constrastAlgorithms, constrastParameters, gammas, 2);
+                    applyContrastEnhancement(
+                            cs.red().channelName(channelNames[0]).contrastEnhancement(),
+                            constrastEnhancements, constrastParameters, gammas,
+                            0);
+                    applyContrastEnhancement(
+                            cs.green().channelName(channelNames[1]).contrastEnhancement(),
+                            constrastEnhancements, constrastParameters, gammas,
+                            1);
+                    applyContrastEnhancement(
+                            cs.blue().channelName(channelNames[2]).contrastEnhancement(),
+                            constrastEnhancements, constrastParameters, gammas,
+                            2);
                 }
             } else {
                 applyContrastEnhancement(rb.contrastEnhancement(), constrastEnhancements,
-                        constrastAlgorithms, constrastParameters, gammas, 0);
+                        constrastParameters, gammas, 0);
             }
 
             Expression opacity = getExpression(values, "raster-opacity", i);
@@ -105,7 +111,7 @@
                     }
                 }
             }
-            
+
             addVendorOptions(rb, RASTER_VENDOR_OPTIONS, values, i);
         }
     }
