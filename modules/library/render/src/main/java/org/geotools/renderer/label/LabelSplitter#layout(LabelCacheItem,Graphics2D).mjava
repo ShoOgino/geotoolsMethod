@@ -1,0 +1,119 @@
+    public List<LineInfo> layout(LabelCacheItem labelItem, Graphics2D graphics) {
+        String text = labelItem.getLabel();
+        Font[] fonts = labelItem.getTextStyle().getFonts();
+
+        // split the label into lines
+        int textLength = text.length();
+        boolean singleFont = fonts.length == 1
+                || textLength == fonts[0].canDisplayUpTo(text.toCharArray(), 0, textLength);
+        if (!(text.contains("\n") || labelItem.getAutoWrap() > 0) && singleFont) {
+            FontRenderContext frc = graphics.getFontRenderContext();
+            TextLayout layout = new TextLayout(text, fonts[0], frc);
+            LineComponent component = new LineComponent(text,
+                    layoutSentence(text, labelItem, graphics, fonts[0]), layout);
+            LineInfo line = new LineInfo(component);
+            return Collections.singletonList(line);
+        }
+
+        // first split along the newlines
+        String[] splitted = text.split("\\n");
+
+        List<LineInfo> lines = new ArrayList<LineInfo>();
+        if (labelItem.getAutoWrap() <= 0) {
+            // no need for auto-wrapping, we already have the proper split
+            for (String line : splitted) {
+                line = checkForEmptyLine(line);
+
+                LineInfo lineInfo = new LineInfo();
+                List<FontRange> ranges = buildFontRanges(line, fonts);
+                for (FontRange range : ranges) {
+                    graphics.setFont(range.font);
+                    FontRenderContext frc = graphics.getFontRenderContext();
+
+                    TextLayout layout = new TextLayout(range.text, range.font, frc);
+                    LineComponent component = new LineComponent(range.text,
+                            layoutSentence(range.text, labelItem, graphics, range.font), layout);
+                    lineInfo.add(component);
+                }
+                lines.add(lineInfo);
+            }
+        } else {
+            // Perform an auto-wrap using the java2d facilities. This
+            // is done using a LineBreakMeasurer, but first we need to create
+            // some extra objects
+
+            // setup the attributes
+            Map<TextAttribute, Object> map = new HashMap<TextAttribute, Object>();
+            map.put(TextAttribute.FONT, fonts[0]);
+
+            // accumulate the lines
+            for (int i = 0; i < splitted.length; i++) {
+                String lineText = checkForEmptyLine(splitted[i]);
+
+                // build the line break iterator that will split lines at word
+                // boundaries when the wrapping length is exceeded
+                List<FontRange> ranges = buildFontRanges(lineText, fonts);
+                AttributedString attributed = buildAttributedLine(lineText, ranges);
+                AttributedCharacterIterator iter = attributed.getIterator();
+                LineBreakMeasurer lineMeasurer = new LineBreakMeasurer(iter,
+                        BreakIterator.getLineInstance(), graphics.getFontRenderContext());
+                BreakIterator breaks = BreakIterator.getLineInstance();
+                breaks.setText(lineText);
+
+                // setup iteration and start splitting at word boundaries
+                int prevPosition = 0;
+                while (lineMeasurer.getPosition() < iter.getEndIndex()) {
+                    // grab the next portion of text within the wrapping limits
+                    TextLayout layout = lineMeasurer.nextLayout(labelItem.getAutoWrap(),
+                            lineText.length(), true);
+                    int newPosition = prevPosition;
+
+                    if (layout != null) {
+                        newPosition = lineMeasurer.getPosition();
+                    } else {
+                        int nextBoundary = breaks.following(prevPosition);
+                        if (nextBoundary == BreakIterator.DONE) {
+                            newPosition = lineText.length();
+                        } else {
+                            newPosition = nextBoundary;
+                        }
+                        AttributedCharacterIterator subIter = attributed.getIterator(null,
+                                prevPosition, newPosition);
+                        layout = new TextLayout(subIter, graphics.getFontRenderContext());
+                        lineMeasurer.setPosition(newPosition);
+                    }
+
+                    // extract the text, and trim it since leading and trailing spaces
+                    // can affect label alignment in an unpleasant way (improper left
+                    // or right alignment, or bad centering)
+                    List<FontRange> lineRanges = getLineRanges(ranges, prevPosition, newPosition);
+                    LineInfo lineInfo = new LineInfo();
+                    int lastLineRange = lineRanges.size() - 1;
+                    int currentLineRange = 0;
+                    for (FontRange range : lineRanges) {
+                        String extracted = lineText.substring(Math.max(prevPosition, range.startChar),
+                                Math.min(newPosition, range.endChar));
+                        if (currentLineRange == 0 && currentLineRange == lastLineRange) {
+                            // single string, remote trailing and leading
+                            extracted = extracted.trim();
+                        } else if (currentLineRange == 0) {
+                            // trim leading whitespace
+                            extracted = extracted.replaceAll("^\\s+", "");
+                        } else if (currentLineRange == lastLineRange) {
+                            // trim training whitespace
+                            extracted = extracted.replaceAll("\\s+$", "");
+                        }
+                        currentLineRange++;
+                        LineComponent component = new LineComponent(extracted,
+                                layoutSentence(extracted, labelItem, graphics, range.font), layout);
+                        lineInfo.add(component);
+                    }
+                    lines.add(lineInfo);
+                    prevPosition = newPosition;
+                }
+            }
+        }
+
+        return lines;
+    }
+
