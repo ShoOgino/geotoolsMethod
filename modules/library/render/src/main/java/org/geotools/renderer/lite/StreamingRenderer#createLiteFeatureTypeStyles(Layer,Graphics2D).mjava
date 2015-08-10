@@ -1,15 +1,11 @@
     /**
-     * creates a list of LiteFeatureTypeStyles a) out-of-scale rules removed b)
-     * incompatible FeatureTypeStyles removed
+     * creates a list of LiteFeatureTypeStyles a) out-of-scale rules removed b) incompatible
+     * FeatureTypeStyles removed
      * 
      * 
-     * @param featureStylers
-     * @param features
-     * @throws Exception
      * @return ArrayList<LiteFeatureTypeStyle>
      */
-    private ArrayList<LiteFeatureTypeStyle> createLiteFeatureTypeStyles(
-            List<FeatureTypeStyle> featureStyles, FeatureType ftype,
+    private ArrayList<LiteFeatureTypeStyle> createLiteFeatureTypeStyles(Layer layer,
             Graphics2D graphics) throws IOException {
         if (LOGGER.isLoggable(Level.FINE))
             LOGGER.fine("creating rules for scale denominator - "
@@ -18,14 +14,14 @@
 
         LiteFeatureTypeStyle lfts;
         boolean foundComposite = false;
-        for (FeatureTypeStyle fts : featureStyles) {
-            if (isFeatureTypeStyleActive(ftype, fts)) {
+        for (FeatureTypeStyle fts : layer.getStyle().featureTypeStyles()) {
+            if (isFeatureTypeStyleActive(layer.getFeatureSource().getSchema(), fts)) {
                 // DJB: this FTS is compatible with this FT.
 
                 // get applicable rules at the current scale
-                List[] splittedRules = splitRules(fts);
-                List ruleList = splittedRules[0];
-                List elseRuleList = splittedRules[1];
+                List<List<Rule>> splittedRules = splitRules(fts);
+                List<Rule> ruleList = splittedRules.get(0);
+                List<Rule> elseRuleList = splittedRules.get(1);
 
                 // if none, skip it
                 if ((ruleList.isEmpty()) && (elseRuleList.isEmpty()))
@@ -38,10 +34,11 @@
                 // we can optimize this one and draw directly on the graphics, assuming
                 // there is no composition
                 if (!foundComposite && (result.isEmpty() || !isOptimizedFTSRenderingEnabled())) {
-                    lfts = new LiteFeatureTypeStyle(graphics, ruleList,
+                    lfts = new LiteFeatureTypeStyle(layer, graphics, ruleList,
                             elseRuleList, fts.getTransformation());
                 } else {
-                    lfts = new LiteFeatureTypeStyle(new DelayedBackbufferGraphic(graphics, screenSize), 
+                    lfts = new LiteFeatureTypeStyle(layer,
+                            new DelayedBackbufferGraphic(graphics, screenSize), 
                             ruleList, elseRuleList, fts.getTransformation());
                 }
                 lfts.composite = composite;

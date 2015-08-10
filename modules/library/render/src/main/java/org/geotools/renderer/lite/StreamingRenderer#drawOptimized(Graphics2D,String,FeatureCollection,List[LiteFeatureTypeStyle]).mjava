@@ -1,0 +1,39 @@
+    /**
+     * Performs rendering so that the collection is scanned only once even in presence
+     * of multiple feature type styles, using the in memory buffer for each feature type
+     * style other than the first one (that uses the graphics provided by the user)s 
+     */
+    private void drawOptimized(final Graphics2D graphics, String layerId,
+            FeatureCollection features, final List<LiteFeatureTypeStyle> lfts) {
+
+        try (FeatureIterator<?> iterator = features.features()) {
+            if (iterator == null)
+                return; // nothing to do
+
+            boolean clone = isCloningRequired(lfts);
+            RenderableFeature rf = new RenderableFeature(layerId, clone);
+            // loop exit condition tested inside try catch
+            // make sure we test hasNext() outside of the try/cath that follows, as that
+            // one is there to make sure a single feature error does not ruin the rendering
+            // (best effort) whilst an exception in hasNext() + ignoring catch results in
+            // an infinite loop
+            while (iterator.hasNext() && !renderingStopRequested) {
+                try {
+                    rf.setFeature(iterator.next());
+                    // draw the feature on the main graphics and on the eventual extra image buffers
+                    for (LiteFeatureTypeStyle liteFeatureTypeStyle : lfts) {
+                        rf.setScreenMap(liteFeatureTypeStyle.screenMap);
+                        rf.layer = liteFeatureTypeStyle.layer;
+                        processFeature(rf, liteFeatureTypeStyle);
+                    }
+                } catch (Throwable tr) {
+                    fireErrorEvent(tr);
+                }
+            }
+            // submit the merge request
+            requests.put(new MergeLayersRequest(graphics, lfts));
+        } catch (InterruptedException e) {
+            fireErrorEvent(e);
+        }
+    }
+
