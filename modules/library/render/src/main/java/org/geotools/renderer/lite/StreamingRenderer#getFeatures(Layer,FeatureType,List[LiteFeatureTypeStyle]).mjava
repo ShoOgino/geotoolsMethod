@@ -1,15 +1,22 @@
-    private FeatureCollection getFeatures(final Layer layer, final FeatureSource featureSource,
-            final CoordinateReferenceSystem sourceCrs, 
-            final FeatureType schema, final GeometryDescriptor geometryAttribute,
+    FeatureCollection getFeatures(final Layer layer, final FeatureType schema,
             List<LiteFeatureTypeStyle> featureTypeStyles) throws IOException, FactoryException,
                     NoninvertibleTransformException, SchemaException, TransformException {
+        final FeatureSource featureSource = layer.getFeatureSource();
         Expression transform = featureTypeStyles.get(0).transformation;
         
+        // grab the source crs and geometry attribute
+        final CoordinateReferenceSystem sourceCrs;
+        final GeometryDescriptor geometryAttribute = schema.getGeometryDescriptor();
+        if (geometryAttribute != null && geometryAttribute.getType() != null) {
+            sourceCrs = geometryAttribute.getType().getCoordinateReferenceSystem();
+        } else {
+            sourceCrs = null;
+        }
+
         // ... assume we have to do the generalization, the query layer process will
         // turn down the flag if we don't 
-        inMemoryGeneralization = true;
         boolean hasTransformation = transform != null;
-        Query styleQuery = getStyleQuery(featureSource, schema, featureTypeStyles, mapExtent,
+        Query styleQuery = getStyleQuery(layer, featureTypeStyles, mapExtent,
                 destinationCrs, sourceCrs, screenSize, geometryAttribute, worldToScreenTransform,
                 hasTransformation);
         Query definitionQuery = getDefinitionQuery(layer, featureSource, sourceCrs);
@@ -66,6 +73,12 @@
             }                    
         } else {
             Query mixed = DataUtilities.mixQueries(definitionQuery, styleQuery, null);
+            // mix the sort by, the style query takes precedence
+            if (styleQuery.getSortBy() != null) {
+                mixed.setSortBy(styleQuery.getSortBy());
+            } else {
+                mixed.setSortBy(definitionQuery.getSortBy());
+            }
             checkAttributeExistence(featureSource.getSchema(), mixed);
             features = featureSource.getFeatures(mixed);
             features = RendererUtilities.fixFeatureCollectionReferencing(features, sourceCrs);

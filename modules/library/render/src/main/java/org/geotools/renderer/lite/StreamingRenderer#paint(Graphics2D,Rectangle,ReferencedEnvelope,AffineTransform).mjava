@@ -112,9 +112,12 @@
                 throw new IllegalStateException("Cannot call paint, you did not set a MapContent in this renderer");
             }
             
+            // re-organize the map content and generate the z group layers
+            MapContent zGroupedMapContent = ZGroupLayerFactory.filter(mapContent);
+
             // split over multiple map contents, one per composition base
-            List<CompositingGroup> compositingGroups = CompositingGroup.splitOnCompositingBase(
-                    graphics, paintArea, mapContent);
+            List<CompositingGroup> compositingGroups = CompositingGroup
+                    .splitOnCompositingBase(graphics, paintArea, zGroupedMapContent);
             
             int layerCounter = 0;
             for (CompositingGroup compositingGroup : compositingGroups) {
@@ -153,11 +156,15 @@
                         } catch (InterruptedException e) {
                             fireErrorEvent(e);
                         }
-                        
-                    } else {
-                        
+                    } else if (layer instanceof ZGroupLayer) {
                         try {
-
+                            ZGroupLayer zGroup = (ZGroupLayer) layer;
+                            zGroup.drawFeatures(compositingGraphic, this, layerId);
+                        } catch (Throwable t) {
+                            fireErrorEvent(t);
+                        }
+                    } else {
+                        try {
                             // extract the feature type stylers from the style object
                             // and process them
                             processStylers(compositingGraphic, layer, layerId);

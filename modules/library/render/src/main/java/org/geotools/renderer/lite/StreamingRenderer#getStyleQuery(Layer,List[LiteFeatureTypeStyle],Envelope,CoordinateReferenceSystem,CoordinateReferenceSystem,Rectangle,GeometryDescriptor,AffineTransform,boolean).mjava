@@ -48,20 +48,21 @@
      * Default visibility for testing purposes
      */
 
-    Query getStyleQuery(FeatureSource<FeatureType, Feature> source,
-            FeatureType schema, List<LiteFeatureTypeStyle> styleList,
+    Query getStyleQuery(Layer layer, List<LiteFeatureTypeStyle> styleList,
             Envelope mapArea, CoordinateReferenceSystem mapCRS,
             CoordinateReferenceSystem featCrs, Rectangle screenSize,
             GeometryDescriptor geometryAttribute,
-            AffineTransform worldToScreenTransform, boolean renderingTransformation)
+            AffineTransform worldToScreenTransform, boolean hasRenderingTransformation)
             throws IllegalFilterException, IOException, FactoryException {
+        FeatureSource<FeatureType, Feature> source = (FeatureSource<FeatureType, Feature>) layer.getFeatureSource();
+        FeatureType schema = source.getSchema();
         Query query = new Query(Query.ALL);
         Filter filter = null;
         
         // if map extent are not already expanded by a constant buffer, try to compute a layer
         // specific one based on stroke widths
         if(getRenderingBuffer() == 0) {
-            metaBuffer = findRenderingBuffer(styleList);
+            int metaBuffer = findRenderingBuffer(styleList);
             if (metaBuffer > 0) {
                 mapArea = expandEnvelope(mapArea, worldToScreenTransform,
                         metaBuffer);
@@ -76,6 +77,7 @@
                     }
                 }
             }
+            setMetaBuffer(styleList, metaBuffer);
         }
         
         // take care of rendering transforms
@@ -102,9 +104,11 @@
             // enable advanced projection handling with the updated map extent
             if (isAdvancedProjectionHandlingEnabled()) {
                 // get the projection handler and set a tentative envelope
-                projectionHandler = ProjectionHandlerFinder.getHandler(envelope, featCrs,
+                ProjectionHandler projectionHandler = ProjectionHandlerFinder.getHandler(envelope,
+                        featCrs,
                         isMapWrappingEnabled());
                 if (projectionHandler != null) {
+                    setProjectionHandler(styleList, projectionHandler);
                     envelopes = projectionHandler.getQueryEnvelopes();
                 }
             }
@@ -127,9 +131,6 @@
             query.setProperties(attributes);
             processRuleForQuery(styleList, query);
 
-            // get the eventual sort-by from the styles
-            SortBy[] sortBy = getSortByFromLiteStyles(styleList);
-            query.setSortBy(sortBy);
         } catch (Exception e) {
             final Exception txException = new Exception("Error transforming bbox", e);
             LOGGER.log(Level.SEVERE, "Error querying layer", txException);
@@ -154,6 +155,18 @@
 
         }
 
+        // get the eventual sort-by from the styles
+        SortBy[] sortBy = getSortByFromLiteStyles(styleList);
+        if(sortBy != null) {
+            QueryCapabilities qc = source.getQueryCapabilities();
+            if (qc != null && !qc.supportsSorting(sortBy)) {
+                throw new IllegalArgumentException("The feature source in layer " + layer.getTitle()
+                        + " cannot sort on " + Arrays.toString(sortBy));
+            }
+            query.setSortBy(sortBy);
+        }
+        
+        
         // prepare hints
         // ... basic one, we want fast and compact coordinate sequences and geometries optimized
         // for the collection of one item case (typical in shapefiles)
@@ -186,12 +199,12 @@
                     }
                 }
             
-                if(renderingTransformation) {
+                if(hasRenderingTransformation) {
                     // the RT might need valid geometries, we can at most apply a topology
                     // preserving generalization
                     if(fsHints.contains(Hints.GEOMETRY_GENERALIZATION)) {
                         hints.put(Hints.GEOMETRY_GENERALIZATION, distance);
-                        inMemoryGeneralization = false;
+                        disableInMemoryGeneralization(styleList);
                     }
                 } else {
                     // ... if possible we let the datastore do the generalization
@@ -199,7 +212,7 @@
                         // good, we don't need to perform in memory generalization, the datastore
                         // does it all for us
                         hints.put(Hints.GEOMETRY_SIMPLIFICATION, distance);
-                        inMemoryGeneralization = false;
+                        disableInMemoryGeneralization(styleList);
                     } else if(fsHints.contains(Hints.GEOMETRY_DISTANCE)) {
                         // in this case the datastore can get us close, but we can still
                         // perform some in memory generalization

@@ -4,9 +4,10 @@
      * 
      * 
      * @return ArrayList<LiteFeatureTypeStyle>
+     * @throws FactoryException
      */
-    private ArrayList<LiteFeatureTypeStyle> createLiteFeatureTypeStyles(Layer layer,
-            Graphics2D graphics) throws IOException {
+    ArrayList<LiteFeatureTypeStyle> createLiteFeatureTypeStyles(Layer layer,
+            Graphics2D graphics, boolean optimizedFTSRendering) throws IOException, FactoryException {
         if (LOGGER.isLoggable(Level.FINE))
             LOGGER.fine("creating rules for scale denominator - "
                     + NumberFormat.getNumberInstance().format(scaleDenominator));
@@ -33,7 +34,7 @@
 
                 // we can optimize this one and draw directly on the graphics, assuming
                 // there is no composition
-                if (!foundComposite && (result.isEmpty() || !isOptimizedFTSRenderingEnabled())) {
+                if (!foundComposite && (result.isEmpty() || !optimizedFTSRendering)) {
                     lfts = new LiteFeatureTypeStyle(layer, graphics, ruleList,
                             elseRuleList, fts.getTransformation());
                 } else {
@@ -60,6 +61,14 @@
                                                    
                 result.add(lfts);
             }
+        }
+
+        if (!result.isEmpty()) {
+            // make sure all spatial filters in the feature source native SRS
+            reprojectSpatialFilters(result, layer.getFeatureSource().getSchema());
+
+            // apply the uom and dpi rescale
+            applyUnitRescale(result);
         }
 
         return result;
