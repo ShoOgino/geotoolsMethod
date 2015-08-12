@@ -8,13 +8,13 @@
         if(metadataBboxEnabled) {
             String tableName = featureType.getTypeName();
         
-            Statement st = null;
+            PreparedStatement st = null;
             ResultSet rs = null;
+            String sql;
          
             List<ReferencedEnvelope> result = new ArrayList<ReferencedEnvelope>();
             Savepoint savePoint = null;
             try {
-                st = cx.createStatement();
                 if(!cx.getAutoCommit()) {
                     savePoint = cx.setSavepoint();
                 }
@@ -22,14 +22,14 @@
                 for (AttributeDescriptor att : featureType.getAttributeDescriptors()) {
                     if (att instanceof GeometryDescriptor) {
                         String columnName = att.getName().getLocalPart();
-                        StringBuffer sql = new StringBuffer();
                         // check if we can access the MDSYS.USER_SDO_GEOM_METADATA table
                         if (canAccessUserViews(cx)) {
-                            sql.append("SELECT DIMINFO FROM MDSYS.USER_SDO_GEOM_METADATA WHERE ");
-                            sql.append( "TABLE_NAME='").append( tableName.toUpperCase() ).append("' AND ");
-                            sql.append( "COLUMN_NAME='").append( columnName.toUpperCase() ).append( "'");
+                            sql = "SELECT DIMINFO FROM MDSYS.USER_SDO_GEOM_METADATA WHERE TABLE_NAME = ? AND COLUMN_NAME = ?";
                             
-                            rs = st.executeQuery(sql.toString());
+                            st = cx.prepareStatement(sql);
+                            st.setString(1, tableName.toUpperCase());
+                            st.setString(2, columnName.toUpperCase());
+                            rs = st.executeQuery();
                             
                             if (rs.next()) {
                                 // decode the dimension info
@@ -44,17 +44,24 @@
                                     continue;
                                 }
                             }
-                            rs.close();
+                            dataStore.closeSafe(rs);
+                            dataStore.closeSafe(st);
                         }
                         // if we could not retrieve the envelope from USER_SDO_GEOM_METADATA,
                         // try from ALL_SDO_GEOM_METADATA
-                        sql = new StringBuffer("SELECT DIMINFO FROM MDSYS.ALL_SDO_GEOM_METADATA WHERE ");
-                        sql.append( "TABLE_NAME='").append( tableName.toUpperCase() ).append("' AND ");
-                        sql.append( "COLUMN_NAME='").append( columnName.toUpperCase() ).append( "'");
-                        if(schema != null)
-                            sql.append(" AND OWNER='" + schema + "'");                  
-                                
-                        rs = st.executeQuery(sql.toString());
+                        sql = "SELECT DIMINFO FROM MDSYS.ALL_SDO_GEOM_METADATA WHERE TABLE_NAME = ? AND COLUMN_NAME = ?";
+                        if(schema != null) {
+                            sql += " AND OWNER = ?";
+                        }
+                        st = cx.prepareStatement(sql);
+                        st.setString(1, tableName.toUpperCase());
+                        st.setString(2, columnName.toUpperCase());
+                        
+                        if(schema != null) {
+                            st.setString(3, schema);
+                        }
+                        
+                        rs = st.executeQuery();
 
                         if (rs.next()) {
                             // decode the dimension info
@@ -67,7 +74,9 @@
                                 result.add(new ReferencedEnvelope(env, crs));
                             }
                         }
-                        rs.close();
+
+                        dataStore.closeSafe(rs);
+                        dataStore.closeSafe(st);
                     }
                 }
             } catch(SQLException e) {
