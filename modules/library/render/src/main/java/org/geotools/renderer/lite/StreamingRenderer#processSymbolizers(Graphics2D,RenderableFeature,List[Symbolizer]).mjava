@@ -1,0 +1,120 @@
+    /**
+     * Applies each of a set of symbolizers in turn to a given feature.
+     * <p>
+     * This is an internal method and should only be called by processStylers.
+     * </p>
+     * @param currLayer 
+     * 
+     * @param graphics
+     * @param drawMe
+     *            The feature to be rendered
+     * @param symbolizers
+     *            An array of symbolizers which actually perform the rendering.
+     *            The scale range we are working on... provided in order to make
+     *            the style factory happy
+     * @param shape
+     * @param destinationCrs
+     * @param layerId 
+     * @throws TransformException
+     * @throws FactoryException
+     */
+    private void processSymbolizers(final Graphics2D graphics,
+            final RenderableFeature drawMe,
+            final List<Symbolizer> symbolizers)
+            throws Exception {
+        int paintCommands = 0;
+        
+        for (Symbolizer symbolizer : symbolizers) {
+
+            // /////////////////////////////////////////////////////////////////
+            //
+            // RASTER
+            //
+            // /////////////////////////////////////////////////////////////////
+            if (symbolizer instanceof RasterSymbolizer) {
+                // grab the grid coverage
+                GridCoverage2D coverage = null;
+                boolean disposeCoverage = false;
+                
+                try {
+                    // //
+                    // It is a grid coverage
+                    // //
+                    final Object grid = gridPropertyName.evaluate(drawMe.feature);
+                    if (grid instanceof GridCoverage2D) {
+                        coverage = (GridCoverage2D) grid;
+                        if (coverage != null) {
+                            disposeCoverage = grid instanceof DisposableGridCoverage;
+                            requests.put(new RenderRasterRequest(graphics, coverage,
+                                    disposeCoverage, (RasterSymbolizer) symbolizer, destinationCrs,
+                                    worldToScreenTransform));
+                            paintCommands++;
+                        }
+                    } else if (grid instanceof GridCoverage2DReader) {
+                        final GeneralParameterValue[] params = (GeneralParameterValue[]) paramsPropertyName
+                                .evaluate(drawMe.feature);
+                        GridCoverage2DReader reader = (GridCoverage2DReader) grid;
+                        requests.put(new RenderCoverageReaderRequest(graphics, reader, params,
+                                (RasterSymbolizer) symbolizer, destinationCrs,
+                                worldToScreenTransform,
+                                getRenderingInterpolation(drawMe.layer)));
+                    }
+                } catch (IllegalArgumentException e) {
+                    LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
+                    fireErrorEvent(e);
+                }
+            } else {
+
+                // /////////////////////////////////////////////////////////////////
+                //
+                // FEATURE
+                //
+                // /////////////////////////////////////////////////////////////////
+                LiteShape2 shape = drawMe.getShape(symbolizer, worldToScreenTransform);
+                if(shape == null) {
+                    continue;
+                }
+                
+                if (symbolizer instanceof TextSymbolizer && drawMe.feature instanceof Feature) {
+                    labelCache.put(drawMe.layerId, (TextSymbolizer) symbolizer, drawMe.feature,
+                            shape,
+                            null);
+                    paintCommands++;
+                } else {
+                    Style2D style = styleFactory.createStyle(drawMe.feature, symbolizer);
+                    
+                    // clip to the visible area + the size of the symbolizer (with some extra 
+                    // to make sure we get no artefacts from polygon new borders)
+                    double size = RendererUtilities.getStyle2DSize(style);
+                    // take into account the meta buffer to try and clip all geometries by the same
+                    // amount
+                    double clipBuffer = Math.max(size / 2, drawMe.metaBuffer) + 10;
+                    Envelope env = new Envelope(screenSize.getMinX(), screenSize.getMaxX(), screenSize.getMinY(), screenSize.getMaxY());
+                    env.expandBy(clipBuffer);
+                    final GeometryClipper clipper = new GeometryClipper(env);
+                    Geometry g = clipper.clip(shape.getGeometry(), false);
+                    if(g == null) {
+                        continue;
+                    }
+                    if(g != shape.getGeometry()) {
+                        shape = new LiteShape2(g, null, null, false);
+                    }
+                    
+                    PaintShapeRequest paintShapeRequest = 
+                        new PaintShapeRequest(graphics, shape, style, scaleDenominator);
+                    if (symbolizer.hasOption("labelObstacle")) {
+                        paintShapeRequest.setLabelObstacle(true);
+                    }
+                    requests.put(paintShapeRequest);
+                    paintCommands++;
+                }
+
+            }
+        }
+        // only emit a feature drawn event if we actually painted something with it, 
+        // if it has been clipped out or eliminated by the screenmap we won't emit the event instead
+        if(paintCommands > 0) {
+            requests.put(new FeatureRenderedRequest(drawMe.feature));
+        }
+    }
+
