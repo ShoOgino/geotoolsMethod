@@ -1,0 +1,69 @@
+    private List<ZGroupLayerPainter> buildLayerPainters(Graphics2D graphics,
+            StreamingRenderer renderer, String layerId, ProgressListener cancellationListener)
+                    throws IOException, FactoryException, NoninvertibleTransformException,
+                    SchemaException, TransformException {
+        List<ZGroupLayerPainter> painters = new ArrayList<>();
+        boolean closePainters = true;
+        try {
+            for (Layer layer : layers) {
+                // get the LiteFeatureTypeStyle for this layer
+                final FeatureSource featureSource = layer.getFeatureSource();
+                if (featureSource == null) {
+                    throw new IllegalArgumentException(
+                            "The layer does not contain a feature source");
+                }
+                final FeatureType schema = featureSource.getSchema();
+
+                final ArrayList<LiteFeatureTypeStyle> lfts = renderer
+                        .createLiteFeatureTypeStyles(layer, graphics, false);
+                if (lfts.isEmpty()) {
+                    continue;
+                } else {
+                    if (LOGGER.isLoggable(Level.FINE)) {
+                        LOGGER.fine(
+                                "Processing " + lfts.size() + " stylers for " + schema.getName());
+                    }
+                }
+
+                // get the feature iterator we need
+                FeatureCollection features = renderer.getFeatures(layer, schema, lfts);
+                // While we could use a non mark feature iterator for single fts layers,
+                // that would cause multiple connections to be open at the same time,
+                // which in turn could cause deadlocks against connection pools, so we
+                // are going to build a MarkFeatureIterator regardless
+                // TODO: we could optimize down to simple streaming painting if we end up
+                // with a single painter with a single fts (due to scale dependencies)
+                // but we'd have to delay opening the MarkFeatureIterator to recognize the
+                // situation
+                int maxFeatures = SortedFeatureReader.getMaxFeaturesInMemory(layer.getQuery());
+                MarkFeatureIterator fi = MarkFeatureIterator.create(features,
+                        maxFeatures, cancellationListener);
+                if (fi.hasNext()) {
+                    ZGroupLayerPainter painter = new ZGroupLayerPainter(fi, lfts, renderer,
+                            layerId);
+                    painters.add(painter);
+                } else {
+                    fi.close();
+                }
+            }
+
+            // got to the end cleanly, no need to close the painters accumulated so far
+            closePainters = false;
+        } finally {
+            if (closePainters) {
+                for (ZGroupLayerPainter painter : painters) {
+                    try {
+                        painter.close();
+                    } catch (Exception e) {
+                        LOGGER.log(Level.FINE, "Failed to close cleanly layer painter " + painter,
+                                e);
+                    }
+                }
+            }
+        }
+
+        validateSortBy(painters);
+
+        return painters;
+    }
+

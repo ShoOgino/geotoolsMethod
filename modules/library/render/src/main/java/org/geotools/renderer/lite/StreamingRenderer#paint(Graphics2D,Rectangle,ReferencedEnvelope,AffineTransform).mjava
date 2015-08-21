@@ -112,11 +112,14 @@
                 throw new IllegalStateException("Cannot call paint, you did not set a MapContent in this renderer");
             }
             
+            // re-organize the map content and generate the z group layers
+            MapContent zGroupedMapContent = ZGroupLayerFactory.filter(mapContent);
+
             // split over multiple map contents, one per composition base
-            List<CompositingGroup> compositingGroups = CompositingGroup.splitOnCompositingBase(
-                    graphics, paintArea, mapContent);
+            List<CompositingGroup> compositingGroups = CompositingGroup
+                    .splitOnCompositingBase(graphics, paintArea, zGroupedMapContent);
             
-            int layerId = 0;
+            int layerCounter = 0;
             for (CompositingGroup compositingGroup : compositingGroups) {
                 MapContent currentMapContent = compositingGroup.mapContent;
                 Graphics2D compositingGraphic = compositingGroup.graphics;
@@ -133,7 +136,8 @@
                 }
                 
                 for (Layer layer : currentMapContent.layers()) {
-                    layerId++;
+                    layerCounter++;
+                    String layerId = String.valueOf(layerCounter);
                     if (!layer.isVisible()) {
                         // Only render layer when layer is visible
                         continue;
@@ -142,8 +146,8 @@
                     if (renderingStopRequested) {
                         return;
                     }
-                    labelCache.startLayer(String.valueOf(layerId));
-                    
+
+                    labelCache.startLayer(layerId);
                     if (layer instanceof DirectLayer) {
                         RenderingRequest request = new RenderDirectLayerRequest(compositingGraphic,
                                 (DirectLayer) layer);
@@ -152,21 +156,24 @@
                         } catch (InterruptedException e) {
                             fireErrorEvent(e);
                         }
-                        
-                    } else {
-                        
+                    } else if (layer instanceof ZGroupLayer) {
                         try {
-
+                            ZGroupLayer zGroup = (ZGroupLayer) layer;
+                            zGroup.drawFeatures(compositingGraphic, this, layerId);
+                        } catch (Throwable t) {
+                            fireErrorEvent(t);
+                        }
+                    } else {
+                        try {
                             // extract the feature type stylers from the style object
                             // and process them
-                            processStylers(compositingGraphic, layer, worldToScreenTransform,
-                                    destinationCrs, mapExtent, screenSize, layerId + "");
+                            processStylers(compositingGraphic, layer, layerId);
                         } catch (Throwable t) {
                             fireErrorEvent(t);
                         }
                     }
         
-                    labelCache.endLayer(String.valueOf(layerId), graphics, screenSize);
+                    labelCache.endLayer(layerId, graphics, screenSize);
                 }
                 
                 // have we been painting on a back buffer? If so, merge on the main graphic

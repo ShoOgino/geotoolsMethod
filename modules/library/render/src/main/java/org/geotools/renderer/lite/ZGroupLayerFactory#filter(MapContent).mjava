@@ -1,0 +1,62 @@
+    /**
+     * Filters a MapContent and returns a new one where adjacent {@link FeatureTypeStyle} using the
+     * same {@link FeatureTypeStyle#SORT_BY_GROUP} key are turned into {@link ZGroupLayer}
+     * 
+     * @param mapContent
+     * @return
+     */
+    public static MapContent filter(MapContent mapContent) {
+        // Quick check, do we have any z-group to care for? For the common
+        // case of not having z-groups, we want to avoid building a new object and
+        // go though the complex splitting and checking logic
+        // Also check that the usage of groups is not made in conjunction with incompatible
+        // functionality
+        if (!hasZGroup(mapContent, false)) {
+            return mapContent;
+        }
+
+        // build a new map content where the z-groups are munched toghether into ZGroupLayer
+        MapContent result = new MapContent();
+        result.getViewport().setCoordinateReferenceSystem(
+                mapContent.getViewport().getCoordinateReferenceSystem());
+        result.getViewport().setBounds(mapContent.getViewport().getBounds());
+        ZGroupLayer currentGroup = null;
+        for (Layer layer : mapContent.layers()) {
+            if (layer instanceof DirectLayer) {
+                result.layers().add(layer);
+                currentGroup = null;
+            } else {
+                // in case this layer is clean, eventually dump the current group, dump the
+                // layer, and move on
+                if (!hasZGroup(layer, true)) {
+                    if (currentGroup != null) {
+                        result.layers().add(currentGroup);
+                        currentGroup = null;
+                    }
+                    result.layers().add(layer);
+                } else {
+                    // reorganize the layer in z-groups, and eventually attach to the current one
+                    List<Layer> zGroupLayers = arrangeOnZGroups(layer, currentGroup);
+                    // if the last in the list is a z-group, it's the new current, we don't
+                    // want to add it into the MapContent yet, might join with the next layer
+                    if (zGroupLayers.get(zGroupLayers.size() - 1) instanceof ZGroupLayer) {
+                        currentGroup = (ZGroupLayer) zGroupLayers.remove(zGroupLayers.size() - 1);
+                    } else {
+                        currentGroup = null;
+                    }
+                    // dump the rest
+                    for (Layer l : zGroupLayers) {
+                        result.layers().add(l);
+                    }
+                }
+            }
+        }
+        // dump the last group, if any
+        if (currentGroup != null) {
+            result.layers().add(currentGroup);
+        }
+
+        return result;
+
+    }
+

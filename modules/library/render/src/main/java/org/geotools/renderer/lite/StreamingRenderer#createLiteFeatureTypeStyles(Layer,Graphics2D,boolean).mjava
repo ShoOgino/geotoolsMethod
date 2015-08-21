@@ -1,0 +1,76 @@
+    /**
+     * creates a list of LiteFeatureTypeStyles a) out-of-scale rules removed b) incompatible
+     * FeatureTypeStyles removed
+     * 
+     * 
+     * @return ArrayList<LiteFeatureTypeStyle>
+     * @throws FactoryException
+     */
+    ArrayList<LiteFeatureTypeStyle> createLiteFeatureTypeStyles(Layer layer,
+            Graphics2D graphics, boolean optimizedFTSRendering) throws IOException, FactoryException {
+        if (LOGGER.isLoggable(Level.FINE))
+            LOGGER.fine("creating rules for scale denominator - "
+                    + NumberFormat.getNumberInstance().format(scaleDenominator));
+        ArrayList<LiteFeatureTypeStyle> result = new ArrayList<LiteFeatureTypeStyle>();
+
+        LiteFeatureTypeStyle lfts;
+        boolean foundComposite = false;
+        for (FeatureTypeStyle fts : layer.getStyle().featureTypeStyles()) {
+            if (isFeatureTypeStyleActive(layer.getFeatureSource().getSchema(), fts)) {
+                // DJB: this FTS is compatible with this FT.
+
+                // get applicable rules at the current scale
+                List<List<Rule>> splittedRules = splitRules(fts);
+                List<Rule> ruleList = splittedRules.get(0);
+                List<Rule> elseRuleList = splittedRules.get(1);
+
+                // if none, skip it
+                if ((ruleList.isEmpty()) && (elseRuleList.isEmpty()))
+                    continue;
+
+                // get the fts level composition, if any
+                Composite composite = styleFactory.getComposite(fts.getOptions());
+                foundComposite |= composite != null;
+
+                // we can optimize this one and draw directly on the graphics, assuming
+                // there is no composition
+                if (!foundComposite && (result.isEmpty() || !optimizedFTSRendering)) {
+                    lfts = new LiteFeatureTypeStyle(layer, graphics, ruleList,
+                            elseRuleList, fts.getTransformation());
+                } else {
+                    lfts = new LiteFeatureTypeStyle(layer,
+                            new DelayedBackbufferGraphic(graphics, screenSize), 
+                            ruleList, elseRuleList, fts.getTransformation());
+                }
+                lfts.composite = composite;
+                if (FeatureTypeStyle.VALUE_EVALUATION_MODE_FIRST.equals(fts.getOptions().get(
+                        FeatureTypeStyle.KEY_EVALUATION_MODE))) {
+                    lfts.matchFirst = true;
+                }
+
+                // get the sort by, if any
+                SortBy[] sortBy = styleFactory.getSortBy(fts.getOptions());
+                lfts.sortBy = sortBy;
+
+                if (screenMapEnabled(lfts)) {
+                    int renderingBuffer = getRenderingBuffer();
+                    lfts.screenMap = new ScreenMap(screenSize.x - renderingBuffer, screenSize.y
+                            - renderingBuffer, screenSize.width + renderingBuffer * 2,
+                            screenSize.height + renderingBuffer * 2);
+                }
+                                                   
+                result.add(lfts);
+            }
+        }
+
+        if (!result.isEmpty()) {
+            // make sure all spatial filters in the feature source native SRS
+            reprojectSpatialFilters(result, layer.getFeatureSource().getSchema());
+
+            // apply the uom and dpi rescale
+            applyUnitRescale(result);
+        }
+
+        return result;
+    }
+
