@@ -24,7 +24,24 @@
         // to synchronize this call so that only one of these operations is active at any time
         synchronized(Schemas.class) {
             xsdMainResource.load(resourceSet.getLoadOptions());
-            return xsdMainResource.getSchema();
+            XSDSchema schema = xsdMainResource.getSchema();
+
+            if (schema != null) {
+                // if schema contains no element declarations, nor type definitions,
+                // force import of external schemas (if any), since it does not happen automatically;
+                // import can be forced no matter what is in the importing schema by setting
+                // the system property "org.geotools.xml.forceSchemaImport" to "true".
+                String forceSchemaImport = System.getProperty(FORCE_SCHEMA_IMPORT);
+                boolean alwaysForce = false;
+                if (forceSchemaImport != null) {
+                    alwaysForce = forceSchemaImport.equalsIgnoreCase("true");
+                }
+                if (alwaysForce || hasNoElementsNorTypes(schema)) {
+                    forceImport((XSDSchemaImpl) schema);
+                }
+            }
+
+            return schema;
         }
     }
 
