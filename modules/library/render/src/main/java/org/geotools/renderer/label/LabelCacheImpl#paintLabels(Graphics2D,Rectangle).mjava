@@ -7,6 +7,11 @@
         LabelIndex glyphs = new LabelIndex();
         glyphs.reserveArea( reserved );
 
+        //Used to check the paintLineLabel function
+        boolean painted;
+        int nonPaintedLineLabels = 0;
+        int paintedLineLabels = 0;
+
         // Hack: let's reduce the display area width and height by one pixel.
         // If the rendered image is 256x256, proper rendering of polygons and
         // lines occurr only if the display area is [0,0; 256,256], yet if you
@@ -57,8 +62,15 @@
                 if ((geom instanceof Point) || (geom instanceof MultiPoint))
                     paintPointLabel(painter, tempTransform, displayArea, glyphs);
                 else if (((geom instanceof LineString) && !(geom instanceof LinearRing))
-                        || (geom instanceof MultiLineString))
-                    paintLineLabels(painter, tempTransform, displayArea, glyphs);
+                        || (geom instanceof MultiLineString)){
+                     if(!DISABLE_LETTER_LEVEL_CONFLICT)
+                         painted = paintLineLabelsWithLetterConflict(painter, tempTransform, displayArea, glyphs);
+                     else
+                         painted = paintLineLabels(painter, tempTransform, displayArea, glyphs);
+                     if (!painted){
+                         nonPaintedLineLabels++;
+                     } else paintedLineLabels++;
+                }
                 else if (geom instanceof Polygon || geom instanceof MultiPolygon
                         || geom instanceof LinearRing)
                     paintPolygonLabel(painter, tempTransform, displayArea, glyphs);
@@ -69,5 +81,9 @@
                 e.printStackTrace();
             }
         }
+        //Output for line labels
+        LOGGER.log(Level.FINE, "TOTAL LINE LABELS : {0}", items.size());
+        LOGGER.log(Level.FINE, "PAINTED LINE LABELS : {0}", paintedLineLabels);
+        LOGGER.log(Level.FINE, "REMAINING LINE LABELS : {0}", nonPaintedLineLabels);
     }
 
