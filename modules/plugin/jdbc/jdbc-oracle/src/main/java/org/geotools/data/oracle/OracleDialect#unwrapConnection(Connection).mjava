@@ -16,6 +16,7 @@
             // OracleConnection. Maintain a map of UnWrappers to avoid searching
             // the registry every time we need to unwrap.
             Connection testCon = cx;
+            Connection toUnwrap;
             do {
                 UnWrapper unwrapper = uwMap.get(testCon.getClass());
                 if (unwrapper == null) {
@@ -26,14 +27,15 @@
                     uwMap.put(testCon.getClass(), unwrapper);
                 }
                 if (unwrapper == UNWRAPPER_NOT_FOUND) {
-                    // give up and try legacy approaches below
+                    // give up and do Java 6 unwrap below
                     break;
                 }
+                toUnwrap = testCon;
                 testCon = unwrapper.unwrap(testCon);
                 if (testCon instanceof OracleConnection) {
                     return (OracleConnection) testCon;
                 }
-            } while (testCon != null);
+            } while (testCon != null && testCon != toUnwrap);
 
             if (cx instanceof Wrapper) {
                 // try to use java 6 unwrapping
