@@ -84,7 +84,7 @@
                     Style2D style = styleFactory.createStyle(drawMe.feature, symbolizer);
                     
                     // clip to the visible area + the size of the symbolizer (with some extra 
-                    // to make sure we get no artefacts from polygon new borders)
+                    // to make sure we get no artifacts from polygon new borders)
                     double size = RendererUtilities.getStyle2DSize(style);
                     // take into account the meta buffer to try and clip all geometries by the same
                     // amount
@@ -92,11 +92,37 @@
                     Envelope env = new Envelope(screenSize.getMinX(), screenSize.getMaxX(), screenSize.getMinY(), screenSize.getMaxY());
                     env.expandBy(clipBuffer);
                     final GeometryClipper clipper = new GeometryClipper(env);
-                    Geometry g = clipper.clip(shape.getGeometry(), false);
+                    Geometry source = shape.getGeometry();
+                    // we need to preserve the topology if we end up applying buffer for perp. offset
+                    boolean preserveTopology = style instanceof LineStyle2D && ((LineStyle2D) style).getPerpendicularOffset() != 0 &&
+                            (source instanceof Polygon || source instanceof MultiPolygon);
+                    Geometry g = clip(shape.getGeometry(), clipper, preserveTopology);
+                    // handle perpendincular offset as needed
+                    if(style instanceof LineStyle2D && ((LineStyle2D) style).getPerpendicularOffset() != 0) {
+                        LineStyle2D ls = (LineStyle2D) style;
+                        double offset = ls.getPerpendicularOffset();
+                        // people applying an offset on a polygon really expect a buffer instead,
+                        // do so... however buffering is damn expensive, so let's apply some heuristics
+                        // to still run the offset curve builder for the simplest cases
+                        if(source instanceof Polygon || source instanceof MultiPolygon && abs(offset) > 3) {
+                            // buffering is expensive, we can be a bit off with the 
+                            // result, do simplify the geometry first 
+                            Geometry simplified = TopologyPreservingSimplifier.simplify(source, Math.max(abs(offset) / 10, 1));
+                            try {
+                                g = simplified.buffer(offset);
+                            } catch(Exception e) {
+                                LOGGER.log(Level.FINE, "Failed to apply JTS buffer to the geometry, falling back on the offset curve builder", e);
+                                OffsetCurveBuilder offseter = new OffsetCurveBuilder(offset);
+                                g = offseter.offset(g);
+                            }
+                        } else {
+                            OffsetCurveBuilder offseter = new OffsetCurveBuilder(offset);
+                            g = offseter.offset(g);
+                        }
+                    }
                     if(g == null) {
                         continue;
-                    }
-                    if(g != shape.getGeometry()) {
+                    } else {
                         shape = new LiteShape2(g, null, null, false);
                     }
                     
