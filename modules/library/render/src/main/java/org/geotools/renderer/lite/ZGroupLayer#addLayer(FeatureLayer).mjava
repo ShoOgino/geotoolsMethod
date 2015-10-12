@@ -1,0 +1,36 @@
+    public void addLayer(FeatureLayer layer) {
+        List<FeatureTypeStyle> featureTypeStyles = layer.getStyle().featureTypeStyles();
+        boolean cleanupStyle = false;
+        for (FeatureTypeStyle fts : featureTypeStyles) {
+            Map<String, String> options = fts.getOptions();
+            String compositingBaseDefinition = options.get(FeatureTypeStyle.COMPOSITE_BASE);
+            if("true".equalsIgnoreCase(compositingBaseDefinition)) {
+                this.compositingBase = true;
+            }
+            // cannot really rely on equals here, we use a simple "last one wins" logic
+            Composite composite = SLDStyleFactory.getComposite(options);
+            if(composite != null) {
+                this.composite = composite;
+                cleanupStyle = true;
+            }
+        }
+        // compositing is now handled at the ZGroupLayer level, remove it from the 
+        // inner layer
+        if(cleanupStyle) {
+            DuplicatingStyleVisitor cleaner = new DuplicatingStyleVisitor() {
+                @Override
+                public void visit(FeatureTypeStyle fts) {
+                    super.visit(fts);
+                    FeatureTypeStyle copy = (FeatureTypeStyle) pages.peek();
+                    copy.getOptions().remove(FeatureTypeStyle.COMPOSITE);
+                    copy.getOptions().remove(FeatureTypeStyle.COMPOSITE_BASE);
+                }
+            };
+            layer.getStyle().accept(cleaner);
+            Style cleaned = (Style) cleaner.getCopy();
+            layer.setStyle(cleaned);
+        }
+        
+        layers.add(layer);
+    }
+
