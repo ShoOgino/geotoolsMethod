@@ -1,0 +1,29 @@
+        @Override
+        public void postInsert(SimpleFeatureType featureType, Collection<SimpleFeature> features,
+                               PreparedStatement ps) throws SQLException {
+            if (!isPostInsert()) {
+                return;
+            }
+            final ResultSet rs = ps.getGeneratedKeys();
+            try {
+                final Iterator<SimpleFeature> it = features.iterator();
+                final List<Object> keyValues = new ArrayList<>(key.getColumns().size());
+                while (rs.next()) {
+                    final SimpleFeature feature = it.next();
+                    // Need to access the values by index instead of name because of a limitation in
+                    // Oracle. It is assumed the result set contains only the keys and in the
+                    // correct order since they where declared like that when the PreparedStatement
+                    // was created.
+                    for (int index = 1; index <= key.getColumns().size(); ++index) {
+                        keyValues.add(rs.getObject(index));
+                    }
+                    String fid = featureType.getTypeName() + "." +
+                            JDBCDataStore.encodeFID(keyValues);
+                    feature.getUserData().put("fid", fid);
+                    keyValues.clear();
+                }
+            } finally {
+                rs.close();
+            }
+        }
+

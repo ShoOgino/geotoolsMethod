@@ -1,0 +1,56 @@
+    /**
+     * Build the insert statement that will be used in a PreparedStatement.
+     */
+    private String buildInsertPS(InsertionClassifier kind,
+                                 SimpleFeatureType featureType, KeysFetcher keysFetcher,
+                                 PreparedStatementSQLDialect dialect) throws SQLException {
+        StringBuffer sql = new StringBuffer();
+        sql.append("INSERT INTO ");
+        encodeTableName(featureType.getTypeName(), sql, null);
+
+        // column names
+        sql.append(" ( ");
+
+        for (int i = 0; i < featureType.getAttributeCount(); i++) {
+            String colName = featureType.getDescriptor(i).getLocalName();
+            // skip the pk columns in case we have exposed them
+            if(keysFetcher.isKey(colName)) {
+                continue;
+            }
+
+            dialect.encodeColumnName(null, colName, sql);
+            sql.append(",");
+        }
+
+        // primary key values
+        keysFetcher.addKeyColumns(sql);
+        sql.setLength(sql.length() - 1);  // remove the last coma
+
+        // values
+        sql.append(" ) VALUES ( ");
+        for (AttributeDescriptor att : featureType.getAttributeDescriptors()) {
+            String colName = att.getLocalName();
+            // skip the pk columns in case we have exposed them, we grab the
+            // value from the pk itself
+            if(keysFetcher.isKey(colName)) {
+                continue;
+            }
+
+            // geometries might need special treatment, delegate to the dialect
+            if(att instanceof GeometryDescriptor) {
+                Class<? extends Geometry> geometryClass =
+                        kind.geometryTypes.get(att.getName().getLocalPart());
+                dialect.prepareGeometryValue(geometryClass, getDescriptorDimension(att),
+                        getDescriptorSRID(att), att.getType().getBinding(), sql);
+            } else {
+                sql.append("?");
+            }
+            sql.append(",");
+        }
+        keysFetcher.addKeyBindings(sql);
+
+        sql.setLength(sql.length()-1);
+        sql.append(")");
+        return sql.toString();
+    }
+
