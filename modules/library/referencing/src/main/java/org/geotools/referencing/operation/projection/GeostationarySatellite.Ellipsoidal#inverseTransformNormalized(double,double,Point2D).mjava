@@ -1,0 +1,29 @@
+        @Override
+        protected Point2D inverseTransformNormalized(double x, double y, Point2D p2d) throws ProjectionException {
+            // from https://github.com/OSGeo/proj.4/blob/4.9/src/PJ_geos.c
+            /* Setting three components of vector from satellite to position.*/
+            double Vx = -1.;
+            double Vy = Math.tan(x / radius_g_1);
+            double Vz = Math.tan(y / radius_g_1) * Math.hypot(1., Vy);
+            /* Calculation of terms in cubic equation and determinant.*/
+            double a = Vz / radius_p;
+            a = Vy * Vy + a * a + Vx * Vx;
+            double b = 2. * radius_g * Vx;
+            double det = (b * b) - 4. * a * C;
+            if (det < 0.) {
+                throw new ProjectionException();
+            }
+            /* Calculation of three components of vector from satellite to position.*/
+            double k = (-b - Math.sqrt(det)) / (2. * a);
+            Vx = radius_g + k * Vx;
+            Vy *= k;
+            Vz *= k;
+            /* Calculation of longitude and latitude.*/
+            double lambda = Math.atan2(Vy, Vx);
+            double phi = Math.atan(Vz * Math.cos(lambda) / Vx);
+            phi = Math.atan(radius_p_inv2 * Math.tan(phi));
+            p2d.setLocation(lambda, phi);
+
+            return p2d;
+        }
+
