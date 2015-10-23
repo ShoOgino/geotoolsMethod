@@ -56,8 +56,24 @@
 
         int numSources = rasters.length;
         // Setting the source rasters for the mosaic
-        for (int i = 0; i < numSources; i++) {
-            block.setSource(rasters[i], i);
+        if(Boolean.TRUE.equals(hints.get(JAI.KEY_REPLACE_INDEX_COLOR_MODEL))) {
+            // the mosaic operation will blow up in this case, internally the Raster accessors 
+            // are not getting configured to do expansion as needed. Work around it.
+            for (int i = 0; i < numSources; i++) {
+                RenderedImage source = rasters[i];
+                if(source.getColorModel() instanceof IndexColorModel) {
+                    source = new ImageWorker(source).forceComponentColorModel().getRenderedImage();
+                }
+                block.setSource(source, i);
+            }
+            
+            hints = new Hints(hints);
+            hints.add(new RenderingHints(JAI.KEY_REPLACE_INDEX_COLOR_MODEL, Boolean.FALSE));
+            hints.add(new RenderingHints(JAI.KEY_TRANSFORM_ON_COLORMAP, Boolean.TRUE));
+        } else {
+            for (int i = 0; i < numSources; i++) {
+                block.setSource(rasters[i], i);
+            }
         }
         // Setting the nodata values for the areas not covered by any GridCoverage.
         double[] nodata = null;
