@@ -50,38 +50,17 @@
         pb.add(thresholds);
         pb.add(background);
         pb.add(nodataNew);
-        Range nod = null;
-        if (background != null && background.length > 0) {
-            // We must set the new NoData value
-            nod = (RangeFactory.create(background[0], background[0]));
-        }
-        // Setting the final ROI as union of the older ROIs
-        if(roisNew != null){
-            int numROI = roisNew.length;
-            ROI roi2 = roisNew[0];
-            ROI finalROI = roi2 != null  ? new ROI(roi2.getAsImage()) : null;//roisNew[0];
-            for(int i = 1; i < numROI; i++){
-                ROI added = roisNew[i];
-                if(added != null){
-                    if(finalROI != null){
-                        finalROI.add(added);
-                    }else{
-                        finalROI = new ROI(added.getAsImage());
-                    }
-                }
-            }
-            if(numROI != srcNum){
-                for(int i = numROI; i < srcNum; i++){
-                    RenderedImage img = (RenderedImage) pb.getSource(i);
-                    ROI r = new ROIShape(new Rectangle(img.getMinX(), img.getMinY(), img.getWidth(), img.getHeight()));
-                    finalROI.add(r);
-                }
-            }
-            setROI(finalROI);
-        }
         image = JAI.create("Mosaic", pb, getRenderingHints());
-        if(nodata != null || (!noInternalNoData && nodataNew != null)){
-            setNoData(nod);
+        // Setting the final ROI as union of the older ROIs, assuming
+        // we did not apply a background color, in that case, there is no more ROI to
+        // care for
+        if(background == null) {
+            if(roisNew != null ) {
+                ROI finalROI = mosaicROIs(pb.getSources(), roisNew);
+                setROI(finalROI);
+            }
+        } else {
+            setROI(null);
         }
         
         return this;
