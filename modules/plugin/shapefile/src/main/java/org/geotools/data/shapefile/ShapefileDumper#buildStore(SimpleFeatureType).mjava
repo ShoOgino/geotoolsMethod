@@ -1,0 +1,57 @@
+    /**
+     * Creates a shapefile data store for the specified schema
+     * 
+     * @param tempDir
+     * @param charset
+     * @param schema
+     * @return
+     * @throws MalformedURLException
+     * @throws FileNotFoundException
+     * @throws IOException
+     */
+    private ShapefileDataStore buildStore(SimpleFeatureType schema)
+            throws MalformedURLException, FileNotFoundException, IOException {
+        File file = new File(targetDirectory, schema.getTypeName() + ".shp");
+        ShapefileDataStore sfds = new ShapefileDataStore(DataUtilities.fileToURL(file));
+
+        // handle shapefile encoding
+        // and dump the charset into a .cst file, for debugging and control purposes
+        // (.cst is not a standard extension)
+        sfds.setCharset(charset);
+        File charsetFile = new File(targetDirectory, schema.getTypeName() + ".cst");
+        PrintWriter pw = null;
+        try {
+            pw = new PrintWriter(charsetFile);
+            pw.write(charset.name());
+        } finally {
+            if (pw != null)
+                pw.close();
+        }
+
+        // create the shapefile
+        try {
+            sfds.createSchema(schema);
+        } catch (NullPointerException e) {
+            LOGGER.warning(
+                    "Error in shapefile schema. It is possible you don't have a geometry set in the output. \n"
+                            + "Please specify a <wfs:PropertyName>geom_column_name</wfs:PropertyName> in the request");
+            throw new IOException(
+                    "Error in shapefile schema. It is possible you don't have a geometry set in the output.");
+        }
+
+        // create the prj file
+        try {
+            if (schema.getCoordinateReferenceSystem() != null) {
+                sfds.forceSchemaCRS(schema.getCoordinateReferenceSystem());
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Could not properly create the .prj file", e);
+        }
+        
+        // enforce the limits
+        sfds.setMaxShpSize(this.maxShpSize);
+        sfds.setMaxDbfSize(this.maxDbfSize);
+
+        return sfds;
+    }
+
