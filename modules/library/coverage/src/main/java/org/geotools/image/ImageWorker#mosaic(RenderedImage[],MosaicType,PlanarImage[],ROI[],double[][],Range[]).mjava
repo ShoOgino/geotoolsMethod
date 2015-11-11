@@ -1,5 +1,31 @@
     public ImageWorker mosaic(RenderedImage[] images, MosaicType type, PlanarImage[] alphas, ROI[] rois, double[][] thresholds,
             Range[] nodata) {
+        // check if we might be applying a background value that's not in palettes, still assuming
+        // the input images have uniform palettes
+        double[] background = this.background;
+        if(images != null && images.length > 0) {
+            ColorModel cmref = images[0].getColorModel();
+            Color backgroundColor = getBackgroundColor();
+            if(cmref instanceof IndexColorModel && (cmref.getTransparency() != IndexColorModel.OPAQUE || images[0].getProperty("ROI") instanceof ROI) && backgroundColor != null) {
+                IndexColorModel icm = (IndexColorModel) cmref;
+                int index = ColorUtilities.getColorIndex(icm, backgroundColor, -1);
+                Color color;
+                if(icm.hasAlpha()) {
+                    color = new Color(icm.getRed(index), icm.getGreen(index), icm.getBlue(index));
+                } else {
+                    color = new Color(icm.getRed(index), icm.getGreen(index), icm.getBlue(index), icm.getAlpha(index));
+                }
+                if(color.equals(backgroundColor)) {
+                    background = new double[] {index};
+                } else {
+                    // we have to expand to RGB to apply that value
+                    for (int i = 0; i < images.length; i++) {
+                        images[i] = new ImageWorker(images[i]).forceComponentColorModel().getRenderedImage();
+                    }
+                }
+            }
+        }
+
         // ParameterBlock creation
         ParameterBlock pb = new ParameterBlock();
         int srcNum = 0;
