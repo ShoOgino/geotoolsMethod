@@ -14,7 +14,6 @@
                         Object source = null;
                         try {
                             source = planarImage.getSourceObject(k);
-
                         } catch (ArrayIndexOutOfBoundsException e) {
                             // Ignore
                         }
@@ -64,9 +63,20 @@
                     }
                 }
 
-                if (inputImage instanceof PlanarImage) {
-                    ((PlanarImage) inputImage).dispose();
+                try {
+                    if(planarImage instanceof RenderedImageAdapter) {
+                        cleanField(planarImage, "theImage");
+                    } 
+                    if(planarImage instanceof WritableRenderedImageAdapter) {
+                        cleanField(planarImage, "theWritableImage");
+                    }
+                } catch(NoSuchFieldException | IllegalAccessException e) {
+                    // fine, we tried
+                    LOGGER.log(Level.FINE, "Failed to clear rendered image adapters field to null. "
+                            + "Not a problem per se, but if the finalizer thread is not fast enough, this might result in a OOM", e);
                 }
+                
+                planarImage.dispose();
             } else if (inputImage instanceof BufferedImage) {
                 ((BufferedImage) inputImage).flush();
                 inputImage = null;
