@@ -1,0 +1,35 @@
+    /**
+     * Inserts a collection of new features into the database for a particular
+     * feature type / table.
+     */
+    protected void insert(Collection<? extends SimpleFeature> features, SimpleFeatureType featureType, Connection cx)
+        throws IOException {
+        PrimaryKey key = getPrimaryKey(featureType);
+
+        // we do this in a synchronized block because we need to do two queries,
+        // first to figure out what the id will be, then the insert statement
+        synchronized (this) {
+            try {
+                if (dialect instanceof PreparedStatementSQLDialect) {
+                    Map<InsertionClassifier, Collection<SimpleFeature>> kinds =
+                            InsertionClassifier.classify(featureType, features);
+                    for (InsertionClassifier kind: kinds.keySet()) {
+                        insertPS(kinds.get(kind), kind, featureType, cx, key);
+                    }
+                } else {
+                    Collection<SimpleFeature> useExistings = new ArrayList<>();
+                    Collection<SimpleFeature> notUseExistings = new ArrayList<>();
+                    for (SimpleFeature cur : features) {
+                        (InsertionClassifier.useExisting(cur) ? useExistings : notUseExistings).
+                                add(cur);
+                    }
+                    insertNonPS(useExistings, featureType, cx, key, true);
+                    insertNonPS(notUseExistings, featureType, cx, key, false);
+                }
+            } catch (SQLException e) {
+                String msg = "Error inserting features";
+                throw (IOException) new IOException(msg).initCause(e);
+            }
+        }
+    }
+
