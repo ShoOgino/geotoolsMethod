@@ -1,18 +1,24 @@
-    @Override
-    protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query)
-            throws IOException {
-        LOGGER.fine("getReaderInternal");
-        FeatureReader<SimpleFeatureType, SimpleFeature> reader = null;
-        try {
-            final SearchRequestBuilder searchRequest;
-            searchRequest = prepareSearchRequest(query, SearchType.DFS_QUERY_THEN_FETCH);
-            reader = new ElasticFeatureReader(getState(), searchRequest.execute().get());
-            if (!filterFullySupported) {
-                reader = new FilteringFeatureReader<SimpleFeatureType, SimpleFeature>(reader, query.getFilter());
-            }
-        } catch (InterruptedException | ExecutionException e) {
-            throw new IOException("Error executing query search", e);
-        }
-        return reader;
-    }
+	@Override
+	protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query) throws IOException {
+		LOGGER.fine("getReaderInternal");
+		FeatureReader<SimpleFeatureType, SimpleFeature> reader = null;
+		try {
+			SearchType searchType = (useSortOrPagination(query) 
+					|| !getDataStore().getScrollEnabled()) ? SearchType.DFS_QUERY_THEN_FETCH : SearchType.SCAN;
+			final SearchRequestBuilder searchRequest = prepareSearchRequest(query, searchType);
+			SearchResponse sr = searchRequest.execute().get();
+			if (searchType!=SearchType.SCAN) {
+				reader = new ElasticFeatureReader(getState(), sr);
+			} else {
+			    reader = new ElasticFeatureReaderScroll(getState(), sr.getScrollId(), getSize(query));
+			}
+			if (!filterFullySupported) {
+				reader = new FilteringFeatureReader<SimpleFeatureType, SimpleFeature>(reader, query.getFilter());
+			}
+		} catch (InterruptedException | ExecutionException e) {
+			LOGGER.log(Level.SEVERE, e.getMessage(), e);
+			throw new IOException("Error executing query search", e);
+		}
+		return reader;
+	}
 
