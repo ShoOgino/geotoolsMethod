@@ -3,8 +3,8 @@
      * the input collection contains multiple geometry types, or as the size limit for output files
      * get reached
      * 
-     * @param fc
-     * @return
+     * @param fc The input feature collection
+     * @return True if at least one feature got written, false otherwise
      * @throws IOException
      */
     public boolean dump(SimpleFeatureCollection fc) throws IOException {
@@ -19,7 +19,7 @@
         SimpleFeatureType schema = fc.getSchema();
 
         Map<Class, StoreWriter> writers = new HashMap<Class, StoreWriter>();
-        boolean shapefileCreated = false;
+        boolean featuresWritten = false;
         Class geomType = schema.getGeometryDescriptor().getType().getBinding();
         boolean multiWriter = GeometryCollection.class.equals(geomType)
                 || Geometry.class.equals(geomType);
@@ -37,8 +37,19 @@
                     storeWriter.nextWriter();
                     writeToShapefile(f, storeWriter.writer);
                 }
-                shapefileCreated = true;
+                featuresWritten = true;
             }
+            
+            // force writing out a empty shapefile if required
+            if(!featuresWritten && emptyShapefileAllowed) {
+                if(multiWriter) {
+                    // force the dump of a point file
+                    getStoreWriter(fc.getSchema(), writers, true, Point.class, null);
+                } else {
+                    getStoreWriter(fc.getSchema(), writers, false, geomType, null);
+                }
+            }
+            
         } catch (ShapefileSizeException e) {
             throw e;
         } catch (IOException ioe) {
@@ -67,7 +78,9 @@
                 throw new IOException(stored);
             }
         }
+        
+        
 
-        return shapefileCreated;
+        return featuresWritten;
     }
 
