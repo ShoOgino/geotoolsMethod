@@ -1,64 +1,63 @@
-	private SearchRequestBuilder prepareSearchRequest(Query query, SearchType searchType) throws IOException {
-		SortOrder naturalSortOrder = SortOrder.ASC;
-		final SearchRequestBuilder searchRequest;
-		final ElasticDataStore dataStore = getDataStore();
-		final String docType = dataStore.getDocType(entry.getName());
+    private SearchRequestBuilder prepareSearchRequest(Query query, SearchType searchType) throws IOException {
+        SortOrder naturalSortOrder = SortOrder.ASC;
+        final SearchRequestBuilder searchRequest;
+        final ElasticDataStore dataStore = getDataStore();
+        final String docType = dataStore.getDocType(entry.getName());
 
-		LOGGER.fine("Preparing " + docType + " (" + entry.getName() + ") " + searchType + " query");
-		if (searchType!=SearchType.SCAN) {
-			searchRequest = dataStore.getClient().prepareSearch(dataStore.getSearchIndices()).setTypes(docType)
-			        .setSearchType(searchType);
+        LOGGER.fine("Preparing " + docType + " (" + entry.getName() + ") " + searchType + " query");
+        if (searchType!=SearchType.SCAN) {
+            searchRequest = dataStore.getClient().prepareSearch(dataStore.getSearchIndices()).setTypes(docType)
+                    .setSearchType(searchType);
 
-			if (query.getSortBy()!=null){
-				for (final SortBy sort : query.getSortBy()) {
-					final SortOrder sortOrder = (sort.getSortOrder() == ASCENDING) ? SortOrder.ASC : SortOrder.DESC;
-	
-					if (sort.getPropertyName() != null) {
-						final String name = sort.getPropertyName().getPropertyName();
-						searchRequest.addSort(name, sortOrder);
-					} else {
-						naturalSortOrder = sortOrder;
-					}
-				}
-			}
+            if (query.getSortBy()!=null){
+                for (final SortBy sort : query.getSortBy()) {
+                    final SortOrder sortOrder = (sort.getSortOrder() == ASCENDING) ? SortOrder.ASC : SortOrder.DESC;
 
-			// pagination
-			searchRequest.setSize(getSize(query));
-			searchRequest.setFrom(getStartIndex(query));			
-		} else {
-			searchRequest = dataStore.getClient().prepareSearch(dataStore.getSearchIndices()).setTypes(docType)
-			        .setSearchType(SearchType.SCAN);
-			if (dataStore.getScrollSize() != null) {
-				searchRequest.setSize(dataStore.getScrollSize().intValue());
-			}
-			if (dataStore.getScrollTime() != null) {
-				searchRequest.setScroll(TimeValue.timeValueSeconds(dataStore.getScrollTime()));
-			}
-		}
+                    if (sort.getPropertyName() != null) {
+                        final String name = sort.getPropertyName().getPropertyName();
+                        searchRequest.addSort(name, sortOrder);
+                    } else {
+                        naturalSortOrder = sortOrder;
+                    }
+                }
+            }
 
-		// add fields
-		setIncludes(searchRequest);
+            // pagination
+            searchRequest.setSize(getSize(query));
+            searchRequest.setFrom(getStartIndex(query));			
+        } else {
+            searchRequest = dataStore.getClient().prepareSearch(dataStore.getSearchIndices()).setTypes(docType)
+                    .setSearchType(SearchType.SCAN);
+            if (dataStore.getScrollSize() != null) {
+                searchRequest.setSize(dataStore.getScrollSize().intValue());
+            }
+            if (dataStore.getScrollTime() != null) {
+                searchRequest.setScroll(TimeValue.timeValueSeconds(dataStore.getScrollTime()));
+            }
+        }
 
-		// add query and post filter
-		final FilterToElastic filterToElastic = new FilterToElastic();
-		filterToElastic.setFeatureType(buildFeatureType());
-		filterToElastic.encode(query);
-		filterFullySupported = filterToElastic.getFullySupported();
-		if (!filterFullySupported) {
-			LOGGER.fine("Filter is not fully supported by nativeElasticsearch."
-			        + " Additional post-query filtering will be performed.");
-		}
-		final QueryBuilder elasticQuery = filterToElastic.getQueryBuilder();
-		final FilterBuilder postFilter = filterToElastic.getFilterBuilder();
-		LOGGER.fine(String.format("postFilter: %s", postFilter.toString()));
-		searchRequest.setQuery(elasticQuery).setPostFilter(postFilter);
+        // add fields
+        setIncludes(searchRequest);
 
-		if (isSort(query) && elasticQuery.toString().equals(QueryBuilders.matchAllQuery().toString())) {
-			searchRequest.addSort("_uid", naturalSortOrder);
-		}
+        // add query and post filter
+        final FilterToElastic filterToElastic = new FilterToElastic();
+        filterToElastic.setFeatureType(buildFeatureType());
+        filterToElastic.encode(query);
+        filterFullySupported = filterToElastic.getFullySupported();
+        if (!filterFullySupported) {
+            LOGGER.fine("Filter is not fully supported by nativeElasticsearch."
+                    + " Additional post-query filtering will be performed.");
+        }
+        final QueryBuilder elasticQuery = filterToElastic.getQueryBuilder();
+        final FilterBuilder postFilter = filterToElastic.getFilterBuilder();
+        searchRequest.setQuery(elasticQuery).setPostFilter(postFilter);
 
-		LOGGER.info(searchRequest.toString());
+        if (isSort(query) && elasticQuery.toString().equals(QueryBuilders.matchAllQuery().toString())) {
+            searchRequest.addSort("_uid", naturalSortOrder);
+        }
 
-		return searchRequest;
-	}
+        LOGGER.fine(searchRequest.toString());
+
+        return searchRequest;
+    }
 
