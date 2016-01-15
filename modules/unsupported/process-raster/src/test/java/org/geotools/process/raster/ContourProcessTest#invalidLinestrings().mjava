@@ -1,0 +1,56 @@
+    /**
+     * Tests that the process doesn't blow up when the contour process provides invalid lineStrings
+     * 
+     * @throws IOException
+     * @throws FileNotFoundException
+     * @throws FactoryException
+     * @throws NoSuchAuthorityCodeException
+     */
+    @Test
+    public void invalidLinestrings() throws FileNotFoundException, IOException,
+            NoSuchAuthorityCodeException, FactoryException {
+        File input = TestData.file(ContourProcessTest.class, "contoursample.tif");
+        AbstractGridFormat format = GridFormatFinder.findFormat(input);
+        AbstractGridCoverage2DReader reader = null;
+        boolean success = true;
+        try {
+            reader = format.getReader(input);
+
+            GridCoverage2D coverage = (GridCoverage2D) reader.read(null);
+            CoordinateReferenceSystem wgs84 = CRS.decode("EPSG:4326", true);
+
+            // Run process asking for contours at different levels
+            double[] levels = new double[40];
+            double start = -2.0;
+            for (int i = 0; i < levels.length; i++) {
+                levels[i] = start + (0.2 * i);
+            }
+
+            SimpleFeatureCollection fc = process.execute(coverage, 0, levels, null, null, null,
+                    null, null);
+            SimpleFeatureIterator features = fc.features();
+
+            while (features.hasNext()) {
+                // Apply a set of transformations to the feature geometries to make sure 
+                // no exceptions are thrown. (This would happen when dealing with invalid
+                // lineStrings, resulting into IllegalArgumentException)
+                SimpleFeature feature = features.next();
+                Geometry geometry = (Geometry) feature.getDefaultGeometry();
+                ReferencedEnvelope ge = new ReferencedEnvelope(geometry.getEnvelopeInternal(),
+                        wgs84);
+                JTS.toGeometry((Envelope) ge);
+            }
+        } catch (IllegalArgumentException iae) {
+            success = false;
+        } finally {
+            if (reader != null) {
+                try {
+                    reader.dispose();
+                } catch (Throwable t) {
+                    // Ignore exception on dispose
+                }
+            }
+        }
+        assertTrue(success);
+    }
+
