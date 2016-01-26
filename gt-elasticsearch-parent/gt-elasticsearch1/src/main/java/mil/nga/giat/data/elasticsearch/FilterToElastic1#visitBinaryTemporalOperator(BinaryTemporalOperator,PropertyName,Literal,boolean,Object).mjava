@@ -1,0 +1,40 @@
+    protected Object visitBinaryTemporalOperator(BinaryTemporalOperator filter, 
+            PropertyName property, Literal temporal, boolean swapped, Object extraData) {
+        
+        super.visitBinaryTemporalOperator(filter, property, temporal, swapped, extraData);
+
+        if (filter instanceof After || filter instanceof Before) {
+            if (period != null) {
+                if ((op.equals(" > ") && !swapped) || (op.equals(" < ") && swapped)) {
+                    filterBuilder = FilterBuilders.rangeFilter(key).gt(end);
+                } else {
+                    filterBuilder = FilterBuilders.rangeFilter(key).lt(begin);
+                }
+            }
+            else {
+                if (op.equals(" < ") || swapped) {
+                    filterBuilder = FilterBuilders.rangeFilter(key).lt(field);
+                } else {
+                    filterBuilder = FilterBuilders.rangeFilter(key).gt(field);
+                }
+            }
+        }
+        else if (filter instanceof Begins || filter instanceof Ends || 
+                filter instanceof BegunBy || filter instanceof EndedBy ) {
+
+            filterBuilder = FilterBuilders.termFilter(key, field);
+        }
+        else if (filter instanceof During || filter instanceof TContains){
+            filterBuilder = FilterBuilders.rangeFilter(key).gt(lower).lt(field);
+        }
+        else if (filter instanceof TEquals) {
+            filterBuilder = FilterBuilders.termFilter(key, field);
+        }
+        
+        if (nested) {
+            filterBuilder = FilterBuilders.nestedFilter(path,filterBuilder);
+        }
+
+        return extraData;
+    }
+

@@ -1,0 +1,67 @@
+    private SearchRequestBuilder prepareSearchRequest(Query query, SearchType searchType) throws IOException {
+        SortOrder naturalSortOrder = SortOrder.ASC;
+        final SearchRequestBuilder searchRequest;
+        final ElasticDataStore dataStore = getDataStore();
+        final String docType = dataStore.getDocType(entry.getName());
+
+        LOGGER.fine("Preparing " + docType + " (" + entry.getName() + ") " + searchType + " query");
+        if (searchType!=SearchType.SCAN) {
+            searchRequest = dataStore.getClient().prepareSearch(dataStore.getSearchIndices()).setTypes(docType)
+                    .setSearchType(searchType);
+
+            if (query.getSortBy()!=null){
+                for (final SortBy sort : query.getSortBy()) {
+                    final SortOrder sortOrder = (sort.getSortOrder() == ASCENDING) ? SortOrder.ASC : SortOrder.DESC;
+
+                    if (sort.getPropertyName() != null) {
+                        final String name = sort.getPropertyName().getPropertyName();
+                        searchRequest.addSort(name, sortOrder);
+                    } else {
+                        naturalSortOrder = sortOrder;
+                    }
+                }
+            }
+
+            // pagination
+            searchRequest.setSize(getSize(query));
+            searchRequest.setFrom(getStartIndex(query));
+        } else {
+            searchRequest = dataStore.getClient().prepareSearch(dataStore.getSearchIndices()).setTypes(docType)
+                    .setSearchType(SearchType.SCAN);
+            if (dataStore.getScrollSize() != null) {
+                searchRequest.setSize(dataStore.getScrollSize().intValue());
+            }
+            if (dataStore.getScrollTime() != null) {
+                searchRequest.setScroll(TimeValue.timeValueSeconds(dataStore.getScrollTime()));
+            }
+        }
+
+        // add fields
+        setIncludes(searchRequest);
+
+        // add query and post filter
+        ElasticCompat compat = ElasticCompatLoader.getCompat(null);
+        final FilterToElastic filterToElastic = compat.newFilterToElastic();
+        filterToElastic.setFeatureType(buildFeatureType());
+        filterToElastic.encode(query);
+        filterFullySupported = filterToElastic.getFullySupported();
+        if (!filterFullySupported) {
+            LOGGER.fine("Filter is not fully supported by nativeElasticsearch."
+                    + " Additional post-query filtering will be performed.");
+        }
+        final QueryBuilder filteredQueryBuilder = filterToElastic.getQueryBuilder();
+        LOGGER.fine("Elasticsearch query: " + filteredQueryBuilder);
+        
+        final QueryBuilder nativeQueryBuilder = filterToElastic.getNativeQueryBuilder();
+
+        searchRequest.setQuery(filteredQueryBuilder);
+
+        if (isSort(query) && nativeQueryBuilder.toString().equals(QueryBuilders.matchAllQuery().toString())) {
+            searchRequest.addSort("_uid", naturalSortOrder);
+        }
+
+        LOGGER.fine(searchRequest.toString());
+
+        return searchRequest;
+    }
+
