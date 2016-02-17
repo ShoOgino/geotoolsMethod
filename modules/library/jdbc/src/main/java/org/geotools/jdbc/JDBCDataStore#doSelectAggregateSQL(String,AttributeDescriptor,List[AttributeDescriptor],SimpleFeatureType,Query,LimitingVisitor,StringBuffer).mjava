@@ -1,7 +1,7 @@
     /**
      * Helper method to factor out some commonalities between selectAggregateSQL, and selectAggregateSQLPS 
      */
-    List<FilterToSQL> doSelectAggregateSQL(String function, AttributeDescriptor att, 
+    List<FilterToSQL> doSelectAggregateSQL(String function, AttributeDescriptor att, List<AttributeDescriptor> groupByAttributes,
             SimpleFeatureType featureType, Query query, LimitingVisitor visitor, StringBuffer sql) throws SQLException, IOException {
 
         JoinInfo join = !query.getJoins().isEmpty() 
@@ -22,6 +22,10 @@
             }
         } else {
             sql.append("SELECT ");
+            if (groupByAttributes != null && !groupByAttributes.isEmpty()) {
+                encodeGroupByAttributes(groupByAttributes, query, sql);
+                sql.append(",");
+            }
             encodeFunction(function,att,query,sql);
             sql.append( " FROM ");
         }
@@ -56,13 +60,19 @@
             applyLimitOffset(sql, query.getStartIndex(), query.getMaxFeatures());
             
             StringBuffer sql2 = new StringBuffer("SELECT ");
+            if (groupByAttributes != null && !groupByAttributes.isEmpty()) {
+                encodeGroupByAttributes(groupByAttributes, query, sql2);
+                sql2.append(",");
+            }
             encodeFunction(function,att,query,sql2);
             sql2.append(" AS gt_result_");
             sql2.append(" FROM (");
             sql.insert(0,sql2.toString());
             sql.append(") gt_limited_");
         }
-        
+
+        encodeGroupByStatement(groupByAttributes, query, sql);
+
         // add search hints if the dialect supports them
         applySearchHints(featureType, query, sql);
 
