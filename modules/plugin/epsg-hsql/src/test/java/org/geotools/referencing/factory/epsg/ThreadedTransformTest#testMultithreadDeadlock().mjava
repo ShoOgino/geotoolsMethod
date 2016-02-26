@@ -1,0 +1,38 @@
+    /**
+     * Main test method. Waits 30 seconds to perform envelope reprojections with multiple threads while one threads retrieves the coordinate operation
+     * factory. If this fails, there's most probably a deadlock that prevents the operations from finishing (use debugger to see threads &
+     * owned/waiting locks).<br>
+     * This may not fail all the time, but using multiple iterations should maximize chances of producing the bug. Although this may vary from a
+     * computer to another...
+     * 
+     * @throws Exception If an exception occurs while performing {@link #retrieve} or {@link #transform}.
+     */
+    @Test(timeout = 30000L)
+    public void testMultithreadDeadlock() throws Exception {
+        List<Future<Void>> futures = new ArrayList<>();
+        // raise some hell with 32 total threads 
+        for (int i = 0; i < 16; i++) {
+            Future<Void> f = EXECUTOR.submit(new Callable<Void>() {
+                @Override
+                public Void call() throws Exception {
+                    retrieve();
+                    return null;
+                }
+            });
+            futures.add(f);
+            f = EXECUTOR.submit(new Callable<Void>() {
+                @Override
+                public Void call() throws Exception {
+                    transform();
+                    return null;
+                }
+            });
+            futures.add(f);
+        }
+        
+        // wait for all
+        for (Future<Void> f : futures) {
+            f.get();
+        }
+    }
+
