@@ -1,0 +1,44 @@
+    /**
+     * Lookup the MANIFEST.MF for the provided class.
+     * <p>
+     * This can be used to quickly verify packaging information.
+     * @param type
+     * @return MANIFEST.MF contents, please note contents may be empty when running from IDE
+     */
+    public static Manifest getManifest(Class<?> type) {
+        final URL classLocation = type.getResource(type.getSimpleName() + ".class");
+
+        Manifest manifest = new Manifest();
+
+        if (classLocation.getProtocol().equalsIgnoreCase("jar")) {
+            String path = classLocation.toString();
+            URL manifestLocation;
+            try {
+                manifestLocation = new URL(
+                        path.substring(0, path.lastIndexOf("!") + 1) + "/META-INF/MANIFEST.MF");
+                try (InputStream content = manifestLocation.openStream()) {
+                    manifest.read(content);
+                }
+            } catch (FileNotFoundException ignore) {
+                ignore.printStackTrace();
+            } catch (IOException invalid) {
+                invalid.printStackTrace();
+            }
+        }
+        if (manifest.getMainAttributes().isEmpty()) {
+            // must be running in IDE
+            String name = type.getName();
+            if (name.startsWith("org.geotools") || name.startsWith("org.opengis")
+                    || name.startsWith("net.opengis")) {
+                String generated = "Manifest-Version: 1.0\n" + "Project-Version: " + getVersion()
+                        + "\n";
+
+                try {
+                    manifest.read(new ByteArrayInputStream(generated.getBytes()));
+                } catch (IOException e) {
+                }
+            }
+        }
+        return manifest;
+    }
+
