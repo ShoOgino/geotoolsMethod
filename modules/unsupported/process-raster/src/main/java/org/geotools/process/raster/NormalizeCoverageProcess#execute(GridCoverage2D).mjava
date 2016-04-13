@@ -1,0 +1,35 @@
+    @DescribeResult(name = "result", description = "Normalized raster")
+    public GridCoverage2D execute(
+        @DescribeParameter(name = "data", description = "Input raster") GridCoverage2D coverage
+    ) throws IOException {
+        
+        ParameterValueGroup param = PROCESSOR.getOperation("Extrema").getParameters();
+        param.parameter("Source").setValue(coverage);
+
+        GridCoverage2D extrema = (GridCoverage2D) PROCESSOR.doOperation(param);
+        Object max = extrema.getProperty("maximum");
+
+        // handle zero case
+        boolean allZero = true;
+        for (int i = 0; i < Array.getLength(max); i++) {
+            Object num = Array.get(max, i);
+            boolean isZero = num instanceof Number && ((Number)num).doubleValue() == 0d;
+
+            allZero = allZero && isZero;
+            if (isZero) {
+                Array.set(max, i, Converters.convert(1, num.getClass()));
+            }
+        }
+
+        if (allZero) {
+            // no need to do anything
+            return coverage;
+        }
+
+        param = PROCESSOR.getOperation("DivideByConst").getParameters();
+        param.parameter("source").setValue(coverage);
+        param.parameter("constants").setValue(max);
+    
+        return (GridCoverage2D) PROCESSOR.doOperation(param);
+    }
+
