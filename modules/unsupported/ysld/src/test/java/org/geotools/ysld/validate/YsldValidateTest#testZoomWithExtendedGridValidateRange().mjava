@@ -1,0 +1,51 @@
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testZoomWithExtendedGridValidateRange() throws Exception {
+        StringBuilder builder =  new StringBuilder();
+        builder.append(
+                "grid:\n"+           // 1
+                "  name: SIGMA:957\n"+// 2
+                "rules:\n"+          // 3
+                "- zoom: [0,max]\n"+ // 4 OK
+                "- zoom: [min,0]\n"+ // 5 OK
+                "- zoom: [2,max]\n"+ // 6 OK
+                "- zoom: [min,2]\n"+ // 7 OK
+                "- zoom: [5,max]\n"+ // 8 OK
+                "- zoom: [min,5]\n"+ // 9 OK
+                "- zoom: [6, max]\n"+ // 10 Bad, Out of Range
+                "- zoom: [min, 6]\n"+ // 11 Bad, Out of Range
+                "- zoom: [-1, max]\n"+ // 12 Bad, Out of Range
+                "- zoom: [min, -1]\n"+ // 13 Bad, Out of Range
+                "- zoom: [min, foo]\n"+ // 14 Bad
+                "- zoom: [foo, max]\n"+ // 15 Bad
+                "- zoom: [0.5, max]\n"+ // 16 Bad
+                "- zoom: [min, 0.5]\n"); // 17 Bad
+        
+        ZoomContextFinder finder = createMock("finder", ZoomContextFinder.class);
+        ZoomContext zctxt = createMock("zctxt", ZoomContext.class);
+        
+        expect(finder.get("SIGMA:957")).andStubReturn(zctxt);
+        
+        expect(zctxt.isInRange(0)).andStubReturn(true);
+        expect(zctxt.isInRange(2)).andStubReturn(true);
+        expect(zctxt.isInRange(5)).andStubReturn(true);
+        expect(zctxt.isInRange(-1)).andStubReturn(false);
+        expect(zctxt.isInRange(6)).andStubReturn(false);
+       
+        replay(finder, zctxt);
+        
+        List<MarkedYAMLException> errors = validate(builder.toString(),Collections.singletonList(finder));
+        assertThat(errors, contains(
+                hasProperty("problemMark", problemOn(10)),
+                hasProperty("problemMark", problemOn(11)),
+                hasProperty("problemMark", problemOn(12)),
+                hasProperty("problemMark", problemOn(13)),
+                hasProperty("problemMark", problemOn(14)),
+                hasProperty("problemMark", problemOn(15)),
+                hasProperty("problemMark", problemOn(16)),
+                hasProperty("problemMark", problemOn(17))
+                ));
+        
+        verify(finder, zctxt);
+    }
+

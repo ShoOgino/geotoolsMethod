@@ -1,0 +1,49 @@
+        @Override
+        public FileGroup next() {
+            SimpleFeature next = null;
+
+            // look for cached feature
+            if (cachedNext != null) {
+                next = cachedNext;
+                cachedNext = null;
+            } else {
+                next = featureIterator.next();
+            }
+
+            // Avoid adding the feature to a collection to reduce memory consumption
+            // we only take note of the firstFeature
+            int groupedFeatures = 0;
+            SimpleFeature firstFeature = null;
+
+            // resolve the location
+            String granuleLocation = (String) next.getAttribute(locationAttributeName);
+            URL resolved = pathType.resolvePath(parentLocation, granuleLocation);
+            File file = null;
+            if (resolved != null) {
+                file = DataUtilities.urlToFile(resolved);
+                if (file != null && file.exists()) {
+                    groupedFeatures++;
+                    firstFeature = next;
+                }
+            }
+            if (groupedFeatures == 0) {
+                return null;
+            }
+
+            while (featureIterator.hasNext()) {
+                // Group features sharing same location
+                next = featureIterator.next();
+                String nextLocation = (String) next.getAttribute(locationAttributeName);
+                if (granuleLocation.equalsIgnoreCase(nextLocation)) {
+                    groupedFeatures++;
+                } else {
+                    cachedNext = next;
+                    break;
+                }
+            }
+
+            // I have to group the features to get the ranges.
+            return buildFileGroup(file, groupedFeatures > 1, firstFeature);
+
+        }
+

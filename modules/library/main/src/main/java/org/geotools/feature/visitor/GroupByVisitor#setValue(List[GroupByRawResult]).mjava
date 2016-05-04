@@ -1,0 +1,24 @@
+    /**
+     * Methods that allow optimizations to directly set the group by visitor result instead
+     * of computing it visiting all the features. Aggregate visitor results are wrapped with
+     * the appropriate feature calculation type.
+     *
+     * @param value the group by visitor result
+     */
+    public void setValue(List<GroupByRawResult> value) {
+        Map<List<Object>, CalcResult> results = new HashMap<>();
+        for (GroupByRawResult groupByRawResult : value) {
+            // wrap the aggregate visitor result with the appropriate feature calculation type
+            results.put(groupByRawResult.groupByValues, aggregate.wrap(expression, groupByRawResult.visitorValue));
+        }
+        // create a new group by result using the raw values returned by the optimization
+        GroupByResult newResult = new GroupByResult(results, aggregate, groupByAttributes);
+        if (optimizationResult == CalcResult.NULL_RESULT) {
+            // if no current result we simply return the new one
+            optimizationResult = newResult;
+        } else {
+            // if a result already exists we merge it with the new one
+            optimizationResult = optimizationResult.merge(newResult);
+        }
+    }
+

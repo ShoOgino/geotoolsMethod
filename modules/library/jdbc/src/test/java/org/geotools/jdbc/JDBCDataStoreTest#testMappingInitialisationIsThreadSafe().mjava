@@ -1,0 +1,58 @@
+    @Test
+    public void testMappingInitialisationIsThreadSafe() throws InterruptedException, ExecutionException {
+        // This test attempts to exercise a race condition on initialisation of mappings.  It is caused when
+        // two threads simultaneously try to access mapping of SQL types for a datastore.  This
+        // previously led to a ConcurrentModificationException. (c.f. GEOT-4506)
+        int nThreads = Math.min(Runtime.getRuntime().availableProcessors(), 2);
+        ExecutorService executorService = Executors.newFixedThreadPool(nThreads);
+
+        for (int i = 0; i < 100; i++) {
+            final CountDownLatch latch = new CountDownLatch(nThreads);
+            final JDBCDataStore jdbcDataStore = new JDBCDataStore();
+            SQLDialect sqlDialect = new BasicSQLDialect(jdbcDataStore) {
+                @Override
+                public void encodeGeometryValue(Geometry value, int dimension, int srid, StringBuffer sql) throws IOException {
+                }
+
+                @Override
+                public void encodeGeometryEnvelope(String tableName, String geometryColumn, StringBuffer sql) {
+                }
+
+                @Override
+                public Envelope decodeGeometryEnvelope(ResultSet rs, int column, Connection cx) throws SQLException, IOException {
+                    return null;
+                }
+
+                @Override
+                public Geometry decodeGeometryValue(GeometryDescriptor descriptor, ResultSet rs, String column, GeometryFactory factory, Connection cx) throws IOException, SQLException {
+                    return null;
+                }
+            };
+            jdbcDataStore.setSQLDialect(sqlDialect);
+            List<Future> futures = new ArrayList<>();
+            for (int j = 0; j < nThreads; j++) {
+                Future f = executorService.submit(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            // Get all the threads to the same point to increase the likelihood
+                            // of finding the issue
+                            latch.countDown();
+                            latch.await();
+                        } catch (InterruptedException e) {
+                            Thread.interrupted();
+                            return;
+                        }
+                        jdbcDataStore.getMapping(DateSubClass.class);
+                    }
+                });
+                futures.add(f);
+            }
+            for (Future future : futures) {
+                future.get();
+            }
+        }
+        executorService.shutdown();
+        executorService.awaitTermination(30, TimeUnit.SECONDS);
+    }
+

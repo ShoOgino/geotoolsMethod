@@ -1,0 +1,27 @@
+    /**
+     * Specialized insertion for dialects that are not using prepared statements.
+     */
+    private void insertNonPS(Collection<? extends SimpleFeature> features,
+                             SimpleFeatureType featureType, Connection cx, PrimaryKey key,
+                             boolean useExisting) throws IOException, SQLException {
+        if (features.isEmpty()) {
+            return;
+        }
+        final Statement st = cx.createStatement();
+        final KeysFetcher keysFetcher = KeysFetcher.create(this, cx, useExisting, key);
+        try {
+            for (SimpleFeature feature : features) {
+                String sql = insertSQL(featureType, feature, keysFetcher, cx);
+
+                ((BasicSQLDialect) dialect).onInsert(st, cx, featureType);
+
+                LOGGER.log(Level.FINE, "Inserting new feature: {0}", sql);
+                st.execute(sql);
+
+                keysFetcher.postInsert(featureType, feature, cx);
+            }
+        } finally {
+            closeSafe(st);
+        }
+    }
+

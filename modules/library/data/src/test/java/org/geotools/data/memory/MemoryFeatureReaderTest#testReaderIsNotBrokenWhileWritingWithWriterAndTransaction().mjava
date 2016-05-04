@@ -1,0 +1,32 @@
+    public void testReaderIsNotBrokenWhileWritingWithWriterAndTransaction()
+            throws IOException {
+        // a write should not "destroy" readers
+        int expectedFeatureCount = roadFeatures.length;
+        int currentFeatureCount = 0;
+
+        FeatureReader<SimpleFeatureType, SimpleFeature> featureReader = memoryDataStore
+                .getFeatureReader(
+                        new Query(roadType.getTypeName(), Filter.INCLUDE),
+                        transaction);
+
+        // start iterating through content
+        if (featureReader.hasNext()) {
+            featureReader.next();
+            currentFeatureCount++;
+        }
+
+        FeatureWriter<SimpleFeatureType, SimpleFeature> featureWriter = memoryDataStore
+                .getFeatureWriter(roadType.getTypeName(), transaction);
+
+        while (featureWriter.hasNext()) {
+            featureWriter.next();
+        }
+
+        SimpleFeature newFeature = featureWriter.next();
+        assertNotNull(newFeature);
+
+        transaction.commit();
+
+        assertReaderHasFeatureCount(expectedFeatureCount, currentFeatureCount, featureReader);
+    }
+

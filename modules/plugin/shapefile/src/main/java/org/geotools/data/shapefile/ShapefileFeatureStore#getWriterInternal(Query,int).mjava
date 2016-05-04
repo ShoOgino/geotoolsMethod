@@ -7,7 +7,7 @@
 
         ShapefileFeatureReader reader = (ShapefileFeatureReader) delegate
                 .getReaderInternal(Query.ALL);
-        FeatureWriter<SimpleFeatureType, SimpleFeature> writer;
+        ShapefileFeatureWriter writer;
         ShapefileDataStore ds = getDataStore();
         if(ds.indexManager.hasFidIndex(false) || ds.isFidIndexed() && ds.indexManager.hasFidIndex(true)) {
             writer = new IndexedShapefileFeatureWriter(ds.indexManager, reader, ds.getCharset(), ds.getTimeZone());
@@ -15,6 +15,8 @@
             writer = new ShapefileFeatureWriter(delegate.shpFiles, reader, ds.getCharset(), 
                     ds.getTimeZone());
         }
+        writer.setMaxShpSize(getDataStore().getMaxShpSize());
+        writer.setMaxDbfSize(getDataStore().getMaxDbfSize());
 
         // if we only have to add move to the end.
         // TODO: just make the code transfer the bytes in bulk instead and start actual writing at
@@ -29,9 +31,9 @@
         // but writes down the mall
         Filter filter = query.getFilter();
         if (filter != null && !Filter.INCLUDE.equals(filter)) {
-            writer = new FilteringFeatureWriter(writer, filter);
+            return new FilteringFeatureWriter(writer, filter);
+        } else {
+            return writer;
         }
-
-        return writer;
     }
 

@@ -1,0 +1,42 @@
+    /**
+     * Remap an attribute for a specified dimension. Get it from the schemaType and update
+     * both the related dimension Descriptor as well as the dimensions mapping.
+     * 
+     * @param indexSchema
+     * @param currentDimName
+     * @param indexAttribute
+     * @param descriptors
+     * @param mapper
+     * @return
+     */
+    private boolean remapAttribute(final SimpleFeatureType indexSchema, final String currentDimName,
+            final int indexAttribute, final List<DimensionDescriptor> descriptors, DimensionMapper mapper) {
+        final int numAttributes = indexSchema.getAttributeCount();
+        if (numAttributes <= indexAttribute) {
+            // Stop looking for attributes in case there aren't anymore
+            return false;
+        }
+
+        // Get the attribute descriptor for that index
+        final AttributeDescriptor attributeDescriptor = indexSchema.getDescriptor(indexAttribute);
+
+        // Loop over dimensionDescriptors 
+        for (DimensionDescriptor descriptor : descriptors) {
+            // Find the descriptor related to the current dimension
+            if (descriptor.getName().toUpperCase().equalsIgnoreCase(currentDimName)) {
+                final String updatedAttribute = attributeDescriptor.getLocalName();
+                if (!updatedAttribute.equals(((DefaultDimensionDescriptor) descriptor)
+                        .getStartAttribute())) {
+                    // Remap attributes in case the schema's attribute doesn't match the current attribute
+                    ((DefaultDimensionDescriptor) descriptor).setStartAttribute(updatedAttribute);
+
+                    // Update the dimensions mapping too
+                    mapper.remap(currentDimName, updatedAttribute);
+                }
+                // the attribute has been found, prepare for the next one
+                return true;
+            }
+        }
+        return false;
+    }
+

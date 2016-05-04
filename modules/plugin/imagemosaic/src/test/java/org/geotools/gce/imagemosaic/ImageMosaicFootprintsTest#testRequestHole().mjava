@@ -3,7 +3,7 @@
         // copy the footprints mosaic over
         FileUtils.copyDirectory(footprintsSource, testMosaic);
         Properties p = new Properties();
-        p.put(MultiLevelROIProviderFactory.INSET_PROPERTY, "0.1");
+        p.put(FootprintInsetPolicy.INSET_PROPERTY, "0.1");
         saveFootprintProperties(p);
         final AbstractGridFormat format = TestUtils.getFormat(testMosaicUrl);
         ImageMosaicReader reader = TestUtils.getReader(testMosaicUrl, format);
@@ -17,7 +17,7 @@
 
         // activate footprint management
         GeneralParameterValue[] params = new GeneralParameterValue[3];
-        ParameterValue<String> footprintManagement = ImageMosaicFormat.FOOTPRINT_BEHAVIOR
+        ParameterValue<String> footprintManagement = AbstractGridFormat.FOOTPRINT_BEHAVIOR
                 .createValue();
         footprintManagement.setValue(FootprintBehavior.Transparent.name());
         params[0] = footprintManagement;
@@ -29,19 +29,27 @@
 
         // limit yourself to reading just a bit of it
         MathTransform mt = reader.getOriginalGridToWorld(PixelInCell.CELL_CENTER);
-        ReferencedEnvelope readEnvelope = new ReferencedEnvelope(8.3, 9.6, 43, 44,
-                DefaultGeographicCRS.WGS84);
-        Envelope2D rasterEnvelope = new Envelope2D(CRS.transform(mt, readEnvelope));
         GridEnvelope2D ge = new GridEnvelope2D(6, 44, 1, 1);
         final ParameterValue<GridGeometry2D> gg = AbstractGridFormat.READ_GRIDGEOMETRY2D
                 .createValue();
         gg.setValue(new GridGeometry2D(ge, mt, DefaultGeographicCRS.WGS84));
         params[2] = gg;
 
+        // read the first time, no sample_image yet present
         GridCoverage2D coverage = reader.read(params);
         reader.dispose();
         assertNotNull(coverage);
         RenderedImage ri = coverage.getRenderedImage();
         assertNotEquals(Transparency.OPAQUE, ri.getColorModel().getTransparency());
+        reader.dispose();
+        
+        // read a second time
+        reader = TestUtils.getReader(testMosaicUrl, format);
+        coverage = reader.read(params);
+        reader.dispose();
+        assertNotNull(coverage);
+        ri = coverage.getRenderedImage();
+        assertNotEquals(Transparency.OPAQUE, ri.getColorModel().getTransparency());
+        reader.dispose();
     }
 

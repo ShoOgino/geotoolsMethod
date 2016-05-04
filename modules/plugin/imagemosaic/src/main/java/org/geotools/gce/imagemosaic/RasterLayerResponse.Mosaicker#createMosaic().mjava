@@ -101,7 +101,17 @@
                 alphas[i] = mosaicElement.alphaChannel;
                 rois[i] = mosaicElement.roi;
                 pams[i] = mosaicElement.pamDataset;
-
+                
+                //If we have an alpha, mask it by the ROI
+                if (alphas[i] != null && rois[i] != null) {
+                    //Get ROI as image, fix color space
+                    ImageWorker roi = new ImageWorker(rois[i].getAsImage());
+                    roi.forceComponentColorModel();
+                    ImageWorker alpha = new ImageWorker(alphas[i]);
+                    alpha.multiply(roi.getRenderedImage());
+                    
+                    alphas[i] =  alpha.getPlanarImage();
+                }
                 // compose the overall ROI if needed
                 if (mosaicElement.roi != null) {
                     realROIs++;
@@ -123,13 +133,8 @@
                         request.isBlend() ? MosaicDescriptor.MOSAIC_TYPE_BLEND: MosaicDescriptor.MOSAIC_TYPE_OVERLAY, 
                         localHints);
             
-            ROI overallROI = mosaicROIs(rois);
-            if (footprintBehavior != FootprintBehavior.None) {
-                // Adding globalRoi to the output
-                RenderedOp rop = (RenderedOp) mosaic;                
-                rop.setProperty("ROI", overallROI);
-            }
-            
+            Object property = mosaic.getProperty("ROI");
+            ROI overallROI = (property instanceof ROI) ? (ROI) property : null; 
             final RenderedImage postProcessed = footprintBehavior.postProcessMosaic(mosaic, overallROI,localHints);
     
             // prepare for next step

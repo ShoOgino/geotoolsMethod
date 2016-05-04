@@ -1,0 +1,23 @@
+    /**
+     * Helper method that handle requests that have group by attributes by wrapping the functions in group by visitors.
+     */
+    private Results handleGroupByVisitor(SimpleFeatureCollection features, String aggAttribute, Set<AggregationFunction> functions,
+                                         List<String> rawGroupByAttributes, ProgressListener progressListener) throws IOException {
+        // building a group by visitor for every aggregate function
+        List<GroupByVisitor> groupByVisitors = functions.stream().map(function -> new GroupByVisitorBuilder()
+                .withAggregateAttribute(aggAttribute, features.getSchema())
+                .withAggregateVisitor(function.name())
+                .withGroupByAttributes(rawGroupByAttributes, features.getSchema())
+                .withProgressListener(progressListener)
+                .build()).collect(Collectors.toList());
+        // visiting the features collection with each visitor
+        for (GroupByVisitor visitor : groupByVisitors) {
+            features.accepts(visitor, progressListener);
+        }
+        // extracting the results from each group by visitor
+        List<Map<List<Object>, Object>> results = groupByVisitors.stream()
+                .map(visitor -> (Map<List<Object>, Object>)visitor.getResult().toMap())
+                .collect(Collectors.toList());
+        return new Results(aggAttribute, functions, rawGroupByAttributes, mergeResults(results, rawGroupByAttributes.size()));
+    }
+

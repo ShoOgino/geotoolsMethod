@@ -2,40 +2,31 @@
      * Results the value of an aggregate function over a query.
      * @return generated result, or null if unsupported
      */
-    protected Object getAggregateValue(FeatureVisitor visitor, SimpleFeatureType featureType, Query query, Connection cx ) 
-        throws IOException {
-        
-        // get the name of the function
-        String function = getAggregateFunctions().get( visitor.getClass() );
-        if ( function == null ) {
-            //try walking up the hierarchy
-            Class clazz = visitor.getClass();
-            while( clazz != null && function == null ) {
-                clazz = clazz.getSuperclass();
-                function = getAggregateFunctions().get( clazz );
-            }
-            
-            if ( function == null ) {
-                //not supported
-                LOGGER.info( "Unable to find aggregate function matching visitor: " + visitor.getClass());
-                return null;
-            }
+    protected Object getAggregateValue(FeatureVisitor visitor, SimpleFeatureType featureType, Query query, Connection cx)
+            throws IOException {
+        // check if group by is supported by the udnerlign store
+        if(isGroupByVisitor(visitor) && !dialect.isGroupBySupported()) {
+            return null;
         }
-        
-        AttributeDescriptor att = null;
-        Expression expression = getExpression(visitor);
-        if (expression != null) {
-            att = (AttributeDescriptor) expression.evaluate( featureType );
+        // try to match the visitor with an aggregate function
+        String function = matchAggregateFunction(visitor);
+        if (function == null) {
+            // this visitor is not supported
+            return null;
         }
-        if(att == null && !(visitor instanceof CountVisitor)){
+        // try to extract an aggregate attribute from the visitor
+        AttributeDescriptor att = extractAggregateAttribute(visitor, featureType);
+        if (att == null && !isCountVisitor(visitor)) {
             return null; // aggregate function optimization only supported for PropertyName expression
         }
         // if the visitor is limiting the result to a given start - max, we will
         // try to apply limits to the aggregate query
         LimitingVisitor limitingVisitor = null;
-        if(visitor instanceof LimitingVisitor) {
+        if (visitor instanceof LimitingVisitor) {
             limitingVisitor = (LimitingVisitor) visitor;
         }
+        // if the visitor is a group by visitor we extract the group by attributes
+        List<AttributeDescriptor> groupByAttributes = extractGroupByAttributes(visitor, featureType);
         //result of the function
         try {
             Object result = null;
@@ -45,11 +36,11 @@
             
             try {
                 if ( dialect instanceof PreparedStatementSQLDialect ) {
-                    st = selectAggregateSQLPS(function, att, featureType, query, limitingVisitor,  cx);
+                    st = selectAggregateSQLPS(function, att, groupByAttributes, featureType, query, limitingVisitor,  cx);
                     rs = ((PreparedStatement)st).executeQuery();
                 } 
                 else {
-                    String sql = selectAggregateSQL(function, att, featureType, query, limitingVisitor);
+                    String sql = selectAggregateSQL(function, att, groupByAttributes, featureType, query, limitingVisitor);
                     LOGGER.fine( sql );
                     
                     st = cx.createStatement();
@@ -58,9 +49,14 @@
                 }
              
                 while(rs.next()) {
-                    Object value = rs.getObject(1);
-                    result = value;
-                    results.add(value);
+                    if (groupByAttributes == null || groupByAttributes.isEmpty()) {
+                        Object value = rs.getObject(1);
+                        result = value;
+                        results.add(value);
+                    }
+                    else {
+                        results.add(extractValuesFromResultSet(rs, groupByAttributes.size()));
+                    }
                 }
             } finally {
                 closeSafe( rs );
@@ -68,7 +64,7 @@
             }
             
             if ( setResult(visitor, results.size() > 1 ? results : result) ){
-                return result;    
+                return result == null ? results : result;
             }
             
             return null;

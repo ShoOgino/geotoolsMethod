@@ -84,7 +84,7 @@
 
 			// //
 			//
-                        // finalRasterArea will hold the smallest rectangular integer raster area that contains the floating point raster
+            // finalRasterArea will hold the smallest rectangular integer raster area that contains the floating point raster
 			// area which we obtain when applying the world-to-grid transform to the cropEnvelope. Note that we need to intersect
 			// such an area with the area covered by the source coverage in order to be sure we do not try to crop outside the
 			// bounds of the source raster.
@@ -95,8 +95,9 @@
 
             // intersection with the original range in order to not try to crop outside the image bounds
             Rectangle.intersect(finalRasterArea, sourceGridRange, finalRasterArea);
-            if(finalRasterArea.isEmpty())
-            	throw new CannotCropException(Errors.format(ErrorKeys.CANT_CROP));
+            if (finalRasterArea.isEmpty()) {
+                throw new EmptyIntersectionException("Crop envelope intersects in model space, but not in raster space");
+            }
 
             // //
             //
@@ -164,29 +165,23 @@
 				if (doMosaic || cropROI != null || internalROI != null || nodata != null) {
 					// prepare the params for the mosaic
                     final ROI[] roiarr;
-                    try {
-                        if(cropROI != null) {
-                            final LiteShape2 cropRoiLS2 = new LiteShape2(cropROI, ProjectiveTransform.create(sourceWorldToGridTransform), null, false);
-                            ROI cropRS = new ROIShape(cropRoiLS2);
-                            Rectangle2D rt = cropRoiLS2.getBounds2D();
-                            if (!hasIntegerBounds(rt)) {
-                                // Approximate Geometry
-                                Geometry geo = (Geometry) cropRoiLS2.getGeometry().clone();
-                                transformGeometry(geo);
-                                cropRS = new ROIShape(new LiteShape2(geo, null, null, false));
-                            }
-                            roiarr = new ROI[]{cropRS};
-                        } else {
-                            ROI roi = new ROIShape(rasterSpaceROI);
-                            roiarr = new ROI[]{roi};
+                    if(cropROI != null) {
+                        Geometry txROI = JTS.transform(cropROI, ProjectiveTransform.create(sourceWorldToGridTransform));
+                        if (!hasIntegerBounds(JTS.toRectangle2D(txROI.getEnvelopeInternal()))) {
+                            // Approximate Geometry
+                            transformGeometry(txROI);
                         }
-                        if(roiarr[0].getBounds().isEmpty()){
-                            throw new CannotCropException(Errors.format(ErrorKeys.CANT_CROP));
-                        }
-                    } catch (FactoryException ex) {
-						throw new CannotCropException(Errors.format(ErrorKeys.CANT_CROP), ex);
+                        ROI cropRS = getAsROI(txROI);
+                        roiarr = new ROI[]{cropRS};
+                    } else {
+                        ROI roi = getAsROI(JTS.toPolygon(rasterSpaceROI));
+                        roiarr = new ROI[]{roi};
                     }
-                                        worker.setBackground(background);
+                    if(roiarr[0].getBounds().isEmpty()){
+                        throw new CannotCropException(Errors.format(ErrorKeys.CANT_CROP));
+                    }
+                    worker.setBackground(background);
+                    worker.setNoData(nodata);
                                         
                                         
  					
@@ -241,7 +236,7 @@
             if (rasterSpaceROI != null || internalROI != null) {
                 ROI finalROI = null;
                 if (rasterSpaceROI != null) {
-                    finalROI = new ROIShape(rasterSpaceROI);
+                    finalROI = getAsROI(JTS.toPolygon(rasterSpaceROI));
                 }
                 if (finalROI != null && internalROI != null) {
                     finalROI = finalROI.intersect(internalROI);

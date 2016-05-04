@@ -1,0 +1,38 @@
+    /**
+     * Return the footprint (if any) for a file referred by its path
+     * 
+     * @param path
+     * @return
+     * @throws IOException
+     */
+    public Geometry getFootprint(String path) throws IOException {
+        String noExtension = getNoExtensionPath(path);
+
+        // Try to reuse over and over the last loader, to avoid checking the others
+        // The last loader is kept in a volatile variable and all the work is done via
+        // a local copy of it to avoid concurrency issues
+        FootprintLoader loader = lastLoader;
+        Geometry result = null;
+        try {
+            // Check from cached loader
+            if (loader != null) {
+                result = loader.loadFootprint(noExtension);
+            }
+            // Check beside the original data
+            if (result == null) {
+                result = checkForFootprint(noExtension);
+            }
+            // Footprint still not found. Fallback by looking in alternative directory if defined
+            if (result == null) {
+                // Try looking at the alternative location if defined
+                if ((noExtension = getAlternativePath(path, true)) != null) {
+                    result = checkForFootprint(noExtension);
+                }
+            }
+
+        } catch (Exception e) {
+            throw new IOException("Failed to load the footprint for granule " + path, e);
+        }
+        return result;
+    }
+
