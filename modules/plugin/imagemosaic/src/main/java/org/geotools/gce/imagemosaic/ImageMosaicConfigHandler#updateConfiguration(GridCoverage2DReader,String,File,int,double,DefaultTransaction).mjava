@@ -14,9 +14,7 @@
             final String inputCoverageName, File fileBeingProcessed, int fileIndex,
             double numFiles, DefaultTransaction transaction) throws IOException {
 
-        final String indexName = getRunConfiguration().getParameter(Prop.INDEX_NAME);
-        final String coverageName = coverageReader instanceof StructuredGridCoverage2DReader ? inputCoverageName
-                : indexName;
+        final String coverageName = getTargetCoverageName(coverageReader, inputCoverageName);
 
         final Indexer indexer = getRunConfiguration().getIndexer();
 
@@ -179,39 +177,6 @@
                 mosaicConfiguration.setLevelsNum(numberOfLevels);
                 getConfigurations().put(mosaicConfiguration.getName(), mosaicConfiguration);
             }
-
-            ImageLayout layout = coverageReader.getImageLayout(inputCoverageName);
-            cm = layout.getColorModel(null);
-            sm = layout.getSampleModel(null);
-
-            // comparing ColorModel
-            // comparing SampeModel
-            // comparing CRSs
-            ColorModel actualCM = cm;
-            CoordinateReferenceSystem expectedCRS = this.getDefaultCRS(coverageName);
-            if (!(CRS.equalsIgnoreMetadata(expectedCRS, actualCRS))) {
-                // if ((fileIndex > 0 ? !(CRS.equalsIgnoreMetadata(defaultCRS, actualCRS)) : false)) {
-                eventHandler.fireFileEvent(Level.INFO, fileBeingProcessed, false, "Skipping image "
-                        + fileBeingProcessed + " because CRSs do not match.",
-                        (((fileIndex + 1) * 99.0) / numFiles));
-                return;
-            }
-
-            byte[][] palette = mosaicConfiguration.getPalette();
-            ColorModel colorModel = mosaicConfiguration.getColorModel();
-            if (colorModel == null) {
-                colorModel = rasterManager.defaultCM;
-            }
-            if (palette == null) {
-                palette = rasterManager.defaultPalette;
-            }
-            if (Utils.checkColorModels(colorModel, palette, actualCM)) {
-                eventHandler.fireFileEvent(Level.INFO, fileBeingProcessed, false, "Skipping image "
-                        + fileBeingProcessed + " because color models do not match.",
-                        (((fileIndex + 1) * 99.0) / numFiles));
-                return;
-            }
-
         }
         // STEP 3
         if (!useExistingSchema) {
