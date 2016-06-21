@@ -35,71 +35,26 @@
         final ListFeatureCollection collection = new ListFeatureCollection(indexSchema);
         final String fileLocation = prepareLocation(configuration, fileBeingProcessed);
         final String locationAttribute = configuration.getParameter(Prop.LOCATION_ATTRIBUTE);
+        MosaicConfigurationBean mosaicConfiguration = this.getConfigurations().get(coverageName);
+        GranuleGeometryHandler geometryHandler = this.getGeometryHandler();
 
         // getting input granules
         if (inputReader instanceof StructuredGridCoverage2DReader) {
-
             //
             // Case A: input reader is a StructuredGridCoverage2DReader. We can get granules from a source
             //
-            // Getting granule source and its input granules
-            final GranuleSource source = ((StructuredGridCoverage2DReader) inputReader).getGranules(coverageName, true);
-            final SimpleFeatureCollection originCollection = source.getGranules(null);
-            final DefaultProgressListener listener = new DefaultProgressListener();
+            handleStructuredGridCoverage(
+                    ((StructuredGridCoverage2DReader) inputReader).getGranules(coverageName, true),
+                    fileBeingProcessed, inputReader, propertiesCollectors, indexSchema, feature,
+                    collection, fileLocation, locationAttribute, mosaicConfiguration,
+                    geometryHandler);
 
-            // Getting attributes structure to be filled
-            final Collection<Property> destProps = feature.getProperties();
-            final Set<Name> destAttributes = new HashSet<>();
-            for (Property prop: destProps) {
-                destAttributes.add(prop.getName());
-            }
-
-            // Collecting granules
-            originCollection.accepts( new AbstractFeatureVisitor(){
-                public void visit( Feature feature ) {
-                    if(feature instanceof SimpleFeature)
-                    {
-                            // get the feature
-                            final SimpleFeature sourceFeature = (SimpleFeature) feature;
-                            final SimpleFeature destFeature = DataUtilities.template(indexSchema);
-                            Collection<Property> props = sourceFeature.getProperties();
-                            Name propName = null;
-                            Object propValue = null;
-
-                            // Assigning value to dest feature for matching attributes
-                            for (Property prop: props) {
-                                propName = prop.getName();
-                                propValue = prop.getValue();
-
-                                // Matching attributes are set
-                                if (destAttributes.contains(propName)) {
-                                    destFeature.setAttribute(propName, propValue);
-                                }
-                            }
-
-                            // Set location
-                            destFeature.setAttribute(locationAttribute, fileLocation);
-
-                            // delegate remaining attributes set to properties collector
-                            updateAttributesFromCollectors(destFeature, fileBeingProcessed, inputReader, propertiesCollectors);
-                            collection.add(destFeature);
-
-                            // check if something bad occurred
-                            if(listener.isCanceled()||listener.hasExceptions()){
-                                if(listener.hasExceptions())
-                                    throw new RuntimeException(listener.getExceptions().peek());
-                                else
-                                    throw new IllegalStateException("Feature visitor has been canceled");
-                            }
-                    }
-                }
-            }, listener);
         } else {
             //
             // Case B: old style reader, proceed with classic way, using properties collectors
             //
-            feature.setAttribute(indexSchema.getGeometryDescriptor().getLocalName(),
-                    GEOM_FACTORY.toGeometry(new ReferencedEnvelope(envelope)));
+            geometryHandler.handleGeometry(
+                    inputReader, feature, indexSchema, mosaicConfiguration);
             feature.setAttribute(locationAttribute, fileLocation);
 
             updateAttributesFromCollectors(feature, fileBeingProcessed, inputReader, propertiesCollectors);

@@ -1,0 +1,76 @@
+    private void handleStructuredGridCoverage(GranuleSource granules, final File fileBeingProcessed,
+            final GridCoverage2DReader inputReader,
+            final List<PropertiesCollector> propertiesCollectors,
+            final SimpleFeatureType indexSchema, SimpleFeature feature,
+            final ListFeatureCollection collection, final String fileLocation,
+            final String locationAttribute, final MosaicConfigurationBean mosaicConfiguration,
+            final GranuleGeometryHandler geometryHandler) throws IOException
+    {
+
+        // Getting granule source and its input granules
+        final GranuleSource source = granules;
+        final SimpleFeatureCollection originCollection = source.getGranules(null);
+        final DefaultProgressListener listener = new DefaultProgressListener();
+
+        // Getting attributes structure to be filled
+        final Collection<Property> destProps = feature.getProperties();
+        final Set<Name> destAttributes = new HashSet<>();
+        for (Property prop: destProps) {
+            destAttributes.add(prop.getName());
+        }
+
+        // Collecting granules
+        originCollection.accepts( new AbstractFeatureVisitor(){
+            public void visit( Feature feature ) {
+                if(feature instanceof SimpleFeature)
+                {
+                        // get the feature
+                        final SimpleFeature sourceFeature = (SimpleFeature) feature;
+                        final SimpleFeature destFeature = DataUtilities.template(indexSchema);
+                        Collection<Property> props = sourceFeature.getProperties();
+                        Name propName = null;
+                        Object propValue = null;
+
+                        // Assigning value to dest feature for matching attributes
+                        for (Property prop: props) {
+                            Name geometryName = sourceFeature.getFeatureType().getGeometryDescriptor()
+                                    .getName();
+                            if (prop.getName().equals(geometryName)) {
+                                geometryHandler.handleGeometry(
+                                        (StructuredGridCoverage2DReader) inputReader,
+                                        destFeature,
+                                        destFeature.getFeatureType(),
+                                        sourceFeature,
+                                        sourceFeature.getFeatureType(),
+                                        mosaicConfiguration);
+                            }
+                            else {
+                                propName = prop.getName();
+                                propValue = prop.getValue();
+
+                                // Matching attributes are set
+                                if (destAttributes.contains(propName)) {
+                                    destFeature.setAttribute(propName, propValue);
+                                }
+                            }
+                        }
+
+                        // Set location
+                        destFeature.setAttribute(locationAttribute, fileLocation);
+
+                        // delegate remaining attributes set to properties collector
+                        updateAttributesFromCollectors(destFeature, fileBeingProcessed, inputReader, propertiesCollectors);
+                        collection.add(destFeature);
+
+                        // check if something bad occurred
+                        if(listener.isCanceled()||listener.hasExceptions()){
+                            if(listener.hasExceptions())
+                                throw new RuntimeException(listener.getExceptions().peek());
+                            else
+                                throw new IllegalStateException("Feature visitor has been canceled");
+                        }
+                }
+            }
+        }, listener);
+    }
+
