@@ -12,23 +12,22 @@
      */
     public void updateConfiguration(GridCoverage2DReader coverageReader,
             final String inputCoverageName, File fileBeingProcessed, int fileIndex,
-            double numFiles, DefaultTransaction transaction) throws IOException {
+            double numFiles, DefaultTransaction transaction)
+            throws IOException, GranuleHandlingException {
 
-        final String indexName = getRunConfiguration().getParameter(Prop.INDEX_NAME);
-        final String coverageName = coverageReader instanceof StructuredGridCoverage2DReader ? inputCoverageName
-                : indexName;
+        final String targetCoverageName = getTargetCoverageName(coverageReader, inputCoverageName);
 
         final Indexer indexer = getRunConfiguration().getIndexer();
 
         // checking whether the coverage already exists
-        final boolean coverageExists = coverageExists(coverageName);
+        final boolean coverageExists = coverageExists(targetCoverageName);
         MosaicConfigurationBean mosaicConfiguration = null;
         MosaicConfigurationBean currentConfigurationBean = null;
         RasterManager rasterManager = null;
         if (coverageExists) {
 
             // Get the manager for this coverage so it can be updated
-            rasterManager = getParentReader().getRasterManager(coverageName);
+            rasterManager = getParentReader().getRasterManager(targetCoverageName);
             mosaicConfiguration = rasterManager.getConfiguration();
         }
 
@@ -81,12 +80,12 @@
             configBuilder.setCrs(actualCRS);
             configBuilder.setLevels(resolutionLevels);
             configBuilder.setLevelsNum(numberOfLevels);
-            configBuilder.setName(coverageName);
-            configBuilder.setTimeAttribute(IndexerUtils.getAttribute(coverageName,
+            configBuilder.setName(targetCoverageName);
+            configBuilder.setTimeAttribute(IndexerUtils.getAttribute(targetCoverageName,
                     Utils.TIME_DOMAIN, indexer));
-            configBuilder.setElevationAttribute(IndexerUtils.getAttribute(coverageName,
+            configBuilder.setElevationAttribute(IndexerUtils.getAttribute(targetCoverageName,
                     Utils.ELEVATION_DOMAIN, indexer));
-            configBuilder.setAdditionalDomainAttributes(IndexerUtils.getAttribute(coverageName,
+            configBuilder.setAdditionalDomainAttributes(IndexerUtils.getAttribute(targetCoverageName,
                     Utils.ADDITIONAL_DOMAIN, indexer));
 
             final Hints runHints = getRunConfiguration().getHints();
@@ -120,7 +119,7 @@
             if (configuredTypeName != null) {
                 catalogConfigurationBean.setTypeName(configuredTypeName);
             } else {
-                catalogConfigurationBean.setTypeName(coverageName);
+                catalogConfigurationBean.setTypeName(targetCoverageName);
             }
             configBuilder.setCatalogConfigurationBean(catalogConfigurationBean);
             configBuilder.setCheckAuxiliaryMetadata(IndexerUtils.getParameterAsBoolean(Prop.CHECK_AUXILIARY_METADATA, indexer));
@@ -128,16 +127,14 @@
             currentConfigurationBean = configBuilder.getMosaicConfigurationBean();
 
             // Creating a rasterManager which will be initialized after populating the catalog
-            rasterManager = getParentReader().addRasterManager(currentConfigurationBean, false);
+            getParentReader().addRasterManager(currentConfigurationBean, false);
 
             // Creating a granuleStore
             if (!useExistingSchema) {
                 // creating the schema
-                SimpleFeatureType indexSchema = CatalogManager.createSchema(getRunConfiguration(),
+                SimpleFeatureType indexSchema = createSchema(getRunConfiguration(),
                         currentConfigurationBean.getName(), actualCRS);
-                getParentReader().createCoverage(coverageName, indexSchema);
-//            } else {
-//                rasterManager.typeName = coverageName;
+                getParentReader().createCoverage(targetCoverageName, indexSchema);
             }
             getConfigurations().put(currentConfigurationBean.getName(), currentConfigurationBean);
 
@@ -181,49 +178,11 @@
                 mosaicConfiguration.setLevelsNum(numberOfLevels);
                 getConfigurations().put(mosaicConfiguration.getName(), mosaicConfiguration);
             }
-
-            ImageLayout layout = coverageReader.getImageLayout(inputCoverageName);
-            cm = layout.getColorModel(null);
-            sm = layout.getSampleModel(null);
-
-            // comparing ColorModel
-            // comparing SampeModel
-            // comparing CRSs
-            ColorModel actualCM = cm;
-            CoordinateReferenceSystem expectedCRS;
-            if (mosaicConfiguration.getCrs() != null) {
-                expectedCRS = mosaicConfiguration.getCrs();
-            } else {
-                expectedCRS = rasterManager.spatialDomainManager.coverageCRS;
-            }
-            if (!(CRS.equalsIgnoreMetadata(expectedCRS, actualCRS))) {
-                // if ((fileIndex > 0 ? !(CRS.equalsIgnoreMetadata(defaultCRS, actualCRS)) : false)) {
-                eventHandler.fireFileEvent(Level.INFO, fileBeingProcessed, false, "Skipping image "
-                        + fileBeingProcessed + " because CRSs do not match.",
-                        (((fileIndex + 1) * 99.0) / numFiles));
-                return;
-            }
-
-            byte[][] palette = mosaicConfiguration.getPalette();
-            ColorModel colorModel = mosaicConfiguration.getColorModel();
-            if (colorModel == null) {
-                colorModel = rasterManager.defaultCM;
-            }
-            if (palette == null) {
-                palette = rasterManager.defaultPalette;
-            }
-            if (Utils.checkColorModels(colorModel, palette, actualCM)) {
-                eventHandler.fireFileEvent(Level.INFO, fileBeingProcessed, false, "Skipping image "
-                        + fileBeingProcessed + " because color models do not match.",
-                        (((fileIndex + 1) * 99.0) / numFiles));
-                return;
-            }
-
         }
         // STEP 3
         if (!useExistingSchema) {
             // create and store features
-            CatalogManager.updateCatalog(coverageName, fileBeingProcessed, coverageReader,
+            updateCatalog(targetCoverageName, fileBeingProcessed, coverageReader,
                     getParentReader(), catalogConfig, envelope, transaction,
                     getPropertiesCollectors());
         }
