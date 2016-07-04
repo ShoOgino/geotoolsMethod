@@ -22,17 +22,26 @@
          * referencing framework.
          */
         final List<CoordinateVariable<?>> otherAxes = new ArrayList<CoordinateVariable<?>>();
+        int index=-1;
         for(CoordinateAxis axis :coordinateSystem.getCoordinateAxes()){
+            index++;
+            String fullName = axis.getFullName();
+            if (NetCDFUtilities.getIgnoredDimensions().contains(fullName)) {
+                ignoredDimensions.add(fullName);
+                continue;
+            }
             CoordinateVariable<?> cv=reader.georeferencing.getCoordinateVariable(axis.getShortName());
             if (cv == null) { 
                 if (LOGGER.isLoggable(Level.FINE)) {
-                    LOGGER.fine("Unable to find a coordinate variable for " + axis.getFullName());
+                    LOGGER.fine("Unable to find a coordinate variable for " + fullName);
                 }
+                index--;
                 continue;
             }
             switch(cv.getAxisType()){
             case Time:case RunTime:
                 initTemporalDomain(cv, dimensions);
+                tDimensionIndex = index;
                 continue;
             case GeoZ:case Height:case Pressure:
                 String axisName = cv.getName();
@@ -41,6 +50,7 @@
                 }else{
                     otherAxes.add(cv);
                 }
+                zDimensionIndex = index;
                 continue;  
             case GeoX: case GeoY: case Lat: case Lon:
                 // do nothing
