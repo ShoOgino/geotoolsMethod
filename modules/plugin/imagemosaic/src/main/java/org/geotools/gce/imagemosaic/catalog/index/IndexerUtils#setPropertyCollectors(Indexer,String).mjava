@@ -20,24 +20,6 @@
                 final int roundLPos = pcDef.indexOf("(");
                 final int roundRPos = pcDef.indexOf(")");
                 final int roundRPosLast = pcDef.lastIndexOf(")");
-                if (squareRPos != squareRPosLast) {
-                    if (LOGGER.isLoggable(Level.INFO)) {
-                        LOGGER.info("Skipping unparseable PropertyCollector definition: " + pcDef);
-                    }
-                    continue;
-                }
-                if (squareLPos == -1 || squareRPos == -1) {
-                    if (LOGGER.isLoggable(Level.INFO)) {
-                        LOGGER.info("Skipping unparseable PropertyCollector definition: " + pcDef);
-                    }
-                    continue;
-                }
-                if (squareLPos == 0) {
-                    if (LOGGER.isLoggable(Level.INFO)) {
-                        LOGGER.info("Skipping unparseable PropertyCollector definition: " + pcDef);
-                    }
-                    continue;
-                }
 
                 if (roundRPos != roundRPosLast) {
                     if (LOGGER.isLoggable(Level.INFO)) {
@@ -57,12 +39,6 @@
                     }
                     continue;
                 }
-                if (roundLPos != squareRPos + 1) {// ]( or exit
-                    if (LOGGER.isLoggable(Level.INFO)) {
-                        LOGGER.info("Skipping unparseable PropertyCollector definition: " + pcDef);
-                    }
-                    continue;
-                }
                 if (roundRPos != (pcDef.length() - 1)) {// end with )
                     if (LOGGER.isLoggable(Level.INFO)) {
                         LOGGER.info("Skipping unparseable PropertyCollector definition: " + pcDef);
@@ -71,27 +47,37 @@
                 }
 
                 // name
-                final String spi = pcDef.substring(0, squareLPos);
+                String spi = null;
+                if (squareLPos != -1) {
+                    spi = pcDef.substring(0, squareLPos);
+                } else {
+                    spi = pcDef.substring(0, roundLPos);
+                }
 
                 // config
                 final String config = squareLPos < squareRPos
                         ? pcDef.substring(squareLPos + 1, squareRPos) : "";
+
                 String value = null;
-                final File configFile = new File(getParameter(Utils.Prop.ROOT_MOSAIC_DIR, indexer),
+                //only need config if provided, some property collectors don't need it
+                if (config.length() > 0) {
+                    final File configFile = new File(getParameter(Utils.Prop.ROOT_MOSAIC_DIR, indexer),
                         config + ".properties");
-                if (!Utils.checkFileReadable(configFile)) {
-                    if (LOGGER.isLoggable(Level.INFO)) {
-                        LOGGER.info("Unable to access the file for this PropertyCollector: "
+
+                    if (!Utils.checkFileReadable(configFile)) {
+                        if (LOGGER.isLoggable(Level.INFO)) {
+                            LOGGER.info("Unable to access the file for this PropertyCollector: "
                                 + configFile.getAbsolutePath());
-                    }
-                    continue;
-                } else {
-                    final Properties properties = CoverageUtilities
+                        }
+                    } else {
+                        final Properties properties = CoverageUtilities
                             .loadPropertiesFromURL(DataUtilities.fileToURL(configFile));
-                    if (properties.containsKey("regex")) {
-                        value = properties.getProperty("regex");
+                        if (properties.containsKey("regex")) {
+                            value = properties.getProperty("regex");
+                        }
                     }
                 }
+
 
                 // property names
                 final String propertyNames[] = pcDef.substring(roundLPos + 1, roundRPos).split(",");

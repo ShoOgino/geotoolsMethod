@@ -1,13 +1,13 @@
         /**
          * This method is responsible for producing the final mosaic.
-         * 
+         * <p>
          * <p>
          * Depending on whether or not a {@link MergeBehavior#STACK}ing is required, we perform 1 or 2 steps.
          * <ol>
          * <li>step 1 is for merging flat on each value for the dimension</li>
          * <li>step 2 is for merging stack on the resulting mosaics</li>
          * </ol>
-         * 
+         *
          * @return
          * @throws IOException
          */
@@ -20,18 +20,18 @@
 
             // STEP 1 collect all the mosaics from each single dimension
             LOGGER.fine("Producing the final mosaic, step 1, loop through granule collectors");
-            final List<MosaicElement> mosaicInputs = new ArrayList<RasterLayerResponse.MosaicElement>();
-            GranuleCollector first = null; // we take this apart to steal some val
-            int size = granuleCollectors.size();
-            for (GranuleCollector collector : granuleCollectors) {
-                if (LOGGER.isLoggable(Level.FINE)) {
-                    LOGGER.fine(
-                            "Using collector with filter:" + collector.granuleFilter.toString());
+            final List<MosaicElement> mosaicInputs = new ArrayList<MosaicElement>();
+            SubmosaicProducer first = null; // we take this apart to steal some val
+            int size = 0;
+            for (SubmosaicProducer collector : granuleCollectors) {
+                if (LOGGER.isLoggable(Level.FINER)) {
+                    LOGGER.fine("Submosaic producer being called: " + collector.toString());
                 }
-                final MosaicElement preparedMosaic = new Mosaicker(collector.collectGranules(),
-                        MergeBehavior.FLAT).createMosaic();
-                if (preparedMosaic != null) {
-                    mosaicInputs.add(preparedMosaic);
+                final List<MosaicElement> preparedMosaic = collector.createMosaic();
+                size += preparedMosaic.size();
+                if (preparedMosaic.size() > 0
+                        && !preparedMosaic.stream().allMatch(p -> p == null)) {
+                    mosaicInputs.addAll(preparedMosaic);
                     if (first == null) {
                         first = collector;
                     }
@@ -52,9 +52,11 @@
                 return null;
             }
 
-            MosaicInputs mosaickingInputs = new MosaicInputs(first.doInputTransparency,
-                    first.hasAlpha, mosaicInputs, first.sourceThreshold);
-            // normal situan
-            return new MosaicOutput(new Mosaicker(mosaickingInputs, mergeBehavior).createMosaic());
+            MosaicInputs mosaickingInputs = new MosaicInputs(first.doInputTransparency(),
+                    first.hasAlpha(), mosaicInputs, first.getSourceThreshold());
+            // normal situation
+            return new MosaicOutput(
+                    new Mosaicker(RasterLayerResponse.this, mosaickingInputs, mergeBehavior)
+                            .createMosaic());
         }
 
