@@ -38,8 +38,9 @@
 				}
 			}
 		}
-		if (gtParams == null)
+		if (gtParams == null){
 			gtParams = new GTopo30WriteParams();
+		}
 		// compression
 		final boolean compressed = gtParams.getCompressionMode() == ImageWriteParam.MODE_EXPLICIT;
 		// write band
@@ -56,12 +57,37 @@
 		// destination file name
 		String fileName = gc2D.getName().toString();
 
-		// destination XXX HAS to be a dir
+		// handling compression
 		if (compressed) {
-			destination = new ZipOutputStream(new BufferedOutputStream(
-					new FileOutputStream(new File((File) destination,
-							new StringBuffer(fileName).append(".zip")
-									.toString()))));
+			
+			if(destination instanceof File){
+				destination = new ZipOutputStream(new BufferedOutputStream(
+						new FileOutputStream(new File((File) destination,
+								new StringBuffer(fileName).append(".zip")
+										.toString()))));
+			}else{
+				if(!(destination instanceof ZipOutputStream)){
+					throw new IllegalArgumentException("Asking compression on a source that does not support it: "
+					    +destination.getClass().getSimpleName());
+				}
+			}
+			
+		}
+		
+		//now it's either a dir or a ZipOutputStream
+		
+		// if the caller has not asked us to compress explicitly it's usually a file ( a directory) or it is already
+		// compressing hence it is a ZipOutputStream
+		if (!compressed && 
+				!(destination instanceof File && ((File)destination).isDirectory())&&!(destination instanceof ZipOutputStream)){
+				throw new IllegalArgumentException("Asking to write, without compression, on a source that does not support it: "
+					    +destination.getClass().getSimpleName());	
+		}else{
+			// if the caller has asked us to compress explicitly then it is a ZipOutputStream
+			if(compressed &&!(destination instanceof ZipOutputStream)){
+				throw new IllegalArgumentException("Asking to write, with compression, on a source that does not support it: "
+					    +destination.getClass().getSimpleName());	
+			}
 		}
 
 		// /////////////////////////////////////////////////////////////////////
@@ -109,7 +135,7 @@
 		//
 		// //
 		this.writeStats(reFormattedData2Short, fileName, destination, gc2D);
-		// we won't use this image anymore let's release the resources.
+		
 
 		// //
 		//
@@ -146,8 +172,7 @@
 		// //
 		this.writeSRC(gc2D, fileName, destination);
 
-		if (compressed) {
-
+		if (destination instanceof ZipOutputStream) {
 			((ZipOutputStream) destination).close();
 		}
 	}
