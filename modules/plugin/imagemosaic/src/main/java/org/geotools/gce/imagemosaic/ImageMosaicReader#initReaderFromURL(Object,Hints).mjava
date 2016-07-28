@@ -7,7 +7,7 @@
      */
     private void initReaderFromURL(final Object source, final Hints hints) throws Exception {
         this.sourceURL = Utils.checkSource(source, hints);
-        
+
         // Preliminar check on source
         if (this.sourceURL == null) {
             throw new DataSourceException(
@@ -20,13 +20,14 @@
             if (sourceURL.getProtocol().equals("file")) {
                 final File sourceFile = DataUtilities.urlToFile(sourceURL);
                 if (!sourceFile.exists()) {
-                    throw new DataSourceException("The specified sourceURL doesn't refer to an existing file");
+                    throw new DataSourceException(
+                            "The specified sourceURL doesn't refer to an existing file");
                 }
             }
             if (sourceURL != null) {
                 parentDirectory = DataUtilities.urlToFile(sourceURL);
                 if (!parentDirectory.isDirectory()) {
-                        parentDirectory = parentDirectory.getParentFile();
+                    parentDirectory = parentDirectory.getParentFile();
                 }
             }
             configuration = Utils.loadMosaicProperties(sourceURL, this.locationAttributeName);
@@ -37,13 +38,15 @@
                 final File parent = DataUtilities.urlToFile(sourceURL).getParentFile();
 
                 // this can be used to look for properties files that do NOT define a datastore
-                final File[] properties = parent.listFiles((FilenameFilter) FileFilterUtils.and(
-                        FileFilterUtils.notFileFilter(FileFilterUtils
-                                .nameFileFilter("indexer.properties")), FileFilterUtils.and(
-                                FileFilterUtils.notFileFilter(FileFilterUtils
-                                        .nameFileFilter("datastore.properties")), FileFilterUtils
-                                        .makeFileOnly(FileFilterUtils
-                                                .suffixFileFilter(".properties")))));
+                final File[] properties = parent
+                        .listFiles((FilenameFilter) FileFilterUtils.and(
+                                FileFilterUtils.notFileFilter(
+                                        FileFilterUtils.nameFileFilter("indexer.properties")),
+                                FileFilterUtils.and(
+                                        FileFilterUtils.notFileFilter(FileFilterUtils
+                                                .nameFileFilter("datastore.properties")),
+                                        FileFilterUtils.makeFileOnly(
+                                                FileFilterUtils.suffixFileFilter(".properties")))));
 
                 // do we have a valid datastore + mosaic properties pair?
                 final File datastoreProperties = new File(parent, "datastore.properties");
@@ -51,37 +54,43 @@
                 // Scan for MosaicConfigurationBeans from properties files
                 List<MosaicConfigurationBean> beans = new ArrayList<MosaicConfigurationBean>();
                 for (File propFile : properties) {
-                    if (Utils.checkFileReadable(propFile) && Utils.loadMosaicProperties(DataUtilities.fileToURL(propFile), "") != null) {
-                        configuration = Utils.loadMosaicProperties(DataUtilities.fileToURL(propFile), this.locationAttributeName);
+                    if (Utils.checkFileReadable(propFile) && Utils
+                            .loadMosaicProperties(DataUtilities.fileToURL(propFile), "") != null) {
+                        configuration = Utils.loadMosaicProperties(
+                                DataUtilities.fileToURL(propFile), this.locationAttributeName);
                         if (configuration != null) {
                             beans.add(configuration);
                         }
                     }
                 }
-                
+
                 // In case we didn't find any configuration bean and datastore properties, we can't do anything
                 if (beans.isEmpty() && !datastoreProperties.exists()) {
-                    throw new DataSourceException("No mosaic properties file or datastore properties file have been found");
+                    throw new DataSourceException(
+                            "No mosaic properties file or datastore properties file have been found");
                 }
-                
+
                 // Catalog initialization from datastore
                 GranuleCatalog catalog = null;
-                final Properties params = ImageMosaicConfigHandler.createGranuleCatalogProperties(datastoreProperties);
+                final Properties params = ImageMosaicConfigHandler
+                        .createGranuleCatalogProperties(datastoreProperties);
 
                 // Since we are dealing with a catalog from an existing store, make sure to scan for all the typeNames on initialization
-                final Object typeNames=params.get(Utils.SCAN_FOR_TYPENAMES);
-                if (typeNames!=null){
+                final Object typeNames = params.get(Utils.SCAN_FOR_TYPENAMES);
+                if (typeNames != null) {
                     params.put(Utils.SCAN_FOR_TYPENAMES, Boolean.valueOf(typeNames.toString()));
                 } else {
                     params.put(Utils.SCAN_FOR_TYPENAMES, Boolean.TRUE);
                 }
                 if (beans.size() > 0) {
-                    catalog = GranuleCatalogFactory.createGranuleCatalog(sourceURL, beans.get(0).getCatalogConfigurationBean(), params, getHints());
+                    catalog = GranuleCatalogFactory.createGranuleCatalog(sourceURL,
+                            beans.get(0).getCatalogConfigurationBean(), params, getHints());
                 } else {
-                    catalog = ImageMosaicConfigHandler
-                            .createGranuleCatalogFromDatastore(parent, datastoreProperties, true, getHints());
-                } 
-                MultiLevelROIProvider rois = MultiLevelROIProviderMosaicFactory.createFootprintProvider(parent);
+                    catalog = ImageMosaicConfigHandler.createGranuleCatalogFromDatastore(parent,
+                            datastoreProperties, true, getHints());
+                }
+                MultiLevelROIProvider rois = MultiLevelROIProviderMosaicFactory
+                        .createFootprintProvider(parent);
                 catalog.setMultiScaleROIProvider(rois);
                 if (granuleCatalog != null) {
                     granuleCatalog.dispose();
@@ -89,7 +98,8 @@
                 granuleCatalog = catalog;
 
                 if (granuleCatalog == null) {
-                    throw new DataSourceException("Unable to create index for this URL " + sourceURL);
+                    throw new DataSourceException(
+                            "Unable to create index for this URL " + sourceURL);
                 }
 
                 // Creating a RasterManager for each mosaic configuration found on disk
@@ -98,18 +108,19 @@
                     addRasterManager(bean, true);
                 }
             } else {
-                
-                // Old style code: we have a single MosaicConfigurationBean. Use that to create the catalog 
-                granuleCatalog = ImageMosaicConfigHandler
-                        .createCatalog(sourceURL, configuration, this.hints);
+
+                // Old style code: we have a single MosaicConfigurationBean. Use that to create the catalog
+                granuleCatalog = ImageMosaicConfigHandler.createCatalog(sourceURL, configuration,
+                        this.hints);
                 File parent = DataUtilities.urlToFile(sourceURL).getParentFile();
-                MultiLevelROIProvider rois = MultiLevelROIProviderMosaicFactory.createFootprintProvider(parent);
+                MultiLevelROIProvider rois = MultiLevelROIProviderMosaicFactory
+                        .createFootprintProvider(parent);
                 granuleCatalog.setMultiScaleROIProvider(rois);
                 addRasterManager(configuration, true);
             }
 
         } catch (Throwable e) {
-            
+
             // Dispose catalog
             try {
                 if (granuleCatalog != null) {
@@ -122,7 +133,7 @@
             } finally {
                 granuleCatalog = null;
             }
-            
+
             // dispose raster managers as well
             try {
                 disposeManagers();

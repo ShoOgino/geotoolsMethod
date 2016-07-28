@@ -4,56 +4,56 @@
          * <p>
          * Depending on whether or not a {@link MergeBehavior#STACK}ing is required, we perform 1 or 2 steps.
          * <ol>
-         *      <li> step 1 is for merging flat on each value for the dimension</li>
-         *      <li> step 2 is for merging stack on the resulting mosaics</li>
+         * <li>step 1 is for merging flat on each value for the dimension</li>
+         * <li>step 2 is for merging stack on the resulting mosaics</li>
          * </ol>
+         * 
          * @return
          * @throws IOException
          */
-        private MosaicOutput produce() throws IOException{
+        private MosaicOutput produce() throws IOException {
             // checks
             if (granulesNumber == 0) {
-                LOGGER.log(Level.FINE, "Unable to load any granuleDescriptor");     
+                LOGGER.log(Level.FINE, "Unable to load any granuleDescriptor");
                 return null;
             }
-            
+
             // STEP 1 collect all the mosaics from each single dimension
-            LOGGER.fine("Producing the final mosaic, step 1, loop through granule collectors");   
+            LOGGER.fine("Producing the final mosaic, step 1, loop through granule collectors");
             final List<MosaicElement> mosaicInputs = new ArrayList<RasterLayerResponse.MosaicElement>();
             GranuleCollector first = null; // we take this apart to steal some val
             int size = granuleCollectors.size();
             for (GranuleCollector collector : granuleCollectors) {
-                if(LOGGER.isLoggable(Level.FINE)) {
-                    LOGGER.fine("Using collector with filter:" + collector.granuleFilter.toString());
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.fine(
+                            "Using collector with filter:" + collector.granuleFilter.toString());
                 }
-                final MosaicElement preparedMosaic = new Mosaicker(collector.collectGranules(), MergeBehavior.FLAT).createMosaic();
-                if(preparedMosaic != null) {
+                final MosaicElement preparedMosaic = new Mosaicker(collector.collectGranules(),
+                        MergeBehavior.FLAT).createMosaic();
+                if (preparedMosaic != null) {
                     mosaicInputs.add(preparedMosaic);
                     if (first == null) {
                         first = collector;
                     }
-                }else{
+                } else {
                     // we were not able to mosaic these granules, e.g. we have ROIs and the requested area
                     // fell outside the ROI
                     size--;
                 }
             }
-            LOGGER.fine("Producing the final mosaic, step 2, final mosaicking"); 
-            // optimization 
+            LOGGER.fine("Producing the final mosaic, step 2, final mosaicking");
+            // optimization
             if (size == 1) {
                 // we don't need to mosaick again
                 return new MosaicOutput(mosaicInputs.get(0));
             }
             // no mosaics produced, it might happen, see above
-            if(size==0){
+            if (size == 0) {
                 return null;
             }
-            
-            MosaicInputs mosaickingInputs = new MosaicInputs(
-                    first.doInputTransparency, 
-                    first.hasAlpha, 
-                    mosaicInputs, 
-                    first.sourceThreshold);
+
+            MosaicInputs mosaickingInputs = new MosaicInputs(first.doInputTransparency,
+                    first.hasAlpha, mosaicInputs, first.sourceThreshold);
             // normal situan
             return new MosaicOutput(new Mosaicker(mosaickingInputs, mergeBehavior).createMosaic());
         }

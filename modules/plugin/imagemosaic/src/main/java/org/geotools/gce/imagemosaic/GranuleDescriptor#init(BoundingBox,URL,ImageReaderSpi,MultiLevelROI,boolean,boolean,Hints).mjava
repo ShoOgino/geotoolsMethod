@@ -1,144 +1,157 @@
     protected void init(final BoundingBox granuleBBOX, final URL granuleUrl,
-			final ImageReaderSpi suggestedSPI, final MultiLevelROI roiProvider,
-			final boolean heterogeneousGranules, final boolean handleArtifactsFiltering, final Hints hints) {
-		this.granuleBBOX = ReferencedEnvelope.reference(granuleBBOX);
-		this.granuleUrl = granuleUrl;
-		this.roiProvider = roiProvider;
-		this.singleDimensionalGranule = true;
-		this.handleArtifactsFiltering = handleArtifactsFiltering;
-    		filterMe = handleArtifactsFiltering && roiProvider != null;
+            final ImageReaderSpi suggestedSPI, final MultiLevelROI roiProvider,
+            final boolean heterogeneousGranules, final boolean handleArtifactsFiltering,
+            final Hints hints) {
+        this.granuleBBOX = ReferencedEnvelope.reference(granuleBBOX);
+        this.granuleUrl = granuleUrl;
+        this.roiProvider = roiProvider;
+        this.singleDimensionalGranule = true;
+        this.handleArtifactsFiltering = handleArtifactsFiltering;
+        filterMe = handleArtifactsFiltering && roiProvider != null;
 
-                // When looking for formats which may parse this file, make sure to exclude the ImageMosaicFormat as return
-                File granuleFile = DataUtilities.urlToFile(granuleUrl);
-                AbstractGridFormat format = GridFormatFinder.findFormat(granuleFile,
-                        EXCLUDE_MOSAIC);
-		// create the base grid to world transformation
-                AbstractGridCoverage2DReader gcReader = null; 
-		ImageInputStream inStream = null;
-		ImageReader reader = null;
-		try {
-		    
-		    gcReader = format.getReader(granuleFile, hints);
-		    // Getting Dataset Layout
-	                layout = gcReader.getDatasetLayout();
-			//
-			//get info about the raster we have to read
-			//
-		        SpiHelper spiProvider = new SpiHelper(granuleFile, suggestedSPI);
-	                boolean isMultidim = spiProvider.isMultidim();
+        // When looking for formats which may parse this file, make sure to exclude the ImageMosaicFormat as return
+        File granuleFile = DataUtilities.urlToFile(granuleUrl);
+        AbstractGridFormat format = GridFormatFinder.findFormat(granuleFile, EXCLUDE_MOSAIC);
+        // create the base grid to world transformation
+        AbstractGridCoverage2DReader gcReader = null;
+        ImageInputStream inStream = null;
+        ImageReader reader = null;
+        try {
 
-		        ovrProvider = new MaskOverviewProvider(layout, granuleFile, spiProvider);
-			
-			// get a stream
-		        if(cachedStreamSPI==null){
-		            cachedStreamSPI = ovrProvider.getInputStreamSpi();
-		        }
-		        assert cachedStreamSPI!=null:"no cachedStreamSPI available!";
-			inStream = cachedStreamSPI.createInputStreamInstance(granuleUrl, ImageIO.getUseCache(), ImageIO.getCacheDirectory());
-			if(inStream == null){
-                            final File file = DataUtilities.urlToFile(granuleUrl);
-                            if(file!=null){
-                                if(LOGGER.isLoggable(Level.WARNING)){
-                                    LOGGER.log(Level.WARNING,Utils.getFileInfo(file));
-                                }
-                            }
-			    throw new IllegalArgumentException("Unable to get an input stream for the provided file "+granuleUrl.toString());
-			}
-			
-			// get a reader and try to cache the suggested SPI first
-			if(cachedReaderSPI == null){
-			    cachedReaderSPI = ovrProvider.getImageReaderSpi();
-			}
-			if (reader == null) {
-			    if (cachedReaderSPI == null) {
-			        throw new IllegalArgumentException("Unable to get a ReaderSPI for the provided input: " + granuleUrl.toString());
-			    }
-			    reader = cachedReaderSPI.createReaderInstance();
-			}
-			
-			if(reader == null)
-				throw new IllegalArgumentException("Unable to get an ImageReader for the provided file "+granuleUrl.toString());
-			
-			boolean ignoreMetadata = isMultidim ? customizeReaderInitialization(reader, hints) : false;
-			reader.setInput(inStream, false, ignoreMetadata);
-			//get selected level and base level dimensions
-			final Rectangle originalDimension = Utils.getDimension(0, reader);
-			
-			// build the g2W for this tile, in principle we should get it
-			// somehow from the tile itself or from the index, but at the moment
-			// we do not have such info, hence we assume that it is a simple
-			// scale and translate
-			this.geMapper= new GridToEnvelopeMapper(new GridEnvelope2D(originalDimension), granuleBBOX);
-			geMapper.setPixelAnchor(PixelInCell.CELL_CENTER);//this is the default behavior but it is nice to write it down anyway
-			this.baseGridToWorld = geMapper.createAffineTransform();
-			
-			// add the base level
-			this.granuleLevels.put(Integer.valueOf(0), new GranuleOverviewLevelDescriptor(1, 1, originalDimension.width, originalDimension.height));
-			
-			////////////////////// Setting overviewController ///////////////////////
-			
-			if (heterogeneousGranules) {
-			    // //
-			    //
-			    // Right now we are setting up overviewsController by assuming that
-			    // overviews are internal images as happens in TIFF images
-			    // We can improve this by leveraging on coverageReaders  
-			    //
-			    // //
-			    
-	                    // Getting the first level descriptor
-                            final GranuleOverviewLevelDescriptor baseOverviewLevelDescriptor = granuleLevels.get(0);
+            gcReader = format.getReader(granuleFile, hints);
+            // Getting Dataset Layout
+            layout = gcReader.getDatasetLayout();
+            //
+            // get info about the raster we have to read
+            //
+            SpiHelper spiProvider = new SpiHelper(granuleFile, suggestedSPI);
+            boolean isMultidim = spiProvider.isMultidim();
 
-                            // Variables initialization
-                            final int numberOfOvervies = ovrProvider.getNumOverviews();
-			    final AffineTransform2D baseG2W = baseOverviewLevelDescriptor.getGridToWorldTransform();
-			    final int width = baseOverviewLevelDescriptor.getWidth();
-			    final int height = baseOverviewLevelDescriptor.getHeight();
-			    final double resX = AffineTransform2D.getScaleX0(baseG2W);
-			    final double resY = AffineTransform2D.getScaleY0(baseG2W);
-			    final double[] highestRes = new double[]{resX, resY};
-			    
-			    // Populating overviews and initializing overviewsController
-                            final double[][] overviewsResolution = ovrProvider.getOverviewResolutions(
-                                    highestRes[0] * width, highestRes[1] * height);
-			    overviewsController = new OverviewsController(highestRes, numberOfOvervies, overviewsResolution);
-			}
-                        //////////////////////////////////////////////////////////////////////////
-			
-			if (hints != null && hints.containsKey(Utils.CHECK_AUXILIARY_METADATA)) {
-			    boolean checkAuxiliaryMetadata = (Boolean) hints.get(Utils.CHECK_AUXILIARY_METADATA);
-			    if (checkAuxiliaryMetadata) {
-			        checkPamDataset();
-			    }
-			}
-			
+            ovrProvider = new MaskOverviewProvider(layout, granuleFile, spiProvider);
 
-		} catch (IllegalStateException e) {
-			throw new IllegalArgumentException(e);
-			
-		} catch (IOException e) {
-			throw new IllegalArgumentException(e);
-		} finally {
-		    // close/dispose stream and readers
-			try {
-				if(inStream != null){
-					inStream.close();
-				}
-			} catch (Throwable e) {
-				throw new IllegalArgumentException(e);
-			} finally{
-				if (reader != null){
-					reader.dispose();
-				}
-			}
-			if (gcReader != null) {
-			    try {
-			        gcReader.dispose();
-			    } catch (Throwable t) {
-			        // Ignore it
-			    }
-			}
-			
-		}
-	}
+            // get a stream
+            if (cachedStreamSPI == null) {
+                cachedStreamSPI = ovrProvider.getInputStreamSpi();
+            }
+            assert cachedStreamSPI != null : "no cachedStreamSPI available!";
+            inStream = cachedStreamSPI.createInputStreamInstance(granuleUrl, ImageIO.getUseCache(),
+                    ImageIO.getCacheDirectory());
+            if (inStream == null) {
+                final File file = DataUtilities.urlToFile(granuleUrl);
+                if (file != null) {
+                    if (LOGGER.isLoggable(Level.WARNING)) {
+                        LOGGER.log(Level.WARNING, Utils.getFileInfo(file));
+                    }
+                }
+                throw new IllegalArgumentException(
+                        "Unable to get an input stream for the provided file "
+                                + granuleUrl.toString());
+            }
+
+            // get a reader and try to cache the suggested SPI first
+            if (cachedReaderSPI == null) {
+                cachedReaderSPI = ovrProvider.getImageReaderSpi();
+            }
+            if (reader == null) {
+                if (cachedReaderSPI == null) {
+                    throw new IllegalArgumentException(
+                            "Unable to get a ReaderSPI for the provided input: "
+                                    + granuleUrl.toString());
+                }
+                reader = cachedReaderSPI.createReaderInstance();
+            }
+
+            if (reader == null)
+                throw new IllegalArgumentException(
+                        "Unable to get an ImageReader for the provided file "
+                                + granuleUrl.toString());
+
+            boolean ignoreMetadata = isMultidim ? customizeReaderInitialization(reader, hints)
+                    : false;
+            reader.setInput(inStream, false, ignoreMetadata);
+            // get selected level and base level dimensions
+            final Rectangle originalDimension = Utils.getDimension(0, reader);
+
+            // build the g2W for this tile, in principle we should get it
+            // somehow from the tile itself or from the index, but at the moment
+            // we do not have such info, hence we assume that it is a simple
+            // scale and translate
+            this.geMapper = new GridToEnvelopeMapper(new GridEnvelope2D(originalDimension),
+                    granuleBBOX);
+            geMapper.setPixelAnchor(PixelInCell.CELL_CENTER);// this is the default behavior but it is nice to write it down anyway
+            this.baseGridToWorld = geMapper.createAffineTransform();
+
+            // add the base level
+            this.granuleLevels.put(Integer.valueOf(0), new GranuleOverviewLevelDescriptor(1, 1,
+                    originalDimension.width, originalDimension.height));
+
+            ////////////////////// Setting overviewController ///////////////////////
+
+            if (heterogeneousGranules) {
+                // //
+                //
+                // Right now we are setting up overviewsController by assuming that
+                // overviews are internal images as happens in TIFF images
+                // We can improve this by leveraging on coverageReaders
+                //
+                // //
+
+                // Getting the first level descriptor
+                final GranuleOverviewLevelDescriptor baseOverviewLevelDescriptor = granuleLevels
+                        .get(0);
+
+                // Variables initialization
+                final int numberOfOvervies = ovrProvider.getNumOverviews();
+                final AffineTransform2D baseG2W = baseOverviewLevelDescriptor
+                        .getGridToWorldTransform();
+                final int width = baseOverviewLevelDescriptor.getWidth();
+                final int height = baseOverviewLevelDescriptor.getHeight();
+                final double resX = AffineTransform2D.getScaleX0(baseG2W);
+                final double resY = AffineTransform2D.getScaleY0(baseG2W);
+                final double[] highestRes = new double[] { resX, resY };
+
+                // Populating overviews and initializing overviewsController
+                final double[][] overviewsResolution = ovrProvider
+                        .getOverviewResolutions(highestRes[0] * width, highestRes[1] * height);
+                overviewsController = new OverviewsController(highestRes, numberOfOvervies,
+                        overviewsResolution);
+            }
+            //////////////////////////////////////////////////////////////////////////
+
+            if (hints != null && hints.containsKey(Utils.CHECK_AUXILIARY_METADATA)) {
+                boolean checkAuxiliaryMetadata = (Boolean) hints
+                        .get(Utils.CHECK_AUXILIARY_METADATA);
+                if (checkAuxiliaryMetadata) {
+                    checkPamDataset();
+                }
+            }
+
+        } catch (IllegalStateException e) {
+            throw new IllegalArgumentException(e);
+
+        } catch (IOException e) {
+            throw new IllegalArgumentException(e);
+        } finally {
+            // close/dispose stream and readers
+            try {
+                if (inStream != null) {
+                    inStream.close();
+                }
+            } catch (Throwable e) {
+                throw new IllegalArgumentException(e);
+            } finally {
+                if (reader != null) {
+                    reader.dispose();
+                }
+            }
+            if (gcReader != null) {
+                try {
+                    gcReader.dispose();
+                } catch (Throwable t) {
+                    // Ignore it
+                }
+            }
+
+        }
+    }
 
