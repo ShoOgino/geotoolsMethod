@@ -1,56 +1,57 @@
-	/**
-	 * This method shall only be called when the <code>indexLocation</code> is of protocol <code>file:</code>
-	 */
-	private void createIndex() {
-		
-		Iterator<GranuleDescriptor> it=null;
-		final Collection<GranuleDescriptor> features=new ArrayList<GranuleDescriptor>();
-		//
-		// Load tiles informations, especially the bounds, which will be
-		// reused
-		//
-		try{
+    /**
+     * This method shall only be called when the <code>indexLocation</code> is of protocol <code>file:</code>
+     */
+    private void createIndex() {
 
-			wrappedCatalogue.getGranuleDescriptors(new Query(typeName), new GranuleCatalogVisitor() {
-                            
-                            @Override
-                            public void visit(GranuleDescriptor granule, Object o) {
-                                features.add(granule);
-                                
-                            }
-                        });
-			if (features == null) 
-				throw new NullPointerException(
-						"The provided SimpleFeatureCollection is null, it's impossible to create an index!");
-	
-			if (LOGGER.isLoggable(Level.FINE))
-				LOGGER.fine("Index Loaded");
-			
-			//load the feature from the shapefile and create JTS index
-			it = features.iterator();
-			
-			// now build the index
-			// TODO make it configurable as far the index is involved
-			STRtree tree = new STRtree();
-			long size=0;
-			while (it.hasNext()) {
-				final GranuleDescriptor granule = it.next();
-				final ReferencedEnvelope env=ReferencedEnvelope.reference(granule.getGranuleBBOX());
-				final Geometry g = FeatureUtilities.getPolygon(
-						new Rectangle2D.Double(env.getMinX(),env.getMinY(),env.getWidth(),env.getHeight()),0);
-				tree.insert(g.getEnvelopeInternal(), granule);
-			}
-			
-			// force index construction --> STRTrees are built on first call to
-			// query
-			tree.build();
-			
-			// save the soft reference
-			index=tree;
-		}
-		catch (Throwable e) {
-			throw new  IllegalArgumentException(e);
-		}
-		
-	}
+        Iterator<GranuleDescriptor> it = null;
+        final Collection<GranuleDescriptor> features = new ArrayList<GranuleDescriptor>();
+        //
+        // Load tiles informations, especially the bounds, which will be
+        // reused
+        //
+        try {
+
+            wrappedCatalogue.getGranuleDescriptors(new Query(typeName),
+                    new GranuleCatalogVisitor() {
+
+                        @Override
+                        public void visit(GranuleDescriptor granule, Object o) {
+                            features.add(granule);
+
+                        }
+                    });
+            if (features == null)
+                throw new NullPointerException(
+                        "The provided SimpleFeatureCollection is null, it's impossible to create an index!");
+
+            if (LOGGER.isLoggable(Level.FINE))
+                LOGGER.fine("Index Loaded");
+
+            // load the feature from the shapefile and create JTS index
+            it = features.iterator();
+
+            // now build the index
+            // TODO make it configurable as far the index is involved
+            STRtree tree = new STRtree();
+            long size = 0;
+            while (it.hasNext()) {
+                final GranuleDescriptor granule = it.next();
+                final ReferencedEnvelope env = ReferencedEnvelope
+                        .reference(granule.getGranuleBBOX());
+                final Geometry g = FeatureUtilities.getPolygon(new Rectangle2D.Double(env.getMinX(),
+                        env.getMinY(), env.getWidth(), env.getHeight()), 0);
+                tree.insert(g.getEnvelopeInternal(), granule);
+            }
+
+            // force index construction --> STRTrees are built on first call to
+            // query
+            tree.build();
+
+            // save the soft reference
+            index = tree;
+        } catch (Throwable e) {
+            throw new IllegalArgumentException(e);
+        }
+
+    }
 

@@ -1,8 +1,6 @@
-        private MosaicElement preProcessGranuleRaster(
-            	RenderedImage granule,  
-            	final GranuleLoadingResult result, 
-            	String canonicalPath) {
-        
+        private MosaicElement preProcessGranuleRaster(RenderedImage granule,
+                final GranuleLoadingResult result, String canonicalPath) {
+
             //
             // INDEX COLOR MODEL EXPANSION
             //
@@ -27,9 +25,9 @@
             //
             //
             if (rasterManager.expandMe && granule.getColorModel() instanceof IndexColorModel) {
-            	granule = new ImageWorker(granule).forceComponentColorModel().getRenderedImage();
+                granule = new ImageWorker(granule).forceComponentColorModel().getRenderedImage();
             }
-        
+
             //
             // TRANSPARENT COLOR MANAGEMENT
             //
@@ -37,28 +35,31 @@
                 if (LOGGER.isLoggable(Level.FINE)) {
                     LOGGER.fine("Support for alpha on input granule " + result.granuleUrl);
                 }
-                granule = new ImageWorker(granule).makeColorTransparent(inputTransparentColor).getRenderedImage();
-                hasAlpha=granule.getColorModel().hasAlpha();
-                if(!granule.getColorModel().hasAlpha()){
+                granule = new ImageWorker(granule).makeColorTransparent(inputTransparentColor)
+                        .getRenderedImage();
+                hasAlpha = granule.getColorModel().hasAlpha();
+                if (!granule.getColorModel().hasAlpha()) {
                     // if the resulting image has no transparency (can happen with IndexColorModel then we need to try component
                     // color model
-                    granule = new ImageWorker(granule).forceComponentColorModel(true).makeColorTransparent(inputTransparentColor).getRenderedImage();
-                    hasAlpha=granule.getColorModel().hasAlpha();
+                    granule = new ImageWorker(granule).forceComponentColorModel(true)
+                            .makeColorTransparent(inputTransparentColor).getRenderedImage();
+                    hasAlpha = granule.getColorModel().hasAlpha();
                 }
                 assert hasAlpha;
-                
+
             }
-            PlanarImage alphaChannel=null;		
+            PlanarImage alphaChannel = null;
             if (hasAlpha || doInputTransparency) {
                 ImageWorker w = new ImageWorker(granule);
-                if (granule.getSampleModel() instanceof MultiPixelPackedSampleModel||granule.getColorModel() instanceof IndexColorModel) {
+                if (granule.getSampleModel() instanceof MultiPixelPackedSampleModel
+                        || granule.getColorModel() instanceof IndexColorModel) {
                     w.forceComponentColorModel();
-                    granule=w.getRenderedImage();
+                    granule = w.getRenderedImage();
                 }
                 // doing this here gives the guarantee that I get the correct index for the transparency band
                 alphaIndex[0] = granule.getColorModel().getNumComponents() - 1;
-                assert alphaIndex[0]< granule.getSampleModel().getNumBands();
-                
+                assert alphaIndex[0] < granule.getSampleModel().getNumBands();
+
                 //
                 // ALPHA in INPUT
                 //
@@ -68,18 +69,17 @@
                 //
                 alphaChannel = w.retainBands(alphaIndex).getPlanarImage();
             }
-        
-        
+
             //
             // ROI
             //
             // we need to add its roi in order to avoid problems with the mosaics sources overlapping
             final Rectangle bounds = PlanarImage.wrapRenderedImage(granule).getBounds();
-            Geometry mask = JTS.toGeometry(new Envelope(bounds.getMinX(), bounds.getMaxX(), bounds.getMinY(), bounds.getMaxY()));
-            ROI imageROI = new ROIGeometry(mask);            
-            if (footprintBehavior.handleFootprints()){ 
+            Geometry mask = JTS.toGeometry(new Envelope(bounds.getMinX(), bounds.getMaxX(),
+                    bounds.getMinY(), bounds.getMaxY()));
+            ROI imageROI = new ROIGeometry(mask);
+            if (footprintBehavior.handleFootprints()) {
 
-                
                 // get the real footprint
                 final ROI footprint = result.getFootprint();
                 if (footprint != null) {
@@ -89,37 +89,40 @@
                         imageROI = imageROI.intersect(footprint);
                     }
                 }
-                
+
                 // ARTIFACTS FILTERING
-                if (defaultArtifactsFilterThreshold != Integer.MIN_VALUE && result.isDoFiltering()){
-                    int artifactThreshold = defaultArtifactsFilterThreshold; 
-                    if (artifactsFilterPTileThreshold != -1){
-                        
-                        //Looking for a histogram for that granule in order to 
-                        //setup dynamic threshold 
-                        if (canonicalPath != null){
+                if (defaultArtifactsFilterThreshold != Integer.MIN_VALUE
+                        && result.isDoFiltering()) {
+                    int artifactThreshold = defaultArtifactsFilterThreshold;
+                    if (artifactsFilterPTileThreshold != -1) {
+
+                        // Looking for a histogram for that granule in order to
+                        // setup dynamic threshold
+                        if (canonicalPath != null) {
                             final String path = FilenameUtils.getFullPath(canonicalPath);
                             final String baseName = FilenameUtils.getBaseName(canonicalPath);
                             final String histogramPath = path + baseName + "." + "histogram";
                             final Histogram histogram = Utils.getHistogram(histogramPath);
                             if (histogram != null) {
-                                final double[]p = histogram.getPTileThreshold(artifactsFilterPTileThreshold);
-                                artifactThreshold = (int)p[0];
+                                final double[] p = histogram
+                                        .getPTileThreshold(artifactsFilterPTileThreshold);
+                                artifactThreshold = (int) p[0];
                             }
                         }
                     }
-                    if (LOGGER.isLoggable(Level.FINE)){
+                    if (LOGGER.isLoggable(Level.FINE)) {
                         LOGGER.log(Level.FINE, "Filtering granules artifacts");
                     }
-                    ImageWorker w = new ImageWorker(granule).setRenderingHints(hints).setROI(imageROI);
-                    w.setBackground(new double[]{0});
+                    ImageWorker w = new ImageWorker(granule).setRenderingHints(hints)
+                            .setROI(imageROI);
+                    w.setBackground(new double[] { 0 });
                     w.artifactsFilter(artifactThreshold, 3);
                     granule = w.getRenderedImage();
-                    //granule = ArtifactsFilterDescriptor.create(granule, imageROI, new double[]{0}, artifactThreshold, 3, hints);
+                    // granule = ArtifactsFilterDescriptor.create(granule, imageROI, new double[]{0}, artifactThreshold, 3, hints);
                 }
             }
-            
-            // preparing input 
+
+            // preparing input
             return new MosaicElement(alphaChannel, imageROI, granule, result.getPamDataset());
         }
 
