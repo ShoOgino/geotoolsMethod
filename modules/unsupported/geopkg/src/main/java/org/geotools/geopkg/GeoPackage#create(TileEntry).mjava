@@ -33,71 +33,66 @@
 
         try {
             Connection cx = connPool.getConnection();
-            //TODO: do all of this in a transaction
+            // TODO: do all of this in a transaction
             try {
                 PreparedStatement st;
-                
-                //add entry to tile matrix set table
+
+                // add entry to tile matrix set table
                 st = prepare(cx, format("INSERT INTO %s VALUES (?,?,?,?,?,?)", TILE_MATRIX_SET))
                         .set(e.getTableName()).set(e.getSrid()).set(e.getBounds().getMinX())
-                            .set(e.getBounds().getMinY()).set(e.getBounds().getMaxX()).set(e.getBounds().getMaxY())
-                            .statement();
+                        .set(e.getBounds().getMinY()).set(e.getBounds().getMaxX())
+                        .set(e.getBounds().getMaxY()).statement();
                 try {
                     st.execute();
-                }
-                finally {
+                } finally {
                     close(st);
                 }
-                
 
-                //create the tile_matrix_metadata entries
-                st = prepare(cx, format("INSERT INTO %s VALUES (?,?,?,?,?,?,?,?)", TILE_MATRIX_METADATA))
-                    .statement();
+                // create the tile_matrix_metadata entries
+                st = prepare(cx,
+                        format("INSERT INTO %s VALUES (?,?,?,?,?,?,?,?)", TILE_MATRIX_METADATA))
+                                .statement();
                 try {
                     for (TileMatrix m : e.getTileMatricies()) {
-                        prepare(st).set(e.getTableName()).set(m.getZoomLevel()).set(m.getMatrixWidth())
-                            .set(m.getMatrixHeight()).set(m.getTileWidth()).set(m.getTileHeight())
-                            .set(m.getXPixelSize()).set(m.getYPixelSize())
-                            .statement().execute();
+                        prepare(st).set(e.getTableName()).set(m.getZoomLevel())
+                                .set(m.getMatrixWidth()).set(m.getMatrixHeight())
+                                .set(m.getTileWidth()).set(m.getTileHeight()).set(m.getXPixelSize())
+                                .set(m.getYPixelSize()).statement().execute();
                     }
-                } 
-                finally {
+                } finally {
                     close(st);
                 }
-                //create the tile table itself
-                st = cx.prepareStatement(format("CREATE TABLE %s (" +
-                    "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                    "zoom_level INTEGER NOT NULL DEFAULT 0," +
-                    "tile_column INTEGER NOT NULL DEFAULT 0," +
-                    "tile_row INTEGER NOT NULL DEFAULT 0," +
-                    "tile_data BLOB NOT NULL DEFAULT (zeroblob(4)))", e.getTableName()));
-                try {
-                    st.execute();
-                }
-                finally {
-                    close(st);
-                }
-                
-                //create an index on the tile
+                // create the tile table itself
                 st = cx.prepareStatement(format(
-                        "create index %s_zyx_idx on %s(zoom_level, tile_column, tile_row);", 
-                        e.getTableName(),  e.getTableName()));
+                        "CREATE TABLE %s (" + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                                + "zoom_level INTEGER NOT NULL DEFAULT 0,"
+                                + "tile_column INTEGER NOT NULL DEFAULT 0,"
+                                + "tile_row INTEGER NOT NULL DEFAULT 0,"
+                                + "tile_data BLOB NOT NULL DEFAULT (zeroblob(4)))",
+                        e.getTableName()));
                 try {
                     st.execute();
-                }
-                finally {
+                } finally {
                     close(st);
                 }
-            }
-            finally {
+
+                // create an index on the tile
+                st = cx.prepareStatement(
+                        format("create index %s_zyx_idx on %s(zoom_level, tile_column, tile_row);",
+                                e.getTableName(), e.getTableName()));
+                try {
+                    st.execute();
+                } finally {
+                    close(st);
+                }
+            } finally {
                 close(cx);
             }
-        }
-        catch(SQLException ex) {
+        } catch (SQLException ex) {
             throw new IOException(ex);
         }
 
-        //update the metadata tables
+        // update the metadata tables
         addGeoPackageContentsEntry(e);
 
         entry.init(e);
