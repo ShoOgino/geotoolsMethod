@@ -139,7 +139,21 @@
                     LOGGER.fine("Trying to build mosaic for the directory:"
                             + subdir.getAbsolutePath());
                 }
-                mosaics.add(new MosaicInfo(subdir, mosaicFactory.getReader(subdir, hints)));
+                ImageMosaicReader reader = null;
+                try {
+                    reader = mosaicFactory.getReader(subdir, hints);
+                    String referenceName = checkConsistency(reader);
+                    MosaicInfo mosaicInfo = new MosaicInfo(subdir, reader, referenceName);
+                    mosaics.add(mosaicInfo);
+                } finally {
+                    if (reader != null) {
+                        try {
+                            reader.dispose();
+                        } catch (Throwable t) {
+                            // Does nothing
+                        }
+                    }
+                }
             } else {
                 if (LOGGER.isLoggable(Level.INFO)) {
                     LOGGER.info("Unable to build mosaic for the directory:"
@@ -157,8 +171,8 @@
         // for both X and Y resolutions
         Collections.sort(mosaics);
         for (int i = 1; i < mosaics.size(); i++) {
-            double[] resprev = mosaics.get(i - 1).getResolutions();
-            double[] res = mosaics.get(i).getResolutions();
+            double[] resprev = mosaics.get(i - 1).getResolutions()[0];
+            double[] res = mosaics.get(i).getResolutions()[0];
             if (resprev[1] > res[1]) {
                 LOGGER.log(Level.INFO, "Invalid mosaic, y resolution in "
                         + mosaics.get(i - 1).getPath() + " is greater than the one in "
@@ -173,13 +187,14 @@
         //
         // build the property file
         Properties properties = new Properties();
-        properties.put("Name", directory.getName());
+        String coverageNames = mosaics.get(0).getCoverageNames();
+        properties.put("Name", coverageNames != null ? coverageNames : directory.getName());
         properties.put("LevelsNum", String.valueOf(mosaics.size()));
         StringBuilder sbDirNames = new StringBuilder();
         StringBuilder sbLevels = new StringBuilder();
         for (MosaicInfo mi : mosaics) {
             sbDirNames.append(mi.getName()).append(" ");
-            double[] resolutions = mi.getResolutions();
+            double[] resolutions = mi.getResolutions()[0];
             sbLevels.append(resolutions[0]).append(",").append(resolutions[1]).append(" ");
         }
         properties.put("LevelsDirs", sbDirNames.toString());
@@ -193,11 +208,12 @@
             properties.store(os, "Automatically generated");
         } catch (IOException e) {
             LOGGER.log(Level.INFO,
-                    "We could not generate the pyramid propert file " + sourceFile.getPath(), e);
+                    "We could not generate the pyramid property file " + sourceFile.getPath(), e);
             return null;
         } finally {
-            if (os != null)
+            if (os != null) {
                 IOUtils.closeQuietly(os);
+            }
         }
 
         // build the .prj file if possible
