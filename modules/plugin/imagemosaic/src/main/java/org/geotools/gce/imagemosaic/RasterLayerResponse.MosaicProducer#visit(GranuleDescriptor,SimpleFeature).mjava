@@ -1,0 +1,46 @@
+        /**
+         * This method accepts incming granules and dispatch them to the correct {@link DefaultSubmosaicProducer} depending on the internal
+         * {@link Filter} per the dimension.
+         * <p>
+         * <p>
+         * If not {@link MergeBehavior#STACK}ing is required, we collect them all together with an include filter.
+         */
+        public void visit(GranuleDescriptor granuleDescriptor, SimpleFeature sf) {
+
+            //
+            // load raster data
+            //
+            // create a granuleDescriptor loader
+            final Geometry bb = JTS.toGeometry((BoundingBox) mosaicBBox);
+            final Geometry inclusionGeometry = granuleDescriptor.getFootprint();
+            boolean intersects = false;
+            if (inclusionGeometry != null) {
+                intersects = inclusionGeometry.intersects(bb);
+            }
+            if (!footprintBehavior.handleFootprints() || inclusionGeometry == null
+                    || (footprintBehavior.handleFootprints() && intersects)) {
+
+                // find the right filter for this granule
+                boolean found = false;
+                for (SubmosaicProducer submosaicProducer : granuleCollectors) {
+                    if (submosaicProducer.accept(granuleDescriptor)) {
+                        granulesNumber++;
+                        found = true;
+                        break;
+                    }
+                }
+
+                // did we find a place for it?
+                if (!found) {
+                    throw new IllegalStateException("Unable to locate a filter for this granule:\n"
+                            + granuleDescriptor.toString());
+                }
+
+            } else {
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.fine("We rejected for non ROI inclusion the granule "
+                            + granuleDescriptor.toString());
+                }
+            }
+        }
+

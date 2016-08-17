@@ -1,0 +1,128 @@
+    private MosaicElement preProcessGranuleRaster(RenderedImage granule,
+            final GranuleDescriptor.GranuleLoadingResult result, String canonicalPath) {
+
+        //
+        // INDEX COLOR MODEL EXPANSION
+        //
+        // Take into account the need for an expansions of the original color
+        // model.
+        //
+        // If the original color model is an index color model an expansion
+        // might be requested in case the different palettes are not all the
+        // same. In this case the mosaic operator from JAI would provide wrong
+        // results since it would take the first palette and use that one for
+        // all the other images.
+        //
+        // There is a special case to take into account here. In case the input
+        // images use an IndexColorModel it might happen that the transparent
+        // color is present in some of them while it is not present in some
+        // others. This case is the case where for sure a color expansion is
+        // needed. However we have to take into account that during the masking
+        // phase the images where the requested transparent color was present
+        // will have 4 bands, the other 3. If we want the mosaic to work we
+        // have to add an extra band to the latter type of images for providing
+        // alpha information to them.
+        //
+        //
+        if (rasterLayerResponse.getRasterManager().isExpandMe()
+                && granule.getColorModel() instanceof IndexColorModel) {
+            granule = new ImageWorker(granule).forceComponentColorModel().getRenderedImage();
+        }
+
+        //
+        // TRANSPARENT COLOR MANAGEMENT
+        //
+        if (doInputTransparency) {
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine("Support for alpha on input granule " + result.getGranuleUrl());
+            }
+            granule = new ImageWorker(granule).makeColorTransparent(inputTransparentColor)
+                    .getRenderedImage();
+            hasAlpha = granule.getColorModel().hasAlpha();
+            if (!granule.getColorModel().hasAlpha()) {
+                // if the resulting image has no transparency (can happen with IndexColorModel then we need to try component
+                // color model
+                granule = new ImageWorker(granule).forceComponentColorModel(true)
+                        .makeColorTransparent(inputTransparentColor).getRenderedImage();
+                hasAlpha = granule.getColorModel().hasAlpha();
+            }
+            assert hasAlpha;
+
+        }
+        PlanarImage alphaChannel = null;
+        if (hasAlpha || doInputTransparency) {
+            ImageWorker w = new ImageWorker(granule);
+            if (granule.getSampleModel() instanceof MultiPixelPackedSampleModel
+                    || granule.getColorModel() instanceof IndexColorModel) {
+                w.forceComponentColorModel();
+                granule = w.getRenderedImage();
+            }
+            // doing this here gives the guarantee that I get the correct index for the transparency band
+            alphaIndex[0] = granule.getColorModel().getNumComponents() - 1;
+            assert alphaIndex[0] < granule.getSampleModel().getNumBands();
+
+            //
+            // ALPHA in INPUT
+            //
+            // I have to select the alpha band and provide it to the final
+            // mosaic operator. I have to force going to ComponentColorModel in
+            // case the image is indexed.
+            //
+            alphaChannel = w.retainBands(alphaIndex).getPlanarImage();
+        }
+
+        //
+        // ROI
+        //
+        // we need to add its roi in order to avoid problems with the mosaics sources overlapping
+        final Rectangle bounds = PlanarImage.wrapRenderedImage(granule).getBounds();
+        Geometry mask = JTS.toGeometry(new Envelope(bounds.getMinX(), bounds.getMaxX(),
+                bounds.getMinY(), bounds.getMaxY()));
+        ROI imageROI = new ROIGeometry(mask);
+        if (rasterLayerResponse.getFootprintBehavior().handleFootprints()) {
+
+            // get the real footprint
+            final ROI footprint = result.getFootprint();
+            if (footprint != null) {
+                if (imageROI.contains(footprint.getBounds2D().getBounds())) {
+                    imageROI = footprint;
+                } else {
+                    imageROI = imageROI.intersect(footprint);
+                }
+            }
+
+            // ARTIFACTS FILTERING
+            if (rasterLayerResponse.getDefaultArtifactsFilterThreshold() != Integer.MIN_VALUE
+                    && result.isDoFiltering()) {
+                int artifactThreshold = rasterLayerResponse.getDefaultArtifactsFilterThreshold();
+                if (rasterLayerResponse.getArtifactsFilterPTileThreshold() != -1) {
+
+                    // Looking for a histogram for that granule in order to
+                    // setup dynamic threshold
+                    if (canonicalPath != null) {
+                        final String path = FilenameUtils.getFullPath(canonicalPath);
+                        final String baseName = FilenameUtils.getBaseName(canonicalPath);
+                        final String histogramPath = path + baseName + "." + "histogram";
+                        final Histogram histogram = Utils.getHistogram(histogramPath);
+                        if (histogram != null) {
+                            final double[] p = histogram.getPTileThreshold(
+                                    rasterLayerResponse.getArtifactsFilterPTileThreshold());
+                            artifactThreshold = (int) p[0];
+                        }
+                    }
+                }
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.log(Level.FINE, "Filtering granules artifacts");
+                }
+                ImageWorker w = new ImageWorker(granule)
+                        .setRenderingHints(rasterLayerResponse.getHints()).setROI(imageROI);
+                w.setBackground(new double[] { 0 });
+                w.artifactsFilter(artifactThreshold, 3);
+                granule = w.getRenderedImage();
+            }
+        }
+
+        // preparing input
+        return new MosaicElement(alphaChannel, imageROI, granule, result.getPamDataset());
+    }
+

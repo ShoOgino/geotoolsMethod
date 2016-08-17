@@ -15,38 +15,21 @@
         if (defaultIndexer != null) {
             params = defaultIndexer.getParameters();
             rootMosaicDir = IndexerUtils.getParam(params, Prop.ROOT_MOSAIC_DIR);
-            IndexerUtils.getParameterAsBoolean(Prop.USE_EXISTING_SCHEMA, defaultIndexer);
         }
 
         Utilities.ensureNonNull("root location", rootMosaicDir);
 
         // look for and indexer.properties file
         parent = new File(rootMosaicDir);
-        indexerFile = new File(parent, Utils.INDEXER_XML);
-        Indexer indexer = null;
+        Indexer indexer = IndexerUtils.initializeIndexer(params, parent);
+        if (indexer != null) {
+            indexerFile = indexer.getIndexerFile();
+        }
 
         Hints hints = configuration.getHints();
         String ancillaryFile = null;
         String datastoreFile = null;
-        if (Utils.checkFileReadable(indexerFile)) {
-            try {
-                indexer = Utils.unmarshal(indexerFile);
-                if (indexer != null) {
-                    copyDefaultParams(params, indexer);
-                }
-            } catch (JAXBException e) {
-                LOGGER.log(Level.WARNING, e.getMessage(), e);
-            }
-        } else {
-            // Backward compatible with old indexing
-            indexerFile = new File(parent, Utils.INDEXER_PROPERTIES);
-            if (Utils.checkFileReadable(indexerFile)) {
-                // load it and parse it
-                final Properties props = CoverageUtilities
-                        .loadPropertiesFromURL(DataUtilities.fileToURL(indexerFile));
-                indexer = createIndexer(props, params);
-            }
-        }
+
         if (indexer != null) {
             // Overwrite default indexer only when indexer is available
             configuration.setIndexer(indexer);
