@@ -38,6 +38,20 @@
                     }
                     continue;
                 }
+                
+                // perform excess granule removal in case multithreaded loading is enabled
+                if(isMultithreadedLoadingEnabled()) {
+                    ROIExcessGranuleRemover remover = rasterLayerResponse.getExcessGranuleRemover();
+                    if(remover != null) {
+                        if(remover.isRenderingAreaComplete()) {
+                            break;
+                        }
+                        if(!remover.addGranule(result)) {
+                            // skip this granule
+                            continue;
+                        }
+                    }
+                }
 
                 // now process it
                 if (sourceThreshold == null) {
@@ -94,11 +108,12 @@
                 }
                 throw new IOException(e);
             }
-
-            // collect paths
-            rasterLayerResponse.setGranulesPaths(
-                    paths.length() > 1 ? paths.substring(0, paths.length() - 1) : "");
         }
+        
+        // collect paths
+        rasterLayerResponse.setGranulesPaths(
+                paths.length() > 1 ? paths.substring(0, paths.length() - 1) : "");
+        
         if (returnValues == null || returnValues.isEmpty()) {
             if (LOGGER.isLoggable(Level.INFO)) {
                 LOGGER.info("The MosaicElement list is null or empty");
