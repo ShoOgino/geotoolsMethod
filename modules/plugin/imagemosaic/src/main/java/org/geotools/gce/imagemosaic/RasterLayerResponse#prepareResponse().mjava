@@ -1,7 +1,7 @@
     /**
      * This method loads the granules which overlap the requested {@link GeneralEnvelope} using the provided values for alpha and input ROI.
-     * 
-     * @return
+     *
+     * @return the mosaic output for the request
      * @throws DataSourceException
      */
     private MosaicOutput prepareResponse() throws DataSourceException {
@@ -29,7 +29,8 @@
             handleSortByClause(query);
 
             // === collect granules
-            final MosaicProducer visitor = new MosaicProducer();
+            final MosaicProducer visitor = new MosaicProducer(submosaicProducerFactory
+                    .createProducers(this.getRequest(), this.getRasterManager(), this, false));
             rasterManager.getGranuleDescriptors(query, visitor);
 
             // get those granules and create the final mosaic
@@ -63,7 +64,9 @@
                 // spawn any loading tasks, we also ensure we get only 1 feature at most
                 // to make this blazing fast
                 LOGGER.fine("We got no granules, let's do a dry run with no filters");
-                final MosaicProducer dryRunVisitor = new MosaicProducer(true);
+                List<SubmosaicProducer> collectors = submosaicProducerFactory
+                        .createProducers(this.getRequest(), this.getRasterManager(), this, true);
+                final MosaicProducer dryRunVisitor = new MosaicProducer(true, collectors);
                 final Utils.BBOXFilterExtractor bboxExtractor = new Utils.BBOXFilterExtractor();
                 query.getFilter().accept(bboxExtractor, null);
                 query.setFilter(FeatureUtilities.DEFAULT_FILTER_FACTORY.bbox(

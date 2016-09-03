@@ -5,9 +5,16 @@
         // load property collectors
         Indexer indexer = runConfiguration.getIndexer();
         Collectors collectors = indexer.getCollectors();
+        // check whether this indexer allows heterogeneous CRS, then we know we need the CRS collector
+        Boolean heterogeneousCRS = Boolean
+            .valueOf(IndexerUtils.getParameter(Prop.HETEROGENEOUS_CRS, indexer));
         if (collectors == null) {
             if (LOGGER.isLoggable(Level.FINE)) {
                 LOGGER.fine("No properties collector have been found");
+            }
+
+            if (heterogeneousCRS) {
+                this.propertiesCollectors = Collections.singletonList(new CRSExtractor());
             }
             return;
         }
@@ -39,11 +46,13 @@
 
             // property names
             String collectorValue = collector.getValue();
-            final String config;
-            if (!collectorValue.startsWith(DefaultPropertiesCollectorSPI.REGEX_PREFIX)) {
-                config = DefaultPropertiesCollectorSPI.REGEX_PREFIX + collector.getValue();
-            } else {
-                config = collector.getValue();
+            String config = null;
+            if (collectorValue != null) {
+                if (!collectorValue.startsWith(DefaultPropertiesCollectorSPI.REGEX_PREFIX)) {
+                    config = DefaultPropertiesCollectorSPI.REGEX_PREFIX + collector.getValue();
+                } else {
+                    config = collector.getValue();
+                }
             }
 
             // create the PropertiesCollector
@@ -57,6 +66,7 @@
                 }
             }
         }
+
         this.propertiesCollectors = pcs;
     }
 

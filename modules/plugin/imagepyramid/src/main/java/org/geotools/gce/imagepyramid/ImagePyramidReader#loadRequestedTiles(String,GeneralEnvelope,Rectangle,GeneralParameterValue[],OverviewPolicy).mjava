@@ -1,0 +1,48 @@
+    /**
+     * This method loads the tiles which overlap the requested envelope using the provided values
+     * for alpha and input ROI.
+     * 
+     * @param coverageName
+     * @param requestedEnvelope
+     * @param dim
+     * @param params
+     * @param overviewPolicy
+     * @return A {@link GridCoverage}, well actually a {@link GridCoverage2D}.
+     * @throws TransformException
+     * @throws IOException
+     */
+    private GridCoverage2D loadRequestedTiles(final String coverageName,
+            GeneralEnvelope requestedEnvelope, Rectangle dim, GeneralParameterValue[] params,
+            OverviewPolicy overviewPolicy) throws TransformException, IOException {
+
+        // if we get here we have something to load
+
+        // compute the requested resolution
+        final ImageReadParam readP = new ImageReadParam();
+        Integer imageChoice = 0;
+        if (dim != null)
+            imageChoice = setReadParams(overviewPolicy, readP, requestedEnvelope, dim);
+
+        // Check to have the needed reader in memory
+        // light check to see if this reader had been disposed, not synch-ing for performance.
+        if (!imageLevelsMapper.hasReaders()) {
+            throw new IllegalStateException("This ImagePyramidReader has already been disposed");
+        }
+
+        ImageMosaicReader reader = getImageMosaicReaderForLevel(coverageName, imageChoice);
+
+        // update the readingParams
+        GeneralParameterValue[] readingParams = getReadingParams(params, overviewPolicy);
+        //
+        // Abusing of the created ImageMosaicreader for getting a
+        // gridcoverage2d, then rename it
+        //
+        GridCoverage2D mosaicCoverage = reader.read(getReaderCoverageName(coverageName), readingParams);
+        if (mosaicCoverage != null) {
+            return new GridCoverage2D(coverageName, mosaicCoverage);
+        } else {
+            // the mosaic can still return null in corner cases, handle that gracefully
+            return null;
+        }
+    }
+
