@@ -1,6 +1,5 @@
     /**
-     * Test to check the case where a {@link org.geotools.coverage.grid.io.AbstractGridFormat#BANDS} reading parameter is passed to a coverage reader
-     * that does not support it.Reader should ignore it, resulting coverage should not be affected.
+     * Test to check the case where band selection cannot be pushed down to the reader, but needs to be run in memory
      */
     @Test
     public void testBandSelectionOnNonSupportingReader() throws Exception {
@@ -37,23 +36,19 @@
         // Get the reader, read with band selection
         assertTrue(coverageFile.exists());
         GridCoverage2DReader reader = new GeoTiffReader(coverageFile);
-        ParameterValue<int[]> bandSelectionParam = AbstractGridFormat.BANDS.createValue();
-        // Try to produce a coverage containing bands in reverse order, so, resulting image
-        // should be red instead of blue, and different from the original one
-        bandSelectionParam.setValue(new int[] { 3, 2, 1 });
-        GridCoverage nCoverage = reader.read(new GeneralParameterValue[] { bandSelectionParam });
-
-        StyleBuilder sb = new StyleBuilder();
-        RasterSymbolizer symbolizer = sb.createRasterSymbolizer();
-
-        // Render the image
+        
+        // Render the image selecting blue
         GridCoverageRenderer renderer = new GridCoverageRenderer(nativeCrs, mapExtent,
                 new Rectangle(0, 0, 100, 100), null);
-
-        // Image should be same as original, i.e. no flipping of channels
-        RenderedImage image = renderer.renderImage(coverage, symbolizer, null);
-
-        ImageAssert.assertEquals(coverageFile, image, 0);
-
+        RenderedImage image = renderer.renderImage(reader, null, buildChannelSelectingSymbolizer(3), Interpolation.getInstance(Interpolation.INTERP_NEAREST), Color.BLACK, 256, 256);
+        assertEquals(1, image.getSampleModel().getNumBands());
+        assertEquals(255, new ImageWorker(image).getMinimums()[0], 0d);
+        ImageUtilities.disposeImage(image);
+        
+        // Render again selecting red 
+        image = renderer.renderImage(reader, null, buildChannelSelectingSymbolizer(1), Interpolation.getInstance(Interpolation.INTERP_NEAREST), Color.BLACK, 256, 256);
+        assertEquals(1, image.getSampleModel().getNumBands());
+        assertEquals(0, new ImageWorker(image).getMaximums()[0], 0d);
+        ImageUtilities.disposeImage(image);
     }
 
