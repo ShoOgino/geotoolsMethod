@@ -93,6 +93,15 @@
             customizeReaderInitialization(reader, hints);
             reader.setInput(inStream);
 
+            // check if the reader wants to be aware of the current request
+            if (MethodUtils.getAccessibleMethod(reader.getClass(), "setRasterLayerRequest", RasterLayerRequest.class) != null) {
+                try {
+                    MethodUtils.invokeMethod(reader, "setRasterLayerRequest", request);
+                } catch(Exception exception) {
+                    throw new RuntimeException("Error setting raster layer request on reader.", exception);
+                }
+            }
+
             // Checking for heterogeneous granules and if the mosaic is not multidimensional
             if (request.isHeterogeneousGranules() && (originator == null || originator.getAttribute("imageindex") == null)) {
                 // create read parameters
@@ -229,6 +238,28 @@
                             e);
                 }
                 return null;
+            }
+
+            // perform band selection if necessary, so far netcdf is the only low level reader that
+            // handles bands selection, if more readers start to support it a decent approach should
+            // be used to know if the low level reader already performed the bands selection or if
+            // image mosaic is responsible for do it
+            if(request.getBands() != null && !reader.getFormatName().equalsIgnoreCase("netcdf")) {
+                int[] bands = request.getBands();
+                // delegate the band selection operation on JAI BandSelect operation
+                raster = new ImageWorker(raster).retainBands(bands).getRenderedImage();
+                ColorModel colorModel = raster.getColorModel();
+                if (colorModel == null) {
+                    ImageLayout layout = (ImageLayout) hints.get(JAI.KEY_IMAGE_LAYOUT);
+                    if (layout == null) {
+                        layout = new ImageLayout();
+                    }
+                    ColorModel newColorModel =ImageIOUtilities.createColorModel(raster.getSampleModel());
+                    if(newColorModel != null) {
+                        layout.setColorModel(newColorModel);
+                        raster = new ImageWorker(raster).setRenderingHints(hints).format(raster.getSampleModel().getDataType()).getRenderedImage();
+                    }
+                }
             }
 
             // use fixed source area
