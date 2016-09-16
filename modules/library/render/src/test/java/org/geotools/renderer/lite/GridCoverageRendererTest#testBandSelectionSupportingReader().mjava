@@ -6,9 +6,18 @@
         
         GridCoverageRenderer renderer = new GridCoverageRenderer(DefaultGeographicCRS.WGS84, mapExtent,
                 new Rectangle(0, 0, 100, 100), null);
-        RenderedImage image = renderer.renderImage(reader, null, buildChannelSelectingSymbolizer(3), Interpolation.getInstance(Interpolation.INTERP_NEAREST), Color.BLACK, 256, 256);
+        // keeping a reference to the raster symbolizer so we can check we has not altered
+        // during the band setup the raster symbolizer channel selection needs to be rearranged
+        // but the original raster symbolizer should not be altered
+        RasterSymbolizer rasterSymbolizer = buildChannelSelectingSymbolizer(3);
+        RenderedImage image = renderer.renderImage(reader, null, rasterSymbolizer, Interpolation.getInstance(Interpolation.INTERP_NEAREST), Color.BLACK, 256, 256);
         assertEquals(1, image.getSampleModel().getNumBands());
         assertEquals(255, new ImageWorker(image).getMinimums()[0], 0d);
+        // test that raster symbolizer was not altered
+        RasterSymbolizer expectedRasterSymbolizer = buildChannelSelectingSymbolizer(3);
+        // during the copy method contrast enhancement NULL options are converted to an empty HashMap
+        expectedRasterSymbolizer.getContrastEnhancement().setOptions(Collections.emptyMap());
+        assertEquals(rasterSymbolizer, expectedRasterSymbolizer);
         ImageUtilities.disposeImage(image);
         
     }
