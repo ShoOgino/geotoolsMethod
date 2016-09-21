@@ -7,7 +7,6 @@
             if (LOGGER.isLoggable(Level.FINE))
                 LOGGER.fine("Found a valid FileImageInputStream");
         }
-
         if (source instanceof File) {
             input = (File) source;
         }
@@ -23,53 +22,53 @@
             }
         }
         if (input != null) {
-            NetcdfFile file = null;
-            FileImageInputStream fis = null;
             try {
-
                 // Checking Magic Number
-                fis = new FileImageInputStream(input);
-                byte[] b = new byte[4];
-                fis.mark();
-                fis.readFully(b);
-                fis.reset();
-                boolean cdfCheck = (b[0] == (byte)0x43 && b[1] == (byte)0x44 && b[2] == (byte)0x46);
-                boolean hdf5Check = (b[0] == (byte)0x89 && b[1] == (byte)0x48 && b[2] == (byte)0x44);
-                boolean gribCheck = (b[0] == (byte)0x47 && b[1] == (byte)0x52 && b[2] == (byte)0x49 && b[3] == (byte)0x42);
-
+                byte[] b = new byte[GRIB_SEARCH_BYTES];
+                int count = 0;
+                try (FileInputStream fis = new FileInputStream(input)) {
+                    count = fis.read(b);
+                }
+                if (count < 3) {
+                    return false;
+                }
+                // CDF signature at start of file
+                boolean cdfCheck = (b[0] == (byte) 0x43 && b[1] == (byte) 0x44
+                        && b[2] == (byte) 0x46);
+                // HDF signature at start of file
+                boolean hdf5Check = (b[0] == (byte) 0x89 && b[1] == (byte) 0x48
+                        && b[2] == (byte) 0x44);
+                boolean gribCheck = false;
+                // Search for GRIB signature in first count bytes (up to GRIB_SEARCH_BYTES)
+                for (int i = 0; i < count - 3; i++) {
+                    if (b[i] == (byte) 0x47 && b[i + 1] == (byte) 0x52 && b[i + 2] == (byte) 0x49
+                            && b[i + 3] == (byte) 0x42) {
+                        gribCheck = true;
+                        break;
+                    }
+                }
                 // Check if the GRIB library is available
                 gribCheck &= NetCDFUtilities.isGribAvailable();
-                
                 boolean isNetCDF = true;
                 if (!cdfCheck && !hdf5Check && !gribCheck) {
                     if (!isNcML(input)) {
                         isNetCDF = false;
                     }
                 }
-                if (!isNetCDF && !forceOpenCheck) {
+                if (!isNetCDF) {
                     return false;
                 }
-                file = NetcdfDataset.acquireDataset(DataUtilities.fileToURL(input).toString(), null);
-                if (file != null) {
-                    if (LOGGER.isLoggable(Level.FINE))
-                        LOGGER.fine("File successfully opened");
-                    canDecode = true;
+                try (NetcdfFile file = NetcdfDataset
+                        .acquireDataset(DataUtilities.fileToURL(input).toString(), null)) {
+                    if (file != null) {
+                        if (LOGGER.isLoggable(Level.FINE))
+                            LOGGER.fine("File successfully opened");
+                        canDecode = true;
+                    }
                 }
             } catch (IOException ioe) {
                 canDecode = false;
-            } finally {
-                if (fis != null) {
-                    try {
-                        fis.close();
-                    } catch (Throwable t) {
-
-                    }
-                }
-
-                if (file != null)
-                    file.close();
             }
-
         }
         return canDecode;
     }
