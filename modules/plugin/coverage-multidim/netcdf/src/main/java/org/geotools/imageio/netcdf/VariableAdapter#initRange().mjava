@@ -7,13 +7,29 @@
 
         width = variableDS.getDimension(rank - NetCDFUtilities.X_DIMENSION).getLength();
         height = variableDS.getDimension(rank - NetCDFUtilities.Y_DIMENSION).getLength();
-        numBands = rank > 2 ? variableDS.getDimension(2).getLength() : 1;
+
+        // computing the number of bands, according to COARDS convention ignored dimension are at the beginning
+        String candidateDimension = variableDS.getDimensions().get(0).getFullName();
+        MultipleBandsDimensionInfo multipleBands = reader.ancillaryFileManager.getMultipleBandsDimensionInfo(candidateDimension);
+        if (multipleBands != null) {
+            // multiple bands are defined for the ignored dimension
+            numBands = multipleBands.getNumberOfBands();
+        } else {
+            numBands = rank > 2 ? variableDS.getDimension(2).getLength() : 1;
+        }
+
+        // let's check if we are in the context of an image mosaic request
+        if (reader.getImageMosaicRequest() != null) {
+            // if specific bands were selected we need to adapt the number of bands
+            int[] selectedBands = reader.getImageMosaicRequest().getBands();
+            numBands = selectedBands == null ? numBands : selectedBands.length;
+        }
 
         //Adjust the rank skipping the ignoredDimensions
         rank -= ignoredDimensions.size();
 
         final int bufferType = NetCDFUtilities.getRawDataType(variableDS);
-        sampleModel = new BandedSampleModel(bufferType, width, height, 1);
+        sampleModel = new BandedSampleModel(bufferType, width, height, multipleBands == null ? 1 : numBands);
         final Number noData = NetCDFUtilities.getNodata(variableDS);
         Category[] categories = null;
         if (noData != null) {
@@ -44,7 +60,16 @@
                 }
             }
         }
-        sampleDims.add(new GridSampleDimension(description, categories, unit));
+
+        if (multipleBands == null) {
+            // single band dimension, so we only need one sample dimension
+            sampleDims.add(new GridSampleDimension(description, categories, unit));
+        } else {
+            for (String bandName : multipleBands.getBandsNamesInOrder()) {
+                // multiple bands for this dimension, only the bands names is different
+                sampleDims.add(new GridSampleDimension(bandName, categories, unit));
+            }
+        }
 
         InternationalString desc = null;
         if (description != null && !description.isEmpty()) {
