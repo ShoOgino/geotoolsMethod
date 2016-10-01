@@ -1,0 +1,45 @@
+    @Test
+    public void testStyleThatUsesGeometryDefaultAttribute() throws Exception {
+        // preparing the layer to be rendered, the provided style as a filter that will use
+        // the default geometry attribute "", this will allow us to test that using geometry
+        // default attribute "" is correctly handled
+        StyleImpl style = (StyleImpl) RendererBaseTest.loadStyle(this, "genericLines.sld");
+        File vectorDataFile = new File(TestData.getResource(this, "genericLines.properties").toURI());
+        PropertyDataStore dataStore = new PropertyDataStore(vectorDataFile.getParentFile());
+        Layer layer = new FeatureLayer(dataStore.getFeatureSource("genericLines"), style);
+        // prepare map content and instantiate a streaming reader
+        MapContent mapContent = new MapContent();
+        mapContent.addLayer(layer);
+        StreamingRenderer gRender = new StreamingRenderer();
+        gRender.setMapContent(mapContent);
+        gRender.addRenderListener(new RenderListener() {
+            @Override
+            public void featureRenderer(SimpleFeature feature) {
+                features++;
+            }
+
+            @Override
+            public void errorOccurred(Exception e) {
+                errors++;
+            }
+        });
+        features = 0;
+        errors = 0;
+        // defining the paint area and performing the rendering
+        BufferedImage image = new BufferedImage(40, 40, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics = image.createGraphics();
+        Rectangle paintArea = new Rectangle(40, 40);
+        double minx = -2;
+        double maxx = 2;
+        double miny = -2;
+        double maxy = 2;
+        ReferencedEnvelope referencedEnvelope = new ReferencedEnvelope(
+                new Rectangle2D.Double(minx, miny, maxx - minx, maxy - miny),
+                CRS.decode("EPSG:4326"));
+        gRender.paint(graphics, paintArea, referencedEnvelope);
+        // checking that four features were rendered, if the default geometry attribute was not
+        // correctly handled no geometries were selected and so no features were rendered
+        Assert.assertEquals(features, 4);
+        Assert.assertEquals(errors, 0);
+    }
+
