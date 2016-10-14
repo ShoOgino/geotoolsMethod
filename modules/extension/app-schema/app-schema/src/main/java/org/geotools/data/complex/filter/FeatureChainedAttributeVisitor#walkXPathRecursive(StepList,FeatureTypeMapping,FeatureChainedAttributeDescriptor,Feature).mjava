@@ -1,0 +1,102 @@
+    private void walkXPathRecursive(StepList currentXPath, FeatureTypeMapping currentType,
+            FeatureChainedAttributeDescriptor attrDescr, Feature feature) throws IOException {
+        List<NestedAttributeMapping> currentAttributes = currentType.getNestedMappings();
+        boolean searchIsOver = true;
+        for (NestedAttributeMapping nestedAttr : currentAttributes) {
+            StepList targetXPath = nestedAttr.getTargetXPath();
+
+            if (currentXPath.startsWith(targetXPath)) {
+                if (nestedAttr.isConditional() && feature == null) {
+                    logConditionalMappingFound(currentType, targetXPath);
+                    // quit the search
+                    return;
+                } else {
+                    FeatureTypeMapping nestedType = nestedAttr.getFeatureTypeMapping(feature);
+                    if (nestedType != null) {
+                        AttributeType nestedPropertyType = nestedType.getTargetFeature().getType();
+                        QName nestedTypeQName = getFeatureTypeQName(nestedType);
+                        Step nestedTypeStep = new Step(nestedTypeQName, 1);
+                        StepList nestedTypeXPath = targetXPath.clone();
+                        nestedTypeXPath.add(nestedTypeStep);
+
+                        boolean xpathContainsNestedType = currentXPath.startsWith(nestedTypeXPath);
+                        boolean hasSimpleContent = Types.isSimpleContentType(nestedPropertyType);
+
+                        // if this is feature chaining for simple content, the name of the nested type
+                        // may not be present in the XPath, as it was already specified as the container
+                        // property (e.g. see mappings doing chaining for gml:name)
+                        if (xpathContainsNestedType || hasSimpleContent) {
+                            LOGGER.finer("Nested feature type found: " + nestedTypeQName);
+                            FeatureChainedAttributeDescriptor copy = attrDescr.shallowCopy();
+                            copy.addLink(new FeatureChainLink(currentType, nestedAttr));
+
+                            // new root mapping to search
+                            FeatureTypeMapping newType = nestedType;
+
+                            // new xpath
+                            StepList newXPath = currentXPath.clone();
+                            int startIdx = (xpathContainsNestedType) ? nestedTypeXPath.size()
+                                    : currentXPath.size();
+                            newXPath = newXPath.subList(startIdx, currentXPath.size());
+
+                            // if nested type has simple content, XPath expression may point directly
+                            // to the type, and not to one of its attributes (which, BTW, can only
+                            // be client properties, or it wouldn't be simple content)
+                            if (newXPath.isEmpty() && hasSimpleContent) {
+                                newXPath.add(nestedTypeStep);
+                            }
+
+                            // recursive call
+                            walkXPathRecursive(newXPath, newType, copy, feature);
+                            // I'm not done yet
+                            searchIsOver = false;
+                        }
+                    } else {
+                        logNestedFeatureTypeNotFound(currentType, targetXPath);
+                    }
+                }
+            }
+        }
+
+        // add last attribute mapping, which is a direct child of the last nested feature found
+        if (searchIsOver && currentXPath != null && !currentXPath.isEmpty()) {
+            StepList lastAttrPath = currentXPath;
+            List<Expression> lastAttrExpressions = currentType.findMappingsFor(lastAttrPath, false);
+            if (lastAttrExpressions != null && lastAttrExpressions.size() > 0) {
+                attrDescr.setAttributePath(lastAttrPath);
+
+                // check whether this is a case of feature chaining by reference
+                if (isClientProperty(lastAttrPath) && isXlinkHref(lastAttrPath)) {
+                    StepList parentAttrPath = lastAttrPath.subList(0, lastAttrPath.size() - 1);
+                    AttributeMapping parentAttr = currentType.getAttributeMapping(parentAttrPath);
+                    if (parentAttr != null && parentAttr instanceof NestedAttributeMapping) {
+                        // yes, it's feature chaining by reference: add another step to the chain
+                        NestedAttributeMapping nestedAttr = (NestedAttributeMapping) parentAttr;
+                        attrDescr.addLink(new FeatureChainLink(currentType, nestedAttr));
+                        // add last step
+                        if (nestedAttr.isConditional() && feature == null) {
+                            logConditionalMappingFound(currentType, nestedAttr.getTargetXPath());
+                            // abort search
+                            return;
+                        } else {
+                            FeatureTypeMapping nestedType = nestedAttr
+                                    .getFeatureTypeMapping(feature);
+                            if (nestedType != null) {
+                                FeatureChainLink lastLink = new FeatureChainLink(nestedType, true);
+                                attrDescr.addLink(lastLink);
+                                // search was successful, add attribute to collection
+                                attributes.add(attrDescr);
+                            } else {
+                                logNestedFeatureTypeNotFound(currentType, nestedAttr.getTargetXPath());
+                            }
+                        }
+                    }
+                } else {
+                    attrDescr.addLink(new FeatureChainLink(currentType));
+                    // search was successful, add attribute to collection
+                    attributes.add(attrDescr);
+                }
+            }
+        }
+    }
+
