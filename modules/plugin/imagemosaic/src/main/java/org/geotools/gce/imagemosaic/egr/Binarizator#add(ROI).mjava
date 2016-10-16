@@ -1,0 +1,55 @@
+    /**
+     * Adds a ROI to the binarizator. This assumes the operation is already fully working in raster space, in other words, the world to grid
+     * transformation is the identity
+     * 
+     * @param roi
+     * @return
+     */
+    public boolean add(ROI roi) {
+        // do we need to transform it?
+        // roi.transform(at)
+        // look for intercepted tiles
+        // if roi is shape or polygon base go the vector path?
+
+        // avoid using the raster path if possible, the vector one has
+        // some useful optimizations and we'll avod generating the raster version
+        // of
+        if (roi instanceof ROIGeometry) {
+            Geometry geometry = ((ROIGeometry) roi).getAsGeometry();
+            return add(geometry);
+        } else if (roi instanceof ROIShape) {
+            Shape shape = ((ROIShape) roi).getAsShape();
+            Geometry geometry = JTS.toGeometry(shape);
+            return add(geometry);
+        }
+
+        // ok, fully raster addition then
+        final PlanarImage roiImage = roi.getAsImage();
+        final Rectangle roiBounds = roiImage.getBounds();
+        boolean added = false;
+        for (Iterator<Tile> it = activeTiles.iterator(); it.hasNext();) {
+            Tile tile = it.next();
+
+            Rectangle tileBounds = tile.getTileArea();
+            if (tileBounds.intersects(roiBounds)) {
+                if (tile.draw(roiImage)) {
+                    added = true;
+                    if (tile.isFullyCovered()) {
+                        if (LOGGER.isLoggable(Level.FINE)) {
+                            LOGGER.fine("Removing covered tile " + tile + " (" + activeTiles.size()
+                                    + " left)");
+                        }
+                        it.remove();
+                        tile.dispose();
+                    }
+                }
+            } else {
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.fine("Skipping tile " + tile);
+                }
+            }
+        }
+
+        return added;
+    }
+

@@ -10,17 +10,33 @@
                 rasterLayerResponse.getFinalWorldToGridCorner(), granuleDescriptor,
                 rasterLayerResponse.getRequest(), rasterLayerResponse.getHints());
         if (!dryRun) {
-            if (rasterLayerResponse.isMultithreadingAllowed() && rasterLayerResponse
-                    .getRasterManager().getParentReader().getMultiThreadedLoader() != null) {
+            final boolean multiThreadedLoading = isMultithreadedLoadingEnabled();
+            if (multiThreadedLoading) {
                 // MULTITHREADED EXECUTION submitting the task
-                granulesFutures.add(rasterLayerResponse.getRasterManager().getParentReader()
-                        .getMultiThreadedLoader().submit(loader));
+                final ExecutorService mtLoader = rasterLayerResponse
+                        .getRasterManager().getParentReader().getMultiThreadedLoader();
+                granulesFutures.add(mtLoader.submit(loader));
             } else {
                 // SINGLE THREADED Execution, we defer the execution to when we have done the loading
                 final FutureTask<GranuleDescriptor.GranuleLoadingResult> task = new FutureTask<>(
                         loader);
-                granulesFutures.add(task);
                 task.run(); // run in current thread
+                
+                // perform excess granule removal, as it makes sense in single threaded mode to
+                // do it while loading, to allow for an early bail out reading granules
+                ROIExcessGranuleRemover remover = rasterLayerResponse.getExcessGranuleRemover();
+                GranuleLoadingResult result;
+                if(remover != null) {
+                    try {
+                        result = task.get();
+                        if(!remover.addGranule(result)) {
+                            return false;
+                        }
+                    } catch (InterruptedException | ExecutionException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                granulesFutures.add(task);
             }
         }
         if (LOGGER.isLoggable(Level.FINE)) {
