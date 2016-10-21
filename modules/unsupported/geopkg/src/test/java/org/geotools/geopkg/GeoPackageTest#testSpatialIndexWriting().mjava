@@ -8,64 +8,50 @@
         geopkg.create(entry, shp.getSchema());
         
         //write some features before and some after
-        SimpleFeatureIterator it = coll.features();
+        try(SimpleFeatureIterator it = coll.features()) {
         
-        //some features
-        Transaction tx = new DefaultTransaction();
-        SimpleFeatureWriter w = geopkg.writer(entry, true, null, tx);
-        for (int i=0; i<3; i++) {
-            SimpleFeature f = it.next(); 
-            SimpleFeature g = w.next();
-            for (PropertyDescriptor pd : coll.getSchema().getDescriptors()) {
-                String name = pd.getName().getLocalPart();
-                g.setAttribute(name, f.getAttribute(name));
+            //some features
+            try(Transaction tx = new DefaultTransaction(); SimpleFeatureWriter w = geopkg.writer(entry, true, null, tx)) {
+                for (int i = 0; i < 3; i++) {
+                    SimpleFeature f = it.next();
+                    SimpleFeature g = w.next();
+                    for (PropertyDescriptor pd : coll.getSchema().getDescriptors()) {
+                        String name = pd.getName().getLocalPart();
+                        g.setAttribute(name, f.getAttribute(name));
+                    }
+
+                    w.write();
+                }
+                tx.commit();
             }
-                                         
-            w.write();
-        }
-        tx.commit();
-        tx.close();
-        w.close();
-
-        //create spatial index
-        geopkg.createSpatialIndex(entry);
-                
-
-        //the rest of features
-        tx = new DefaultTransaction();
-        w = geopkg.writer(entry, true, null, tx);        
-        while(it.hasNext()) {
-            SimpleFeature f = it.next(); 
-            SimpleFeature g = w.next();
-            for (PropertyDescriptor pd : coll.getSchema().getDescriptors()) {
-                String name = pd.getName().getLocalPart();
-                g.setAttribute(name, f.getAttribute(name));
+    
+            //create spatial index
+            geopkg.createSpatialIndex(entry);
+                    
+    
+            //the rest of features
+            try(Transaction tx = new DefaultTransaction(); SimpleFeatureWriter w = geopkg.writer(entry, true, null, tx)) {        
+                while(it.hasNext()) {
+                    SimpleFeature f = it.next(); 
+                    SimpleFeature g = w.next();
+                    for (PropertyDescriptor pd : coll.getSchema().getDescriptors()) {
+                        String name = pd.getName().getLocalPart();
+                        g.setAttribute(name, f.getAttribute(name));
+                    }
+                                                 
+                    w.write();
+                }
+                tx.commit();
             }
-                                         
-            w.write();
         }
-        tx.commit();
-        tx.close();
-        w.close();
 
-        it.close();
         
         //test if the index was properly created
-              
-        Connection cx = geopkg.getDataSource().getConnection();
-        Statement st = cx.createStatement();
-        try {            
+        try(Connection cx = geopkg.getDataSource().getConnection();  Statement st = cx.createStatement()) {            
             ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM rtree_bugsites_the_geom");
             rs.next();
             
             assertEquals(rs.getInt(1), coll.size());
-        }
-        catch(Exception e) {
-            fail(e.getMessage());
-        }
-        finally {
-            st.close();
-            cx.close();
         }
     }
 
