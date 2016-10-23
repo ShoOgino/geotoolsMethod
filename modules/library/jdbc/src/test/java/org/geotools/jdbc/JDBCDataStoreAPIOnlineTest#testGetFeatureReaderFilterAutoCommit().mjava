@@ -1,28 +1,25 @@
     public void testGetFeatureReaderFilterAutoCommit()
         throws NoSuchElementException, IOException, IllegalAttributeException {
         SimpleFeatureType type = dataStore.getSchema(tname("road"));
-         FeatureReader<SimpleFeatureType, SimpleFeature> reader;
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(
+                new Query(tname("road"), Filter.INCLUDE), Transaction.AUTO_COMMIT);) {
+            assertFalse(reader instanceof FilteringFeatureReader);
+            assertEquals(type, reader.getFeatureType());
+            assertEquals(td.roadFeatures.length, count(reader));
+        }
 
-        reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE),
-                Transaction.AUTO_COMMIT);
-        assertFalse(reader instanceof FilteringFeatureReader);
-        assertEquals(type, reader.getFeatureType());
-        assertEquals(td.roadFeatures.length, count(reader));
-        reader.close();
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.EXCLUDE),
+                Transaction.AUTO_COMMIT)) {
+            assertFalse(reader.hasNext());
+            assertEquals(type, reader.getFeatureType());
+            assertEquals(0, count(reader));
+        }
 
-        reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.EXCLUDE),
-                Transaction.AUTO_COMMIT);
-        assertFalse(reader.hasNext());
-        assertEquals(type, reader.getFeatureType());
-        assertEquals(0, count(reader));
-        reader.close();
-
-        reader = dataStore.getFeatureReader(new Query(tname("road"), td.rd1Filter),
-                Transaction.AUTO_COMMIT);
-
-        // assertTrue(reader instanceof FilteringFeatureReader);
-        assertEquals(type, reader.getFeatureType());
-        assertEquals(1, count(reader));
-        reader.close();
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), td.rd1Filter),
+                Transaction.AUTO_COMMIT)) {
+            // assertTrue(reader instanceof FilteringFeatureReader);
+            assertEquals(type, reader.getFeatureType());
+            assertEquals(1, count(reader));
+        }
     }
 

@@ -1,28 +1,26 @@
     public void testGetFeatureReaderFilterPrePostWithNoGeometry()
         throws IOException, IllegalFilterException {
         // GEOT-1069, make sure the post filter is run even if the geom property is not requested
-        Transaction t = new DefaultTransaction();
-
-        FilterFactory factory = CommonFactoryFinder.getFilterFactory(null);
-        FilterFunction_geometryType geomTypeExpr = new FilterFunction_geometryType();
-        geomTypeExpr.setParameters((List)Collections.singletonList(factory.property(aname("geom"))));
-
-        PropertyIsEqualTo filter = factory.equals(geomTypeExpr, factory.literal("Polygon"));
-
-        Query query = new Query(tname("road"), filter);
-        query.setPropertyNames((List)Collections.singletonList(aname("id")));
-
-         FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(query, t);
-        // if the above statement didn't throw an exception, we're content
-        assertNotNull(reader);
-        reader.close();
-
-        filter = factory.equals(geomTypeExpr, factory.literal("LineString"));
-        query.setFilter(filter);
-        reader = dataStore.getFeatureReader(query, t);
-        assertTrue(reader.hasNext());
-        reader.close();
-
-        t.close();
+        try(Transaction t = new DefaultTransaction()) {
+            FilterFactory factory = CommonFactoryFinder.getFilterFactory(null);
+            FilterFunction_geometryType geomTypeExpr = new FilterFunction_geometryType();
+            geomTypeExpr.setParameters((List)Collections.singletonList(factory.property(aname("geom"))));
+    
+            PropertyIsEqualTo filter = factory.equals(geomTypeExpr, factory.literal("Polygon"));
+    
+            Query query = new Query(tname("road"), filter);
+            query.setPropertyNames((List)Collections.singletonList(aname("id")));
+    
+            try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(query, t)) {
+                // if the above statement didn't throw an exception, we're content
+                assertNotNull(reader);
+            }
+    
+            filter = factory.equals(geomTypeExpr, factory.literal("LineString"));
+            query.setFilter(filter);
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(query, t)) {
+                assertTrue(reader.hasNext());
+            }
+        }
     }
 
