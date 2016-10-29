@@ -32,9 +32,14 @@
         if (startOrdinate < 0)
             startOrdinate = 0;
         cursor.moveTo(startOrdinate);
-        for (LineComponent component : line.getComponents()) {
-            GlyphVector glyphVector = component.getGlyphVector();
-            try {
+
+        // store the computed outlines an transformations
+        List<Shape[]> allOutlines = new ArrayList<>();
+        List<AffineTransform[]> allTransforms = new ArrayList<>();
+
+        try {
+            for (LineComponent component : line.getComponents()) {
+                GlyphVector glyphVector = component.getGlyphVector();
                 final int numGlyphs = glyphVector.getNumGlyphs();
                 float nextAdvance = glyphVector.getGlyphMetrics(0).getAdvance() * 0.5f;
                 double start = cursor.getCurrentOrdinate();
@@ -57,26 +62,31 @@
                     cursor.moveTo(cursor.getCurrentOrdinate() + advance + nextAdvance);
                 }
 
-                // draw halo and label
-                if (labelItem.getTextStyle().getHaloFill() != null) {
-                    configureHalo();
-                    for (int i = 0; i < numGlyphs; i++) {
-                        graphics.setTransform(transforms[i]);
-                        graphics.draw(outlines[i]);
-                    }
-                }
-                configureLabelStyle();
-                for (int i = 0; i < numGlyphs; i++) {
-                    graphics.setTransform(transforms[i]);
-                    graphics.fill(outlines[i]);
-                }
+                allOutlines.add(outlines);
+                allTransforms.add(transforms);
 
                 // take into account eventual spaces at the end of the glyph
                 cursor.moveTo(start + glyphVector.getGlyphPosition(numGlyphs).getX());
-            } finally {
-                graphics.setTransform(oldTransform);
             }
-        }
 
+            // draw halo and label
+            if (labelItem.getTextStyle().getHaloFill() != null) {
+                configureHalo();
+                if (labelItem.isTextUnderlined()) {
+                    // we need to draw the underline halo
+                    drawCurvedUnderline(line, cursor, startOrdinate, true);
+                }
+                drawOrFillOutlines(allOutlines, allTransforms, false);
+            }
+            graphics.setTransform(oldTransform);
+            configureLabelStyle();
+            if (labelItem.isTextUnderlined()) {
+                // we need to draw the underline
+                drawCurvedUnderline(line, cursor, startOrdinate, false);
+            }
+            drawOrFillOutlines(allOutlines, allTransforms, true);
+        } finally {
+            graphics.setTransform(oldTransform);
+        }
     }
 
