@@ -1,0 +1,30 @@
+    @Test
+    public void testLabelsUnderline() throws Exception {
+        // load the data, in this case a set of different linestring
+        File property = new File(TestData.getResource(this, "nonStraightLines.properties").toURI());
+        PropertyDataStore dataStore = new PropertyDataStore(property.getParentFile());
+        SimpleFeatureSource featureSource = dataStore.getFeatureSource("nonStraightLines");
+        // expand the bands so we can view all the labels
+        ReferencedEnvelope bounds = featureSource.getBounds();
+        bounds.expandBy(1, 1);
+        // load the style that will underline the labels
+        Style style = RendererBaseTest.loadStyle(this, "underlineStyle.sld");
+        // set the map content
+        MapContent mapContent = new MapContent();
+        mapContent.addLayer(new FeatureLayer(featureSource, style));
+        // instantiate and initiate the render
+        StreamingRenderer renderer = new StreamingRenderer();
+        renderer.setMapContent(mapContent);
+        renderer.setJava2DHints(new RenderingHints(KEY_ANTIALIASING, VALUE_ANTIALIAS_ON));
+        // create the output image and add a dark background for testing the halo
+        BufferedImage image = new BufferedImage(1000, 1000, BufferedImage.TYPE_3BYTE_BGR);
+        Graphics2D graphics = image.createGraphics();
+        graphics.setColor(Color.LIGHT_GRAY);
+        graphics.fillRect(0, 0, image.getWidth(), image.getHeight());
+        // render the lines with the underline labels
+        renderer.paint(graphics, new Rectangle(0, 0, image.getWidth(), image.getHeight()), bounds);
+        // let's see if the result image match our expectations
+        File reference = new File("./src/test/resources/org/geotools/renderer/lite/test-data/underlineStyle.sld.png");
+        ImageAssert.assertEquals(reference, image, 1200);
+    }
+

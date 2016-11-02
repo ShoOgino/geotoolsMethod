@@ -1,0 +1,33 @@
+    /**
+     * Helper method that will draw the underline of a curved label using the context of the cursor.
+     */
+    private void drawCurvedUnderline(LineInfo line, LineStringCursor cursor, double startOrdinate, boolean drawingHalo) {
+        // extracting label first line component and compute is metrics
+        LineComponent component = line.getComponents().get(0);
+        LineMetrics metrics = computeLineMetricsIfNeeded(component);
+        // the cursor is in the last char of the label
+        double endOrdinate = cursor.getCurrentOrdinate();
+        // compute the advance based on the first char of the label
+        GlyphVector glyphVector = line.getComponents().get(0).getGlyphVector();
+        double advance = glyphVector.getGlyphMetrics(0).getAdvance() * 0.5f;
+        // extract from the linestring the portion associated with the layer
+        LineString labelLineString = cursor.getSubLineString(startOrdinate - advance, endOrdinate - advance);
+        // compute the underline linestring
+        LiteShape underlineLineString = computeCurvedUnderline(labelLineString, metrics);
+        if (drawingHalo) {
+            // when drawing the halo we assume that the correct halo configuration has been set
+            graphics.draw(underlineLineString);
+        } else {
+            // string the current stroke to restore it back
+            Stroke oldStroke = graphics.getStroke();
+            try {
+                // if we are not drawing the halo we need to set the proper stroke
+                graphics.setStroke(new BasicStroke(metrics.getUnderlineThickness()));
+                // draw the underline
+                graphics.draw(underlineLineString);
+            } finally {
+                graphics.setStroke(oldStroke);
+            }
+        }
+    }
+
