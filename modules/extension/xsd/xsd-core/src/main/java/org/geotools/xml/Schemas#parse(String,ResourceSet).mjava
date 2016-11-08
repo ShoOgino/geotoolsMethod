@@ -20,12 +20,25 @@
                     ".xsd"));
         xsdMainResource.setURI(uri);
 
+        // read resource before synchronize: Shorter lock duration and prevention of deadlock
+        // if remote schema is created on same JVM and synchronizes on Schemas, too.
+        Map<Object, Object> options = resourceSet.getLoadOptions();
+        Map<?, ?> response = getOrCreateResponseFrom(options);
+        InputStream inputStream = readUriResource(uri, resourceSet, response);
+                
         // schema building has effects on referenced schemas, it will alter them -> we need 
         // to synchronize this call so that only one of these operations is active at any time
         synchronized(Schemas.class) {
-            xsdMainResource.load(resourceSet.getLoadOptions());
+            try {
+                xsdMainResource.load(inputStream, options);
+            } finally {
+                inputStream.close();
+                Long timeStamp = (Long) response.get(URIConverter.RESPONSE_TIME_STAMP_PROPERTY);
+                if (timeStamp != null) {
+                    xsdMainResource.setTimeStamp(timeStamp);
+                }
+            }
             XSDSchema schema = xsdMainResource.getSchema();
-
             if (schema != null) {
                 // if schema contains no element declarations, nor type definitions,
                 // force import of external schemas (if any), since it does not happen automatically;
