@@ -137,7 +137,7 @@
 			java.awt.Polygon rasterSpaceROI=null;
 			double[] background = destnodata != null ? destnodata : CoverageUtilities.getBackgroundValues(sourceCoverage);
             String operatioName=null;
-            if (!isSimpleTransform || cropROI!=null || nodata != null) {
+            if (!isSimpleTransform || cropROI != null) {
                 // /////////////////////////////////////////////////////////////////////
                 //
                 // We don't have a simple scale and translate transform, JAI
@@ -155,16 +155,15 @@
 				// //
 				final List<Point2D> points = new ArrayList<Point2D>(5);
 				rasterSpaceROI = FeatureUtilities.convertPolygonToPointArray(modelSpaceROI, ProjectiveTransform.create(sourceWorldToGridTransform), points);
-                                if (isSimpleTransform && cropROI == null) {
-                                    rasterSpaceROI = rectangleToPolygon(finalRasterArea);
-                                }
+                if (isSimpleTransform && cropROI == null) {
+                    rasterSpaceROI = rectangleToPolygon(finalRasterArea);
+                }
 				if(rasterSpaceROI==null||rasterSpaceROI.getBounds().isEmpty())
 		            if(finalRasterArea.isEmpty())
 		            	throw new CannotCropException(Errors.format(ErrorKeys.CANT_CROP));
-				final boolean doMosaic = forceMosaic ? true : decideJAIOperation(roiTolerance, rasterSpaceROI.getBounds2D(), points);
-				if (doMosaic || cropROI != null || internalROI != null || nodata != null) {
+				if (forceMosaic || cropROI != null || internalROI != null || nodata != null) {
 					// prepare the params for the mosaic
-                    final ROI[] roiarr;
+                    ROI[] roiarr = null;
                     if(cropROI != null) {
                         Geometry txROI = JTS.transform(cropROI, ProjectiveTransform.create(sourceWorldToGridTransform));
                         if (!hasIntegerBounds(JTS.toRectangle2D(txROI.getEnvelopeInternal()))) {
@@ -173,11 +172,11 @@
                         }
                         ROI cropRS = getAsROI(txROI);
                         roiarr = new ROI[]{cropRS};
-                    } else {
+                    } else if(forceMosaic) {
                         ROI roi = getAsROI(JTS.toPolygon(rasterSpaceROI));
                         roiarr = new ROI[]{roi};
                     }
-                    if(roiarr[0].getBounds().isEmpty()){
+                    if(roiarr != null && roiarr[0].getBounds().isEmpty()){
                         throw new CannotCropException(Errors.format(ErrorKeys.CANT_CROP));
                     }
                     worker.setBackground(background);
@@ -193,7 +192,7 @@
 
 					// we do not have to crop in this case (should not really happen at
                     // this time)
-                    if (!doMosaic && bounds.getBounds().equals(sourceGridRange) && isSimpleTransform && nodata == null)
+                    if (!forceMosaic && bounds.getBounds().equals(sourceGridRange) && isSimpleTransform && nodata == null)
                             return sourceCoverage;
 
 
