@@ -1,21 +1,6 @@
-    private void advanceScroll() {
+    private void advanceScroll() throws IOException {
         final ElasticDataStore dataStore;
         dataStore = (ElasticDataStore) contentState.getEntry().getDataStore();
-        final SearchResponse searchResponse = dataStore.getClient()
-                .prepareSearchScroll(nextScrollId)
-                .setScroll(TimeValue.timeValueSeconds(dataStore.getScrollTime()))
-                .execute().actionGet();
-        final int numHits = searchResponse.getHits().hits().length;
-        final List<SearchHit> hits;
-        if (numFeatures+numHits <= maxFeatures) {
-            hits = Arrays.asList(searchResponse.getHits().hits());
-        } else {
-            final int n = maxFeatures-numFeatures;
-            hits = Arrays.asList(searchResponse.getHits().hits()).subList(0,n);
-        }
-        delegate = new ElasticFeatureReader(contentState, hits.iterator());
-        nextScrollId = searchResponse.getScrollId();
-        lastScroll = numHits == 0 || numFeatures+hits.size()>=maxFeatures;
-        LOGGER.fine("Scoll numHits=" + hits.size() + " (total=" + numFeatures+hits.size());
+        processResponse(dataStore.getClient().scroll(nextScrollId, dataStore.getScrollTime()));
     }
 

@@ -3,19 +3,21 @@
         LOGGER.fine("getReaderInternal");
         FeatureReader<SimpleFeatureType, SimpleFeature> reader = null;
         try {
-            SearchType searchType = (useSortOrPagination(query) 
-                    || !getDataStore().getScrollEnabled()) ? SearchType.DFS_QUERY_THEN_FETCH : SearchType.SCAN;
-            final SearchRequestBuilder searchRequest = prepareSearchRequest(query, searchType);
-            SearchResponse sr = searchRequest.execute().get();
-            if (searchType!=SearchType.SCAN) {
+            final ElasticDataStore dataStore = getDataStore();
+            final String docType = dataStore.getDocType(entry.getName());
+            final boolean scroll = !useSortOrPagination(query) && dataStore.getScrollEnabled();
+            final ElasticRequest searchRequest = prepareSearchRequest(query, scroll);
+            final ElasticResponse sr = dataStore.getClient().search(dataStore.getSearchIndices(), docType, searchRequest);
+            LOGGER.fine("Search response hits/totalHits: " + sr.getNumHits() + "/" + sr.getTotalNumHits());
+            if (!scroll) {
                 reader = new ElasticFeatureReader(getState(), sr);
             } else {
-                reader = new ElasticFeatureReaderScroll(getState(), sr.getScrollId(), getSize(query));
+                reader = new ElasticFeatureReaderScroll(getState(), sr, getSize(query));
             }
             if (!filterFullySupported) {
                 reader = new FilteringFeatureReader<SimpleFeatureType, SimpleFeature>(reader, query.getFilter());
             }
-        } catch (InterruptedException | ExecutionException e) {
+        } catch (Exception e) {
             LOGGER.log(Level.SEVERE, e.getMessage(), e);
             throw new IOException("Error executing query search", e);
         }

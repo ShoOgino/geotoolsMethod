@@ -1,0 +1,36 @@
+    protected void addViewParams(Query query) {
+        super.addViewParams(query);
+
+        if (parameters != null) {
+            if (nativeOnly) {
+                LOGGER.fine("Ignoring GeoServer filter (Elasticsearch native query/post filter only)");
+                filterBuilder = QueryBuilders.matchAllQuery();
+            }
+            for (final Map.Entry<String, String> entry : parameters.entrySet()) {
+                if (entry.getKey().equalsIgnoreCase("q")) {
+                    final String value = entry.getValue();
+                    nativeQueryBuilder = QueryBuilders.wrapperQuery(value);
+                }
+                if (entry.getKey().equalsIgnoreCase("f")) {
+                    final String value = entry.getValue();
+                    if (nativeOnly || filterBuilder.toString().equals(QueryBuilders.matchAllQuery().toString())) {
+                        filterBuilder = QueryBuilders.wrapperQuery(value);
+                    } else {
+                        filterBuilder = QueryBuilders.boolQuery().must(filterBuilder).must(
+                                QueryBuilders.wrapperQuery(value));
+                    }
+                }
+                if (entry.getKey().equalsIgnoreCase("a")) {
+                    final ObjectMapper mapper = new ObjectMapper();
+                    try {
+                        final TypeReference<Map<String, Map<String,Map<String,Object>>>> type;
+                        type = new TypeReference<Map<String, Map<String,Map<String,Object>>>>() {};
+                        this.aggregations = mapper.readValue(entry.getValue(), type);
+                    } catch (IOException e) {
+                        throw new FilterToElasticException("Unable to parse aggregation",e);
+                    }
+                }
+            }
+        }
+    }
+

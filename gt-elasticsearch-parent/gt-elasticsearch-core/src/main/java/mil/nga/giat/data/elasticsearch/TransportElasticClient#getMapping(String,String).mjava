@@ -1,0 +1,41 @@
+    @Override
+    public Map<String, Object> getMapping(String indexName, String type) throws IOException {
+        final ClusterStateRequest clusterStateRequest;
+        clusterStateRequest = Requests.clusterStateRequest()
+                .routingTable(true)
+                .nodes(true)
+                .indices(indexName);
+
+        final ClusterState state;
+        state = client.admin().cluster()
+                .state(clusterStateRequest).actionGet().getState();
+
+        final Map<String, Object> mapping;        
+        final IndexMetaData indexMetadata = state.metaData().index(indexName);
+        if (indexMetadata != null) {
+            final MappingMetaData metadata;
+            metadata = state.metaData().index(indexName)
+                    .mapping(type);
+
+            if (metadata != null) {
+                final byte[] mappingSource = metadata.source().uncompressed();
+                final XContentParser parser;
+                parser = XContentFactory.xContent(mappingSource)
+                        .createParser(mappingSource);
+
+                final Map<String,Object> rawMapping = parser.map();
+                if (rawMapping.size() == 1 && rawMapping.containsKey(type)) {
+                    // the type name is the root value, reduce it
+                    mapping = (Map<String, Object>) rawMapping.get(type);
+                } else {
+                    mapping = rawMapping;
+                }
+            } else {
+                mapping = null;
+            }
+        } else {
+            mapping = null;
+        }
+        return mapping;
+    }
+

@@ -1,0 +1,25 @@
+    @Override
+    public List<String> getTypes(String indexName) {
+        final ClusterStateRequest clusterStateRequest;
+        clusterStateRequest = Requests.clusterStateRequest()
+                .indices(indexName);
+
+        final ClusterState state;
+        state = client.admin()
+                .cluster()
+                .state(clusterStateRequest)
+                .actionGet().getState();
+
+        final IndexMetaData metadata = state.metaData().index(indexName);
+        final List<String> types = new ArrayList<>();
+        if (metadata != null) {
+            final ImmutableOpenMap<String, MappingMetaData> mappings;
+            mappings = state.metaData().index(indexName).getMappings();
+            final Iterator<ObjectCursor<String>> elasticTypes = mappings.keys().iterator();
+            while (elasticTypes.hasNext()) {
+                types.add(elasticTypes.next().value);
+            }
+        }
+        return types;
+    }
+

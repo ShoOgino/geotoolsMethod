@@ -1,0 +1,51 @@
+    @Override
+    public ElasticResponse search(String searchIndices, String type, ElasticRequest request) throws IOException {
+        final String path = "/" + searchIndices + "/" + type + "/_search";
+
+        final Map<String,Object> requestBody = new HashMap<>();
+
+        if (request.getSize() != null) {
+            requestBody.put("size",  request.getSize());
+        }
+
+        if (request.getFrom() != null) {
+            requestBody.put("from", request.getFrom());
+        }
+
+        if (request.getScroll() != null) {
+            requestBody.put("scroll", TimeValue.timeValueSeconds(request.getScroll()).toString());
+        }
+
+        final List<String> sourceIncludes = request.getSourceIncludes();
+        if (sourceIncludes.size() == 1) {
+            requestBody.put("_source", sourceIncludes.get(0));
+        } else if (!sourceIncludes.isEmpty()) {
+            requestBody.put("_source", sourceIncludes);
+        }
+
+        if (!request.getFields().isEmpty()) {
+            requestBody.put("stored_fields", request.getFields());
+        }
+
+        if (!request.getSorts().isEmpty()) {
+            requestBody.put("sort", request.getSorts());
+        }
+
+        if (request.getQuery() != null) {
+            // TODO: Convert QueryBuilder directly to map or use string directly to avoid unnecessary conversions
+            final Map<String,Object> query = mapper.readValue(request.getQuery().toString(), new TypeReference<Map<String, Object>>() {});
+            makeCompatQuery2(query);
+            requestBody.put("query", query);
+        }
+
+        if (request.getAggregations() != null) {
+            requestBody.put("aggregations", request.getAggregations());
+        }
+
+        if (LOGGER.isLoggable(Level.FINE)) {
+            LOGGER.fine("Elasticsearch request:\n" + mapper.writerWithDefaultPrettyPrinter().writeValueAsString(requestBody));
+        }
+
+        return parseResponse(performRequest("POST", path, requestBody));
+    }
+
