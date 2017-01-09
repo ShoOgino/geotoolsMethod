@@ -3,20 +3,19 @@
      * If there is already {@link #hardReferencesCount} hard references, then this method
      * replaces the oldest hard reference by a soft one.
      */
+    @SuppressWarnings("unchecked")
     private void retainStrongly(final K key) {
-        assert Thread.holdsLock(hash);
-        assert !hardCache.contains(key) : key;
-        hardCache.addFirst(key);
-        if (hardCache.size() > hardReferencesCount) {
-            // Remove the last entry if list longer than hardReferencesCount
-            final K toRemove = hardCache.removeLast();
-            final Object value = hash.get(toRemove);
-            assert value!=null && !(value instanceof Reference) : toRemove;
-            @SuppressWarnings("unchecked")
-            final V v = (V) value;
-            hash.put(toRemove, new Reference<K,V>(hash, toRemove, v, cleaner));
-            assert hardCache.size() == hardReferencesCount;
-        }
-        assert isValid();
+        /*
+         * In highly concurrent environments, fields' values (e.g. the size of 'hardCache')
+         *  may differ slightly from what expected.
+         */
+        hardCache.add((K) replaceNull(key));
+            if (hardCache.size() > hardReferencesCount) {
+                // Remove the last entry if list longer than hardReferencesCount
+                final K toRemove = hardCache.poll();
+                final Object value = hash.get(replaceNull(toRemove));
+                final V v = (V) value;
+                hash.put((K) replaceNull(toRemove), new Reference<K, V>(hash, (K) replaceNull(toRemove), v, cleaner));
+             }
     }
 
