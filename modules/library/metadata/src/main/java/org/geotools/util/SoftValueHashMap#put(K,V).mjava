@@ -5,31 +5,33 @@
      * @param value Value to be associated with the specified key. The value can't be null.
      *
      * @return Previous value associated with specified key, or {@code null}
-     *        if there was no mapping for key.
+     *	       if there was no mapping for key.
      */
-    @SuppressWarnings("unchecked")
     @Override
     public V put(final K key, final V value) {
         ensureNotNull(value);
-        Object oldValue = hash.put((K) replaceNull(key), value);
+        synchronized (hash) {
+            Object oldValue = hash.put(key, value);
             if (oldValue instanceof Reference) {
                 oldValue = ((Reference) oldValue).getAndClear();
             } else if (oldValue != null) {
                 /*
                  * The value was retained by hard reference, which implies that the key must be in
                  * the hard-cache list. Removes the key from the list, since we want to reinsert it
-                 * at the beginning of the list in order to mark the value as the most recently used.
-                 * This method performs a linear search, which may be quite inefficient. But it still
+                 * at the begining of the list in order to mark the value as the most recently used.
+                 * This method performs a linear search, which may be quite ineficient. But it still
                  * efficient enough if the key was recently used, in which case it appears near the
-                 * beginning of the list. We assume that this is a common case. We may revisit later
+                 * begining of the list. We assume that this is a common case. We may revisit later
                  * if profiling show that this is a performance issue.
-                 * 
-                 * In highly concurrent environments, key could have been already removed.
-                 */                 
-                 hardCache.remove((K) replaceNull(key));
+                 */
+                if (!hardCache.remove(key)) {
+                    throw new AssertionError(key);
+                }
             }
-            retainStrongly((K) replaceNull(key));
+            retainStrongly(key);
+            @SuppressWarnings("unchecked")
             final V v = (V) oldValue;
             return v;
+        }
     }
 
