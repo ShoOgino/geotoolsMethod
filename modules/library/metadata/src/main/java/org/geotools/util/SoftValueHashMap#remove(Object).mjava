@@ -3,22 +3,25 @@
      *
      * @param  key Key whose mapping is to be removed from the map.
      * @return previous value associated with specified key, or {@code null}
-     *        if there was no entry for key.
+     *	       if there was no entry for key.
      */
     @Override
     public V remove(final Object key) {
-        Object oldValue = hash.remove(replaceNull(key));
+        synchronized (hash) {
+            Object oldValue = hash.remove(key);
             if (oldValue instanceof Reference) {
                 oldValue = ((Reference) oldValue).getAndClear();
             } else if (oldValue != null) {
                 /*
                  * See the comment in the 'put' method.
-                 * In highly concurrent environments, key could have been already removed.
                  */
-                hardCache.remove(replaceNull(key));
+                if (!hardCache.remove(key)) {
+                    throw new AssertionError(key);
+                }
             }
             @SuppressWarnings("unchecked")
             final V v = (V) oldValue;
             return v;
+        }
     }
 
