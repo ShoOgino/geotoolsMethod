@@ -1,24 +1,25 @@
     Object visitDistanceSpatialOperator(DistanceBufferOperator filter, PropertyName property,
             Literal geometry, boolean swapped, Object extraData) {
         try {
-            if ((filter instanceof DWithin && !swapped) || (filter instanceof Beyond && swapped)) {
+            String comparisonOperator = ") < ";
+            if ((filter instanceof DWithin && swapped) 
+                || (filter instanceof Beyond && !swapped)) {
+              comparisonOperator = ") > ";
+            }
                 out.write("db2gse.ST_Distance(");
                 property.accept(this, extraData);
                 out.write(",");
                 geometry.accept(this, extraData);
-                out.write(") < ");
-                out.write(Double.toString(filter.getDistance()));
-                addSelectivity();
+            String distanceUnits = filter.getDistanceUnits();
+            if (isValidUnit(distanceUnits)) {
+                out.write(",'METER'");
             }
-            if ((filter instanceof DWithin && swapped) || (filter instanceof Beyond && !swapped)) {
-                out.write("db2gse.ST_Distance(");
-                property.accept(this, extraData);
-                out.write(",");
-                geometry.accept(this, extraData);
-                out.write(") > ");
-                out.write(Double.toString(filter.getDistance()));
-                addSelectivity();
-            }
+            out.write(comparisonOperator);
+            out.write(toMeters(filter.getDistance(), filter.getDistanceUnits()));
+            if (!isValidUnit(distanceUnits)) {
+                addSelectivity(); // Selectivity clause can not be used with distance units
+            }            
+            
             return extraData;
         } catch (IOException ex) {
             throw new RuntimeException(ex);
