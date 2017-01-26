@@ -1,6 +1,6 @@
     private Function process(YamlMap map) {
         processes++; // Found a new process in the chain.
-        
+
         String name = map.str("name");
         if (name == null) {
             throw new IllegalArgumentException("transform must specify a name");
@@ -11,25 +11,28 @@
         Name qName = processName(name);
 
         // load process parameter info
-        Map<String,Parameter<?>> processInfo = loadProcessInfo(qName);
+        Map<String, Parameter<?>> processInfo = loadProcessInfo(qName);
         if (processInfo == null) {
             throw new IllegalArgumentException("No such process: " + name);
         }
-        
+
         boolean wmsParams = ProcessUtil.hasWMSParams(processInfo);
 
         FilterFactory filterFactory = factory.filter;
 
         // turn properties into inputs for ProcessFunction
         List<Expression> processArgs = new ArrayList<>();
-        
+
         Expression outputBBOX = null;
         Expression outputWidth = null;
         Expression outputHeight = null;
-        if(wmsParams) {
-            outputBBOX =paramExpression("outputBBOX", Collections.singletonList(envVar("wms_bbox")));
-            outputWidth = paramExpression("outputWidth", Collections.singletonList(envVar("wms_width")));
-            outputHeight = paramExpression("outputHeight", Collections.singletonList(envVar("wms_height")));
+        if (wmsParams) {
+            outputBBOX = paramExpression("outputBBOX",
+                    Collections.singletonList(envVar("wms_bbox")));
+            outputWidth = paramExpression("outputWidth",
+                    Collections.singletonList(envVar("wms_width")));
+            outputHeight = paramExpression("outputHeight",
+                    Collections.singletonList(envVar("wms_height")));
         }
 
         YamlMap params = map.map("params");
@@ -43,7 +46,7 @@
                 Parameter<?> p = processInfo.get(key);
                 if (p != null) {
                     if (val instanceof String) {
-                        Expression expr = Util.expression((String)val, true, factory);
+                        Expression expr = Util.expression((String) val, true, factory);
                         if (expr != null) {
                             valueArgs.add(expr);
                         }
@@ -52,15 +55,14 @@
                     if (valueArgs.isEmpty()) {
                         convertAndAdd(val, p, valueArgs);
                     }
-                }
-                else {
+                } else {
                     LOG.warning(String.format("unknown transform parameter: %s", key));
                 }
 
                 if (valueArgs.isEmpty()) {
                     valueArgs.add(factory.filter.literal(val));
                 }
-                switch(key) {
+                switch (key) {
                 case "outputBBOX":
                     outputBBOX = paramExpression(key, valueArgs);
                     break;
@@ -76,19 +78,19 @@
             }
         }
         // If this process is the only one, and no input parameter was specified, use data by default
-        if( input == null && processes == 1 ) {
+        if (input == null && processes == 1) {
             input = "data";
         }
-        if( input != null) {
+        if (input != null) {
             processArgs.add(paramExpression(input, Collections.<Expression> emptyList()));
         }
-        if(outputBBOX!=null) {
+        if (outputBBOX != null) {
             processArgs.add(outputBBOX);
         }
-        if(outputWidth!=null) {
+        if (outputWidth != null) {
             processArgs.add(outputWidth);
         }
-        if(outputHeight!=null) {
+        if (outputHeight != null) {
             processArgs.add(outputHeight);
         }
         Function function = functionFactory.function(processName(name), processArgs, null);
