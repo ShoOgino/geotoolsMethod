@@ -1,18 +1,20 @@
     @Test
     public void testFill() throws IOException, ParseException {
-        assertTrue("hello world", true);
 
+        // Read file to JSONObject
         InputStream is = this.getClass().getResourceAsStream("fillStyleTest.json");
-        String s = IOUtils.toString(is, "utf-8");
+        String fileContents = IOUtils.toString(is, "utf-8");
+        JSONObject jsonObject = (JSONObject) jsonParser.parse(fileContents);
 
-        JSONParser j = new JSONParser();
-        JSONObject o = (JSONObject) j.parse(s);
-        JSONArray array = (JSONArray) o.get("layers");
-        assertEquals(1, array.size());
+        // Parse to MBStyle
+        MBStyle mbStyle = new MBStyle(jsonObject);
+        List<MBLayer> layers = mbStyle.layers("geoserver-states");
 
-        JSONObject fillLayer = (JSONObject) array.get(0);
+        assertEquals(1, layers.size());
 
-        MBFillLayer mbFill = new MBFillLayer(fillLayer);
+        // Find the MBFillLayer and assert it contains the correct FeatureTypeStyle.
+        assertTrue(layers.get(0) instanceof MBFillLayer);
+        MBFillLayer mbFill = (MBFillLayer) layers.get(0);
         FeatureTypeStyle fts = new MBStyleTransformer().transform(mbFill);
 
         assertEquals(1, fts.rules().size());
@@ -23,9 +25,8 @@
                 PolygonSymbolizer psym = (PolygonSymbolizer) symbolizer;
                 assertTrue("#e100ff"
                         .equalsIgnoreCase((String) psym.getFill().getColor().evaluate(null)));
-
-                System.out.println("Fill Color: " + psym.getFill().getColor());
-                System.out.println("Opacity: " + psym.getFill().getOpacity());
+                assertEquals(Double.valueOf(.84),
+                        psym.getFill().getOpacity().evaluate(null, Double.class));
             }
         }
 
