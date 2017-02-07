@@ -1,0 +1,27 @@
+    @Test
+    public void propertyValueStops() throws Exception {
+        SimpleFeatureType SAMPLE = DataUtilities.createType("SAMPLE",
+                "id:\"\",temperature:0.0,location=4326");
+
+        JSONParser parser = new JSONParser();
+
+        JSONObject json = (JSONObject) parser
+                .parse("{\"property\":\"temperature\",\"stops\":[[0,5],[100,10]] }");
+
+        MBFunction function = new MBFunction(json);
+
+        assertEquals("temperature", function.getProperty());
+        assertTrue("property", function.category().contains(MBFunction.FunctionCategory.PROPERTY));
+        assertEquals(MBFunction.FunctionType.EXPONENTIAL, function.getType());
+
+        Function fn = function.expression();
+        assertNotNull(fn);
+        assertEquals("Interpolate", fn.getName());
+        PropertyName propertyName = (PropertyName) fn.getParameters().get(0);
+        assertEquals("temperature", propertyName.getPropertyName());
+        SimpleFeature feature = DataUtilities.createFeature(SAMPLE, "measure1=A|50.0|POINT(0,0)");
+
+        Double result = fn.evaluate(feature, Double.class);
+        assertEquals( 7.5, result, 0.0);
+    }
+
