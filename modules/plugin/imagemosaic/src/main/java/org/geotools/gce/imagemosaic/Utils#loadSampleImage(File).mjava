@@ -16,7 +16,33 @@
                 oiStream = new ObjectInputStream(inStream);
 
                 // load the image
-                return (RenderedImage) oiStream.readObject();
+                Object object = oiStream.readObject();
+                if(object instanceof SampleImage) {
+                    SampleImage si = (SampleImage) object;
+                    return si.toBufferedImage();
+                } else if(object instanceof SerializableRenderedImage) {
+                    SerializableRenderedImage sri = (SerializableRenderedImage) object;
+                    // SerializableRenderedImage is a finalization thread killer, try to replace
+                    // it with SampleImage on disk instead
+                    if(sampleImageFile.canWrite()) {
+                        try {
+                            storeSampleImage(sampleImageFile, sri.getSampleModel(), sri.getColorModel());
+                        } catch(Exception e) {
+                            if(LOGGER.isLoggable(Level.WARNING)) {
+                                LOGGER.log(Level.WARNING, "Failed to upgrade the sample image to the new storage format", e);
+                            }
+                        }
+                    }
+                    // note, disposing the SerializableRenderedImage here is not done on purpose,
+                    // as it will hang, timeout and fail, and then on finalize
+                    // it will do it again, so there is really no point in doing that
+                    return new SampleImage(sri.getSampleModel(), sri.getColorModel()).toBufferedImage();
+                } else {
+                    if(LOGGER.isLoggable(Level.WARNING)) {
+                        LOGGER.warning("Unrecognized sample_image content: " +  object);
+                    }
+                    return null;
+                }
 
             } else {
                 if (LOGGER.isLoggable(Level.WARNING))
