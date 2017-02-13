@@ -1,11 +1,19 @@
-    private void paintImage(final Graphics2D graphics, RenderedImage finalImage) {
+    private void paintImage(final Graphics2D graphics, RenderedImage inputImage) {
         final RenderingHints oldHints = graphics.getRenderingHints();
         graphics.setRenderingHints(this.hints);
+        
+        // nothing to do if the input image is null
+        if (inputImage == null) {
+            return;
+        }
 
+        // force transparency on NODATA and ROI
+        RenderedImage transparentImage = new ImageWorker(inputImage).prepareForRendering().getRenderedImage();
+        
         try {
             // debug
             if (DEBUG) {
-                writeRenderedImage(finalImage, "final");
+                writeRenderedImage(transparentImage, "final");
             }
 
             // force solid alpha, the transparency has already been
@@ -16,7 +24,7 @@
             // //
             // Drawing the Image
             // //
-            graphics.drawRenderedImage(finalImage, GridCoverageRenderer.IDENTITY);
+            graphics.drawRenderedImage(transparentImage, GridCoverageRenderer.IDENTITY);
 
         } catch (Throwable t) {
             try {
@@ -30,16 +38,16 @@
                 // /////////////////////////////////////////////////////////////
                 if (t instanceof IllegalArgumentException) {
                     if (DEBUG) {
-                        writeRenderedImage(finalImage, "preWORKAROUND1");
+                        writeRenderedImage(transparentImage, "preWORKAROUND1");
                     }
-                    final RenderedImage image = new ImageWorker(finalImage)
+                    final RenderedImage componentImage = new ImageWorker(transparentImage)
                             .forceComponentColorModel(true).getRenderedImage();
 
                     if (DEBUG) {
-                        writeRenderedImage(image, "WORKAROUND1");
+                        writeRenderedImage(componentImage, "WORKAROUND1");
 
                     }
-                    graphics.drawRenderedImage(image, GridCoverageRenderer.IDENTITY);
+                    graphics.drawRenderedImage(componentImage, GridCoverageRenderer.IDENTITY);
 
                 } else if (t instanceof ImagingOpException)
                 // /////////////////////////////////////////////////////////////
@@ -58,18 +66,18 @@
                 // LARGE IMAGES.
                 // /////////////////////////////////////////////////////////////
                 {
-                    BufferedImage buf = finalImage.getColorModel().hasAlpha() ? new BufferedImage(
-                            finalImage.getWidth(), finalImage.getHeight(),
+                    BufferedImage buf = transparentImage.getColorModel().hasAlpha() ? new BufferedImage(
+                            transparentImage.getWidth(), transparentImage.getHeight(),
                             BufferedImage.TYPE_4BYTE_ABGR) : new BufferedImage(
-                            finalImage.getWidth(), finalImage.getHeight(),
+                            transparentImage.getWidth(), transparentImage.getHeight(),
                             BufferedImage.TYPE_3BYTE_BGR);
                     if (DEBUG) {
                         writeRenderedImage(buf, "preWORKAROUND2");
                     }
                     final Graphics2D g = (Graphics2D) buf.getGraphics();
-                    final int translationX = finalImage.getMinX(), translationY = finalImage
+                    final int translationX = transparentImage.getMinX(), translationY = transparentImage
                             .getMinY();
-                    g.drawRenderedImage(finalImage,
+                    g.drawRenderedImage(transparentImage,
                             AffineTransform.getTranslateInstance(-translationX, -translationY));
                     g.dispose();
                     if (DEBUG) {
