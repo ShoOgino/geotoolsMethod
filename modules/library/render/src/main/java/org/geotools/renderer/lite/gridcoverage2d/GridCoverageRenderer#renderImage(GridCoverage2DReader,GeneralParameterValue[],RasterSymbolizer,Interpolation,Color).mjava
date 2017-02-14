@@ -100,40 +100,6 @@
             coverages = cropped;
         }
 
-        /////////////////////////////////////////////////////
-        //
-        // Check if Mosaiking and reprojection must be done,
-        // if so we must add a ROIin order to avoid mosaiking issues
-        //
-        /////////////////////////////////////////////////////
-        // TODO optimize by checking if reprojection adds rotational elements
-        if (coverages.size() > 1 && reprojectionNeeded) {
-            // See if we need to add a ROI to the current images
-            for (int i = 0; i < coverages.size(); i++) {
-                GridCoverage2D coverage = coverages.get(i);
-                if (coverage == null) {
-                    continue;
-                }
-                RenderedImage input = coverage.getRenderedImage();
-                Object roiObject = input.getProperty("ROI");
-                Object gcRoiObject = coverage.getProperty("GC_ROI");
-                if (!(roiObject instanceof ROI) && !(gcRoiObject instanceof ROI)) {
-                    Envelope env = new Envelope(input.getMinX(), input.getMinX() + input.getWidth(),
-                            input.getMinY(), input.getMinY() + input.getHeight());
-                    ROI roi = new ROI(new ROIGeometry(JTS.toGeometry(env)).getAsImage());
-                    PlanarImage pi = PlanarImage.wrapRenderedImage(input);
-                    pi.setProperty("ROI", roi);
-                    Map properties = new HashMap(coverage.getProperties());
-                    properties.put("GC_ROI", roi);
-                    GridCoverage2D coverageWithRoi = gridCoverageFactory.create(coverage.getName(),
-                            pi, coverage.getGridGeometry(), null, new GridCoverage2D[] { coverage },
-                            properties);
-                    coverages.set(i, coverageWithRoi);
-
-                }
-            }
-        }
-
         // reproject if needed
         List<GridCoverage2D> reprojectedCoverages = new ArrayList<GridCoverage2D>();
         for (GridCoverage2D coverage : coverages) {

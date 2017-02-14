@@ -1,0 +1,27 @@
+    @Test
+    public void testReprojectTransparency() throws Exception {
+        ReferencedEnvelope re = new ReferencedEnvelope(0, 20, 20, 40, DefaultGeographicCRS.WGS84);
+        CoordinateReferenceSystem utm32n = CRS.decode("EPSG:32632", true);
+        ReferencedEnvelope mapExtent = re.transform(utm32n, true);
+        
+        // get a subset of the coverage
+        GridCoverage2D global = worldReader.read(null);
+        CoverageProcessor processor = CoverageProcessor.getInstance(new Hints(Hints.LENIENT_DATUM_SHIFT, Boolean.TRUE));
+        final ParameterValueGroup param = processor.getOperation("CoverageCrop").getParameters().clone();
+        param.parameter("source").setValue(global);
+        param.parameter("Envelope").setValue(re);
+        GridCoverage2D cropped = (GridCoverage2D) ((Crop)processor.getOperation("CoverageCrop")).doOperation(param, null);
+
+        // render with reprojection, the ROI should be used to create transparent pixels
+        BufferedImage bi = new BufferedImage(100, 100, BufferedImage.TYPE_4BYTE_ABGR);
+        Graphics2D graphics = bi.createGraphics();
+        GridCoverageRenderer renderer = new GridCoverageRenderer(utm32n, mapExtent,
+                new Rectangle(0, 0, 100, 100), null);
+        renderer.paint(graphics, cropped, new StyleBuilder().createRasterSymbolizer());
+        graphics.dispose();
+        
+        // top left and top right corners must be transparent now, the UTM shrinks towards the pole
+        assertPixelIsTransparent(bi, 0, 0);
+        assertPixelIsTransparent(bi, bi.getWidth() - 1, 0);
+    }
+
