@@ -1,0 +1,53 @@
+    @Test
+    public void testMixed2() throws Exception {
+        
+        // Read file to JSONObject
+        InputStream is = this.getClass().getResourceAsStream("testVisualize.json");
+        String fileContents = IOUtils.toString(is, "utf-8");
+        JSONObject jsonObject = (JSONObject) jsonParser.parse(fileContents);
+
+        // Get the style
+        MBStyle mbStyle = new MBStyle(jsonObject);
+        
+        List<MBLayer> bgs = mbStyle.layers("test-source", "test-source-bg");
+        List<MBLayer> circles = mbStyle.layers("test-source", "test-source-circles");
+        List<MBLayer> fills = mbStyle.layers("test-source", "test-source-fills");
+        List<MBLayer> lines =mbStyle.layers("test-source", "test-source-lines");
+        
+        assertEquals(1, bgs.size());
+        assertEquals(1, circles.size());
+        assertEquals(1, fills.size());
+        assertEquals(1, lines.size());
+        
+        MapContent mc = new MapContent();
+        MBStyleTransformer transformer = new MBStyleTransformer();
+       
+        Style bgStyle = styleFactory.createStyle();
+        bgStyle.featureTypeStyles().add(transformer.transform(bgs.get(0)));
+        mc.addLayer(new FeatureLayer(bgFS, bgStyle));
+        
+        Style circleStyle = styleFactory.createStyle();
+        circleStyle.featureTypeStyles().add(transformer.transform(circles.get(0)));
+        mc.addLayer(new FeatureLayer(pointleftFS, circleStyle));
+        
+        Style fillStyle = styleFactory.createStyle();
+        fillStyle.featureTypeStyles().add(transformer.transform(fills.get(0)));
+        mc.addLayer(new FeatureLayer(polyRight, fillStyle));
+        
+        Style lineStyle = styleFactory.createStyle();
+        lineStyle.featureTypeStyles().add(transformer.transform(lines.get(0)));
+        mc.addLayer(new FeatureLayer(lineFS, lineStyle));
+        
+//        
+//        mc.addLayer(new FeatureLayer(pointleftFS, defaultPointStyle()));
+//        mc.addLayer(new FeatureLayer(polyRight, defaultPolyStyle()));
+//        mc.addLayer(new FeatureLayer(gridFS, defaultLineStyle()));
+
+        StreamingRenderer renderer = new StreamingRenderer();        
+        renderer.setMapContent(mc);
+        renderer.setJava2DHints(new RenderingHints(KEY_ANTIALIASING, VALUE_ANTIALIAS_ON));
+        BufferedImage image = showRender("test name", renderer, DISPLAY_TIME, new ReferencedEnvelope[] {bounds}, null);
+
+        // ImageAssert.assertEquals(file("qgis"), image, 50);
+    }
+
