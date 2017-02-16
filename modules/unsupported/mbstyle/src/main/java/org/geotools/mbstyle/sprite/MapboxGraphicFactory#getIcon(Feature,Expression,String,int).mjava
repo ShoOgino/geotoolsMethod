@@ -1,0 +1,38 @@
+    @Override
+    public Icon getIcon(Feature feature, Expression url, String format, int size) throws Exception {
+
+        // Only handle the correct format
+        if (!FORMAT.equalsIgnoreCase(format.trim())) {
+            return null;
+        }
+
+        URL loc = url.evaluate(feature, URL.class);
+        URL baseUrl = parseBaseUrl(loc);
+        String iconName = parseIconName(loc);
+
+        // Retrieve and parse the sprite index file.
+        JSONObject spriteIndexJson = getSpriteIndex(baseUrl);
+
+        IconInfo iconInfo = parseIconInfoFromIndex(spriteIndexJson, iconName);
+
+        // Retrieve the sprite sheet and get the icon as a sub image
+        BufferedImage spriteImg = getSpriteSheet(baseUrl);
+        BufferedImage iconSubImg = spriteImg.getSubimage(iconInfo.getX(), iconInfo.getY(),
+                iconInfo.getWidth(), iconInfo.getHeight());
+
+        // Use "size" to scale the image, if > 0
+        if (size > 0 && iconSubImg.getHeight() != size) {
+            double dsize = (double) size;
+
+            double scaleY = dsize / iconSubImg.getHeight(); // >1 if you're magnifying
+            double scaleX = scaleY; // keep aspect ratio!
+
+            AffineTransform scaleTx = AffineTransform.getScaleInstance(scaleX, scaleY);
+            AffineTransformOp ato = new AffineTransformOp(scaleTx, AffineTransformOp.TYPE_BILINEAR);
+            iconSubImg = ato.filter(iconSubImg, null);
+        }
+
+        return new ImageIcon(iconSubImg);
+
+    }
+
