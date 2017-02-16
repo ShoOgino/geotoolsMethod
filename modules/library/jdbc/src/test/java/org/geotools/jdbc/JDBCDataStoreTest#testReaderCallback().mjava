@@ -1,0 +1,73 @@
+    @Test
+    public void testReaderCallback() throws Exception {
+        JDBCReaderCallback callback = mock(JDBCReaderCallback.class);
+
+        JDBCDataStore store = new JDBCDataStore();
+        store.setNamespaceURI("http://geotools.org");
+        store.setPrimaryKeyFinder(new PrimaryKeyFinder() {
+            @Override
+            public PrimaryKey getPrimaryKey(JDBCDataStore store, String schema, String table, Connection cx) throws SQLException {
+                return new NullPrimaryKey(table);
+            }
+        });
+        store.setCallbackFactory(new JDBCCallbackFactory() {
+            @Override
+            public String getName() {
+                return "mock";
+            }
+
+            @Override
+            public JDBCReaderCallback createReaderCallback() {
+                return callback;
+            }
+        });
+        store.setFeatureFactory(CommonFactoryFinder.getFeatureFactory(null));
+
+        JDBCMockObjectFactory jdbcMock = new JDBCMockObjectFactory();
+        store.setDataSource(jdbcMock.getMockDataSource());
+
+        MockResultSet tableTypes = new MockResultSet("tableTypes");
+        tableTypes.addColumn("TABLE_TYPE", Arrays.asList("TABLE"));
+
+        MockResultSet tables = new MockResultSet("tables");
+        tables.addColumn("TABLE_NAME", Arrays.asList("foo"));
+        tables.addColumn("TABLE_SCHEM", Arrays.asList(""));
+
+        MockDatabaseMetaData meta = new MockDatabaseMetaData();
+        meta.setTableTypes(tableTypes);
+        meta.setTables(tables);
+
+        MockConnection cx = jdbcMock.getMockConnection();
+        cx.setMetaData(meta);
+
+        BasicSQLDialect dialect = mock(BasicSQLDialect.class);
+        when(dialect.getDesiredTablesType()).thenReturn(new String[]{"TABLE"});
+        when(dialect.includeTable(anyString(), anyString(), any(Connection.class))).thenReturn(true);
+
+        store.setSQLDialect(dialect);
+
+        SimpleFeatureTypeBuilder tb = new SimpleFeatureTypeBuilder();
+        tb.setName("foo");
+        tb.setNamespaceURI("http://geotools.org");
+        tb.add("name", String.class);
+
+        JDBCFeatureSource source = mock(JDBCFeatureSource.class);
+        when(source.getDataStore()).thenReturn(store);
+
+        MockResultSet rowData = new MockResultSet("foo");
+        rowData.addColumn("name", Arrays.asList("foo", "bar", "baz"));
+        rowData.setStatement(new MockStatement(cx));
+
+        JDBCFeatureReader reader = 
+            new JDBCFeatureReader(rowData, cx, 0, source, tb.buildFeatureType(), new Query());
+        while (reader.hasNext()) {
+            reader.next();
+        }
+
+        verify(callback, times(1)).init(reader);
+        verify(callback, times(4)).beforeNext(rowData);
+        verify(callback, times(3)).afterNext(rowData, true);
+        verify(callback, times(1)).afterNext(rowData, false);
+        verify(callback, times(1)).finish(reader);
+    }
+
