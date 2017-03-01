@@ -14,15 +14,10 @@
     private SimpleFeature createFeature(
             final Variable variable,
             final String coverageName,
-            final int tIndex,
-            final int zIndex,
+            final int[] index,
             final CoordinateSystem cs,
             final int imageIndex, 
             final SimpleFeatureType indexSchema) {
-
-        final Date date = getTimeValueByIndex(variable, tIndex, cs);
-        final Number verticalValue = getVerticalValueByIndex(variable, zIndex, cs);
-        final int dimSize = variable.getDimensions().size();
 
         final SimpleFeature feature = DataUtilities.template(indexSchema);
         feature.setAttribute(CoverageSlice.Attributes.GEOMETRY, 
@@ -31,8 +26,30 @@
 
         // TIME management
         // Check if we have time and elevation domain and set the attribute if needed
-        String originalTimeAttribute = setFeatureTime(feature, date, cs);
-        setOtherFeatureAttribute(feature, verticalValue, indexSchema, variable, dimSize, originalTimeAttribute);
+        if (nDimensionIndex[T] >= 0) {
+            final Date date = getTimeValueByIndex(variable, nDimensionIndex[T], index[T]);
+            setFeatureTime(feature, date, cs);
+        }
+        // elevation
+        if (nDimensionIndex[Z] >= 0) {
+            final Number verticalValue = getNumberValueByIndex(variable, nDimensionIndex[Z], index[Z]);
+            feature.setAttribute(reader.georeferencing.getDimensionMapper().getDimension(NetCDFUtilities.ELEVATION_DIM), 
+                verticalValue);
+        }
+
+        //additional domains
+        if (getAdditionalDomains() != null) {
+            for (int i = 0; i < getAdditionalDomains().size(); i++) {
+                AdditionalDomain domain = getAdditionalDomains().get(i);
+                final Object value;
+                if (domain.getType().equals(DomainType.DATE)) {
+                    value = getTimeValueByIndex(variable, nDimensionIndex[i + 2], index[i + 2]);
+                } else {
+                    value = getNumberValueByIndex(variable, nDimensionIndex[i + 2], index[i + 2]);
+                }
+                feature.setAttribute(reader.georeferencing.getDimensionMapper().getDimension(domain.getName().toUpperCase()), value);
+            }
+        }
 
         return feature;
     }

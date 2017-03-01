@@ -7,9 +7,7 @@
      * @param collection the feature collection where features need to be stored
      */
     public void getFeatures(final int startIndex, final int limit, final ListFeatureCollection collection) {
-        final boolean hasVerticalAxis = coordinateSystem.hasVerticalAxis() || zDimensionIndex != -1;
         final SimpleFeatureType indexSchema = collection.getSchema();
-        final int bandDimension = rank - NetCDFUtilities.Z_DIMENSION;
         final int slicesNum = getNumberOfSlices();
         if (startIndex > slicesNum) {
             throw new IllegalArgumentException("The paging start index can't be higher than the number of available slices");
@@ -20,34 +18,18 @@
         }
         final String varName = variableDS.getFullName();
         for (int imageIndex = startIndex; imageIndex < lastIndex; imageIndex++) {
-            int zIndex = -1;
-            int tIndex = -1;
-            for (int i = 0; i < rank; i++) {
-                switch (rank - i) {
-                case NetCDFUtilities.X_DIMENSION:
-                case NetCDFUtilities.Y_DIMENSION:
-                    break;
-                default: {
-                    if (i == bandDimension && hasVerticalAxis) {
-                        zIndex = getZIndex(imageIndex);
-                    } else {
-                        tIndex =  getTIndex(imageIndex);
-                    }
-                    break;
-                }
-                }
-            }
+
+            int[] index = splitIndex(imageIndex);
 
             //Put a new sliceIndex in the list
-            final Slice2DIndex variableIndex = new Slice2DIndex(tIndex, zIndex, varName);
+            final SliceNDIndex variableIndex = new SliceNDIndex(index, varName);
             reader.ancillaryFileManager.addSlice(variableIndex);
 
             // Create a feature for that index to be put in the CoverageSlicesCatalog
             final SimpleFeature feature = createFeature(
                     variableDS, 
                     coverageName.toString(), 
-                    tIndex, 
-                    zIndex, 
+                    index,
                     coordinateSystem, 
                     imageIndex, 
                     indexSchema);
