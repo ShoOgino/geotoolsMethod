@@ -1,0 +1,131 @@
+    /**
+     * Generate GeoTools {@link Filter} from json definition.
+     * <p>
+     * This filter specifying conditions on source features. Only features that match the filter are
+     * displayed.
+     * </p>
+     * 
+     * @return GeoTools {@link Filter} specifying conditions on source features.
+     */
+    Filter filter() {
+        if (json == null || json.isEmpty()) {
+            return Filter.INCLUDE; // by default include everything!
+        }
+        String operator = parse.get(json, 0);
+        
+        //
+        // TYPE
+        //
+        if(("==".equals(operator) || "!=".equals(operator) ||
+                "in".equals(operator) || "!in".equals(operator))&&
+                "$type".equals(parse.get(json, 1))){
+            throw new UnsupportedOperationException("$type Point,LineString,Polygon comparisions not yet supported");
+        }
+        if(("==".equals(operator) || "!=".equals(operator) ||
+                "has".equals(operator) || "!has".equals(operator) ||
+                "in".equals(operator) || "!in".equals(operator))&&
+                "$id".equals(parse.get(json, 1))){
+            throw new UnsupportedOperationException("$id comparisions not yet supported");
+        }
+        // ID
+        //
+        
+        //
+        // Feature Property
+        //
+        
+        // Existential Filters
+        if( "has".equals(operator)){
+            String key = parse.get(json, 1);
+            return ff.isNull(ff.property(key)); // null is the same as no value present
+        }
+        else if( "!has".equals(operator)){
+            String key = parse.get(json, 1);
+            return ff.not(ff.isNull(ff.property(key)));
+        }
+        // Comparison Filters
+        else if( "==".equals(operator)){
+            String key = parse.get(json, 1);
+            Object value = parse.value(json,2);
+            return ff.equal(ff.property(key),ff.literal(value), false);
+        }
+        else if( "!=".equals(operator)){
+            String key = parse.get(json, 1);
+            Object value = parse.value(json,2);
+            return ff.notEqual(ff.property(key),ff.literal(value), false);
+        }
+        else if( ">".equals(operator)){
+            String key = parse.get(json, 1);
+            Object value = parse.value(json,2);
+            return ff.greater(ff.property(key),ff.literal(value), false);
+        }
+        else if( ">=".equals(operator)){
+            String key = parse.get(json, 1);
+            Object value = parse.value(json,2);
+            return ff.greaterOrEqual(ff.property(key),ff.literal(value), false);
+        }
+        else if( "<".equals(operator)){
+            String key = parse.get(json, 1);
+            Object value = parse.value(json,2);
+            return ff.less(ff.property(key),ff.literal(value), false);
+        }
+        else if( "<=".equals(operator)){
+            String key = parse.get(json, 1);
+            Object value = parse.value(json,2);
+            return ff.lessOrEqual(ff.property(key),ff.literal(value), false);
+        }
+        // Set Membership Filters
+        else if( "in".equals(operator)){
+            String key = parse.get(json, 1);
+            Expression[] args = new Expression[ json.size()-2];
+            args[0] = ff.property(key);
+            for(int i=1; i<json.size()-2;i++){
+                Object value = parse.value( json,1+i);
+                args[i] = ff.literal( value );
+            }
+            Function in = ff.function("in", args );
+            return ff.equal( in, ff.literal(true));
+        }
+        else if( "!in".equals(operator)){
+            String key = parse.get(json, 1);
+            Expression[] args = new Expression[ json.size()-2];
+            args[0] = ff.property(key);
+            for(int i=1; i<json.size()-2;i++){
+                Object value = parse.value( json,1+i);
+                args[i] = ff.literal( value );
+            }
+            Function in = ff.function("in", args );
+            return ff.equal( in, ff.literal(false));
+        }
+        // Combining Filters
+        else if( "all".equals(operator)){
+            List<Filter> all = new ArrayList<>();
+            for( int i = 1; i < json.size();i++){
+                MBFilter filter = new MBFilter((JSONArray) json.get(i));
+                all.add( filter.filter() );
+            }
+            return ff.and(all);
+        }
+        else if( "any".equals(operator)){
+            List<Filter> any = new ArrayList<>();
+            for( int i = 1; i < json.size();i++){
+                MBFilter filter = new MBFilter((JSONArray) json.get(i));
+                any.add( filter.filter() );
+            }
+            return ff.or(any);
+        }
+        else if( "none".equals(operator)){
+            List<Filter> none = new ArrayList<>();
+            for( int i = 1; i < json.size();i++){
+                // using not here so we can short circuit the and filter below
+
+                MBFilter filter = new MBFilter((JSONArray) json.get(i));
+                none.add( ff.not(filter.filter()));
+            }
+            return ff.and(none);
+        }
+        else {
+            throw new MBFormatException("Unsupported filter "+json);
+        }
+    }
+
