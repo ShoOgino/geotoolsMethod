@@ -1,7 +1,24 @@
     protected ReferencedEnvelope transformEnvelope(ReferencedEnvelope envelope,
             CoordinateReferenceSystem targetCRS) throws TransformException, FactoryException {
         try {
-            return envelope.transform(targetCRS, true, 10);
+            ReferencedEnvelope transformed = envelope.transform(targetCRS, true, 10);
+            ProjectionHandler handler = ProjectionHandlerFinder.getHandler(new ReferencedEnvelope(targetCRS),
+                    DefaultGeographicCRS.WGS84, true);
+            // does the target CRS have a strict notion of what's possible in terms of
+            // valid coordinate ranges?
+            if(handler == null || handler instanceof WrappingProjectionHandler) {
+                return transformed;
+            }
+            
+            // if so, cut
+            final ReferencedEnvelope validAreaBounds = handler.getValidAreaBounds();
+            ReferencedEnvelope validArea  = validAreaBounds.transform(targetCRS, true);
+            ReferencedEnvelope reduced = transformed.intersection(validArea);
+            if(reduced.isNull()) {
+                return null;
+            } else {
+                return reduced;
+            }
         } catch (Exception e) {
             LOGGER.fine("Failed to reproject the envelope " + envelope + " to " + targetCRS
                     + " trying an area restriction");
