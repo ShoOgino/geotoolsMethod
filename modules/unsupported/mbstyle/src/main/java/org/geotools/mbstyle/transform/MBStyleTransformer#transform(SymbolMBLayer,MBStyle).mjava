@@ -1,0 +1,79 @@
+    /**
+     * Transform {@link SymbolMBLayer} to GeoTools FeatureTypeStyle.
+     * <p>
+     * Notes:
+     * </p>
+     * <ul>
+     * </ul>
+     * 
+     * @param layer Describing symbol styling
+     * @return FeatureTypeStyle
+     */
+    FeatureTypeStyle transform(SymbolMBLayer layer, MBStyle styleContext) {
+        List<Symbolizer> symbolizers = new ArrayList<Symbolizer>();
+        Font font = null;
+        LabelPlacement labelPlacement;
+        LinePlacement linePlacement;
+        PointPlacement pointPlacement;
+
+        if (SymbolMBLayer.SymbolPlacement.LINE.equals(layer.getSymbolPlacement())) {
+            // TODO complete development of LineSymbolizer
+
+
+        } else {
+            if (layer.getIconImage().isEmpty()) { // icon-image not provided, using default graphic
+                PointSymbolizer pointSymbolizer = sf.pointSymbolizer(layer.getId(),ff.property((String) null),
+                        sf.description(Text.text("text"), null), NonSI.PIXEL, sf.createDefaultGraphic());
+            } else {
+                ExternalGraphic eg = createExternalGraphicForSprite(ff.literal(layer.getIconImage()), styleContext);
+                PointSymbolizer pointSymbolizer = sf.pointSymbolizer(layer.getId(),ff.property((String) null),
+                        sf.description(Text.text("text"), null), NonSI.PIXEL,
+                        sf.createGraphic(new ExternalGraphic[] { eg }, null, null, ff.literal(layer.getIconOpacity()), ff.literal(layer.getIconSize()), ff.literal(layer.getIconRotate())));
+                symbolizers.add(pointSymbolizer);
+            }
+        }
+
+        if (!layer.getTextField().isEmpty()) { // A text-field was provided - need a TextSymbolizer.
+            Halo halo = sf.halo( sf.fill(null, layer.textHaloColor(), null), layer.textHaloWidth());
+            Fill fill = sf.fill(null, layer.textColor(), layer.textOpacity());
+
+            if (layer.getTextFont().isEmpty()) {
+                font = sb.createFont(ff.literal(defaultFonts), ff.literal("normal"), ff.literal("normal"), layer.textSize());
+            } else {
+                font = sb.createFont(ff.literal(layer.getTextFont()), ff.literal("normal"), ff.literal("normal"), layer.textSize());
+            }
+
+            if (symbolizers.get(0) instanceof PointSymbolizer) {
+                pointPlacement = sb.createPointPlacement();
+                pointPlacement.setAnchorPoint(getAnchorPoint(layer.getTextAnchor().toString()));
+                pointPlacement.setDisplacement(sb.createDisplacement(layer.getTextOffset()[0], layer.getTextOffset()[1]));
+                pointPlacement.setRotation(ff.literal(layer.getTextRotate()));
+                labelPlacement = pointPlacement;
+            } else {
+                // TODO finish lineplacement creation;
+                linePlacement = sb.createLinePlacement(null);
+                labelPlacement = linePlacement;
+            }
+            TextSymbolizer symbolizer = sf.textSymbolizer(layer.getId(), ff.property((String) null),
+                    sf.description(Text.text("text"), null), NonSI.PIXEL, layer.textField(),
+                    font, labelPlacement, halo, fill);
+            symbolizers.add(symbolizer);
+        }
+        // layer.textHaloBlur();
+        // symbolizer.getOptions().put("autoWrap", layer.textMaxWidth()); // TODO - Pixels (GS) vs ems (MB); Vendor options with expressions?
+
+        // List of opengis rules here (needed for constructor)
+        List<org.opengis.style.Rule> rules = new ArrayList<>();
+        Rule rule = sf.rule(layer.getId(), null, null, 0.0, Double.POSITIVE_INFINITY, symbolizers,
+                Filter.INCLUDE);
+        rule.setLegendGraphic(new Graphic[0]);
+
+        rules.add(rule);
+        return sf.featureTypeStyle(layer.getId(),
+                sf.description(Text.text("MBStyle " + layer.getId()),
+                        Text.text("Generated for " + layer.getSourceLayer())),
+                null, // (unused)
+                Collections.emptySet(), Collections.singleton(SemanticType.POLYGON), // we only expect this to be applied to polygons
+                rules);
+    }
+
