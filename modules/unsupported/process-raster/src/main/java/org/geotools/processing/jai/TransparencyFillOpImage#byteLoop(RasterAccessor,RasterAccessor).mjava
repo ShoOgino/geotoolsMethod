@@ -1,0 +1,82 @@
+    private void byteLoop(RasterAccessor src, RasterAccessor dst) {
+
+        int dwidth = dst.getWidth();
+        int dheight = dst.getHeight();
+        int numBands = dst.getNumBands();
+
+        int dstOffsetsForBands[] = dst.getOffsetsForBands();
+        int dstBandOffsets[] = dst.getBandOffsets();
+        int dstPixelStride = dst.getPixelStride();
+        int dstScanlineStride = dst.getScanlineStride();
+
+        int srcOffsetsForBands[] = src.getOffsetsForBands();
+        int srcBandOffsets[] = src.getBandOffsets();
+        int srcPixelStride = src.getPixelStride();
+        int srcScanlineStride = src.getScanlineStride();
+
+        byte dstDataArrays[][] = dst.getByteDataArrays();
+        byte srcDataArrays[][] = src.getByteDataArrays();
+        byte srcData[] = srcDataArrays[numBands - 1];
+
+        int srcScanlineOffset = srcBandOffsets[numBands - 1];
+        int srcScanlineDataOffset = srcBandOffsets[srcOffsetsForBands[0]];
+        int dstScanlineOffset[] = new int[numBands];
+
+        for (int i = 0; i < numBands; i++) {
+            dstScanlineOffset[i] = dstBandOffsets[i];
+        }
+
+        for (int j = 0; j < dheight; j++) {
+            int srcAlphaCentralPixelOffset = srcScanlineOffset + srcScanlineStride + srcPixelStride;
+            int srcDataLeftPixelOffset = srcScanlineDataOffset + srcScanlineStride;
+            int srcDataPixelOffset = srcDataLeftPixelOffset + srcPixelStride;
+            int dstPixelOffset = dstScanlineOffset[dstOffsetsForBands[0]];
+            int imageOffset = srcAlphaCentralPixelOffset;
+            int imageDataOffset = srcDataPixelOffset;
+            for (int i = 0; i < dwidth; i++) {
+                int imageVerticalOffset = imageOffset;
+                int imageDataVerticalOffset = imageDataOffset;
+                int centralPixel = srcData[imageVerticalOffset];
+                boolean copySource = true;
+                if (centralPixel == 0) {
+                    // Check if previous and next pixels are zero.
+                    int rightPixel = srcData[imageVerticalOffset + srcPixelStride];
+                    int leftPixel = srcData[imageVerticalOffset - srcPixelStride];
+                    if (rightPixel != 0 && leftPixel != 0) {
+                        // This has been identified as a pixel of a vertical transparent stripe
+                        fillAlgorithm.fillPixel(numBands, srcDataArrays, dstDataArrays, imageDataVerticalOffset, srcPixelStride, dstPixelOffset);
+                        copySource = false;
+                    } else {
+                        // A transparent pixel with adjacent transparent pixels along x
+                        int upperPixel = srcData[imageVerticalOffset - srcScanlineStride];
+                        if (upperPixel != 0) {
+                            int lowerPixel = srcData[imageVerticalOffset + srcScanlineStride];
+                            if (lowerPixel != 0) {
+                                // This has been identified as a pixel of an horizontal transparent stripe
+                                fillAlgorithm.fillPixel(numBands, srcDataArrays, dstDataArrays, imageDataVerticalOffset, srcScanlineStride, dstPixelOffset);
+                                copySource = false;
+                            }
+                        }
+                    }
+                }
+                if (copySource) {
+                    for (int k = 0; k < numBands; k++) {
+                        dstDataArrays[k][dstPixelOffset
+                                + k] = srcDataArrays[k][imageDataVerticalOffset + k];
+                    }
+                }
+                imageOffset += srcPixelStride;
+                imageDataOffset += srcPixelStride;
+                dstPixelOffset += dstPixelStride;
+
+            }
+
+            srcScanlineOffset += srcScanlineStride;
+            srcScanlineDataOffset += srcScanlineStride;
+
+            for (int i = 0; i < numBands; i++) {
+                dstScanlineOffset[i] += dstScanlineStride;
+            }
+        }
+    }
+
