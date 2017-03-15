@@ -8,24 +8,42 @@
      * @return GeoTools {@link Filter} specifying conditions on source features.
      */
     public Filter filter() {
+        final FilterFactory2 ff = parse.getFilterFactory();
+
         if (json == null || json.isEmpty()) {
             return Filter.INCLUDE; // by default include everything!
         }
         String operator = parse.get(json, 0);
-        
         //
         // TYPE
         //
         if(("==".equals(operator) || "!=".equals(operator) ||
                 "in".equals(operator) || "!in".equals(operator))&&
                 "$type".equals(parse.get(json, 1))){
-            throw new UnsupportedOperationException("$type Point,LineString,Polygon comparisions not yet supported");
+            // handled by semanticsTypes() method
+            // (unsure if #type can be used with all/any/none - if so we will process the json)
+            return Filter.INCLUDE;
         }
         if(("==".equals(operator) || "!=".equals(operator) ||
                 "has".equals(operator) || "!has".equals(operator) ||
                 "in".equals(operator) || "!in".equals(operator))&&
                 "$id".equals(parse.get(json, 1))){
-            throw new UnsupportedOperationException("$id comparisions not yet supported");
+            Set<FeatureId> fids = new HashSet<>();
+            for( Object value : json.subList(2,json.size())){
+                if( value instanceof String){
+                    String fid = (String) value;
+                    fids.add(ff.featureId(fid));
+                }
+            }
+            if("has".equals(operator)||"in".equals(operator)){
+                return ff.id(fids);
+            }
+            else if("!has".equals(operator)||"!in".equals(operator)){
+                return ff.not(ff.id(fids));
+            }
+            else {
+                throw new UnsupportedOperationException("$id \""+operator+"\" not valid");
+            }
         }
         // ID
         //
@@ -118,7 +136,6 @@
             List<Filter> none = new ArrayList<>();
             for( int i = 1; i < json.size();i++){
                 // using not here so we can short circuit the and filter below
-
                 MBFilter filter = new MBFilter((JSONArray) json.get(i));
                 none.add( ff.not(filter.filter()));
             }
