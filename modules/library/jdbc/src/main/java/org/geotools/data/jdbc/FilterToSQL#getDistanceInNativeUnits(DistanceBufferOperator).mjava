@@ -1,0 +1,41 @@
+    /**
+     * Rough evaluation of distance in the units of the current SRID, assuming that
+     * the SRID maps to a known EPSG code. Will use a rather imprecise transformation for distances
+     * over degrees, but better than nothing.
+     * 
+     * @param operator
+     */
+    protected double getDistanceInNativeUnits(DistanceBufferOperator operator) {
+        if(currentSRID == null) {
+            return operator.getDistance();
+        }
+        try {
+            CoordinateReferenceSystem crs = CRS.getHorizontalCRS(CRS.decode("EPSG:" + currentSRID));
+            double distanceMeters = getDistanceInMeters(operator);
+            if(crs instanceof GeographicCRS) {
+                double sizeDegree = 110574.2727;
+                Coordinate center = getReferenceGeometryCentroid(operator);
+                if(center != null) {
+                    double cosLat = Math.cos(Math.PI * center.y / 180.0);
+                    double latAdjustment = Math.sqrt(1 + cosLat * cosLat) / Math.sqrt(2.0);
+                    sizeDegree *= latAdjustment;
+                }
+                
+                return distanceMeters / sizeDegree;
+            } else {
+                Unit<?> unit = crs.getCoordinateSystem().getAxis(0).getUnit();
+                if(unit == null) {
+                    return distanceMeters;
+                } else {
+                    UnitConverter converter = SI.METER.getConverterTo(unit);
+                    return converter.convert(distanceMeters);
+                }
+            }
+        } catch(Exception e) {
+            LOGGER.log(Level.FINE, "Failed to turn the distance of spatial "
+                    + "filter into native units, using it as a pure number instead", e);
+            // tried, fall back on pure value
+            return operator.getDistance();
+        }
+    }
+
