@@ -1,24 +1,21 @@
     @Test
-    public void propertyColorStops() throws Exception {
+    public void propertyColorStopsBase() throws Exception {
         SimpleFeatureType SAMPLE = DataUtilities.createType("SAMPLE",
                 "id:\"\",temperature:0.0,location=4326");
+        SimpleFeature feature = DataUtilities.createFeature(SAMPLE, "measure1=A|50.0|POINT(0,0)");
 
-        JSONParser parser = new JSONParser();
-
-        JSONObject json = (JSONObject) parser
-                .parse("{\"property\":\"temperature\",\"stops\":[[0,\"blue\"],[100,\"red\"]] }");
-
+        JSONObject json = object("{'property':'temperature','stops':[[0,'blue'],[100,'red']],'base':1.1}");
         MBFunction function = new MBFunction(json);
 
         assertEquals("temperature", function.getProperty());
         assertTrue("property", function.category().contains(MBFunction.FunctionCategory.PROPERTY));
         assertEquals(MBFunction.FunctionType.EXPONENTIAL, function.getType());
 
-        Function fn = function.color();
+        Function fn = (Function) function.color();
         assertNotNull(fn);
         assertEquals("Interpolate", fn.getName());
-        PropertyName propertyName = (PropertyName) fn.getParameters().get(0);
-        assertEquals("temperature", propertyName.getPropertyName());
+        Expression property = fn.getParameters().get(0);
+        assertEquals("pow(temperature,'1.1')", ECQL.toCQL(property));
 
         Literal stop1 = (Literal) fn.getParameters().get(1);
         assertEquals(new Integer(0), stop1.evaluate(null, Integer.class));
@@ -36,9 +33,7 @@
         Literal method = (Literal) fn.getParameters().get(5);
         assertEquals("color", method.evaluate(null, String.class));
 
-        SimpleFeature feature = DataUtilities.createFeature(SAMPLE, "measure1=A|50.0|POINT(0,0)");
-
         Color result = fn.evaluate(feature, Color.class);
-        assertEquals(new Color(128, 0, 128), result);
+        assertEquals(new Color(189, 0, 66), result);
     }
 
