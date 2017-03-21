@@ -223,6 +223,15 @@
 
             // set the source region
             readParameters.setSourceRegion(sourceArea);
+            
+            // don't pass down the band selection if the original color model is indexed and
+            // color expansion is enabled
+            final boolean expandToRGB = request.getRasterManager().isExpandMe();
+            if(expandToRGB && getRawColorModel(reader, ovrIndex) instanceof IndexColorModel && readParameters instanceof EnhancedImageReadParam) {
+                EnhancedImageReadParam erp = (EnhancedImageReadParam) readParameters;
+                erp.setBands(null);
+            }
+            
             RenderedImage raster;
             try {
                 // read
@@ -245,6 +254,11 @@
             // be used to know if the low level reader already performed the bands selection or if
             // image mosaic is responsible for do it
             if(request.getBands() != null && !reader.getFormatName().equalsIgnoreCase("netcdf")) {
+                // if we are expanding the color model, do so before selecting the bands
+                if(raster.getColorModel() instanceof IndexColorModel && expandToRGB) {
+                    raster = new ImageWorker(raster).forceComponentColorModel().getRenderedImage();                    
+                }
+                
                 int[] bands = request.getBands();
                 // delegate the band selection operation on JAI BandSelect operation
                 raster = new ImageWorker(raster).retainBands(bands).getRenderedImage();
