@@ -21,13 +21,25 @@
         Map<Class, StoreWriter> writers = new HashMap<Class, StoreWriter>();
         boolean featuresWritten = false;
         Class geomType = schema.getGeometryDescriptor().getType().getBinding();
+        // let's see if we will need to write multiple geometry types
         boolean multiWriter = GeometryCollection.class.equals(geomType)
                 || Geometry.class.equals(geomType);
+        // we write all the features with no geometry type defined and NULL geometries to the same file
+        StoreWriter nullStoreWriter = null;
         try (SimpleFeatureIterator it = fc.features()) {
             while (it.hasNext()) {
                 SimpleFeature f = it.next();
-
-                StoreWriter storeWriter = getStoreWriter(f, writers, multiWriter);
+                // if the geometry type is not defined and the geometry value is NULL we write it
+                // to the NULL geometries file otherwise we write it to the correspondent geometry file
+                StoreWriter storeWriter;
+                if (multiWriter && f.getDefaultGeometry() == null) {
+                    // lazy instantiation of NULL geometries writer
+                    nullStoreWriter = nullStoreWriter == null ?
+                            getStoreWriter(schema, null, multiWriter, Point.class, "_NULL") : nullStoreWriter;
+                    storeWriter = nullStoreWriter;
+                } else {
+                    storeWriter = getStoreWriter(f, writers, multiWriter);
+                }
                 // try to write, the shapefile size limits could be reached
                 try {
                     writeToShapefile(f, storeWriter.writer);
@@ -62,7 +74,12 @@
             // during closeup (shapefile datastore will have to copy the shapefiles, that migh
             // fail in many ways)
             IOException stored = null;
-            for (StoreWriter sw : writers.values()) {
+            // add the not defined and NULL geometries store writer if defined
+            List<StoreWriter> writersValues = new ArrayList<>(writers.values());
+            if (nullStoreWriter != null) {
+                writersValues.add(nullStoreWriter);
+            }
+            for (StoreWriter sw : writersValues) {
                 try {
                     SimpleFeatureType writerSchema = sw.dstore.getSchema();
                     sw.writer.close();
