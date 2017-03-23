@@ -1,0 +1,37 @@
+    /**
+     * Performs fill on a specified rectangle. The sources are cobbled.
+     *
+     * @param sources an array of source Rasters, guaranteed to provide all necessary source data for computing the output.
+     * @param dest a WritableRaster tile containing the area to be computed.
+     * @param destRect the rectangle within dest to be processed.
+     */
+    protected void computeRect(Raster[] sources, WritableRaster dest, Rectangle destRect) {
+        // Retrieve format tags.
+        RasterFormatTag[] formatTags = getFormatTags();
+
+        Raster source = sources[0];
+        Rectangle srcRect = mapDestRect(destRect, 0);
+
+        RasterAccessor srcAccessor = new RasterAccessor(source, srcRect, formatTags[0],
+                getSourceImage(0).getColorModel());
+        RasterAccessor dstAccessor = new RasterAccessor(dest, destRect, formatTags[1],
+                getColorModel());
+
+        switch (dstAccessor.getDataType()) {
+        case DataBuffer.TYPE_BYTE:
+            byteLoop(srcAccessor, dstAccessor);
+            break;
+        default:
+            // Transparency fill is only supported on byte datatype
+            throw new UnsupportedOperationException("Only byte databuffer is currently supported");
+        }
+
+        // If the RasterAccessor object set up a temporary buffer for the
+        // op to write to, tell the RasterAccessor to write that data
+        // to the raster no that we're done with it.
+        if (dstAccessor.isDataCopy()) {
+            dstAccessor.clampDataArrays();
+            dstAccessor.copyDataToRaster();
+        }
+    }
+
