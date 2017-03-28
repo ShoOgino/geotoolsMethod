@@ -5,7 +5,42 @@
          * @param indexList the list of {@link Slice2DIndex} to dump to file.
          * @throws IOException
          */
-        public static void writeIndexFile( File file, List<Slice2DIndex> indexList ) throws IOException {
-            writeIndexFile(file, indexList, 2);
+        public static void writeIndexFile(File file, List<Slice2DIndex> indexList) throws IOException {
+            RandomAccessFile raf = null;
+            try {
+                raf = new RandomAccessFile(file, "rw");
+                int size = indexList.size();
+                // write number of records
+                raf.writeInt(size);
+                long dataPosition = ADDRESS_POSITION + (size + 1) * ADDRESS_SIZE; // the +1 is to have the end address
+
+                long[] pointer = new long[size];
+                raf.seek(dataPosition);
+
+                for( int i = 0; i < size; i++ ) {
+                    Slice2DIndex sliceNDIndex = indexList.get(i);
+                    long pos = raf.getFilePointer();
+                    pointer[i] = pos;
+                    //write as negative value, so if negative is missing -> old file (backwards compatibility)
+                    raf.writeInt(-sliceNDIndex.getNCount());
+                    for (int j = 0; j < sliceNDIndex.getNCount(); j++) {
+                        raf.writeInt(sliceNDIndex.getNIndex(j));
+                    }
+                    raf.write(sliceNDIndex.getVariableName().getBytes());
+                }
+                long dataEnd = raf.getFilePointer();
+
+                raf.seek(ADDRESS_POSITION);
+                for( long address : pointer ) {
+                    raf.writeLong(address);
+                }
+                // add also the data end position
+                raf.writeLong(dataEnd);
+
+            } finally {
+                if (raf != null) {
+                    raf.close();
+                }
+            }
         }
 

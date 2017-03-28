@@ -6,7 +6,7 @@
      * @throws IOException
      * @throws IllegalStateException
      */
-    private List<CoordinateVariable<?>> initCRS(List<DimensionDescriptor> dimensions) throws IllegalArgumentException, RuntimeException,
+    private void initCRS(List<DimensionDescriptor> dimensions) throws IllegalArgumentException, RuntimeException,
             IOException, IllegalStateException {
         // from UnidataVariableAdapter        
         this.coordinateSystem = NetCDFCRSUtilities.getCoordinateSystem(variableDS);
@@ -16,13 +16,17 @@
         // Wrapper for the CoordinateSystem
         coordinateSystem = new CoordinateSystemAdapter(coordinateSystem);
 
+        //init nDimensionIndex
+        List<Integer> nDimensionIndexList = new ArrayList<Integer>(2);
+        nDimensionIndexList.add(-1);
+        nDimensionIndexList.add(-1);
+
         /*
          * Adds the axis in reverse order, because the NetCDF image reader put the last dimensions in the rendered image. Typical NetCDF convention is
          * to put axis in the (time, depth, latitude, longitude) order, which typically maps to (longitude, latitude, depth, time) order in GeoTools
          * referencing framework.
          */
-        final List<CoordinateVariable<?>> otherAxes = new ArrayList<CoordinateVariable<?>>();
-        int index=-1;
+        int index = -1;
         for(CoordinateAxis axis :coordinateSystem.getCoordinateAxes()){
             index++;
             String fullName = axis.getFullName();
@@ -39,33 +43,35 @@
                 continue;
             }
             switch(cv.getAxisType()){
-            case Time:case RunTime:
+            case Time:
                 initTemporalDomain(cv, dimensions);
-                tDimensionIndex = index;
+                nDimensionIndexList.set(T, index);
                 continue;
             case GeoZ:case Height:case Pressure:
                 String axisName = cv.getName();
                 if (NetCDFCRSUtilities.VERTICAL_AXIS_NAMES.contains(axisName)) {
                     initVerticalDomain(cv, dimensions);
-                }else{
-                    otherAxes.add(cv);
+                    nDimensionIndexList.set(Z, index);
+                } else{
+                    initAdditionalDomain(cv, dimensions);
+                    nDimensionIndexList.add(index);
                 }
-                zDimensionIndex = index;
                 continue;  
             case GeoX: case GeoY: case Lat: case Lon:
                 // do nothing
                 continue;
             default:
-                otherAxes.add(cv);
+                initAdditionalDomain(cv, dimensions);
+                nDimensionIndexList.add(index);
             }
             
         }
+        nDimensionIndex = nDimensionIndexList.stream().mapToInt(i -> i).toArray();
 
         // ////
         // Creating the CoordinateReferenceSystem
         // ////
         ReferencedEnvelope bbox = reader.georeferencing.getBoundingBox(variableDS.getShortName());
         coordinateReferenceSystem = bbox.getCoordinateReferenceSystem();
-        return otherAxes;
     }
 

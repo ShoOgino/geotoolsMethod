@@ -1,0 +1,32 @@
+    /**
+     * @param cv
+     * @param dimensions
+     * @throws IOException
+     */
+    private void initAdditionalDomain(CoordinateVariable<?> cv, List<DimensionDescriptor> dimensions) throws IOException {
+       UnidataAdditionalDomain domain;
+       try {
+          domain = new UnidataAdditionalDomain(cv);
+          if (getAdditionalDomains() == null) {
+              setAdditionalDomains(new ArrayList<AdditionalDomain>());
+          }
+          getAdditionalDomains().add(domain);
+       } catch (IOException e) {
+           LOGGER.log(Level.WARNING, e.getMessage(), e);
+           return;
+       }
+       if(cv.getType().equals(Date.class)){
+           if(!(cv.getCoordinateReferenceSystem() instanceof TemporalCRS)){
+               throw new IllegalArgumentException("Unable to init temporal domain from CoordinateVariable that does not have a TemporalCRS");
+           }
+           dimensions.add(new DefaultDimensionDescriptor(cv.getName(),
+                   CoverageUtilities.UCUM.TIME_UNITS.getName(), CoverageUtilities.UCUM.TIME_UNITS.getSymbol(), cv.getName(), null));
+       } else if (Number.class.isAssignableFrom(cv.getType())) {
+           // TODO: Parse Units from axis and map them to UCUM units
+           dimensions.add(new DefaultDimensionDescriptor(cv.getName(), cv.getUnit(), cv.getUnit(), cv.getName(), null));
+       } else {
+           throw new IllegalArgumentException("Unable to init domain from CoordinateVariable of type: " + cv.getType().getName());
+       }
+       this.setHasAdditionalDomains(true);
+    }
+

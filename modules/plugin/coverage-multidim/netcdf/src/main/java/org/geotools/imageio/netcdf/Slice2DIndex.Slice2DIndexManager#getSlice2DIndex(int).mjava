@@ -5,7 +5,7 @@
          * @return the {@link Slice2DIndex} for the picked image.
          * @throws IOException
          */
-        public synchronized Slice2DIndex getSlice2DIndex( int imageIndex ) throws IOException {
+        public synchronized Slice2DIndex getSlice2DIndex(int imageIndex) throws IOException {
             // Synchronized these access due to the RAF usage.
             // concurrent seeks and reads on the same RAF may
             // may result into unexpected results
@@ -16,13 +16,26 @@
             long endDataPosition = raf.readLong();
 
             raf.seek(dataPosition);
-            int tIndex = raf.readInt();
-            int zIndex = raf.readInt();
+            int nextValue = raf.readInt();
+
+            int[] index;
+            if (nextValue < 0) {
+                int dimensions = -nextValue;
+                index = new int[dimensions];
+                for (int i = 0; i < dimensions; i++) {
+                    index[i] = raf.readInt();
+                }
+            } else { //backwards compatibility
+                index = new int[2];
+                index[VariableAdapter.T] = nextValue;
+                index[VariableAdapter.Z] = raf.readInt();
+            }
+
             int stringSize = (int) (endDataPosition - raf.getFilePointer());
             byte[] stringBytes = new byte[stringSize];
             raf.read(stringBytes);
             String varName = new String(stringBytes);
 
-            return  new Slice2DIndex(tIndex, zIndex, varName);
+            return new Slice2DIndex(index, varName);
         }
 
