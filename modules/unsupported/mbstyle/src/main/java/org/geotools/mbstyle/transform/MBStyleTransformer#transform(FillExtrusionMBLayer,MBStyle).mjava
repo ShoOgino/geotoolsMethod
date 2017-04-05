@@ -1,0 +1,61 @@
+    /**
+     *
+     * Transform {@link FillExtrusionMBLayer} to GeoTools FeatureTypeStyle.
+     */
+    FeatureTypeStyle transform(FillExtrusionMBLayer layer, MBStyle styleContext) {
+        PolygonSymbolizer symbolizer;
+
+        // from fill pattern or fill color
+        Fill fill;
+
+        DisplacementImpl displacement = new DisplacementImpl();
+
+        displacement.setDisplacementX(layer.getFillExtrusionBase().doubleValue());
+        displacement.setDisplacementY(layer.getFillExtrusionHeight().doubleValue());
+
+        if (layer.getFillExtrusionPattern() != null) {
+            // TODO: Fill graphic (with external graphics)
+            ExternalGraphic eg = createExternalGraphicForSprite(layer.getFillExtrusionPattern(), styleContext);
+            GraphicFill gf = sf.graphicFill(Arrays.asList(eg), layer.fillExtrusionOpacity(), null, null, null, displacement);
+            fill = sf.fill(gf, null, null);
+        } else {
+            fill = sf.fill(null, layer.fillExtrusionColor(), layer.fillExtrusionOpacity());
+        }
+
+        // TODO: Is there a better way to select the first geometry?
+        symbolizer = sf.polygonSymbolizer(
+                layer.getId(),
+                ff.property((String)null),
+                sf.description(Text.text("fill"),null),
+                NonSI.PIXEL,
+                null,
+                fill,
+                displacement,
+                ff.literal(0));
+
+        Rule rule = sf.rule(
+                layer.getId(),
+                null,
+                null,
+                0.0,
+                Double.POSITIVE_INFINITY,
+                Arrays.asList(symbolizer),
+                layer.filter());
+
+        // Set legend graphic to null.
+        //TODO: How do other style transformers set a null legend? SLD/SE difference - fix setLegend(null) to empty list.
+        rule.setLegendGraphic(new Graphic[0]);
+
+
+        return sf.featureTypeStyle(
+                layer.getId(),
+                sf.description(
+                        Text.text("MBStyle "+layer.getId()),
+                        Text.text("Generated for "+layer.getSourceLayer())),
+                null, // (unused)
+                Collections.emptySet(),
+                Collections.singleton(SemanticType.POLYGON), // we only expect this to be applied to polygons
+                Arrays.asList(rule)
+        );
+    }
+
