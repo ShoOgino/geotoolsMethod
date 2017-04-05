@@ -6,14 +6,14 @@
 
             // process parameters
             @DescribeParameter(name = "cellSize", description = "Grid cell size to aggregate to, in pixels") Integer cellSize,
-            @DescribeParameter(name = "normalize", description = "Indicates whether to add fields normalized to the range 0-1.", defaultValue="false") Boolean argNormalize,
-            @DescribeParameter(name = "preserveLocation", description = "Indicates wheter to preserve the original location of points for single/superimposed points", defaultValue="Never", min=0) PreserveLocation preserveLocation,
+            @DescribeParameter(name = "weightClusterPosition", description = "Weight cluster position based on points added", defaultValue = "false") Boolean argWeightClusterPosition,
+            @DescribeParameter(name = "normalize", description = "Indicates whether to add fields normalized to the range 0-1.", defaultValue = "false") Boolean argNormalize,
+            @DescribeParameter(name = "preserveLocation", description = "Indicates wheter to preserve the original location of points for single/superimposed points", defaultValue = "Never", min = 0) PreserveLocation preserveLocation,
 
             // output image parameters
             @DescribeParameter(name = "outputBBOX", description = "Bounding box for target image extent") ReferencedEnvelope outputEnv,
             @DescribeParameter(name = "outputWidth", description = "Target image width in pixels", minValue = 1) Integer outputWidth,
             @DescribeParameter(name = "outputHeight", description = "Target image height in pixels", minValue = 1) Integer outputHeight,
-            
 
             ProgressListener monitor) throws ProcessException, TransformException {
 
@@ -27,18 +27,24 @@
         } catch (FactoryException e) {
             throw new ProcessException(e);
         }
-        
+
         boolean normalize = false;
-        if(argNormalize!=null){
+        if (argNormalize != null) {
             normalize = argNormalize;
         }
 
-        // TODO: allow output CRS to be different to data CRS 
+        boolean weightClusterPosition = false;
+        if (argWeightClusterPosition != null) {
+            weightClusterPosition = argWeightClusterPosition;
+        }
+
+        // TODO: allow output CRS to be different to data CRS
         // assume same CRS for now...
         double cellSizeSrc = cellSize * outputEnv.getWidth() / outputWidth;
 
+        //create cluster points, based on cellSize and width and height of the viewd area.
         Collection<StackedPoint> stackedPts = stackPoints(data, crsTransform, cellSizeSrc,
-                outputEnv.getMinX(), outputEnv.getMinY());
+                weightClusterPosition, outputEnv.getMinX(), outputEnv.getMinY());
 
         SimpleFeatureType schema = createType(srcCRS, normalize);
         ListFeatureCollection result = new ListFeatureCollection(schema);
@@ -47,23 +53,28 @@
         GeometryFactory factory = new GeometryFactory(new PackedCoordinateSequenceFactory());
 
         double[] srcPt = new double[2];
+        double[] srcPt2 = new double[2];
         double[] dstPt = new double[2];
+        double[] dstPt2 = new double[2];
 
         // Find maxima of the point stacks if needed.
         int maxCount = 0;
         int maxCountUnique = 0;
-        if(normalize){
+        if (normalize) {
             for (StackedPoint sp : stackedPts) {
-                if(maxCount<sp.getCount()) maxCount = sp.getCount();
-                if(maxCountUnique<sp.getCount()) maxCountUnique = sp.getCountUnique();
+                if (maxCount < sp.getCount())
+                    maxCount = sp.getCount();
+                if (maxCountUnique < sp.getCount())
+                    maxCountUnique = sp.getCountUnique();
             }
         }
 
         for (StackedPoint sp : stackedPts) {
             // create feature for stacked point
             Coordinate pt = getStackedPointLocation(preserveLocation, sp);
-            
-            // transform back to src CRS, since RT rendering expects the output to be in the same CRS
+
+            // transform back to src CRS, since RT rendering expects the output
+            // to be in the same CRS
             srcPt[0] = pt.x;
             srcPt[1] = pt.y;
             invTransform.transform(srcPt, 0, dstPt, 0, 1);
@@ -73,11 +84,25 @@
             fb.add(point);
             fb.add(sp.getCount());
             fb.add(sp.getCountUnique());
-            if(normalize){
-                fb.add(((double)sp.getCount())/maxCount);
-                fb.add(((double)sp.getCountUnique())/maxCountUnique);
-            }
+            //adding bounding box of the points staked, as geometry
+            //envelope transformation
+            Envelope boundingBox=sp.getBoundingBox();
+            srcPt[0]=boundingBox.getMinX();
+            srcPt[1]=boundingBox.getMinY();
+            srcPt2[0]=boundingBox.getMaxX();
+            srcPt2[1]=boundingBox.getMaxY();
             
+            invTransform.transform(srcPt, 0, dstPt, 0, 1);
+            invTransform.transform(srcPt2, 0, dstPt2, 0, 1);
+            Envelope boundingBoxTransformed=new Envelope(dstPt[0],dstPt[1],dstPt2[0],dstPt2[1]);
+            fb.add(boundingBoxTransformed);
+            //adding bounding box of the points staked, as string
+            fb.add(boundingBoxTransformed.toString());
+            if (normalize) {
+                fb.add(((double) sp.getCount()) / maxCount);
+                fb.add(((double) sp.getCountUnique()) / maxCountUnique);
+            }
+
             result.add(fb.buildFeature(null));
         }
         return result;

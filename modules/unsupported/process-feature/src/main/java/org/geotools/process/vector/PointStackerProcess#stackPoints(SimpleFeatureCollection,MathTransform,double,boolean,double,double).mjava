@@ -1,17 +1,16 @@
     /**
-     * Computes the stacked points for the given data collection.
-     * All geometry types are handled - for non-point geometries, the centroid is used.
+     * Computes the stacked points for the given data collection. All geometry types are handled - for non-point geometries, the centroid is used.
      * 
      * @param data
      * @param cellSize
      * @param minX
      * @param minY
      * @return
-     * @throws TransformException 
+     * @throws TransformException
      */
     private Collection<StackedPoint> stackPoints(SimpleFeatureCollection data,
-            MathTransform crsTransform, 
-            double cellSize, double minX, double minY) throws TransformException {
+            MathTransform crsTransform, double cellSize, boolean weightClusterPosition,
+            double minX, double minY) throws TransformException {
         SimpleFeatureIterator featureIt = data.features();
 
         Map<Coordinate, StackedPoint> stackedPts = new HashMap<Coordinate, StackedPoint>();
@@ -26,7 +25,7 @@
                 // get the point location from the geometry
                 Geometry geom = (Geometry) feature.getDefaultGeometry();
                 Coordinate p = getRepresentativePoint(geom);
-                
+
                 // reproject data point to output CRS, if required
                 srcPt[0] = p.x;
                 srcPt[1] = p.y;
@@ -39,17 +38,17 @@
 
                 StackedPoint stkPt = stackedPts.get(indexPt);
                 if (stkPt == null) {
-                    
+
                     /**
-                     * Note that the 
+                     * Note that we compute the cluster position in the middle of the grid
                      */
                     double centreX = indexPt.x * cellSize + cellSize / 2;
                     double centreY = indexPt.y * cellSize + cellSize / 2;
-                    
+
                     stkPt = new StackedPoint(indexPt, new Coordinate(centreX, centreY));
                     stackedPts.put(stkPt.getKey(), stkPt);
                 }
-                stkPt.add(pout);
+                stkPt.add(pout, weightClusterPosition);
             }
 
         } finally {
