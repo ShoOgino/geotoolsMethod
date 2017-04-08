@@ -1,0 +1,38 @@
+    /**
+     * Helper function that will walk a mongo db object and retrieve all the values for a certain path.
+     */
+    private static List<Object> getValuesHelper(DBObject dbObject, String[] jsonPathParts, List<Object> values, int index) {
+        // get the object corresponding to the current index
+        Object object = dbObject.get(jsonPathParts[index]);
+        if (object == null) {
+            // we are done
+            return values;
+        }
+        // check if we reach the end of the json path
+        boolean finalPath = index == jsonPathParts.length - 1;
+        index++;
+        if (object instanceof List) {
+            if (finalPath) {
+                // we reached the end of the json path and we have a list, so let's add all the elements of the list
+                for (Object value : (List) object) {
+                    values.add(convertGeometry(value));
+                }
+            } else {
+                // well we have a list so we need to interact over each element of the list
+                for (Object element : (List) object) {
+                    getValuesHelper((DBObject) element, jsonPathParts, values, index);
+                }
+            }
+        } else {
+            if (finalPath) {
+                // we reached the end of the json path so let's add this object
+                values.add(convertGeometry(object));
+            } else {
+                // we need to go deeper in this object
+                getValuesHelper((DBObject) object, jsonPathParts, values, index);
+            }
+        }
+        // we return the list of founded values for commodity
+        return values;
+    }
+
