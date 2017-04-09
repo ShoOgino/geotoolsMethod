@@ -1,0 +1,31 @@
+    /**
+     * Helper method that will recursively walk a mongo db object and compute is mappings.
+     */
+    private static void findMappingsHelper(Object object, String parentPath, Map<String, Class> mappings) {
+        if (object == null) {
+            return;
+        }
+        if (object instanceof DBObject) {
+            DBObject dbObject = (DBObject) object;
+            for (String key : dbObject.keySet()) {
+                Object value = dbObject.get(key);
+                if (value == null) {
+                    continue;
+                }
+                String path = concatPath(parentPath, key);
+                if (value instanceof List) {
+                    List list = (List) value;
+                    if (!list.isEmpty()) {
+                        findMappingsHelper(list.get(0), path, mappings);
+                    }
+                } else if (value instanceof DBObject) {
+                    findMappingsHelper(value, path, mappings);
+                } else {
+                    mappings.put(path, value.getClass());
+                }
+            }
+        } else {
+            mappings.put(parentPath, object.getClass());
+        }
+    }
+
