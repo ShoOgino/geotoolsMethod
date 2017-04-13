@@ -1,0 +1,54 @@
+    /**
+     * Tests that a MapBox exponential zoom function (outputting a color) correctly interpolates color values
+     * for zoom levels between stops.
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void zoomColorStopsExponentialInterpolationTest() throws Exception {
+        SimpleFeatureType SAMPLE = DataUtilities.createType("SAMPLE",
+                "id:\"\",temperature:0.0,location=4326");
+        SimpleFeature feature = DataUtilities.createFeature(SAMPLE, "measure1=A|50.0|POINT(0,0)");
+        
+        // Set scale denominator to the equivalent of zoomLevel 9
+        String scaleDenomForZoom9 = "1091957.546779";
+        EnvFunction.setGlobalValue("wms_scale_denominator", scaleDenomForZoom9);
+
+        // Verify environment has expected scale denominator (and thus zoom level)
+        Number envZoomLevel = ff.function("zoomLevel",
+                ff.function("env", ff.literal("wms_scale_denominator")), ff.literal("EPSG:3857"))
+                .evaluate(null, Number.class);
+        System.out.println("wms_scale_denominator set to " + scaleDenomForZoom9 + " (zoomLevel = "
+                + envZoomLevel + ")");
+        assertEquals(1091957.546779, ff.function("env", ff.literal("wms_scale_denominator"))
+                .evaluate(null, Number.class).doubleValue(), .00001);
+        assertEquals(9.0, envZoomLevel.doubleValue(), .00001);
+
+        // Create a Mapbox Function
+        String jsonStr = "{'base': 1.9, 'stops':[[0,'blue'],[6,'red'],[12, 'lime']]}";
+        JSONObject json = object(jsonStr);        
+        MBFunction function = new MBFunction(json);
+        
+        // Assert it is an exponential function with the correct base
+        assertTrue("Is a zoom function", EnumSet.of(MBFunction.FunctionCategory.ZOOM).equals(function.category()));
+        assertEquals(MBFunction.FunctionType.EXPONENTIAL, function.getType());
+        assertEquals(1.9, function.getBase().doubleValue(), .00001);
+
+        // The environment zoomLevel is 9
+        // which means the color should be between 'red' (255, 0, 0) and 'lime' (0, 255, 0)
+        System.out.println("The function JSON is: " + jsonStr);
+        System.out.println("The interpolated color should be BETWEEN 'red' (255, 0, 0) and 'lime' (0, 255, 0)");
+        
+        Function fn = (Function) function.color();
+        Color result = fn.evaluate(feature, Color.class);
+        System.out.println("The interpolated color is: " + result);
+        
+        Expression zoomLevel = fn.getParameters().get(0);        
+        Number n = zoomLevel.evaluate(null, Number.class);   
+        System.out.println("(the function's interpolate value was " + n + ")");
+                
+        assertTrue("Color has no red, but should be interpolated mix of red and green", result.getRed() > 0);
+        assertTrue("Color has full green, but should be interpolated mix of red and green", result.getGreen() < 255);        
+
+    }
+
