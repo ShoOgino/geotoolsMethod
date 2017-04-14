@@ -9,10 +9,13 @@
      * @param numFiles
      * @param transaction
      * @throws IOException
+     * @throws FactoryException 
+     * @throws NoSuchAuthorityCodeException 
+     * @throws TransformException 
      */
     public void updateConfiguration(GridCoverage2DReader coverageReader,
             final String inputCoverageName, File fileBeingProcessed, int fileIndex, double numFiles,
-            DefaultTransaction transaction) throws IOException, GranuleHandlingException {
+            DefaultTransaction transaction) throws IOException, GranuleHandlingException, NoSuchAuthorityCodeException, FactoryException, TransformException {
 
         final String targetCoverageName = getTargetCoverageName(coverageReader, inputCoverageName);
 
@@ -56,8 +59,6 @@
             ImageLayout layout = coverageReader.getImageLayout(inputCoverageName);
             cm = layout.getColorModel(null);
             sm = layout.getSampleModel(null);
-            numberOfLevels = coverageReader.getNumOverviews(inputCoverageName) + 1;
-            resolutionLevels = coverageReader.getResolutionLevels(inputCoverageName);
 
             // at the first step we initialize everything that we will
             // reuse afterwards starting with color models, sample
@@ -73,10 +74,19 @@
                 byte[][] defaultPalette = Utils.extractPalette(icm);
                 configBuilder.setPalette(defaultPalette);
             }
-
+            
             // STEP 2.A
             // Preparing configuration
-            configBuilder.setCrs(actualCRS);
+            String mosaicCrs = IndexerUtils.getParameter(Utils.Prop.MOSAIC_CRS, indexer);
+            if (mosaicCrs != null) {
+                configBuilder.setCrs(CRS.decode(mosaicCrs, true));
+            } else {
+                configBuilder.setCrs(actualCRS);
+            }
+
+            // get/compute the resolution levels
+            resolutionLevels = getResolutionLevels(coverageReader, inputCoverageName, configBuilder.getCrs());
+            numberOfLevels = resolutionLevels.length;
             configBuilder.setLevels(resolutionLevels);
             configBuilder.setLevelsNum(numberOfLevels);
             configBuilder.setName(targetCoverageName);
@@ -135,7 +145,7 @@
             if (!useExistingSchema) {
                 // creating the schema
                 SimpleFeatureType indexSchema = createSchema(getRunConfiguration(),
-                        currentConfigurationBean.getName(), actualCRS);
+                        currentConfigurationBean.getName(), configBuilder.getCrs());
                 getParentReader().createCoverage(targetCoverageName, indexSchema);
             }
             getConfigurations().put(currentConfigurationBean.getName(), currentConfigurationBean);
@@ -154,8 +164,8 @@
             CatalogConfigurationBean catalogConfigurationBean = bean;
 
             // make sure we pick the same resolution irrespective of order of harvest
-            numberOfLevels = coverageReader.getNumOverviews(inputCoverageName) + 1;
-            resolutionLevels = coverageReader.getResolutionLevels(inputCoverageName);
+            resolutionLevels = getResolutionLevels(coverageReader, inputCoverageName, mosaicConfiguration.getCrs());
+            numberOfLevels = resolutionLevels.length;
 
             int originalNumberOfLevels = mosaicConfiguration.getLevelsNum();
             boolean needUpdate = false;
