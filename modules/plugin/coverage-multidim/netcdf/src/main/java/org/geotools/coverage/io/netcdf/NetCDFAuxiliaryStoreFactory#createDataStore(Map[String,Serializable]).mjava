@@ -1,0 +1,121 @@
+    @Override
+    public DataStore createDataStore(Map<String, Serializable> params) throws IOException {
+        File file = (File) FILE_PARAM.lookUp(params);
+        String indexPath = (String) INDEX_PARAM.lookUp(params);
+        String dsPath = (String) DS_PARAM.lookUp(params);
+        try {
+            AncillaryFileManager ancilaryFileManager = new AncillaryFileManager(file, indexPath, dsPath);
+            DataStoreConfiguration datastoreConfig = ancilaryFileManager.getDatastoreConfiguration();            
+            
+            final DataStore delegate = datastoreConfig.getDatastoreSpi().createDataStore(datastoreConfig.getParams());
+            String namespace = (String) NS_PARAM.lookUp(params);     
+            if (namespace != null && delegate instanceof ContentDataStore) {
+                ((ContentDataStore) delegate).setNamespaceURI(namespace);
+            }
+            
+            //make read-only wrapper
+            return new DataStore() {
+
+                @Override
+                public ServiceInfo getInfo() {
+                    return delegate.getInfo();
+                }
+
+                @Override
+                public void createSchema(SimpleFeatureType featureType) throws IOException {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public void updateSchema(Name typeName, SimpleFeatureType featureType)
+                        throws IOException {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public void removeSchema(Name typeName) throws IOException {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public List<Name> getNames() throws IOException {
+                    return delegate.getNames();
+                }
+
+                @Override
+                public SimpleFeatureType getSchema(Name name) throws IOException {
+                    return delegate.getSchema(name);
+                }
+
+                @Override
+                public void dispose() {
+                    //do nothing
+                }
+
+                @Override
+                public void updateSchema(String typeName, SimpleFeatureType featureType)
+                        throws IOException {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public void removeSchema(String typeName) throws IOException {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public String[] getTypeNames() throws IOException {
+                    return delegate.getTypeNames();
+                }
+
+                @Override
+                public SimpleFeatureType getSchema(String typeName) throws IOException {
+                    return delegate.getSchema(typeName);
+                }
+
+                @Override
+                public SimpleFeatureSource getFeatureSource(String typeName) throws IOException {
+                    return delegate.getFeatureSource(typeName);
+                }
+
+                @Override
+                public SimpleFeatureSource getFeatureSource(Name typeName) throws IOException {
+                    return delegate.getFeatureSource(typeName);
+                }
+
+                @Override
+                public FeatureReader<SimpleFeatureType, SimpleFeature> getFeatureReader(Query query,
+                        Transaction transaction) throws IOException {
+                    return delegate.getFeatureReader(query, transaction);
+                }
+
+                @Override
+                public FeatureWriter<SimpleFeatureType, SimpleFeature> getFeatureWriter(
+                        String typeName, Filter filter, Transaction transaction)
+                        throws IOException {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public FeatureWriter<SimpleFeatureType, SimpleFeature> getFeatureWriter(
+                        String typeName, Transaction transaction) throws IOException {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public FeatureWriter<SimpleFeatureType, SimpleFeature> getFeatureWriterAppend(
+                        String typeName, Transaction transaction) throws IOException {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public LockingManager getLockingManager() {
+                    return delegate.getLockingManager();
+                }
+                
+            };            
+        } catch (NoSuchAlgorithmException | JAXBException e) {
+            throw new IOException(e);
+        }
+    }
+
