@@ -1,0 +1,38 @@
+    @Override
+    public <T> T evaluate(Object object, Class<T> context) {
+        List<Expression> parameters = getParameters();
+        List<Stop> stops = new ArrayList<>();
+        
+        Expression input = parameters.get(0);
+        Expression base = parameters.get(1);
+        
+        for (int i = 2; i < parameters.size(); i++) {
+            Stop stop = new Stop(parameters.get(i), parameters.get(i + 1));
+            stops.add(stop);
+        }
+        Double inputValue = input.evaluate(object, Double.class);
+        Double baseValue = base.evaluate(object, Double.class);
+        if( stops.size()==1){
+            // single stop
+            Stop single = stops.get(0);
+            return single.value.evaluate(object, context);
+        }
+        int find = find(object, inputValue, stops);
+        
+        if( find <= 0 ){
+            // data is below stop range, use min
+            Stop min = stops.get(0);
+            return min.value.evaluate(object, context);
+        }
+        else if (find >= stops.size()){
+            // data is above the stop range, use max
+            Stop max = stops.get(stops.size()-1);
+            return max.value.evaluate(object, context);
+        }
+        Stop lower = stops.get(find-1);
+        Stop upper = stops.get(find);
+        double exponential = exponential(object, inputValue, baseValue, lower, upper);
+        
+        return context.cast(exponential);
+    }
+
