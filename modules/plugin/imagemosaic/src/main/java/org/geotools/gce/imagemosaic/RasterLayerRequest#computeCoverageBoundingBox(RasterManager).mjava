@@ -1,0 +1,20 @@
+    private ReferencedEnvelope computeCoverageBoundingBox(final RasterManager rasterManager) throws IOException {
+        if(filter != null && ! Filter.INCLUDE.equals(filter)) {
+            // limit it to the filtered granules bounding box by full enumeration, to avoid
+            // imprecise datastore optimizations (e.g., loose bounds)
+            GranuleSource granules = rasterManager.getGranuleSource(true, null);
+            Query query = new Query(granules.getSchema().getTypeName(), filter);
+            // ... load only the default geometry if possible
+            final GeometryDescriptor gd = granules.getSchema().getGeometryDescriptor();
+            if(gd != null) {
+                query.setPropertyNames(new String[] {gd.getLocalName()});
+            }
+            SimpleFeatureCollection features = granules.getGranules(query);
+            ReferencedEnvelope envelope = DataUtilities.bounds(features);
+            if(envelope != null && !envelope.isEmpty()) {
+                return envelope;
+            }
+        }
+        return rasterManager.spatialDomainManager.coverageBBox;
+    }
+
