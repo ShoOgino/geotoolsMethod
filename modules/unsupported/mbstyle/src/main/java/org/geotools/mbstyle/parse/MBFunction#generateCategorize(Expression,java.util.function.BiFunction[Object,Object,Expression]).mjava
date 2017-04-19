@@ -1,0 +1,26 @@
+    private Expression generateCategorize(Expression expression, java.util.function.BiFunction<Object, Object, Expression> parseValue) {
+        
+        JSONArray stopsJson = getStops();
+        List<Expression> parameters = new ArrayList<>(stopsJson.size()*2+3); // each stop is 2, plus property name, leading interval value, and "succeeding"
+        parameters.add(expression);
+        for (int i = 0; i < stopsJson.size(); i++) {
+            JSONArray entry = parse.jsonArray(stopsJson.get(i));
+            Object stop = entry.get(0);
+            Expression value = parseValue.apply(entry.get(1), stop);
+            
+            if (i == 0) {
+                // CategorizeFunction expects there to be a leading value for inputs < firstStopThreshold.
+                // But the MapBox spec does not define the expected behavior in that case.
+                // (spec: "functions return the output value of the stop just less than the function input.")
+                // TODO Default value could go here.
+                // Temporarily, return first interval value for inputs < firstStopThreshold.
+                parameters.add(value);
+            }
+            
+            parameters.add(ff.literal(stop));
+            parameters.add(value);
+        }
+        parameters.add(ff.literal("succeeding"));
+        return ff.function("Categorize", parameters.toArray(new Expression[parameters.size()]));
+    }
+
