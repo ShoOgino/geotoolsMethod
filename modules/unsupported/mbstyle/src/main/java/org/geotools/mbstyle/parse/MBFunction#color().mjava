@@ -1,27 +1,46 @@
-    /** GeoTools {@link Function} from json definition that evaluates to a color.
+    //
+    // Color
+    //
+    /**
+     * GeoTools {@link Expression} from json definition that evaluates to a color, used for
+     * properties such as 'color' and 'fill-color'.
      * <p>
-     * This is the same as {@link #numeric()} except we can make some assumptions about
-     * the values (converting hex to color, looking up color names).
+     * This is the same as {@link #numeric()} except we can make some assumptions about the values
+     * (converting hex to color, looking up color names).
+     * </p>
+     * <ul>
+     * <li>{@link FunctionType#IDENITY}: input is directly converted to a color, providing a way to process attribute data
+     * into colors.</li>
+     * <li>{@link FunctionType#CATEGORICAL}: selects stop equal to input value</li>
+     * <li>{@link FunctionType#INTERVAL}: selects stop less than numeric input value</li>
+     * <li>{@link FunctionType#EXPONENTIAL}: interpolates an output color between two stops</li>  
+     * </ul>
+     * If type is unspecified exponential is used as a default.</li>
      * 
-     * @return {@link Function} (or identity {@link Expression} for the provided json 
+     * @return {@link Function} (or identity {@link Expression} for the provided json)
      */
     public Expression color(){
         Expression value = value();
-        // this is a plain property category so we can turn it into a function
-        // Assume a EXPOTENTIAL function for now because it is the default for color
         FunctionType type = getType();
-        if( type == null || type == FunctionType.CATEGORICAL){
-            return colorCategorical(value); // CATEGORICAL is the default
+        
+        if( type == null || type == FunctionType.EXPONENTIAL){
+            double base = parse.optional(Double.class, json, "base", 1.0 );
+            if( base == 1.0){
+                return colorGenerateInterpolation(value);
+            }
+            else {
+                return colorGenerateExponential(value, base);
+            }
         }
-        else if( type == FunctionType.EXPONENTIAL){
-            return colorExponential(value);
+        if( type == null || type == FunctionType.CATEGORICAL){
+            return colorGenerateRecode(value);
         }
         else if( type == FunctionType.INTERVAL){
-            return colorInterval(value);
+            return colorGenerateCategorize(value);
         }
         else if( type == FunctionType.IDENITY){
             return value;
         }
-        throw new UnsupportedOperationException("Not yet implemented support for '"+type+"' function");
+        throw new UnsupportedOperationException("Color unavailable for '"+type+"' function");
     }
 

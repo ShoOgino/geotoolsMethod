@@ -1,24 +1,42 @@
     /**
-     * Generate GeoTools {@link Function} from json definition.
+     * GeoTools {@link Expression} from json definition that evaluates to a numeric, used for
+     * properties such as 'line-width' and 'opacity'.
      * <p>
-     * This method is used for numeric properties such as line width or opacity.</p>
-     * <p>
-     * This only works for concrete functions, that have been resolved to the current zoom level.</p>.
+     * This is the same as {@link #color()} except we can make some assumptions about the values
+     * (converting "50%"  to 0.5).
+     * </p>
+     * <ul>
+     * <li>{@link FunctionType#IDENITY}: input is directly converted to a numeric output</li>
+     * <li>{@link FunctionType#CATEGORICAL}: selects stop equal to input, and returns stop value as a number</li>
+     * <li>{@link FunctionType#INTERVAL}: selects stop less than numeric input, and returns stop value as a number</li>
+     * <li>{@link FunctionType#EXPONENTIAL}: interpolates a numeric output between two stops</li>  
+     * </ul>
+     * If type is unspecified exponential is used as a default.</li>
      * 
-     * @return GeoTools Function or the provided json
+     * @return {@link Function} (or identity {@link Expression} for the provided json)
      */
-    public Function numeric() {
-        if( !category().contains(FunctionCategory.ZOOM)){
-            // this is a plain property category so we can turn it into a function
-            
-            // assume a EXPOTENTIAL function for now because it is the default
-            // TODO: make a special case for mapbox style enums which default to CATEGORICAL
-            FunctionType type = FunctionType.CATEGORICAL;
-            
-            if( type == FunctionType.CATEGORICAL){
-                return categorical();
+    public Expression numeric() {
+        Expression input = value();
+        FunctionType type = getType();
+        
+        if( type == null || type == FunctionType.EXPONENTIAL){
+            double base = parse.optional(Double.class, json, "base", 1.0 );
+            if( base == 1.0){
+                return numericGenerateInterpolation(input);
+            }
+            else {
+                return numericGenerateExponential(input, base);
             }
         }
-        throw new UnsupportedOperationException("Not yet implemented support for this function");
+        if( type == null || type == FunctionType.CATEGORICAL){
+            return generateRecode(input);
+        }
+        else if( type == FunctionType.INTERVAL){
+            return generateCategorize(input);
+        }
+        else if( type == FunctionType.IDENITY){
+            return input;
+        }
+        throw new UnsupportedOperationException("Numeric unavailable for '"+type+"' function");
     }
 
