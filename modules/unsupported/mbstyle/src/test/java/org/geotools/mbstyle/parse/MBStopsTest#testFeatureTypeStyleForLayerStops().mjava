@@ -1,0 +1,29 @@
+    @Test
+    public void testFeatureTypeStyleForLayerStops() throws IOException, ParseException {
+        JSONObject jsonObject = MapboxTestUtils.parseTestStyle("functionParseTest.json");
+        MBStyle mbStyle = new MBStyle(jsonObject);
+        MBLayer mbLayer = mbStyle.layer("function2");
+
+        List<Long> zoomLevels = MBObjectStops.getLayerStopLevels(mbLayer);
+        List<long[]> ranges = MBObjectStops.getStopLevelRanges(zoomLevels);
+
+        List<MBStyle> zoomStyles = MBObjectStops.getLayerStylesForStops(zoomLevels, mbStyle, mbLayer);
+
+        List<FeatureTypeStyle> ftsList = new ArrayList<>();
+
+        for (MBStyle style : zoomStyles) {
+            long stopLevel = MBObjectStops.getStop(style.layers().get(0));
+            long[] rangeForStopLevel = MBObjectStops.getRangeForStop(stopLevel, ranges);
+
+            // create the FeatureTypeStyles based upon the stops for a layer
+            FeatureTypeStyle fts = new MBStyleTransformer().transform(style.layers().get(0), style);
+
+            // the created FetureTypeStyle as default values set for MIN/MAX Scale Denominator
+            // Edit these values to correspond to the stop level of the layer.
+            Rule rule = fts.rules().get(0);
+            rule.setMinScaleDenominator(MBObjectStops.getMinScaleDenominator(rangeForStopLevel[0]));
+            rule.setMaxScaleDenominator(MBObjectStops.getMaxScaleDenominator(rangeForStopLevel[1]));
+            ftsList.add(fts);
+        }
+    }
+
