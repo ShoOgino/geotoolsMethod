@@ -1,30 +1,33 @@
     /**
-     * Takes the name of an icon, and an {@link MBStyle} as a context, and returns an External Graphic referencing the full URL of the image for consumption
-     * by the {@link SpriteGraphicFactory}. (The format of the image will be {@link SpriteGraphicFactory#FORMAT}).
+     * <p>
+     * Takes the name of an icon, and an {@link MBStyle} as a context, and returns an External Graphic referencing the full URL of the image for
+     * consumption by the {@link SpriteGraphicFactory}. (The format of the image will be {@link SpriteGraphicFactory#FORMAT}).
+     * </p>
      * 
      * @see {@link SpriteGraphicFactory} for more information.
      * 
      * @param iconName The name of the icon inside the spritesheet.
-     * @param styleContext The style context in which to resolve the icon name to the full sprite URL (for consumption by the {@link SpriteGraphicFactory}).
+     * @param styleContext The style context in which to resolve the icon name to the full sprite URL (for consumption by the
+     *        {@link SpriteGraphicFactory}).
      * @return An external graphic with the full URL of the mage for the {@link SpriteGraphicFactory}.
      */
     private ExternalGraphic createExternalGraphicForSprite(Expression iconName, MBStyle styleContext) {
-        Expression spriteUrl;
+        String spriteUrl;
+        String iconNameCql = ECQL.toCQL(iconName);
         
+        /*
+         * Note: The provided iconName {@link Expression} will be embedded in the {@link ExternalGraphic}'s URL as a CQL string, in order to support
+         * Mapbox functions. The {@link SLDStyleFactory} will transform it back into a proper {@link Expression} before sending it to the {@link
+         * SpriteGraphicFactory}.
+         */
+
         if (styleContext != null && styleContext.getSprite() != null) {
             String spriteBase = styleContext.getSprite().trim() + "#";
-            spriteUrl = ff.function("Concatenate", ff.literal(spriteBase),
-                    iconName);
+            spriteUrl = spriteBase + "${" + iconNameCql + "}"; 
         } else {
-            spriteUrl = iconName;
+            spriteUrl = iconNameCql;
         }
 
-        // TODO: (Functions milestone) The icon name can be a function, so evaluating the expression to a string (below) is wrong.
-        // Evaluate it for now, because (for now) External Graphics do not take an expression for the URL.
-        // TODO: Allow External Graphics to take an expression for the URL
-        String spriteUrlStr = spriteUrl.evaluate(null, String.class);
-
-        return sf.createExternalGraphic(spriteUrlStr, SpriteGraphicFactory.FORMAT);
-
+        return sf.createExternalGraphic(spriteUrl, SpriteGraphicFactory.FORMAT);
     }
 
