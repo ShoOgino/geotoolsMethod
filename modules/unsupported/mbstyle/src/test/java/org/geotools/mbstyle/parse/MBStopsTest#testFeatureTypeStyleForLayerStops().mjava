@@ -1,5 +1,7 @@
     @Test
     public void testFeatureTypeStyleForLayerStops() throws IOException, ParseException {
+        sf = CommonFactoryFinder.getStyleFactory();
+        Style sld = sf.createStyle();
         JSONObject jsonObject = MapboxTestUtils.parseTestStyle("functionParseTest.json");
         MBStyle mbStyle = new MBStyle(jsonObject);
         MBLayer mbLayer = mbStyle.layer("function2");
@@ -9,7 +11,7 @@
 
         List<MBStyle> zoomStyles = MBObjectStops.getLayerStylesForStops(zoomLevels, mbStyle, mbLayer);
 
-        List<FeatureTypeStyle> ftsList = new ArrayList<>();
+
 
         for (MBStyle style : zoomStyles) {
             long stopLevel = MBObjectStops.getStop(style.layers().get(0));
@@ -22,8 +24,20 @@
             // Edit these values to correspond to the stop level of the layer.
             Rule rule = fts.rules().get(0);
             rule.setMinScaleDenominator(MBObjectStops.zoomLevelToScaleDenominator(rangeForStopLevel[0]));
-            rule.setMaxScaleDenominator(MBObjectStops.zoomLevelToScaleDenominator(rangeForStopLevel[1]));
-            ftsList.add(fts);
+            if (stopLevel != rangeForStopLevel[1]) {
+                rule.setMaxScaleDenominator(MBObjectStops.zoomLevelToScaleDenominator(rangeForStopLevel[1]));
+            }
+
+            sld.featureTypeStyles().add(fts);
         }
+        assertEquals(3, sld.featureTypeStyles().size());
+        assertEquals(34123.67333684649, sld.featureTypeStyles().get(0).rules().get(0).getMaxScaleDenominator(), 0.1);
+        assertEquals(5.590822639508929E8, sld.featureTypeStyles().get(0).rules().get(0).getMinScaleDenominator(), 0.1);
+
+        assertEquals(133.2955989720566, sld.featureTypeStyles().get(1).rules().get(0).getMaxScaleDenominator(), 0.1);
+        assertEquals(34123.67333684649, sld.featureTypeStyles().get(1).rules().get(0).getMinScaleDenominator(), 0.1);
+
+        assertEquals(Double.POSITIVE_INFINITY, sld.featureTypeStyles().get(2).rules().get(0).getMaxScaleDenominator(), 0.1);
+        assertEquals(133.2955989720566, sld.featureTypeStyles().get(2).rules().get(0).getMinScaleDenominator(), 0.1);
     }
 
