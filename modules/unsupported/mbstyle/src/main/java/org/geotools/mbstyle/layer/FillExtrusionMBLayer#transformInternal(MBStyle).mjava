@@ -1,0 +1,64 @@
+    /**
+     * Transform {@link FillExtrusionMBLayer} to GeoTools FeatureTypeStyle.
+     *
+     * @param styleContext The MBStyle to which this layer belongs, used as a context for things like resolving sprite and glyph names to full urls.
+     */
+    public FeatureTypeStyle transformInternal(MBStyle styleContext) {
+        PolygonSymbolizer symbolizer;
+        MBStyleTransformer transformer = new MBStyleTransformer(parse);
+
+        // from fill pattern or fill color
+        Fill fill;
+
+        DisplacementImpl displacement = new DisplacementImpl();
+
+        displacement.setDisplacementX(getFillExtrusionBase().doubleValue());
+        displacement.setDisplacementY(getFillExtrusionHeight().doubleValue());
+
+        if (getFillExtrusionPattern() != null) {
+            //Fill graphic (with external graphics)
+            ExternalGraphic eg = transformer.createExternalGraphicForSprite(getFillExtrusionPattern(), styleContext);
+            GraphicFill gf = sf.graphicFill(Arrays.asList(eg), fillExtrusionOpacity(), null, null, null, displacement);
+            fill = sf.fill(gf, null, null);
+        } else {
+            fill = sf.fill(null, fillExtrusionColor(), fillExtrusionOpacity());
+        }
+
+        symbolizer = sf.polygonSymbolizer(
+                getId(),
+                ff.property((String)null),
+                sf.description(Text.text("fill"),null),
+                NonSI.PIXEL,
+                null,
+                fill,
+                displacement,
+                ff.literal(0));
+
+        MBFilter filter = getFilter();
+        
+        Rule rule = sf.rule(
+                getId(),
+                null,
+                null,
+                0.0,
+                Double.POSITIVE_INFINITY,
+                Arrays.asList(symbolizer),
+                filter.filter());
+
+        // Set legend graphic to null.
+        //setLegend(null) to empty list.
+        rule.setLegendGraphic(new Graphic[0]);
+
+
+        return sf.featureTypeStyle(
+                getId(),
+                sf.description(
+                        Text.text("MBStyle "+getId()),
+                        Text.text("Generated for "+getSourceLayer())),
+                null, // (unused)
+                Collections.emptySet(),
+                filter.semanticTypeIdentifiers(),
+                Arrays.asList(rule)
+        );
+    }
+

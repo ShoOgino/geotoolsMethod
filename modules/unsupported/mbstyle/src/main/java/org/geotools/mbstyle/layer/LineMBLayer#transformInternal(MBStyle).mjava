@@ -1,0 +1,44 @@
+    /**
+     * Transform {@link LineMBLayer} to GeoTools FeatureTypeStyle.
+     * <p>
+     * Notes:
+     * </p>
+     * <ul>
+     * </ul>
+     *
+     * @param styleContext The MBStyle to which this layer belongs, used as a context for things like resolving sprite and glyph names to full urls.
+     * @return FeatureTypeStyle
+     */
+    public FeatureTypeStyle transformInternal(MBStyle styleContext) {
+        MBStyleTransformer transformer = new MBStyleTransformer(parse);
+        org.geotools.styling.Stroke stroke = sf.stroke(lineColor(), lineOpacity(), lineWidth(),
+                lineJoin(), lineCap(), null, null); // last "offset" is really "dash offset"
+
+        stroke.setDashArray(lineDasharray());
+        LineSymbolizer ls = sf.lineSymbolizer(getId(), null,
+                sf.description(Text.text("line"), null), NonSI.PIXEL, stroke, lineOffset());
+
+        if (hasLinePattern()) {
+            ExternalGraphic eg = transformer.createExternalGraphicForSprite(linePattern(), styleContext);
+            GraphicFill fill = sf.graphicFill(Arrays.asList(eg), lineOpacity(), null, null, null, null);
+            stroke.setGraphicFill(fill);
+        }
+
+        MBFilter filter = getFilter();
+        List<org.opengis.style.Rule> rules = new ArrayList<>();
+        Rule rule = sf.rule(
+                getId(),
+                null,
+                null,
+                0.0,
+                Double.POSITIVE_INFINITY,
+                Arrays.asList(ls),
+                filter.filter());
+        rule.setLegendGraphic(new Graphic[0]);
+        rules.add(rule);
+        return sf.featureTypeStyle(getId(),
+                sf.description(Text.text("MBStyle " + getId()),
+                        Text.text("Generated for " + getSourceLayer())),
+                null, Collections.emptySet(), filter.semanticTypeIdentifiers(), rules);
+    }
+

@@ -1,16 +1,35 @@
+    /**
+     * Lookup an array of the provided type in the provided JSONObject at 'tag', with a fallback if that tag is not found. Throws an exception if
+     * that tag is something other than an array, or if its contents cannot be cast to type.
+     * 
+     * @param type The type of the array
+     * @param json The JSONObject in which to look up the array
+     * @param tag The tag at which to look up the array
+     * @param fallback The fallback array
+     * @return An array of the provided type, or the fallback array.
+     */
     @SuppressWarnings("unchecked")
     public <T> T[] array(Class<T> type, JSONObject json, String tag, T[] fallback) {
-        if( json.containsKey(tag)){
+        if (json.containsKey(tag)) {
             Object obj = json.get(tag);
-            if( obj instanceof JSONArray){
+            if (obj instanceof JSONArray) {
                 JSONArray array = (JSONArray) obj;                
                 T[] returnArray = (T[]) Array.newInstance(type, array.size());
                 for (int i = 0; i < array.size(); i++) {
+                    Object value = array.get(i);
+                    if (Number.class.isAssignableFrom(type) && value instanceof Number) {
+                        if (type == Double.class) {
+                            returnArray[i] = (T)new Double(((Number)value).doubleValue());
+                            continue;
+                        } else if (type == Integer.class) {
+                            returnArray[i] = (T)new Integer(((Number)value).intValue());
+                            continue;
+                        }
+                    }
                     returnArray[i] = type.cast(array.get(i));
                 }
-                return returnArray;               
-            }
-            else {
+                return returnArray;
+            } else {
                 throw new MBFormatException("\"" + tag + "\" required as JSONArray of "
                         + type.getSimpleName() + ": Unexpected " + obj.getClass().getSimpleName());
             }
