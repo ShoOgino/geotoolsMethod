@@ -1,0 +1,47 @@
+    /**
+     * Builds a RasterManager for the sub mosaic of a given template granule, and within a given search bounds
+     * 
+     * @throws Exception
+     */
+    public RasterManager getForGranuleCRS(GranuleDescriptor templateDescriptor,
+            ReferencedEnvelope requestBounds) throws Exception {
+        CoordinateReferenceSystem granuleCRS = templateDescriptor.getGranuleEnvelope()
+                .getCoordinateReferenceSystem();
+        if (CRS.equalsIgnoreMetadata(spatialDomainManager.coverageCRS2D, granuleCRS)) {
+            return this;
+        }
+
+        // compute the bounds of the sub-mosaic in that CRS
+        ReferencedEnvelope bounds = getBoundsForGranuleCRS(templateDescriptor, requestBounds);
+        ReferencedEnvelope targetBounds = bounds.transform(granuleCRS, true);
+
+        // rebuild the raster manager
+        RasterManager reprojected = (RasterManager) this.clone();
+        reprojected.configuration = new MosaicConfigurationBean(this.configuration);
+        reprojected.configuration.setCrs(granuleCRS);
+        reprojected.configuration.setEnvelope(targetBounds);
+        if (reprojected.imposedEnvelope != null) {
+            // we might have an imposed bbox
+            reprojected.imposedEnvelope = targetBounds;
+        }
+        if (templateDescriptor.getOverviewsController() != null) {
+            reprojected.overviewsController = templateDescriptor.getOverviewsController();
+        }
+
+        OverviewLevel level = templateDescriptor.getOverviewsController().getLevel(0);
+        // original gridrange (estimated). I am using the floor here in order to make sure
+        // we always stays inside the real area that we have for the granule
+        final double highestRes[] = new double[] { level.resolutionX, level.resolutionY };
+        GridEnvelope2D originalGridRange = new GridEnvelope2D(
+                new Rectangle((int) (targetBounds.getSpan(0) / highestRes[0]),
+                        (int) (targetBounds.getSpan(1) / highestRes[1])));
+        AffineTransform2D raster2Model = new AffineTransform2D(highestRes[0], 0, 0, -highestRes[1],
+                targetBounds.getLowerCorner().getOrdinate(0) + 0.5 * highestRes[0],
+                targetBounds.getUpperCorner().getOrdinate(1) - 0.5 * highestRes[1]);
+        reprojected.spatialDomainManager = new SpatialDomainManager(
+                new GeneralEnvelope(targetBounds), originalGridRange, granuleCRS, raster2Model,
+                reprojected.overviewsController);
+
+        return reprojected;
+    }
+

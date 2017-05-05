@@ -1,0 +1,35 @@
+    /**
+     * Grab the bounds of the mosaic granules in the template granule CRS (cannot reproject, in general, the whole mosaic bounds in the granule local
+     * CRS)
+     *
+     * @param templateDescriptor
+     * @param requestBounds
+     * @return
+     * @throws IOException
+     */
+    private ReferencedEnvelope getBoundsForGranuleCRS(GranuleDescriptor templateDescriptor,
+            ReferencedEnvelope requestBounds) throws IOException {
+        
+        String crsAttribute = configuration.getCRSAttribute();
+        if (crsAttribute == null) {
+            crsAttribute = CRSExtractor.DEFAULT_ATTRIBUTE_NAME;
+        }
+        GranuleSource granuleSource = getGranuleSource(true, null);
+        if(granuleSource.getSchema().getDescriptor(crsAttribute) == null) {
+            throw new IllegalStateException("Invalid heterogeneous mosaic configuration, "
+                    + "the 'crs' property is missing from the index schema");
+        }
+        
+        String granuleCRSCode = (String) templateDescriptor.getOriginator()
+                .getAttribute(crsAttribute);
+        FilterFactory2 ff = FeatureUtilities.DEFAULT_FILTER_FACTORY;
+        PropertyIsEqualTo crsFilter = ff.equal(ff.property(crsAttribute),
+                ff.literal(granuleCRSCode), false);
+        BBOX bbox = ff.bbox(ff.property(""), requestBounds);
+        Filter filter = ff.and(crsFilter, bbox);
+        Query q = new Query(granuleSource.getSchema().getTypeName(), filter);
+        SimpleFeatureCollection granules = granuleSource.getGranules(q);
+        ReferencedEnvelope bounds = granules.getBounds();
+        return bounds;
+    }
+

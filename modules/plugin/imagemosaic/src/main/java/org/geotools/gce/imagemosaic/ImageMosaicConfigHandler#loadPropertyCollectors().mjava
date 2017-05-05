@@ -26,6 +26,7 @@
 
         // parse the string
         final List<PropertiesCollector> pcs = new ArrayList<>();
+        boolean hasCRSCollector = false;
         for (Collector collector : collectorList) {
             PropertiesCollectorSPI selectedSPI = null;
             final String spiName = collector.getSpi();
@@ -59,12 +60,17 @@
             final PropertiesCollector pc = selectedSPI.create(config,
                     Arrays.asList(collector.getMapped()));
             if (pc != null) {
+                hasCRSCollector |= pc instanceof CRSExtractor;
                 pcs.add(pc);
             } else {
                 if (LOGGER.isLoggable(Level.INFO)) {
                     LOGGER.info("Unable to create PropertyCollector");
                 }
             }
+        }
+        
+        if(heterogeneousCRS && !hasCRSCollector) {
+            pcs.add(new CRSExtractor());
         }
 
         this.propertiesCollectors = pcs;
