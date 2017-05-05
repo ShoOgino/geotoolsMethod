@@ -1,0 +1,65 @@
+    /**
+     * Create a SimpleFeature on top of the variable and indexes.
+     * 
+     * @param tIndex the time index 
+     * @param zIndex the zeta index
+     * @param cs the {@link CoordinateSystem} associated with that variable
+     * @param imageIndex the index to be associated to the feature in the index
+     * @param indexSchema the schema to be used to create the feature
+     * @param geometry the geometry to be attached to the feature
+     * @return the created {@link SimpleFeature}
+     * TODO move to variable wrapper
+     */
+    private SimpleFeature createFeature(
+            final String coverageName,
+            final int[] index,
+            final CoordinateSystem cs,
+            final int imageIndex, 
+            final SimpleFeatureType indexSchema) {
+
+        final SimpleFeature feature = DataUtilities.template(indexSchema);
+        feature.setAttribute(CoverageSlice.Attributes.GEOMETRY, 
+                NetCDFCRSUtilities.GEOM_FACTORY.toGeometry(reader.georeferencing.getBoundingBox(variableDS.getShortName())));
+        feature.setAttribute(CoverageSlice.Attributes.INDEX, imageIndex);
+
+        Map<String, Integer> mappedIndex = mapIndex(index);
+
+        // TIME management
+        // Check if we have time and elevation domain and set the attribute if needed
+        if (nDimensionIndex[T] >= 0) {
+            final Date date = getValueByIndex(nDimensionIndex[T], mappedIndex);
+            if (date == null) { //non-existing slice, not in catalog
+                return null;
+            }
+            setFeatureTime(feature, date, cs);
+        }
+        // elevation
+        if (nDimensionIndex[Z] >= 0) {
+            final Number verticalValue = getValueByIndex(nDimensionIndex[Z], mappedIndex);
+            if (verticalValue == null) { //non-existing slice, not in catalog
+                return null;
+            }
+            feature.setAttribute(reader.georeferencing.getDimensionMapper().getDimension(NetCDFUtilities.ELEVATION_DIM), 
+                verticalValue);
+        }
+
+        //additional domains
+        if (getAdditionalDomains() != null) {
+            for (int i = 0; i < getAdditionalDomains().size(); i++) {
+                AdditionalDomain domain = getAdditionalDomains().get(i);
+                final Object value;
+                if (domain.getType().equals(DomainType.DATE)) {
+                    value = getValueByIndex(nDimensionIndex[i + 2], mappedIndex);
+                } else {
+                    value = getValueByIndex(nDimensionIndex[i + 2], mappedIndex);
+                }
+                if (value == null) { //non-existing slice, not in catalog
+                    return null;
+                }
+                feature.setAttribute(reader.georeferencing.getDimensionMapper().getDimension(domain.getName().toUpperCase()), value);
+            }
+        }
+
+        return feature;
+    }
+
