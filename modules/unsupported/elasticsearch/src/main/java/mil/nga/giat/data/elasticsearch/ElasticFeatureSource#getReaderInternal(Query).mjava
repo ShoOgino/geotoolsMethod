@@ -1,0 +1,28 @@
+    @Override
+    protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query) throws IOException {
+        LOGGER.fine("getReaderInternal");
+        FeatureReader<SimpleFeatureType, SimpleFeature> reader = null;
+        try {
+            final ElasticDataStore dataStore = getDataStore();
+            final String docType = dataStore.getDocType(entry.getName());
+            final boolean scroll = !useSortOrPagination(query) && dataStore.getScrollEnabled();
+            final ElasticRequest searchRequest = prepareSearchRequest(query, scroll);
+            final ElasticResponse sr = dataStore.getClient().search(dataStore.getIndexName(), docType, searchRequest);
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine("Search response: " + sr);
+            }
+            if (!scroll) {
+                reader = new ElasticFeatureReader(getState(), sr);
+            } else {
+                reader = new ElasticFeatureReaderScroll(getState(), sr, getSize(query));
+            }
+            if (!filterFullySupported) {
+                reader = new FilteringFeatureReader<SimpleFeatureType, SimpleFeature>(reader, query.getFilter());
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+            throw new IOException("Error executing query search", e);
+        }
+        return reader;
+    }
+

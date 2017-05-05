@@ -1,0 +1,19 @@
+    protected void createIndices() throws IOException {
+        // create index and add mappings
+        Map<String,Object> settings = new HashMap<>();
+        settings.put("settings", ImmutableMap.of("number_of_shards", numShards, "number_of_replicas", numReplicas));
+        Map<String,Object> mappings = new HashMap<>();
+        settings.put("mappings", mappings);
+        final String filename = client.getMajorVersion() < 5 ? LEGACY_ACTIVE_MAPPINGS_FILE : ACTIVE_MAPPINGS_FILE;
+        try (Scanner s = new Scanner(ClassLoader.getSystemResourceAsStream(filename))) {
+            s.useDelimiter("\\A");
+            Map<String,Object> source = mapReader.readValue(s.next());
+            mappings.put(TYPE_NAME, source);
+        }
+        client.performRequest("PUT", "/" + indexName, settings);
+
+        // add alias
+        Map<String,Object> aliases = ImmutableMap.of("actions", ImmutableList.of(ImmutableMap.of("index", indexName, "alias", indexName + "_alias")));
+        client.performRequest("PUT", "/_alias", aliases);
+    }
+

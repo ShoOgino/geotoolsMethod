@@ -1,0 +1,24 @@
+    private void indexDocuments(String status) throws IOException {
+        try (InputStream inputStream = ClassLoader.getSystemResourceAsStream(TEST_FILE); Scanner scanner = new Scanner(inputStream)) {
+            scanner.useDelimiter(System.lineSeparator());
+            final StringBuilder builder = new StringBuilder();
+            while (scanner.hasNext()) {
+                final String line = scanner.next();
+                if (!line.startsWith("#")) {
+                    builder.append(line);
+                }
+            }
+            final Map<String,Object> content = mapReader.readValue(builder.toString());
+            @SuppressWarnings("unchecked")
+            final List<Map<String,Object>> features = (List<Map<String,Object>>) content.get("features");
+            for (final Map<String,Object> featureSource : features) {
+                if (featureSource.containsKey("status_s") && featureSource.get("status_s").equals(status)) {
+                    final String id = featureSource.containsKey("id") ? (String) featureSource.get("id") : null;
+                    client.performRequest("POST", "/" + indexName + "/" + TYPE_NAME + "/" + id, featureSource);
+                }
+            }
+
+            client.performRequest("POST", "/" + indexName + "/_refresh", null);
+        }
+    }
+

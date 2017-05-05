@@ -1,0 +1,28 @@
+    @Override
+    public int getMajorVersion() {
+        if (majorVersion != null) {
+            return majorVersion;
+        }
+
+        final Pattern pattern = Pattern.compile("(\\d+)\\.\\d+\\.\\d+");
+        try {
+            final Response response = performRequest("GET", "/", null);
+            try (final InputStream inputStream = response.getEntity().getContent()) {
+                Map<String,Object> info = mapper.readValue(inputStream, new TypeReference<Map<String, Object>>() {});
+                @SuppressWarnings("unchecked")
+                Map<String,Object> version = (Map<String,Object>) info.getOrDefault("version", Collections.EMPTY_MAP);
+                final Matcher m = pattern.matcher((String) version.get("number"));
+                if (!m.find()) {
+                    majorVersion = DEFAULT_MAJOR_VERSION;
+                } else {
+                    majorVersion = Integer.valueOf(m.group(1));
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.warning("Error getting server version: " + e);
+            majorVersion = DEFAULT_MAJOR_VERSION;
+        }
+
+        return majorVersion;
+    }
+

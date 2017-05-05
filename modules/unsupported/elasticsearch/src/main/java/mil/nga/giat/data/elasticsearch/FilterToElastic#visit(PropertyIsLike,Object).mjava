@@ -1,0 +1,61 @@
+    /**
+     * Writes the FilterBuilder for the Like Filter.
+     *
+     * @param filter the filter to be visited
+     *
+     */
+    public Object visit(PropertyIsLike filter, Object extraData) {
+        char esc = filter.getEscape().charAt(0);
+        char multi = filter.getWildCard().charAt(0);
+        char single = filter.getSingleChar().charAt(0);
+        boolean matchCase = false;
+        if (filter.isMatchingCase()) {
+            LOGGER.fine("Case sensitive search not supported");
+        }
+
+        String literal = filter.getLiteral();
+        Expression att = filter.getExpression();
+
+        AttributeDescriptor attType = (AttributeDescriptor) att.evaluate(featureType);
+        analyzed = false;
+        nested = false;
+        if (attType != null) {
+            if (attType.getUserData().containsKey(ANALYZED)) {
+                analyzed = (Boolean) attType.getUserData().get(ANALYZED);
+            }
+            if (attType.getUserData().containsKey(NESTED)) {
+                nested = (Boolean) attType.getUserData().get(NESTED);
+            }
+            if (Date.class.isAssignableFrom(attType.getType().getBinding())) {
+                updateDateFormatter(attType);
+            }
+        }
+
+        att.accept(this, extraData);
+        key = (String) field;
+
+        if (analyzed) {
+            // use query string query post filter for analyzed fields
+            pattern = convertToQueryString(esc, multi, single, matchCase, literal);
+        } else {
+            // default to regexp filter
+            pattern = convertToRegex(esc, multi, single, matchCase, literal);
+        }
+        if (nested) {
+            path = extractNestedPath(key);
+        }
+
+        if (analyzed) {
+            // use query string query for analyzed fields
+            queryBuilder = ImmutableMap.of("query_string", ImmutableMap.of("query", pattern, "default_field", key));
+        } else {
+            // default to regexp query
+            queryBuilder = ImmutableMap.of("regexp", ImmutableMap.of(key, pattern));
+        }
+        if (nested) {
+            queryBuilder = ImmutableMap.of("nested", ImmutableMap.of("path", path, "query", queryBuilder));
+        }
+
+        return extraData;
+    }
+

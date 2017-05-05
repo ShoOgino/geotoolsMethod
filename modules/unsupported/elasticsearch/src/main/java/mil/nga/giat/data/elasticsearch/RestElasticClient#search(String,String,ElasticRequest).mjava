@@ -1,0 +1,48 @@
+    @Override
+    public ElasticResponse search(String searchIndices, String type, ElasticRequest request) throws IOException {
+        final StringBuilder pathBuilder = new StringBuilder("/" + searchIndices + "/" + type + "/_search");
+
+        final Map<String,Object> requestBody = new HashMap<>();
+
+        if (request.getSize() != null) {
+            requestBody.put("size",  request.getSize());
+        }
+
+        if (request.getFrom() != null) {
+            requestBody.put("from", request.getFrom());
+        }
+
+        if (request.getScroll() != null) {
+            pathBuilder.append("?scroll=" + request.getScroll() + "s");
+        }
+
+        final List<String> sourceIncludes = request.getSourceIncludes();
+        if (sourceIncludes.size() == 1) {
+            requestBody.put("_source", sourceIncludes.get(0));
+        } else if (!sourceIncludes.isEmpty()) {
+            requestBody.put("_source", sourceIncludes);
+        }
+
+        if (!request.getFields().isEmpty()) {
+            final String key = getMajorVersion() > 2 ? "stored_fields" : "fields";
+            requestBody.put(key, request.getFields());
+        }
+
+        if (!request.getSorts().isEmpty()) {
+            requestBody.put("sort", request.getSorts());
+        }
+
+        if (request.getQuery() != null) {
+            requestBody.put("query", request.getQuery());
+        }
+
+        if (request.getAggregations() != null) {
+            requestBody.put("aggregations", request.getAggregations());
+        }
+
+        if (LOGGER.isLoggable(Level.FINE)) {
+            LOGGER.fine("Elasticsearch request:\n" + mapper.writerWithDefaultPrettyPrinter().writeValueAsString(requestBody));
+        }
+        return parseResponse(performRequest("POST", pathBuilder.toString(), requestBody));
+    }
+

@@ -1,0 +1,44 @@
+    protected Object evaluateLiteral(Literal expression, Class<?> target ) {
+        Object literal = null;
+
+        // HACK: let expression figure out the right value for numbers,
+        // since the context is almost always improperly set and the
+        // numeric converters try to force floating points to integrals
+        // JD: the above is no longer true, so instead do a safe conversion
+        if(target != null) {
+            // use the target type
+            if (Number.class.isAssignableFrom(target)) {
+                literal = safeConvertToNumber(expression, target);
+
+                if (literal == null) {
+                    literal = safeConvertToNumber(expression, Number.class);
+                }
+            }
+            else {
+                literal = expression.evaluate(null, target);
+            }
+        }
+
+        //check for conversion to number
+        if (target == null) {
+            // we don't know the target type, check for a conversion to a number
+
+            Number number = safeConvertToNumber(expression, Number.class);
+            if (number != null) {
+                literal = number;
+            }
+        }
+
+        // if the target was not known, of the conversion failed, try the
+        // type guessing dance literal expression does only for the following
+        // method call
+        if(literal == null)
+            literal = expression.evaluate(null);
+
+        // if that failed as well, grab the value as is
+        if(literal == null)
+            literal = expression.getValue();
+
+        return literal;
+    }
+

@@ -1,0 +1,134 @@
+    /**
+     * Handles the common case of a PropertyName,Literal geometry binary temporal operator.
+     * <p>
+     * Subclasses should override if they support more temporal operators than what is handled in 
+     * this base class. 
+     * </p>
+     */
+    protected Object visitBinaryTemporalOperator(BinaryTemporalOperator filter, 
+            PropertyName property, Literal temporal, boolean swapped, Object extraData) { 
+
+        AttributeDescriptor attType = (AttributeDescriptor)property.evaluate(featureType);
+
+        Class<?> typeContext = null;
+        nested = false;
+        if (attType != null) {
+            typeContext = attType.getType().getBinding();
+            if (attType.getUserData().containsKey(NESTED)) {
+                nested = (Boolean) attType.getUserData().get(NESTED);
+            }
+            updateDateFormatter(attType);
+        }
+
+        //check for time period
+        period = null;
+        if (temporal.evaluate(null) instanceof Period) {
+            period = (Period) temporal.evaluate(null);
+        }
+
+        //verify that those filters that require a time period have one
+        if ((filter instanceof Begins || filter instanceof BegunBy || filter instanceof Ends ||
+                filter instanceof EndedBy || filter instanceof During || filter instanceof TContains) &&
+                period == null) {
+            if (period == null) {
+                throw new IllegalArgumentException("Filter requires a time period");
+            }
+        }
+        if (filter instanceof TEquals && period != null) {
+            throw new IllegalArgumentException("TEquals filter does not accept time period");
+        }
+
+        //ensure the time period is the correct argument
+        if ((filter instanceof Begins || filter instanceof Ends || filter instanceof During) && 
+                swapped) {
+            throw new IllegalArgumentException("Time period must be second argument of Filter");
+        }
+        if ((filter instanceof BegunBy || filter instanceof EndedBy || filter instanceof TContains) && 
+                !swapped) {
+            throw new IllegalArgumentException("Time period must be first argument of Filter");
+        }
+
+        key = "";
+        if (filter instanceof After || filter instanceof Before) {
+            op = filter instanceof After ? " > " : " < ";
+
+            if (period != null) {
+                property.accept(this, extraData);
+                key = (String) field;
+
+                visitBegin(period, extraData);
+                begin = field;
+                visitEnd(period, extraData);
+                end = field;
+            }
+            else {
+                property.accept(this, extraData);
+                key = (String) field;
+                temporal.accept(this, typeContext);
+            }
+        }
+        else if (filter instanceof Begins || filter instanceof Ends || 
+                filter instanceof BegunBy || filter instanceof EndedBy ) {
+            property.accept(this, extraData);
+            key = (String) field;
+
+            if (filter instanceof Begins || filter instanceof BegunBy) {
+                visitBegin(period, extraData);
+            }
+            else {
+                visitEnd(period, extraData);
+            }
+        }
+        else if (filter instanceof During || filter instanceof TContains){
+            property.accept(this, extraData);
+            key = (String) field;
+
+            visitBegin(period, extraData);
+            lower = field;
+            visitEnd(period, extraData);
+        }
+        else if (filter instanceof TEquals) {
+            property.accept(this, extraData);
+            key = (String) field;
+            temporal.accept(this, typeContext);
+        }
+
+        if (nested) {
+            path = extractNestedPath(key);
+        }
+
+        if (filter instanceof After || filter instanceof Before) {
+            if (period != null) {
+                if ((op.equals(" > ") && !swapped) || (op.equals(" < ") && swapped)) {
+                    queryBuilder = ImmutableMap.of("range", ImmutableMap.of(key, ImmutableMap.of("gt", end)));
+                } else {
+                    queryBuilder = ImmutableMap.of("range", ImmutableMap.of(key, ImmutableMap.of("lt", begin)));
+                }
+            }
+            else {
+                if (op.equals(" < ") || swapped) {
+                    queryBuilder = ImmutableMap.of("range", ImmutableMap.of(key, ImmutableMap.of("lt", field)));
+                } else {
+                    queryBuilder = ImmutableMap.of("range", ImmutableMap.of(key, ImmutableMap.of("gt", field)));
+                }
+            }
+        }
+        else if (filter instanceof Begins || filter instanceof Ends || 
+                filter instanceof BegunBy || filter instanceof EndedBy ) {
+
+            queryBuilder = ImmutableMap.of("term", ImmutableMap.of(key, field));
+        }
+        else if (filter instanceof During || filter instanceof TContains){
+            queryBuilder = ImmutableMap.of("range", ImmutableMap.of(key, ImmutableMap.of("gt", lower, "lt", field)));
+        }
+        else if (filter instanceof TEquals) {
+            queryBuilder = ImmutableMap.of("term", ImmutableMap.of(key, field));
+        }
+
+        if (nested) {
+            queryBuilder = ImmutableMap.of("nested", ImmutableMap.of("path", path, "query", queryBuilder));
+        }
+
+        return extraData;
+    }
+
