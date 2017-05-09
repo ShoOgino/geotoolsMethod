@@ -18,11 +18,31 @@
             if (request.getMaximumNumberOfGranules() > 0) {
                 query.setMaxFeatures(request.getMaximumNumberOfGranules());
             }
-            bbox = FeatureUtilities.DEFAULT_FILTER_FACTORY
-                    .bbox(FeatureUtilities.DEFAULT_FILTER_FACTORY
-                            .property(rasterManager.getGranuleCatalog().getType(typeName)
-                                    .getGeometryDescriptor().getName()),
-                            mosaicBBox);
+            final PropertyName geometryProperty = FeatureUtilities.DEFAULT_FILTER_FACTORY
+                    .property(rasterManager.getGranuleCatalog().getType(typeName)
+                            .getGeometryDescriptor().getName());
+            if(request.isHeterogeneousGranules()) {
+                ProjectionHandler handler = ProjectionHandlerFinder.getHandler(mosaicBBox, mosaicBBox.getCoordinateReferenceSystem(), true);
+                if(handler != null) {
+                    List<ReferencedEnvelope> envelopes = handler.getQueryEnvelopes();
+                    if(envelopes != null && envelopes.size() > 0) {
+                        List<Filter> filters = new ArrayList<>();
+                        for (ReferencedEnvelope envelope : envelopes) {
+                            Filter f = FeatureUtilities.DEFAULT_FILTER_FACTORY.bbox(geometryProperty, envelope);
+                            filters.add(f);
+                        }
+                        if(envelopes.size() == 1) {
+                            bbox = filters.get(0);
+                        } else {
+                            bbox = FeatureUtilities.DEFAULT_FILTER_FACTORY.or(filters);
+                        }
+                    }
+                    
+                }
+            }
+            if(bbox == null) {
+                bbox = FeatureUtilities.DEFAULT_FILTER_FACTORY.bbox(geometryProperty, mosaicBBox);
+            }
             query.setFilter(bbox);
             return query;
         } else {

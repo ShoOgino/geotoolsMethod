@@ -12,19 +12,24 @@
             GeneralEnvelope coverageEnvelope = inputReader.getOriginalEnvelope();
             CoordinateReferenceSystem coverageCRS = inputReader.getCoordinateReferenceSystem();
             ReferencedEnvelope finalEnvelope = new ReferencedEnvelope(coverageEnvelope);
+            Geometry geometry = null;
             if (!CRS.equalsIgnoreMetadata(targetCRS, coverageCRS)) {
                 try {
-                    finalEnvelope = new ReferencedEnvelope(CRS.transform(finalEnvelope, targetCRS));
-                } catch (TransformException e) {
+                    geometry = Utils.reprojectEnvelopeToGeometry(finalEnvelope, targetCRS, null);
+                    if(geometry == null) {
+                        throw new GranuleHandlingException("Reprojection of source envelope failed, got back a null one " + finalEnvelope);
+                    }
+                } catch (TransformException | FactoryException e) {
                     throw new GranuleHandlingException(
                             "Unable to reproject incoming granule, but target and granule CRS "
                                     + "differ so we can't continue",
                             e);
                 }
+            } else {
+                geometry = JTS.toGeometry(finalEnvelope);
             }
 
-            targetFeature.setAttribute(targetFeatureType.getGeometryDescriptor().getName(),
-                    GEOM_FACTORY.toGeometry(finalEnvelope));
+            targetFeature.setAttribute(targetFeatureType.getGeometryDescriptor().getName(), geometry);
 
         }
 

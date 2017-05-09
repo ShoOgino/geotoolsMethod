@@ -1,0 +1,39 @@
+    public static Geometry reprojectEnvelopeToGeometry(ReferencedEnvelope sourceEnvelope, CoordinateReferenceSystem targetCRS, ReferencedEnvelope targetReferenceEnvelope)
+            throws FactoryException, TransformException {
+        ProjectionHandler handler;
+        CoordinateReferenceSystem sourceCRS = sourceEnvelope.getCoordinateReferenceSystem();
+        if(targetReferenceEnvelope == null) {
+            targetReferenceEnvelope = ReferencedEnvelope.reference(getCRSEnvelope(targetCRS));
+        }
+        if(targetReferenceEnvelope != null) {
+            handler = ProjectionHandlerFinder.getHandler(targetReferenceEnvelope, sourceCRS, true);
+        } else {
+            // cannot handle wrapping if we do not have a reference envelope, but
+            // cutting/adapting will still work
+            ReferencedEnvelope reference = new ReferencedEnvelope(targetCRS);
+            handler = ProjectionHandlerFinder.getHandler(reference, sourceCRS, false);
+        }
+        
+        if(handler != null) {
+            MathTransform transform = CRS.findMathTransform(sourceCRS, targetCRS);
+            Geometry footprint = JTS.toGeometry(sourceEnvelope);
+            Geometry preProcessed = handler.preProcess(footprint);
+            if(preProcessed == null) {
+                return null;
+            }
+            Geometry transformed = JTS.transform(preProcessed, transform);
+            // this might generate multipolygons for data crossing the dataline, which 
+            // is actually what we want
+            Geometry postProcessed = handler.postProcess(transform.inverse(), transformed);
+            if(postProcessed == null) {
+                return null;
+            }
+            return postProcessed;
+        } else {
+            sourceEnvelope = new ReferencedEnvelope(CRS.transform(sourceEnvelope, targetCRS));
+        }
+        
+        
+        return JTS.toGeometry(sourceEnvelope);
+    }
+
