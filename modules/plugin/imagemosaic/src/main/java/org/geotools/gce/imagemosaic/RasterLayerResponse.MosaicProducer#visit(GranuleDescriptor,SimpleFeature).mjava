@@ -12,10 +12,21 @@
             //
             // create a granuleDescriptor loader
             final Geometry bb = JTS.toGeometry((BoundingBox) mosaicBBox);
-            final Geometry inclusionGeometry = granuleDescriptor.getFootprint();
+            Geometry inclusionGeometry = granuleDescriptor.getFootprint();
             boolean intersects = false;
             if (inclusionGeometry != null) {
-                intersects = inclusionGeometry.intersects(bb);
+                CoordinateReferenceSystem granuleCRS = granuleDescriptor.getGranuleEnvelope().getCoordinateReferenceSystem();
+                CoordinateReferenceSystem mosaicCRS = mosaicBBox.getCoordinateReferenceSystem();
+                try {
+                    if(!CRS.equalsIgnoreMetadata(granuleCRS, mosaicCRS)) {
+                        MathTransform mt = CRS.findMathTransform(granuleCRS, mosaicCRS);
+                        inclusionGeometry = JTS.transform(inclusionGeometry, mt);
+                    }
+                    intersects = inclusionGeometry.intersects(bb);
+                } catch (FactoryException | MismatchedDimensionException | TransformException e) {
+                    // in case there was a reprojection issue assume intersection
+                    intersects = true;
+                }
             }
             if (!footprintBehavior.handleFootprints() || inclusionGeometry == null
                     || (footprintBehavior.handleFootprints() && intersects)) {

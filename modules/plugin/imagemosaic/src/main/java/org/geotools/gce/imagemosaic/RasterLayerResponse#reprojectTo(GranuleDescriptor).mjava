@@ -1,0 +1,29 @@
+    /**
+     * Builds an alternate view of request/response/manager based on a template descriptor
+     * @param templateDescriptor
+     * @return
+     * @throws Exception
+     */
+    public RasterLayerResponse reprojectTo(GranuleDescriptor templateDescriptor) throws Exception {
+        // optimization in case the granule CRS and the mosaic CRS correspond
+        CoordinateReferenceSystem granuleCRS = templateDescriptor.getGranuleEnvelope().getCoordinateReferenceSystem();
+        if(CRS.equalsIgnoreMetadata(rasterManager.spatialDomainManager.coverageCRS2D, granuleCRS)) {
+            return this;
+        }
+        
+        // rebuild
+        RasterLayerRequest originalRequest = this.getRequest();
+        RasterManager originalRasterManager = originalRequest.getRasterManager();
+        RasterManager manager = originalRasterManager.getForGranuleCRS(templateDescriptor, this.mosaicBBox);
+        RasterLayerRequest request = new RasterLayerRequest(originalRequest.getParams(), manager);
+        RasterLayerResponse response = new RasterLayerResponse(request, manager,
+                this.submosaicProducerFactory);
+        // initialize enough info without actually running the output computation
+        response.chooseOverview();
+        response.initBBOX();
+        response.initTransformations();
+        response.initRasterBounds();
+
+        return response;
+    }
+
