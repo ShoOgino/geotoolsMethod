@@ -1,0 +1,28 @@
+    @Test
+    public void testRasterLayer() throws Exception {
+        File coverageFile = TestData.copy(this, "geotiff/worldPalette.tiff");
+        assertTrue(coverageFile.exists());
+        GridCoverage2DReader worldPaletteReader = new GeoTiffReader(coverageFile);
+        
+        CoordinateReferenceSystem googleMercator = CRS.decode("EPSG:3857");
+        ReferencedEnvelope mapExtent = new ReferencedEnvelope(-20037508.34, 20037508.34,
+                -20037508.34, 20037508.34, googleMercator);
+        Rectangle screenSize = new Rectangle(200, (int) (mapExtent.getHeight()
+                / mapExtent.getWidth() * 200));
+        AffineTransform w2s = RendererUtilities.worldToScreenTransform(mapExtent, screenSize);
+        GridCoverageRenderer renderer = new GridCoverageRenderer(googleMercator, mapExtent,
+                screenSize, w2s);        
+        
+        JSONObject jsonObject = MapboxTestUtils.parseTestStyle("rasterStyleTestAllProperties.json");
+        MBStyle mbStyle = new MBStyle(jsonObject);
+        StyledLayerDescriptor sld = mbStyle.transform();
+        UserLayer l = (UserLayer) sld.layers().get(0);
+        Style style = l.getUserStyles()[0];
+        RasterSymbolizer s = (RasterSymbolizer)style.featureTypeStyles().get(0).getRules()[0].getSymbolizers()[0];      
+
+        RenderedImage image = renderer.renderImage(worldPaletteReader, null, s,
+                Interpolation.getInstance(Interpolation.INTERP_BICUBIC), null, 256, 256);
+
+        ImageAssert.assertEquals(file("raster"), image, 50);
+    }
+
