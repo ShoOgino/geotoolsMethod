@@ -8,8 +8,22 @@
 
         URL loc = url.evaluate(feature, URL.class);
         URL baseUrl = parseBaseUrl(loc);
-        String iconName = parseIconName(loc);
 
+        Map<String, String> paramsMap = parseFragmentParams(loc);
+        String iconName = paramsMap.get("icon");
+        String sizeStr = paramsMap.get("size");
+        sizeStr = sizeStr == null ? "1.0" : sizeStr;
+        
+        Double sizeMultiplier = null;        
+        try {
+            sizeMultiplier = Double.parseDouble(sizeStr); 
+            if (sizeMultiplier < 0) {
+                sizeMultiplier = 1.0;
+            }
+        } catch (NumberFormatException e) {
+            throw new MBSpriteException("Exception parsing size parameter from Sprite External Graphic URL. URL was: " + loc, e);
+        }        
+        
         // Retrieve and parse the sprite index file.
         SpriteIndex spriteIndex = getSpriteIndex(baseUrl);
 
@@ -29,6 +43,13 @@
             AffineTransformOp ato = new AffineTransformOp(scaleTx, AffineTransformOp.TYPE_BILINEAR);
             iconSubImg = ato.filter(iconSubImg, null);
         }
+        
+        // Use the size multiplier, if any, to scale the image
+        if (sizeMultiplier != null && sizeMultiplier != 1.0) {
+            AffineTransform scaleTx = AffineTransform.getScaleInstance(sizeMultiplier, sizeMultiplier);
+            AffineTransformOp ato = new AffineTransformOp(scaleTx, AffineTransformOp.TYPE_BILINEAR);
+            iconSubImg = ato.filter(iconSubImg, null);
+        }        
 
         return new ImageIcon(iconSubImg);
     }
