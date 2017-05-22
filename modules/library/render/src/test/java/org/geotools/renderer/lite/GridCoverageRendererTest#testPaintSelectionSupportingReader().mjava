@@ -1,0 +1,26 @@
+    @Test
+    public void testPaintSelectionSupportingReader() throws Exception {
+        ReferencedEnvelope mapExtent = new ReferencedEnvelope(0, 90, 0, 90, DefaultGeographicCRS.WGS84);
+        
+        GridCoverage2DReader reader = new TestSingleBandReader(2);
+        
+        GridCoverageRenderer renderer = new GridCoverageRenderer(DefaultGeographicCRS.WGS84, mapExtent,
+                new Rectangle(0, 0, 100, 100), null);
+        // keeping a reference to the raster symbolizer so we can check we has not altered
+        // during the band setup the raster symbolizer channel selection needs to be rearranged
+        // but the original raster symbolizer should not be altered
+        RasterSymbolizer rasterSymbolizer = buildChannelSelectingSymbolizer(3);
+        BufferedImage bi = new BufferedImage(100, 100, BufferedImage.TYPE_3BYTE_BGR);
+        Graphics2D graphics = (Graphics2D) bi.getGraphics();
+        // .. the reader here checks the band selection params were passed down
+        renderer.paint(graphics, reader, null, rasterSymbolizer, Interpolation.getInstance(Interpolation.INTERP_NEAREST), Color.BLACK);
+        
+        // check we got a gray image
+        final double[] minimums = new ImageWorker(bi).getMaximums();
+        final double[] maximums = new ImageWorker(bi).getMaximums();
+        assertThat(maximums[0], equalTo(maximums[1]));
+        assertThat(maximums[1], equalTo(maximums[2]));
+        assertThat(minimums[0], equalTo(minimums[1]));
+        assertThat(minimums[1], equalTo(minimums[2]));
+    }
+
