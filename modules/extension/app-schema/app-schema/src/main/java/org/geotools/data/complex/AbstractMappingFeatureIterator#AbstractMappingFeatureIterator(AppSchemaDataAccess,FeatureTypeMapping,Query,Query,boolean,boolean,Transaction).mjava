@@ -1,0 +1,72 @@
+    public AbstractMappingFeatureIterator(AppSchemaDataAccess store, FeatureTypeMapping mapping,
+            Query query, Query unrolledQuery, boolean removeQueryLimitIfDenormalised,
+            boolean hasPostFilter, Transaction tx) throws IOException {
+        this.store = store;
+        this.attf = new AppSchemaFeatureFactoryImpl();
+
+        this.mapping = mapping;
+
+        this.transaction = tx;
+
+        // validate and initialise resolve options
+        Hints hints = query.getHints();
+        ResolveValueType resolveVal = (ResolveValueType) hints.get( Hints.RESOLVE );
+        boolean resolve = ResolveValueType.ALL.equals(resolveVal) || ResolveValueType.LOCAL.equals(resolveVal);
+        if (!resolve && resolveVal!=null && !ResolveValueType.NONE.equals(resolveVal)) {
+            throw new IllegalArgumentException("Resolve:" + resolveVal.getName() + " is not supported in app-schema!");
+        }
+        Integer atd = (Integer) hints.get(Hints.ASSOCIATION_TRAVERSAL_DEPTH);
+        resolveDepth = resolve ? atd==null? 0 : atd  : 0;
+        resolveTimeOut = (Integer) hints.get( Hints.RESOLVE_TIMEOUT );
+
+        namespaces = mapping.getNamespaces();
+        namespaceAwareFilterFactory = new FilterFactoryImplNamespaceAware(namespaces);
+        
+        Object includeProps = query.getHints().get(Query.INCLUDE_MANDATORY_PROPS);
+        includeMandatory = includeProps instanceof Boolean && ((Boolean)includeProps).booleanValue();
+               
+        if (mapping.isDenormalised()) {
+            // we need to disable the max number of features retrieved so we can
+            // sort them manually just in case the data is denormalised.  Do this
+            // by overriding the max features for this query just before executing
+            // it.  Note that the original maxFeatures value was copied to
+            // this.requestMaxFeatures in the constructor and will be re-applied after
+            // the rows have been returned
+            if (removeQueryLimitIfDenormalised) {
+                this.dataMaxFeatures = 1000000;
+                if (hasPostFilter) {
+                   // true max features will be handled in PostFilteringMappingFeatureIterator
+                   this.requestMaxFeatures = 1000000;
+                } else {
+                    this.requestMaxFeatures = query.getMaxFeatures(); 
+                }
+            } else {
+                this.dataMaxFeatures = query.getMaxFeatures();
+                this.requestMaxFeatures = query.getMaxFeatures();
+            }
+        } else {
+            this.requestMaxFeatures = query.getMaxFeatures();
+            this.dataMaxFeatures = query.getMaxFeatures();
+        }
+
+        if (unrolledQuery == null) {
+            unrolledQuery = getUnrolledQuery(query);
+            if (query instanceof JoiningQuery && unrolledQuery instanceof JoiningQuery) {
+                ((JoiningQuery) unrolledQuery).setRootMapping(((JoiningQuery) query)
+                        .getRootMapping());
+            }
+        }
+
+         // NC - property names
+        if (query != null && query.getProperties() != null) {
+            setPropertyNames(query.getProperties());
+        } else {
+            setPropertyNames(null); // we need the actual property names (not surrogates) to do
+                                    // this...
+        }
+        xpathAttributeBuilder = new XPath();
+        xpathAttributeBuilder.setFeatureFactory(attf);
+        initialiseSourceFeatures(mapping, unrolledQuery, query.getCoordinateSystemReproject());
+        xpathAttributeBuilder.setFilterFactory(namespaceAwareFilterFactory);
+    }
+
