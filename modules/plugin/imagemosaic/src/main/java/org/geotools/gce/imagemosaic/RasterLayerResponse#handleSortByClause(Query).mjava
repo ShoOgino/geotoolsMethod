@@ -2,11 +2,13 @@
      * Handles the optional {@link SortBy} clause for the query to the catalog
      *
      * @param query the {@link Query} to set the {@link SortBy} for.
+     * @throws IOException 
      */
-    private void handleSortByClause(final Query query) {
+    private void handleSortByClause(final Query query) throws IOException {
         Utilities.ensureNonNull("query", query);
         LOGGER.fine("Prepping to manage SortBy Clause");
         final String sortByClause = request.getSortClause();
+        final GranuleCatalog catalog = rasterManager.getGranuleCatalog();
         if (sortByClause != null && sortByClause.length() > 0) {
             final String[] elements = sortByClause.split(",");
             if (elements != null && elements.length > 0) {
@@ -47,12 +49,22 @@
                 // assign to query if sorting is supported!
 
                 this.sortBy = clauses.toArray(new SortBy[] {});
-                if (rasterManager.getGranuleCatalog()
+                if (catalog
                         .getQueryCapabilities(rasterManager.getTypeName()).supportsSorting(sortBy)) {
                     query.setSortBy(sortBy);
                 }
             } else {
                 LOGGER.fine("No SortBy Clause");
+            }
+        } else {
+            // no specified sorting, is this a heterogeneous CRS mosaic?
+            String crsAttribute = rasterManager.getCrsAttribute();
+            if(crsAttribute != null) {
+                SortBy sort = new SortByImpl(FeatureUtilities.DEFAULT_FILTER_FACTORY.property(crsAttribute), SortOrder.ASCENDING);
+                this.sortBy = new SortBy[] {sort};
+                if (catalog.getQueryCapabilities(rasterManager.getTypeName()).supportsSorting(sortBy)) {
+                    query.setSortBy(sortBy);
+                }               
             }
         }
     }
