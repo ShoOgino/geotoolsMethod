@@ -63,22 +63,20 @@
             try {
                 // create a datastore as instructed
                 spi = (DataStoreFactorySpi) Class.forName(SPIClass).newInstance();
-
             } catch (Exception e) {
-                if (LOGGER.isLoggable(Level.WARNING))
-                    LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
-                return null;
+                // if we are directed to use a pre-existing store then don't complain about lack of SPI
+                if (properties.get(Utils.Prop.STORE_NAME) == null) {
+                    if (LOGGER.isLoggable(Level.WARNING)) {
+                        LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
+                    }
+                    return null;
+                }
             }
         }
         // Instantiate
         if (overrideParams != null && !overrideParams.isEmpty()) {
             params.putAll(overrideParams);
         }
-        final GranuleCatalog catalog = catalogConfigurationBean.isCaching()
-                ? new STRTreeGranuleCatalog(params, spi, hints)
-                : new CachingDataStoreGranuleCatalog(
-                        new GTDataStoreGranuleCatalog(params, false, spi, hints));
-
-        return catalog;
+        return createGranuleCatalog(params, catalogConfigurationBean.isCaching(), false, spi, hints);
     }
 

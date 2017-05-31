@@ -1,0 +1,58 @@
+    @Test
+    public void createFromExistingDataAccess() throws Exception {
+        // setup mosaic
+        URL storeUrl = TestData.url(this, "rgba");
+        File testDataFolder = new File(storeUrl.toURI());
+        File testDirectory = crsMosaicFolder.newFolder("rgbaShapefile");
+        FileUtils.copyDirectory(testDataFolder, testDirectory);
+        // clean up, other tests might have left the rgba source dir dirty
+        for (File file : testDirectory.listFiles(f -> f.getName().startsWith("rgba"))) {
+            file.delete();
+        }
+
+        // make it create a shapefile
+        ImageMosaicReader reader = FORMAT.getReader(testDirectory);
+        assertNotNull(reader);
+        reader.dispose();
+
+        // clean up and rename all shapefiles to make sure the store is not overwriting it by accident
+        removeSupportFiles(testDirectory);
+        for (File f : testDirectory
+                .listFiles(f -> f.getName().startsWith(testDirectory.getName()))) {
+            String extension = FilenameUtils.getExtension(f.getName());
+            f.renameTo(new File(testDirectory, "test." + extension));
+        }
+
+        // signal the intention to use a store name using both datastore.properties and indexer
+        Properties properties = new Properties();
+        properties.put(Utils.Prop.STORE_NAME, "foo:test");
+        try (FileOutputStream fos = new FileOutputStream(
+                new File(testDirectory, "datastore.properties"))) {
+            properties.store(fos, null);
+        }
+        properties = new Properties();
+        properties.put(Utils.Prop.USE_EXISTING_SCHEMA, "true");
+        properties.put(Utils.Prop.TYPENAME, "test");
+        try (FileOutputStream fos = new FileOutputStream(
+                new File(testDirectory, "indexer.properties"))) {
+            properties.store(fos, null);
+        }
+
+        DefaultRepository repository = new DefaultRepository();
+        ShapefileDataStore ds = new ShapefileDataStore(
+                DataUtilities.fileToURL(new File(testDirectory, "test.shp")));
+        Name name = new NameImpl("foo", "test");
+        TestDataAccess dataAccess = new TestDataAccess(name, ds);
+        repository.register(name, dataAccess);
+
+        // now re-init from the existing shapefile data store
+        Hints hints = new Hints(Hints.REPOSITORY, repository);
+        reader = FORMAT.getReader(testDirectory, hints);
+        assertNotNull(reader);
+        GridCoverage2D coverage = reader.read(NO_DEFERRED_LOAD);
+        assertNotNull(coverage);
+        coverage.dispose(true);
+        reader.dispose();
+        ds.dispose();
+    }
+
