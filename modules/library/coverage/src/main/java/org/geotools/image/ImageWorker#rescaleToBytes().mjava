@@ -23,6 +23,8 @@
         final double[] scale = new double[length];
         final double[] offset = new double[length];
         final double destNodata = (background != null && background.length > 0) ? background[0] : ((nodata != null && !nodata.contains(0)) ? 0d: Double.NaN);
+        // If setting noData to zero, make sure the rescale doesn't map good values to zero.
+        double offsetAdjustment = Math.abs(destNodata - 0 ) < 1E-6 ? 1 : 0;
 
         boolean computeRescale = false;
         for (int i = 0; i < length; i++) {
@@ -35,8 +37,8 @@
                 computeRescale = true;
 
                 // rescale factors
-                scale[i] = 255 / delta;
-                offset[i] = -scale[i] * extrema[0][i];
+                scale[i] = (255 - offsetAdjustment) / delta;
+                offset[i] = (-scale[i] * extrema[0][i]) + offsetAdjustment;
             } else {
                 // we do not rescale explicitly bu in case we have to, we relay on the clamping capabilities of the format operator
                 scale[i] = 1;
@@ -56,13 +58,16 @@
             }
 
             image = JAI.create("Rescale", pb, hints);
+            if (!Double.isNaN(destNodata)) {
+                setNoData(RangeFactory.create((byte)destNodata, DataBuffer.TYPE_BYTE));
+            }
         } else {
             ParameterBlock pb = new ParameterBlock();
             pb.setSource(image, 0); // The source image.
             pb.set(DataBuffer.TYPE_BYTE, 0); // The destination image data type (BYTE)
-
             image = JAI.create("Format", pb, hints);
             setNoData(RangeFactory.convert(nodata, DataBuffer.TYPE_BYTE));
+
         }
         invalidateStatistics(); // Extremas are no longer valid.
 
