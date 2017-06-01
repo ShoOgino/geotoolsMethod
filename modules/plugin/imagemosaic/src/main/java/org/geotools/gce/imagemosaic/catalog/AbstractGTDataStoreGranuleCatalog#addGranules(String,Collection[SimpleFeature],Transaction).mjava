@@ -1,0 +1,32 @@
+    @Override
+    public void addGranules(final String typeName, final Collection<SimpleFeature> granules,
+            final Transaction transaction) throws IOException {
+        Utilities.ensureNonNull("granuleMetadata", granules);
+        final Lock lock = rwLock.writeLock();
+        try {
+            lock.lock();
+            // check if the index has been cleared
+            checkStore();
+
+            SimpleFeatureStore store = (SimpleFeatureStore) getTileIndexStore()
+                    .getFeatureSource(typeName);
+            store.setTransaction(transaction);
+
+            ListFeatureCollection featureCollection = new ListFeatureCollection(
+                    getTileIndexStore().getSchema(typeName));
+
+            // add them all
+            Set<FeatureId> fids = new HashSet<FeatureId>();
+            for (SimpleFeature f : granules) {
+                // Add the feature to the feature collection
+                featureCollection.add(f);
+                fids.add(ff.featureId(f.getID()));
+            }
+            store.addFeatures(featureCollection);
+
+        } finally {
+            lock.unlock();
+
+        }
+    }
+

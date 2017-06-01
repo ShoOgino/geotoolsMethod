@@ -1,0 +1,57 @@
+    @Override
+    public void getGranuleDescriptors(Query query, final GranuleCatalogVisitor visitor)
+            throws IOException {
+        Utilities.ensureNonNull("query", query);
+        final Query q = mergeHints(query);
+        String typeName = q.getTypeName();
+        final Lock lock = rwLock.readLock();
+        try {
+            lock.lock();
+            checkStore();
+
+            //
+            // Load tiles informations, especially the bounds, which will be
+            // reused
+            //
+            final SimpleFeatureSource featureSource = getTileIndexStore().getFeatureSource(typeName);
+            if (featureSource == null) {
+                throw new NullPointerException(
+                        "The provided SimpleFeatureSource is null, it's impossible to create an index!");
+            }
+
+            final SimpleFeatureCollection features = featureSource.getFeatures(q);
+            if (features == null)
+                throw new NullPointerException(
+                        "The provided SimpleFeatureCollection is null, it's impossible to create an index!");
+
+            if (LOGGER.isLoggable(Level.FINE))
+                LOGGER.fine("Index Loaded");
+
+            // visiting the features from the underlying store, caring for early bail out
+            try(SimpleFeatureIterator fi = features.features()) {
+                while(fi.hasNext() && !visitor.isVisitComplete()) {
+                    final SimpleFeature sf = fi.next();
+                    MultiLevelROI footprint = getGranuleFootprint(sf);
+                    if (footprint == null || !footprint.isEmpty()) {
+                        try {
+                            final GranuleDescriptor granule = new GranuleDescriptor(sf,
+                                    suggestedRasterSPI, pathType, locationAttribute,
+                                    parentLocation, footprint, heterogeneous, q.getHints());
+
+                            visitor.visit(granule, sf);
+                        } catch (Exception e) {
+                            LOGGER.log(Level.FINE, "Skipping invalid granule", e);
+                        }
+                    }
+                }
+            }
+        } catch (Throwable e) {
+            final IOException ioe = new IOException();
+            ioe.initCause(e);
+            throw ioe;
+        } finally {
+            lock.unlock();
+
+        }
+    }
+

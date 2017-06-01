@@ -1,11 +1,26 @@
     public static GranuleCatalog createGranuleCatalog(final Properties params,
             final boolean caching, final boolean create, final DataStoreFactorySpi spi,
             final Hints hints) {
-        if (caching) {
-            return new STRTreeGranuleCatalog(params, spi, hints);
+        // build the catalog
+        Repository repository = (Repository) hints.get(Hints.REPOSITORY);
+        String storeName = (String) params.get(Utils.Prop.STORE_NAME);
+        AbstractGTDataStoreGranuleCatalog catalog;
+        if (storeName != null && !storeName.trim().isEmpty()) {
+            if (repository == null) {
+                throw new IllegalArgumentException("Was given a store name " + storeName
+                        + " but there is no Repository to resolve it");
+            } else {
+                catalog = new RepositoryDataStoreCatalog(params, create, repository, storeName, spi, hints);
+            }
         } else {
-            return new CachingDataStoreGranuleCatalog(
-                    new GTDataStoreGranuleCatalog(params, create, spi, hints));
+            catalog = new GTDataStoreGranuleCatalog(params, create, spi, hints);
+        }
+        
+        // caching wrappers
+        if (caching) {
+            return new STRTreeGranuleCatalog(params, catalog, hints);
+        } else {
+            return new CachingDataStoreGranuleCatalog(catalog);
         }
     }
 
