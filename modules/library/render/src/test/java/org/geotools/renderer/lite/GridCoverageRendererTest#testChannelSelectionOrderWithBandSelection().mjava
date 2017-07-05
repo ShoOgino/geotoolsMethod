@@ -1,0 +1,35 @@
+    @Test
+    public void testChannelSelectionOrderWithBandSelection() throws Exception {
+        ReferencedEnvelope mapExtent = new ReferencedEnvelope(0, 90, 0, 90, DefaultGeographicCRS.WGS84);
+
+        GridCoverage2DReader reader = new TestMultiBandReader(4,2,0);
+
+        GridCoverageRenderer renderer = new GridCoverageRenderer(DefaultGeographicCRS.WGS84, mapExtent,
+                new Rectangle(0, 0, 255, 255), null);
+
+        StyleBuilder sldBuilder = new StyleBuilder();
+
+        RasterSymbolizer symbolizer = sldBuilder.createRasterSymbolizer();
+        final ChannelSelection chSel = new ChannelSelectionImpl();
+        final SelectedChannelType chTypeRed = new SelectedChannelTypeImpl();
+        final SelectedChannelType chTypeBlue = new SelectedChannelTypeImpl();
+        final SelectedChannelType chTypeGreen = new SelectedChannelTypeImpl();
+
+        chTypeRed.setChannelName("5");
+        chTypeGreen.setChannelName("3");
+        chTypeBlue.setChannelName("1");
+
+        chSel.setRGBChannels(chTypeRed, chTypeGreen, chTypeBlue);
+
+        symbolizer.setChannelSelection(chSel);
+        symbolizer.setOpacity(sldBuilder.literalExpression(1.0));
+
+        Graphics2D graphics = ((BufferedImage) TestMultiBandReader.image).createGraphics();
+        renderer.paint(graphics, reader, null, symbolizer, Interpolation.getInstance(Interpolation.INTERP_NEAREST), Color.BLACK);
+        RenderedImage image = renderer.renderImage(reader, null, symbolizer, Interpolation.getInstance(Interpolation.INTERP_NEAREST), Color.BLACK, 256, 256);
+
+        // the read operation checked that the proper bandSelect (4,2,0) has been specified
+        // instead of 0,1,2 (as per bugged code)
+        assertEquals(3, image.getSampleModel().getNumBands());
+    }
+
