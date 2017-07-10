@@ -85,6 +85,7 @@
             paramBlk.add(interp);
             paramBlk.add(null);
             paramBlk.add(srcROI);
+            paramBlk.add(null);
 
             // force in the image layout, this way we get exactly the same
             // as the affine we're eliminating
@@ -98,7 +99,13 @@
             il.setTileWidth(op.getTileWidth());
             il.setTileHeight(op.getTileHeight());
             localHints.put(JAI.KEY_IMAGE_LAYOUT, il);
-            roiImage = JAI.create("Warp", paramBlk, localHints);
+            // we need to use JAI-EXT own warp, the JAI one ignores the ROI
+            if(JAIExt.isJAIExtOperation("Warp")) {
+                roiImage = JAI.create("Warp", paramBlk, localHints);
+            } else {
+                // force JAI-EXT usage
+                roiImage = PlanarImage.wrapRenderedImage(new WarpRIF().create(paramBlk, localHints));
+            }
             ROI dstROI = new ROI(roiImage, 1);
 
             // If necessary, clip the warped ROI to the destination bounds.
