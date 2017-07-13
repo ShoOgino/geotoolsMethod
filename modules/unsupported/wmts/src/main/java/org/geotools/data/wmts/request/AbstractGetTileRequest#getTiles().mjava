@@ -1,0 +1,123 @@
+    /**
+     * fetch the tiles we need to generate the image
+     * 
+     * @throws ServiceException
+     */
+    @Override
+    public Set<Tile> getTiles() throws ServiceException {
+        Set<Tile> tiles;
+        if (layer == null) {
+            throw new ServiceException("GetTiles called with no layer set");
+        }
+
+        LOGGER.warning("===== getTiles    layer:" + layer );
+
+        String layerString = "";
+        String styleString = "";
+
+        try {
+            // spaces are converted to plus signs, but must be %20 for url calls [GEOT-4317]
+            layerString = URLEncoder.encode(layer.getName(), "UTF-8").replaceAll("\\+", "%20");
+        } catch (UnsupportedEncodingException | NullPointerException e) {
+            layerString = layerString + layer.getName();
+        }
+        styleName = styleName == null ? "" : styleName;
+        try {
+            styleString = URLEncoder.encode(styleName, "UTF-8").replaceAll("\\+", "%20");
+        } catch (UnsupportedEncodingException | NullPointerException e1) {
+            styleString = styleString + styleName;
+        }
+
+        setProperty(LAYER, layerString);
+        setProperty(STYLE, styleString);
+//        String width = properties.getProperty(GetMapRequest.WIDTH);
+//        String height = properties.getProperty(GetMapRequest.HEIGHT);
+//        if (width == null || width.isEmpty() || height == null || height.isEmpty()) {
+//            throw new ServiceException("Can't request TILES without width and height being set");
+//        }
+
+        LOGGER.warning("===== getTiles    layer:" + layer + " w:" + requestedWidth + " x h:"+requestedHeight);
+
+//        int w = Integer.parseInt(width);
+//        int h = Integer.parseInt(height);
+        TileMatrixSet matrixSet = selectMatrixSet();
+        
+        String requestUrl = onlineResource.toString();
+        if (WMTSServiceType.REST.equals(type)) {
+            String format = (String) getProperties().get("Format");
+            if (format == null || format.isEmpty()) {
+                format = "image/png";
+                LOGGER.fine("Format not set, trying with " + format);
+            }
+            requestUrl = layer.getTemplate(format);
+            if(requestUrl == null) {
+                LOGGER.info("Template URL not available for format  " + format);
+                format = layer.getFormats().get(0);
+                if(LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.fine("Available formats: " + layer.getFormats() + " -- Selecting " + format);
+                }
+                requestUrl = layer.getTemplate(format);
+            }
+        }
+
+        WMTSTileService wmtsService = new WMTSTileService(requestUrl, type, layer, styleString, matrixSet);
+
+        wmtsService.getDimensions().put(WMTSTileService.DIMENSION_TIME, requestedTime);
+
+        ((Map)(wmtsService.getExtrainfo()
+                .computeIfAbsent(WMTSTileService.EXTRA_HEADERS, extra -> new HashMap<>())
+                )).putAll(this.headers);
+
+        // zoomLevel = factory.getZoomLevel(zoom, wmtsService);
+        int scale = 0;
+
+        try {
+            scale = (int) Math.round(RendererUtilities.calculateScale(requestedBBox, requestedWidth, requestedHeight, DPI));
+        } catch (FactoryException | TransformException ex) {
+            throw new RuntimeException("Failed to calculate scale", ex);
+        }
+        tiles = wmtsService.findTilesInExtent(requestedBBox, scale, false, MAXTILES);
+        LOGGER.fine("found " + tiles.size() + " tiles in " + requestedBBox);
+        if (tiles.isEmpty()) {
+            return tiles;
+        }
+        Tile first = tiles.iterator().next();
+        int z = first.getTileIdentifier().getZ();
+        List<TileMatrixLimits> limits = layer.getTileMatrixLinks().get(matrixSet.getIdentifier())
+                .getLimits();
+        TileMatrixLimits limit;
+        if (!limits.isEmpty()) {
+
+            limit = limits.get(z);
+        } else {
+            // seems that MapProxy (and all REST APIs?) don't create limits
+            limit = new TileMatrixLimits();
+            limit.setMaxCol(matrixSet.getMatrices().get(z).getMatrixWidth() - 1);
+            limit.setMaxRow(matrixSet.getMatrices().get(z).getMatrixHeight() - 1);
+            limit.setMinCol(0);
+            limit.setMinRow(0);
+            limit.setTileMatix(matrixSet.getIdentifier());
+        }
+        ArrayList<Tile> remove = new ArrayList<>();
+        for (Tile tile : tiles) {
+
+            int x = tile.getTileIdentifier().getX();
+            int y = tile.getTileIdentifier().getY();
+            if (x < limit.getMincol() || x > limit.getMaxcol()) {
+                LOGGER.fine(
+                        x + " exceeds col limits " + limit.getMincol() + " " + limit.getMaxcol());
+                remove.add(tile);
+                continue;
+            }
+
+            if (y < limit.getMinrow() || y > limit.getMaxrow()) {
+                LOGGER.fine(
+                        y + " exceeds row limits " + limit.getMinrow() + " " + limit.getMaxrow());
+                remove.add(tile);
+            }
+        }
+        tiles.removeAll(remove);
+
+        return tiles;
+    }
+

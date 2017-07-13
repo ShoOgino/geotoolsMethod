@@ -1,0 +1,214 @@
+    @Override
+    public Set<Tile> findTilesInExtent(ReferencedEnvelope requestedExtent, int scaleFactor,
+            boolean recommendedZoomLevel, int maxNumberOfTiles) {
+
+        Set<Tile> ret = Collections.emptySet();
+
+        CoordinateReferenceSystem reqCrs = requestedExtent.getCoordinateReferenceSystem();
+
+        LOGGER.fine("orig request bbox :"+requestedExtent
+                +" "+reqCrs.getCoordinateSystem().getAxis(0).getDirection()
+                +" ("+reqCrs.getName()+ ")");
+        System.out.println("orig request bbox :"+requestedExtent
+                +" "+reqCrs.getCoordinateSystem().getAxis(0).getDirection()
+                +" ("+reqCrs.getName()+ ")");
+//        ReferencedEnvelope reqExtentInTileCrs = createSafeEnvelopeInTileCRS( _mapExtent ) ;
+
+        ReferencedEnvelope reqExtentInTileCrs = null;
+        for (CRSEnvelope layerEnv : layer.getLayerBoundingBoxes()) {
+            if(CRS.equalsIgnoreMetadata(
+                    reqCrs,
+                    layerEnv.getCoordinateReferenceSystem())) {
+                // crop req extent according to layer bbox
+                requestedExtent = requestedExtent.intersection(new ReferencedEnvelope(layerEnv));
+                System.out.println("cropping request bbox :"+requestedExtent);
+                break;
+            } else {
+                System.out.println("... no crs match: "
+                        + "req:" + reqCrs.getName()
+                        + " cov:" + layerEnv.getCoordinateReferenceSystem().getName());
+            }
+        }
+
+        CoordinateReferenceSystem tileCrs;
+        try { // TODO: the matrixset should provide an already decoded CRS
+            tileCrs = this.matrixSet.getCoordinateReferenceSystem();
+            System.out.println("tile crs orig :"+tileCrs.getName());
+        } catch (FactoryException ex) {
+            LOGGER.log(Level.WARNING, "Tile CRS can't be decoded");
+            return ret;
+        }
+        if(!CRS.equalsIgnoreMetadata(
+                    tileCrs,
+                    requestedExtent.getCoordinateReferenceSystem())) {
+            try {
+                reqExtentInTileCrs = requestedExtent.transform(tileCrs, true);
+            } catch (TransformException | FactoryException ex) {
+                LOGGER.log(Level.WARNING, "Requested extent can't be projected to tile CRS ("
+                        +reqCrs.getCoordinateSystem().getName()
+                        +" -> " + tileCrs.getCoordinateSystem().getName() +") :" + ex.getMessage());
+
+                // maybe the req area is too wide for the data; let's try an inverse trasformation
+                try {
+                    ReferencedEnvelope covExtentInReqCrs = envelope.transform(reqCrs, true);
+                    requestedExtent = requestedExtent.intersection(covExtentInReqCrs);
+                    System.out.println("cropping request bbox by projectet layer env: "+requestedExtent);
+
+                } catch (TransformException | FactoryException ex2) {
+                    LOGGER.log(Level.WARNING, "Incompatible CRS: " + ex2.getMessage());
+                    return ret; // should throw
+                }
+            }
+        } else {
+            reqExtentInTileCrs = requestedExtent;
+        }
+        
+        if(reqExtentInTileCrs == null) {
+            LOGGER.log(Level.FINE, "Requested extent not in tile CRS range");
+            return ret;
+        }
+
+        LOGGER.log(Level.FINE, "tile crs req bbox :"+reqExtentInTileCrs+
+                " "+reqExtentInTileCrs.getCoordinateReferenceSystem().getCoordinateSystem().getAxis(0).getDirection()
+                +" ("+reqExtentInTileCrs.getCoordinateReferenceSystem().getName()+ ")");
+        System.out.println("tile crs req bbox :"+reqExtentInTileCrs+
+                " "+reqExtentInTileCrs.getCoordinateReferenceSystem().getCoordinateSystem().getAxis(0).getDirection()
+                +" ("+reqExtentInTileCrs.getCoordinateReferenceSystem().getName()+ ")");
+        
+        ReferencedEnvelope coverageEnvelope = getBounds();
+        LOGGER.log(Level.FINE, "coverage bbox :"+coverageEnvelope
+                +" "+coverageEnvelope.getCoordinateReferenceSystem().getCoordinateSystem().getAxis(0).getDirection()
+                +" ("+coverageEnvelope.getCoordinateReferenceSystem().getName()+ ")");
+        System.out.println("coverage bbox :"+coverageEnvelope
+                +" "+coverageEnvelope.getCoordinateReferenceSystem().getCoordinateSystem().getAxis(0).getDirection()
+                +" ("+coverageEnvelope.getCoordinateReferenceSystem().getName()+ ")");
+
+        ReferencedEnvelope requestEnvelopeWGS84;
+
+        boolean sameCRS = CRS.equalsIgnoreMetadata(
+                coverageEnvelope.getCoordinateReferenceSystem(),
+                reqExtentInTileCrs.getCoordinateReferenceSystem());
+        if (sameCRS) {
+            if (!coverageEnvelope.intersects((BoundingBox) reqExtentInTileCrs)) {
+                LOGGER.log(Level.FINE, "Extents do not intersect (sameCRS))");
+                return ret;
+            }
+        } else {
+            ReferencedEnvelope dataEnvelopeWGS84;
+            try {
+                dataEnvelopeWGS84 = coverageEnvelope.transform(DefaultGeographicCRS.WGS84, true);
+
+                requestEnvelopeWGS84 = requestedExtent.transform(DefaultGeographicCRS.WGS84, true);
+
+                if (!dataEnvelopeWGS84.intersects((BoundingBox) requestEnvelopeWGS84)) {
+                    LOGGER.log(Level.FINE, "Extents do not intersect");
+                    return ret;
+                }
+            } catch (TransformException | FactoryException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+                throw new RuntimeException(e);
+            }
+        }
+      
+        TileFactory tileFactory = getTileFactory();
+
+        ScaleZoomLevelMatcher zoomLevelMatcher = null;
+        try {
+
+            zoomLevelMatcher = ScaleZoomLevelMatcher.createMatcher(reqExtentInTileCrs, matrixSet.getCoordinateReferenceSystem(), scaleFactor);
+
+        } catch (FactoryException|TransformException e) {
+            throw new RuntimeException(e);
+        }
+
+        int zl = getZoomLevelFromMapScale(zoomLevelMatcher, scaleFactor);
+        ZoomLevel zoomLevel = tileFactory.getZoomLevel(zl, this);
+        long maxNumberOfTilesForZoomLevel = zoomLevel.getMaxTileNumber();
+
+        if(LOGGER.isLoggable(Level.FINE)) {
+            LOGGER.log(Level.FINE, "Zoom level:" + zl
+                    + "[" + zoomLevel.getMaxTilePerColNumber()+ " x " + zoomLevel.getMaxTilePerRowNumber() +"]");
+        }
+
+        // Map<String, Tile> tileList = new HashMap<String, Tile>();
+        Set<Tile> tileList = new HashSet<>(
+                (int) Math.min(maxNumberOfTiles, maxNumberOfTilesForZoomLevel));
+        Tile firstTile;
+        // Let's get the first tile which covers the upper-left corner
+        if (/*TileMatrix.isGeotoolsLongitudeFirstAxisOrderForced()
+                || */reqExtentInTileCrs.getCoordinateReferenceSystem().getCoordinateSystem().getAxis(0)
+                        .getDirection().equals(AxisDirection.EAST)) {
+            firstTile = tileFactory.findTileAtCoordinate(reqExtentInTileCrs.getMinX(), reqExtentInTileCrs.getMaxY(), zoomLevel, this);
+        } else {
+            LOGGER.log(Level.FINE, "Inverted tile coords!");
+            firstTile = tileFactory.findTileAtCoordinate(reqExtentInTileCrs.getMinY(), reqExtentInTileCrs.getMaxX(), zoomLevel, this);
+        }
+
+        LOGGER.log(Level.FINE, "Adding first tile " + firstTile.getId() + " " + firstTile.getExtent()
+                + " ("+firstTile.getExtent().getCoordinateReferenceSystem().getName()+")");
+        addTileToCache(firstTile);
+        tileList.add(firstTile);
+
+        Tile firstTileOfRow = firstTile;
+        Tile movingTile = firstTile;
+
+        // Loop column
+        do {
+            // Loop row
+            do {
+
+                // get the next tile right of this one
+                // Tile rightNeighbour = movingTile.getRightNeighbour();
+                Tile rightNeighbour = tileFactory.findRightNeighbour(movingTile, this);// movingTile.getRightNeighbour();
+
+                // Check if the new tile is still part of the extent and
+                // that we don't have the first tile again
+//                boolean intersects = extent.intersects((Envelope) rightNeighbour.getExtent());
+                boolean intersects = reqExtentInTileCrs.intersects((Envelope) rightNeighbour.getExtent());
+                LOGGER.log(Level.FINE, "Intersect (" + rightNeighbour.getId()+" , "+  rightNeighbour.getExtent()+") --> " + intersects);
+                if (intersects && !firstTileOfRow.equals(rightNeighbour)) {
+                    LOGGER.log(Level.FINE, "Adding right neighbour " + rightNeighbour.getId());
+
+                    addTileToCache(rightNeighbour);
+                    tileList.add(rightNeighbour);
+
+                    movingTile = rightNeighbour;
+                } else {
+                    LOGGER.log(Level.FINE, "Stopping on right neighbour " + rightNeighbour.getId());
+
+                    break;
+                }
+                if (tileList.size() > maxNumberOfTiles) {
+                    LOGGER.warning("Reached tile limit of " + maxNumberOfTiles
+                            + ". Returning the tiles collected so far.");
+                    return tileList;
+                }
+            } while (tileList.size() < maxNumberOfTilesForZoomLevel);
+
+            // get the next tile under the first one of the row
+            // Tile lowerNeighbour = firstTileOfRow.getLowerNeighbour();
+            Tile lowerNeighbour = tileFactory.findLowerNeighbour(firstTileOfRow, this);
+
+            // Check if the new tile is still part of the extent
+            boolean intersects = reqExtentInTileCrs.intersects((Envelope) lowerNeighbour.getExtent());
+                LOGGER.log(Level.FINE, "Intersect (" + lowerNeighbour.getId()+") --> " + intersects);
+            if (intersects && !firstTile.equals(lowerNeighbour)) {
+                LOGGER.log(Level.FINE, "Adding lower neighbour " + lowerNeighbour.getId());
+
+                // System.out.printf("N: %s %s", lowerNeighbour.getId(),
+                // addTileToList(lowerNeighbour));
+
+                addTileToCache(lowerNeighbour);
+                tileList.add(lowerNeighbour);
+
+                firstTileOfRow = movingTile = lowerNeighbour;
+            } else {
+                LOGGER.log(Level.FINE, "Stopping on lower neighbour " + lowerNeighbour.getId());
+                break;
+            }
+        } while (tileList.size() < maxNumberOfTilesForZoomLevel);
+
+        return tileList;
+    }
+

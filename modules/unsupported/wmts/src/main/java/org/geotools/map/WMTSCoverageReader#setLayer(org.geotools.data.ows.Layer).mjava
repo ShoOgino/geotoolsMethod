@@ -1,0 +1,77 @@
+    final void setLayer(org.geotools.data.ows.Layer owsLayer) {
+        this.layer = (org.geotools.data.wmts.model.WMTSLayer) owsLayer;
+
+        if (srsName == null) { // initialize from first (unique) layer
+
+            // prefer 4326
+            for (String preferred : new String[]{"EPSG:4326", "WGS84", "CRS:84", "WGS 84", "WGS84(DD)"}) {
+                if (owsLayer.getSrs().contains(preferred)) {
+                    srsName = preferred;
+                    LOGGER.info("defaulting CRS to: "+srsName);
+                }
+            }
+
+            // no 4326, let's see if the layer is offering something valid
+            if (srsName == null ) {
+                for (String srs : owsLayer.getSrs()) {
+                    try {
+                        // check it's valid, if not we crap out and move to the next
+                        CRS.decode(srs);
+                        srsName = srs;
+                        LOGGER.info("setting CRS: "+srsName);
+                        break;
+                    } catch (Exception e) {
+                        // it's fine, we could not decode that code
+                    }
+                }
+            }
+
+            if (srsName == null ) {
+                if (owsLayer.getSrs().isEmpty()) {
+                    // force  4326
+                    srsName = "EPSG:4326";
+                    LOGGER.info("adding default CRS to: "+srsName);
+                    owsLayer.getSrs().add(srsName);
+                } else {
+                    // if not even that works we just take the first...
+                    srsName = owsLayer.getSrs().iterator().next();
+                    LOGGER.info("guessing CRS to: "+srsName);
+                }
+            }
+            
+            validSRS = owsLayer.getSrs();
+
+        } else {
+            LOGGER.info("TODO: check if this code path is ever run");
+
+            Set<String> intersection = new HashSet<>(validSRS);
+            intersection.retainAll(owsLayer.getSrs());
+
+            // can we reuse what we have?
+            if (!intersection.contains(srsName)) {
+                if (intersection.isEmpty()) {
+                    throw new IllegalArgumentException("The layer being appended does "
+                            + "not have any SRS in common with the ones already "
+                            + "included in the WMS request, cannot be merged");
+                } else if (intersection.contains("EPSG:4326")) {
+                    srsName = "EPSG:4326";
+                } else {
+                    // if not even that works we just take the first...
+                    srsName = intersection.iterator().next();
+                }
+                this.validSRS = intersection;
+            }
+        }
+
+        CoordinateReferenceSystem crs = null;
+        try {
+            crs = CRS.decode(srsName);
+        } catch (Exception e) {
+            LOGGER.log(Level.FINE, "Bounds unavailable for layer" + owsLayer);
+        }
+        this.crs = crs;
+        this.requestCRS = crs;
+        // update the cached bounds and the reader original envelope
+        updateBounds();
+    }
+
