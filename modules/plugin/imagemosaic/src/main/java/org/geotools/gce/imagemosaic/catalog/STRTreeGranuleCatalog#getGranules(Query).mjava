@@ -15,19 +15,28 @@
             // load what we need to load
             checkIndex(lock);
             final List<GranuleDescriptor> features = index.query(requestedBBox);
-            final ListFeatureCollection retVal = new ListFeatureCollection(
-                    wrappedCatalogue.getType(typeName));
+            List<SimpleFeature> filtered = new ArrayList<>();
             final int maxGranules = q.getMaxFeatures();
             int numGranules = 0;
             for (GranuleDescriptor g : features) {
                 // check how many tiles we are returning
-                if (maxGranules > 0 && numGranules >= maxGranules)
+                if (q.getSortBy() == null && maxGranules > 0 && numGranules >= maxGranules)
                     break;
                 final SimpleFeature originator = g.getOriginator();
                 if (originator != null && filter.evaluate(originator))
-                    retVal.add(originator);
+                    filtered.add(originator);
             }
-            return retVal;
+            if (q.getSortBy() != null) {
+                Comparator<SimpleFeature> comparator = SortedFeatureReader
+                        .getComparator(q.getSortBy());
+                if (comparator != null) {
+                    Collections.sort(filtered, comparator);
+                }
+                if (maxGranules > 0 && filtered.size() > maxGranules) {
+                    filtered = filtered.subList(0, maxGranules);
+                }
+            }
+            return new ListFeatureCollection(wrappedCatalogue.getType(typeName), filtered);
         } finally {
             lock.unlock();
         }

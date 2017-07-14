@@ -11,8 +11,29 @@
 
             // get filter and check bbox
             checkIndex(lock);
-            index.query(requestedBBox, new JTSIndexVisitorAdapter(visitor, q));
-
+            Comparator<SimpleFeature> comparator = q.getSortBy() == null ? null
+                    : SortedFeatureReader.getComparator(q.getSortBy());
+            if (comparator == null) {
+                index.query(requestedBBox, new JTSIndexVisitorAdapter(visitor, q));
+            } else {
+                List<GranuleDescriptor> granules = index.query(requestedBBox);
+                Comparator<GranuleDescriptor> granuleComparator = (gd1, gd2) -> {
+                    SimpleFeature sf1 = gd1.getOriginator();
+                    SimpleFeature sf2 = gd2.getOriginator();
+                    return comparator.compare(sf1, sf2);
+                };
+                Collections.sort(granules, granuleComparator);
+                int maxGranules = q.getMaxFeatures();
+                if (maxGranules > 0 && granules.size() > maxGranules) {
+                    granules = granules.subList(0, maxGranules);
+                }
+                for (GranuleDescriptor gd : granules) {
+                    if (visitor.isVisitComplete()) {
+                        break;
+                    }
+                    visitor.visit(gd, gd.getOriginator());
+                }
+            }
         } finally {
             lock.unlock();
         }
