@@ -1,0 +1,33 @@
+    @Test
+    public void testHeteroCRSRasterMask() throws IOException, URISyntaxException, TransformException,
+            FactoryException {
+        URL storeUrl = TestData.url(this, "rastermask2");
+
+        File testDataFolder = new File(storeUrl.toURI());
+        File testDirectory = crsMosaicFolder.newFolder("hetero_crs_rastermask");
+        FileUtils.copyDirectory(testDataFolder, testDirectory);
+
+        // force hetero setup, different CRS for the mosaic
+        String indexer = "GranuleAcceptors=org.geotools.gce.imagemosaic.acceptors.HeterogeneousCRSAcceptorFactory\n" +
+                "GranuleHandler=org.geotools.gce.imagemosaic.granulehandler.ReprojectingGranuleHandlerFactory\n" +
+                "HeterogeneousCRS=true\n" + //
+                "MosaicCRS=EPSG\\:3857\n" + // the reprojection bit
+                "Schema=*the_geom:Polygon,location:String,crs:String";
+        FileUtils.writeStringToFile(new File(testDirectory, "indexer.properties"), indexer);
+        
+        // footprint management
+        String footprints = "footprint_source=raster";
+        FileUtils.writeStringToFile(new File(testDirectory, "footprints.properties"), footprints);
+        
+        ImageMosaicReader imReader = new ImageMosaicReader(testDirectory, new Hints());
+        Assert.assertNotNull(imReader);
+        assertEquals(CRS.toSRS(imReader.getCoordinateReferenceSystem()), "EPSG:3857");
+
+        // check it's not empty (used to be)
+        final ParameterValue<String> footprintParam =  AbstractGridFormat.FOOTPRINT_BEHAVIOR.createValue();
+        footprintParam.setValue("Transparent");
+        GridCoverage2D coverage = imReader.read(new GeneralParameterValue[] {footprintParam});
+        assertNotNull(coverage);
+        ImageAssert.assertEquals(testFile("hetero_crs_rastermask.png"), coverage.getRenderedImage(), 1000);
+    }
+
