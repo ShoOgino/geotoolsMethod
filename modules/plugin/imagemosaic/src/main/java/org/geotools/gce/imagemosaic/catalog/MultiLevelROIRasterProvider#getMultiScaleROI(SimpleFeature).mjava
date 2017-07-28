@@ -29,10 +29,26 @@
                                 ? layout.getNumExternalMaskOverviews() : 0;
                         int totalMasks = numExternalMasks + numInternalMasks
                                 + numExternalMaskOverviews;
+                        
                         // Check if masks are present
                         // NOTE No Mask: Outside ROI
                         if (totalMasks > 0) {
-                            return new MultiLevelROIRaster(layout, file, sf);
+                            CoordinateReferenceSystem crs = reader.getCoordinateReferenceSystem();
+                            final SimpleFeatureType indexSchema = sf.getFeatureType();
+                            if(crs != null &&  indexSchema != null && indexSchema.getCoordinateReferenceSystem() != null && 
+                                    !CRS.equalsIgnoreMetadata(crs, indexSchema.getCoordinateReferenceSystem())) {
+                                // do not trust the feature footprint, it's reprojected
+                                ReferencedEnvelope envelope = ReferencedEnvelope.reference(reader.getOriginalEnvelope());
+                                Polygon nativeFootprint = JTS.toGeometry(envelope);
+                                SimpleFeatureType ftNative = FeatureTypes.transform(indexSchema, reader.getCoordinateReferenceSystem());
+                                SimpleFeatureBuilder fb = new SimpleFeatureBuilder(ftNative);
+                                fb.init(sf);
+                                fb.set(indexSchema.getGeometryDescriptor().getLocalName(), nativeFootprint);
+                                SimpleFeature nativeFeature = fb.buildFeature(sf.getID());
+                                return new MultiLevelROIRaster(layout, file, nativeFeature);
+                            } else {
+                                return new MultiLevelROIRaster(layout, file, sf);
+                            }
                         }
                     }
                 } catch (Exception e) {
