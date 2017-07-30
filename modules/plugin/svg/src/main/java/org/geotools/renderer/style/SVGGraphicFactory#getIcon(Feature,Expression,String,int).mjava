@@ -2,32 +2,7 @@
         // check we do support the declared format
         if (format == null || !formats.contains(format.toLowerCase())) return null;
 
-        // grab the url
-        String svgfile = url.evaluate(feature, String.class);
-        if (svgfile == null) {
-            throw new IllegalArgumentException(
-                    "The specified expression could not be turned into an URL");
-        }
-        // just for validation parse the URL
-        URL svgUrl = Converters.convert(svgfile, URL.class);
-        if (svgUrl == null) {
-            throw new IllegalArgumentException("Invalid URL: " + svgfile);
-        }
-
-        // turn the svg into a document and cache results
-        svgfile = CANONICAL_PATHS.unique(svgfile);
-        RenderableSVG svg = glyphCache.get(svgfile);
-        if (svg == null) {
-            // double checked locking to reduce extra work when many threads all want the same
-            // SVG, e.g., a tile cache seed with many layers
-            synchronized (svgfile) {
-                svg = glyphCache.get(svgfile);
-                if (svg == null) {
-                    svg = toRenderableSVG(svgfile, svgUrl);
-                    glyphCache.put(svgfile, svg);
-                }
-            }
-        }
+        RenderableSVG svg = glyphCache.getRenderableSVG(feature, url, format);
 
         return new SVGIcon(svg, size);
     }
