@@ -1,0 +1,23 @@
+    /**
+     * GEOT-5773 Geoserver can generate images without a color model (before the RasterSymbolizer is applied).
+     * These images should also be rendered appropriately when the symbolizer converts the bands to a range that makes sense.
+     */
+    @Test
+    public void testContrastEnhancementInChannelSelectionAfterBandSelectionWithoutColorModel() throws Exception {
+        GridCoverage2DReader reader = new TestMultiBandReader(0,2,4){
+            @Override
+            public GridCoverage2D read(GeneralParameterValue[] parameters) throws IOException {
+                GridCoverage2D originalCoverage = super.read(parameters);
+                RenderedImage source = new ImageWorker(originalCoverage.getRenderedImage()).format(DataBuffer.TYPE_USHORT).getRenderedImage();
+                TiledImage shortImage = new TiledImage(source.getMinX(), source.getMinY(), source.getWidth(), source.getHeight(), source.getTileGridXOffset(), source.getTileGridYOffset(), source.getSampleModel(), null);
+                shortImage.set(source);
+
+                //force color model to be null, this also occurs in real cases
+                GridCoverage2D coverage = CoverageFactoryFinder.getGridCoverageFactory(null).create(
+                        originalCoverage.getName(), shortImage, originalCoverage.getEnvelope2D());
+                return coverage;
+            }
+        };
+        applyAndAssertContrastEnhancement(reader);
+    }
+
