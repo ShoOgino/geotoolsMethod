@@ -16,14 +16,10 @@
     public <T> boolean setOrdering(final Class<T> base, final boolean set,
                                    final Filter service1, final Filter service2)
     {
-        boolean done = false;
-        for (final Iterator<Class<?>> categories=getCategories(); categories.hasNext();) {
-            final Class<?> candidate = categories.next();
-            if (base.isAssignableFrom(candidate)) {
-                final Class<? extends T> category = candidate.asSubclass(base);
-                done |= setOrUnsetOrdering(category, set, service1, service2);
-            }
-        }
-        return done;
+        return registry.streamCategories()
+                .flatMap(category -> streamAsSubtype(category, base))
+                .map(category -> setOrUnsetOrdering(category, set, service1, service2))
+                .reduce((done1, done2) -> done1 || done2)
+                .orElse(false);
     }
 
