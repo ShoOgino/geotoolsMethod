@@ -1,0 +1,45 @@
+    private String expandEnvironmentVariables(String expression) {
+        String variablesExpanded = expandUnquoted(expression, (token, sb) -> {
+            Matcher matcher = ENV_PATTERN.matcher(token);
+
+            if (!matcher.find()) {
+                sb.append(token);
+            } else {
+                do {
+                    String variable = matcher.group(1);
+
+                    if ("sd".equals(variable)) {
+                        // for conformity with GeoServer WMS env vars
+                        variable = "wms_scale_denominator";
+                    }
+
+                    String defaultValue = matcher.group(3);
+                    if (defaultValue != null) {
+                        matcher.appendReplacement(sb,
+                                "env('" + variable + "', '" + defaultValue + "')");
+                    } else {
+                        matcher.appendReplacement(sb, "env('" + variable + "')");
+                    }
+                } while (matcher.find());
+                matcher.appendTail(sb);
+            }
+        });
+        String numbersExpanded = expandUnquoted(variablesExpanded, (token, sb) -> {
+            Pattern scaledNumber = Pattern.compile("(?<!\\w)\\d+(\\.\\d+)?[kMG]");
+            Matcher matcher = scaledNumber.matcher(token);
+
+            if (!matcher.find()) {
+                sb.append(token);
+            } else {
+                do {
+                    String value = matcher.group(0);
+                    String expandedScaleValue = scaleValueToString(value);
+                    matcher.appendReplacement(sb, expandedScaleValue);
+                } while (matcher.find());
+                matcher.appendTail(sb);
+            }
+        });
+
+        return numbersExpanded;
+    }
+
