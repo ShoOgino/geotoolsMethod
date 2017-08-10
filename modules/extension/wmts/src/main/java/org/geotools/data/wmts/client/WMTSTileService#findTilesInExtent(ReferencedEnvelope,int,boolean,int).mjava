@@ -6,53 +6,51 @@
 
         CoordinateReferenceSystem reqCrs = requestedExtent.getCoordinateReferenceSystem();
 
-        LOGGER.fine("orig request bbox :"+requestedExtent
-                +" "+reqCrs.getCoordinateSystem().getAxis(0).getDirection()
-                +" ("+reqCrs.getName()+ ")");
-        System.out.println("orig request bbox :"+requestedExtent
-                +" "+reqCrs.getCoordinateSystem().getAxis(0).getDirection()
-                +" ("+reqCrs.getName()+ ")");
-//        ReferencedEnvelope reqExtentInTileCrs = createSafeEnvelopeInTileCRS( _mapExtent ) ;
+        LOGGER.fine("orig request bbox :" + requestedExtent + " "
+                + reqCrs.getCoordinateSystem().getAxis(0).getDirection() + " (" + reqCrs.getName()
+                + ")");
+        System.out.println("orig request bbox :" + requestedExtent + " "
+                + reqCrs.getCoordinateSystem().getAxis(0).getDirection() + " (" + reqCrs.getName()
+                + ")");
+        // ReferencedEnvelope reqExtentInTileCrs = createSafeEnvelopeInTileCRS(
+        // _mapExtent ) ;
 
         ReferencedEnvelope reqExtentInTileCrs = null;
         for (CRSEnvelope layerEnv : layer.getLayerBoundingBoxes()) {
-            if(CRS.equalsIgnoreMetadata(
-                    reqCrs,
-                    layerEnv.getCoordinateReferenceSystem())) {
+            if (CRS.equalsIgnoreMetadata(reqCrs, layerEnv.getCoordinateReferenceSystem())) {
                 // crop req extent according to layer bbox
                 requestedExtent = requestedExtent.intersection(new ReferencedEnvelope(layerEnv));
-                System.out.println("cropping request bbox :"+requestedExtent);
+                System.out.println("cropping request bbox :" + requestedExtent);
                 break;
             } else {
-                System.out.println("... no crs match: "
-                        + "req:" + reqCrs.getName()
-                        + " cov:" + layerEnv.getCoordinateReferenceSystem().getName());
+                System.out.println("... no crs match: " + "req:" + reqCrs.getName() + " cov:"
+                        + layerEnv.getCoordinateReferenceSystem().getName());
             }
         }
 
         CoordinateReferenceSystem tileCrs;
         try { // TODO: the matrixset should provide an already decoded CRS
             tileCrs = this.matrixSet.getCoordinateReferenceSystem();
-            System.out.println("tile crs orig :"+tileCrs.getName());
+            System.out.println("tile crs orig :" + tileCrs.getName());
         } catch (FactoryException ex) {
             LOGGER.log(Level.WARNING, "Tile CRS can't be decoded");
             return ret;
         }
-        if(!CRS.equalsIgnoreMetadata(
-                    tileCrs,
-                    requestedExtent.getCoordinateReferenceSystem())) {
+        if (!CRS.equalsIgnoreMetadata(tileCrs, requestedExtent.getCoordinateReferenceSystem())) {
             try {
                 reqExtentInTileCrs = requestedExtent.transform(tileCrs, true);
             } catch (TransformException | FactoryException ex) {
                 LOGGER.log(Level.WARNING, "Requested extent can't be projected to tile CRS ("
-                        +reqCrs.getCoordinateSystem().getName()
-                        +" -> " + tileCrs.getCoordinateSystem().getName() +") :" + ex.getMessage());
+                        + reqCrs.getCoordinateSystem().getName() + " -> "
+                        + tileCrs.getCoordinateSystem().getName() + ") :" + ex.getMessage());
 
-                // maybe the req area is too wide for the data; let's try an inverse trasformation
+                // maybe the req area is too wide for the data; let's try an
+                // inverse trasformation
                 try {
                     ReferencedEnvelope covExtentInReqCrs = envelope.transform(reqCrs, true);
                     requestedExtent = requestedExtent.intersection(covExtentInReqCrs);
-                    System.out.println("cropping request bbox by projectet layer env: "+requestedExtent);
+                    System.out.println(
+                            "cropping request bbox by projectet layer env: " + requestedExtent);
 
                 } catch (TransformException | FactoryException ex2) {
                     LOGGER.log(Level.WARNING, "Incompatible CRS: " + ex2.getMessage());
@@ -63,30 +61,35 @@
             reqExtentInTileCrs = requestedExtent;
         }
 
-        if(reqExtentInTileCrs == null) {
+        if (reqExtentInTileCrs == null) {
             LOGGER.log(Level.FINE, "Requested extent not in tile CRS range");
             return ret;
         }
 
-        LOGGER.log(Level.FINE, "tile crs req bbox :"+reqExtentInTileCrs+
-                " "+reqExtentInTileCrs.getCoordinateReferenceSystem().getCoordinateSystem().getAxis(0).getDirection()
-                +" ("+reqExtentInTileCrs.getCoordinateReferenceSystem().getName()+ ")");
-        System.out.println("tile crs req bbox :"+reqExtentInTileCrs+
-                " "+reqExtentInTileCrs.getCoordinateReferenceSystem().getCoordinateSystem().getAxis(0).getDirection()
-                +" ("+reqExtentInTileCrs.getCoordinateReferenceSystem().getName()+ ")");
+        LOGGER.log(Level.FINE,
+                "tile crs req bbox :" + reqExtentInTileCrs + " "
+                        + reqExtentInTileCrs.getCoordinateReferenceSystem().getCoordinateSystem()
+                                .getAxis(0).getDirection()
+                        + " (" + reqExtentInTileCrs.getCoordinateReferenceSystem().getName() + ")");
+        System.out.println("tile crs req bbox :" + reqExtentInTileCrs + " "
+                + reqExtentInTileCrs.getCoordinateReferenceSystem().getCoordinateSystem().getAxis(0)
+                        .getDirection()
+                + " (" + reqExtentInTileCrs.getCoordinateReferenceSystem().getName() + ")");
 
         ReferencedEnvelope coverageEnvelope = getBounds();
-        LOGGER.log(Level.FINE, "coverage bbox :"+coverageEnvelope
-                +" "+coverageEnvelope.getCoordinateReferenceSystem().getCoordinateSystem().getAxis(0).getDirection()
-                +" ("+coverageEnvelope.getCoordinateReferenceSystem().getName()+ ")");
-        System.out.println("coverage bbox :"+coverageEnvelope
-                +" "+coverageEnvelope.getCoordinateReferenceSystem().getCoordinateSystem().getAxis(0).getDirection()
-                +" ("+coverageEnvelope.getCoordinateReferenceSystem().getName()+ ")");
+        LOGGER.log(Level.FINE,
+                "coverage bbox :" + coverageEnvelope + " "
+                        + coverageEnvelope.getCoordinateReferenceSystem().getCoordinateSystem()
+                                .getAxis(0).getDirection()
+                        + " (" + coverageEnvelope.getCoordinateReferenceSystem().getName() + ")");
+        System.out.println("coverage bbox :" + coverageEnvelope + " "
+                + coverageEnvelope.getCoordinateReferenceSystem().getCoordinateSystem().getAxis(0)
+                        .getDirection()
+                + " (" + coverageEnvelope.getCoordinateReferenceSystem().getName() + ")");
 
         ReferencedEnvelope requestEnvelopeWGS84;
 
-        boolean sameCRS = CRS.equalsIgnoreMetadata(
-                coverageEnvelope.getCoordinateReferenceSystem(),
+        boolean sameCRS = CRS.equalsIgnoreMetadata(coverageEnvelope.getCoordinateReferenceSystem(),
                 reqExtentInTileCrs.getCoordinateReferenceSystem());
         if (sameCRS) {
             if (!coverageEnvelope.intersects((BoundingBox) reqExtentInTileCrs)) {
@@ -116,9 +119,10 @@
         ScaleZoomLevelMatcher zoomLevelMatcher = null;
         try {
 
-            zoomLevelMatcher = ScaleZoomLevelMatcher.createMatcher(reqExtentInTileCrs, matrixSet.getCoordinateReferenceSystem(), scaleFactor);
+            zoomLevelMatcher = ScaleZoomLevelMatcher.createMatcher(reqExtentInTileCrs,
+                    matrixSet.getCoordinateReferenceSystem(), scaleFactor);
 
-        } catch (FactoryException|TransformException e) {
+        } catch (FactoryException | TransformException e) {
             throw new RuntimeException(e);
         }
 
@@ -126,9 +130,9 @@
         ZoomLevel zoomLevel = tileFactory.getZoomLevel(zl, this);
         long maxNumberOfTilesForZoomLevel = zoomLevel.getMaxTileNumber();
 
-        if(LOGGER.isLoggable(Level.FINE)) {
-            LOGGER.log(Level.FINE, "Zoom level:" + zl
-                    + "[" + zoomLevel.getMaxTilePerColNumber()+ " x " + zoomLevel.getMaxTilePerRowNumber() +"]");
+        if (LOGGER.isLoggable(Level.FINE)) {
+            LOGGER.log(Level.FINE, "Zoom level:" + zl + "[" + zoomLevel.getMaxTilePerColNumber()
+                    + " x " + zoomLevel.getMaxTilePerRowNumber() + "]");
         }
 
         // Map<String, Tile> tileList = new HashMap<String, Tile>();
@@ -136,17 +140,21 @@
                 (int) Math.min(maxNumberOfTiles, maxNumberOfTilesForZoomLevel));
         Tile firstTile;
         // Let's get the first tile which covers the upper-left corner
-        if (/*TileMatrix.isGeotoolsLongitudeFirstAxisOrderForced()
-                || */reqExtentInTileCrs.getCoordinateReferenceSystem().getCoordinateSystem().getAxis(0)
-                        .getDirection().equals(AxisDirection.EAST)) {
-            firstTile = tileFactory.findTileAtCoordinate(reqExtentInTileCrs.getMinX(), reqExtentInTileCrs.getMaxY(), zoomLevel, this);
+        if (/*
+             * TileMatrix.isGeotoolsLongitudeFirstAxisOrderForced() ||
+             */reqExtentInTileCrs.getCoordinateReferenceSystem().getCoordinateSystem().getAxis(0)
+                .getDirection().equals(AxisDirection.EAST)) {
+            firstTile = tileFactory.findTileAtCoordinate(reqExtentInTileCrs.getMinX(),
+                    reqExtentInTileCrs.getMaxY(), zoomLevel, this);
         } else {
             LOGGER.log(Level.FINE, "Inverted tile coords!");
-            firstTile = tileFactory.findTileAtCoordinate(reqExtentInTileCrs.getMinY(), reqExtentInTileCrs.getMaxX(), zoomLevel, this);
+            firstTile = tileFactory.findTileAtCoordinate(reqExtentInTileCrs.getMinY(),
+                    reqExtentInTileCrs.getMaxX(), zoomLevel, this);
         }
 
-        LOGGER.log(Level.FINE, "Adding first tile " + firstTile.getId() + " " + firstTile.getExtent()
-                + " ("+firstTile.getExtent().getCoordinateReferenceSystem().getName()+")");
+        LOGGER.log(Level.FINE,
+                "Adding first tile " + firstTile.getId() + " " + firstTile.getExtent() + " ("
+                        + firstTile.getExtent().getCoordinateReferenceSystem().getName() + ")");
         addTileToCache(firstTile);
         tileList.add(firstTile);
 
@@ -164,9 +172,12 @@
 
                 // Check if the new tile is still part of the extent and
                 // that we don't have the first tile again
-//                boolean intersects = extent.intersects((Envelope) rightNeighbour.getExtent());
-                boolean intersects = reqExtentInTileCrs.intersects((Envelope) rightNeighbour.getExtent());
-                LOGGER.log(Level.FINE, "Intersect (" + rightNeighbour.getId()+" , "+  rightNeighbour.getExtent()+") --> " + intersects);
+                // boolean intersects = extent.intersects((Envelope)
+                // rightNeighbour.getExtent());
+                boolean intersects = reqExtentInTileCrs
+                        .intersects((Envelope) rightNeighbour.getExtent());
+                LOGGER.log(Level.FINE, "Intersect (" + rightNeighbour.getId() + " , "
+                        + rightNeighbour.getExtent() + ") --> " + intersects);
                 if (intersects && !firstTileOfRow.equals(rightNeighbour)) {
                     LOGGER.log(Level.FINE, "Adding right neighbour " + rightNeighbour.getId());
 
@@ -191,8 +202,9 @@
             Tile lowerNeighbour = tileFactory.findLowerNeighbour(firstTileOfRow, this);
 
             // Check if the new tile is still part of the extent
-            boolean intersects = reqExtentInTileCrs.intersects((Envelope) lowerNeighbour.getExtent());
-                LOGGER.log(Level.FINE, "Intersect (" + lowerNeighbour.getId()+") --> " + intersects);
+            boolean intersects = reqExtentInTileCrs
+                    .intersects((Envelope) lowerNeighbour.getExtent());
+            LOGGER.log(Level.FINE, "Intersect (" + lowerNeighbour.getId() + ") --> " + intersects);
             if (intersects && !firstTile.equals(lowerNeighbour)) {
                 LOGGER.log(Level.FINE, "Adding lower neighbour " + lowerNeighbour.getId());
 
