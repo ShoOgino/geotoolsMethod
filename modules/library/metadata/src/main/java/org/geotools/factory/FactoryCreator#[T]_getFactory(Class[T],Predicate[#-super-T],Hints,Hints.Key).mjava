@@ -1,0 +1,99 @@
+    // TODO document
+    public <T> T getFactory(final Class<T>     category,
+                            final Predicate<? super T> filter,
+                            final Hints        hints,
+                            final Hints.Key    key)
+            throws FactoryRegistryException
+    {
+        final FactoryNotFoundException notFound;
+        try {
+            return super.getFactory(category, filter, hints, key);
+        } catch (FactoryNotFoundException exception) {
+            // Will be rethrown later in case of failure to create the factory.
+            notFound = exception;
+        }
+        /*
+         * No existing factory found. Creates one using reflection. First, we
+         * check if an implementation class was explicitly specified by the user.
+         */
+        final Class<?>[] types;
+        if (hints==null || key==null) {
+            types = null;
+        } else {
+            final Object hint = hints.get(key);
+            if (hint == null) {
+                types = null;
+            } else {
+                if (hint instanceof Class<?>[]) {
+                    types = (Class<?>[]) hint;
+                } else {
+                    types = new Class<?>[] {(Class<?>) hint};
+                    // Should not fails, since non-class argument should
+                    // have been accepted by 'getServiceProvider(...)'.
+                }
+                final int length = types.length;
+                for (int i=0; i<length; i++) {
+                    final Class<?> type = types[i];
+                    if (type!=null && category.isAssignableFrom(type)) {
+                        final int modifiers = type.getModifiers();
+                        if (!Modifier.isAbstract(modifiers)) {
+                            final T candidate = createSafe(category, type, hints);
+                            if (candidate == null) {
+                                continue;
+                            }
+                            if (isAcceptable(candidate, category, hints, filter)) {
+                                cache(category, candidate);
+                                return candidate;
+                            }
+                            dispose(candidate);
+                        }
+                    }
+                }
+            }
+        }
+        /*
+         * No implementation hint provided. Search the first implementation
+         * accepting a Hints argument. No-args constructor will be ignored.
+         * Note: all Factory objects should be fully constructed by now,
+         * since the super-class has already iterated over all factories.
+         */
+        for (final Iterator<T> it = getUnfilteredFactories(category); it.hasNext();) {
+            final T factory = it.next();
+            final Class<?> implementation = factory.getClass();
+            if (types!=null && !isTypeOf(types, implementation)) {
+                continue;
+            }
+            if (filter!=null && !filter.test(factory)) {
+                continue;
+            }
+            final T candidate;
+            try {
+                candidate = createSafe(category, implementation, hints);
+            } catch (FactoryNotFoundException exception) {
+                // The factory has a dependency which has not been found.
+                // Be tolerant to that kind of error.
+                Logging.recoverableException(LOGGER, FactoryCreator.class, "getFactory", exception);
+                continue;
+            } catch (FactoryRegistryException exception) {
+                if (exception.getCause() instanceof NoSuchMethodException) {
+                    // No public constructor with the expected argument.
+                    // Try an other implementation.
+                    continue;
+                } else {
+                    // Other kind of error, probably unexpected.
+                    // Let the exception propagates.
+                    throw exception;
+                }
+            }
+            if (candidate == null) {
+                continue;
+            }
+            if (isAcceptable(candidate, category, hints, filter)) {
+                cache(category, candidate);
+                return candidate;
+            }
+            dispose(candidate);
+        }
+        throw notFound;
+    }
+
