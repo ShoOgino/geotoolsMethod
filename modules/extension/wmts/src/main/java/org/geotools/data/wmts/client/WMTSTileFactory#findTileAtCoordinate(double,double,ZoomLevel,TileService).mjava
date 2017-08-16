@@ -1,20 +1,16 @@
+    /**
+     * Return a tile with the proper row and column indexes.
+     *
+     * Please notice that the tile indexes are purely computed on the zoom level details,
+     * but the MatrixLimits in a given layer may make the row/col invalid for that layer.
+     */
     @Override
     public Tile findTileAtCoordinate(double lon, double lat, ZoomLevel zoomLevel,
             TileService service) {
+
         WMTSZoomLevel zl = (WMTSZoomLevel) zoomLevel;
         TileMatrix tileMatrix = ((WMTSTileService) service).getMatrixSet().getMatrices()
                 .get(zl.getZoomLevel());
-        List<TileMatrixLimits> limits = ((WMTSTileService) service).getLimits();
-        TileMatrixLimits tileMatrixLimits;
-        if (limits != null && zl.getZoomLevel() < limits.size()) {
-            tileMatrixLimits = limits.get(zl.getZoomLevel());
-        } else { // probably a REST API with no limits
-            tileMatrixLimits = new TileMatrixLimits();
-            tileMatrixLimits.setMinCol(0L);
-            tileMatrixLimits.setMinRow(0L);
-            tileMatrixLimits.setMaxCol(tileMatrix.getMatrixWidth());
-            tileMatrixLimits.setMaxRow(tileMatrix.getMatrixHeight());
-        }
 
         double pixelSpan = getPixelSpan(tileMatrix);
 
@@ -34,20 +30,16 @@
         double epsilon = 1e-6;
         long xTile = (int) Math.floor((lon - tileMatrixMinX) / tileSpanX + epsilon);
         long yTile = (int) Math.floor((tileMatrixMaxY - lat) / tileSpanY + epsilon);
-        // to avoid requesting out-of-range tiles
 
-        if (xTile >= tileMatrixLimits.getMaxcol())
-            xTile = tileMatrixLimits.getMaxcol() - 1;
-        if (yTile >= tileMatrixLimits.getMaxrow())
-            yTile = tileMatrixLimits.getMaxrow() - 1;
+        // sanitize
+        xTile = Math.max(0, xTile);
+        yTile = Math.max(0, yTile);
 
-        if (xTile < tileMatrixLimits.getMincol())
-            xTile = tileMatrixLimits.getMincol();
-        if (yTile < tileMatrixLimits.getMinrow())
-            yTile = tileMatrixLimits.getMinrow();
+        if (LOGGER.isLoggable(Level.FINE)) {
+            LOGGER.fine("findTile: (lon,lat)=(" + lon + "," + lat + ")  (col,row)=" + xTile + ", "
+                    + yTile + " zoom:" + zoomLevel.getZoomLevel());
+        }
 
-        LOGGER.fine("findTile: (lon,lat)=(" + lon + "," + lat + ")  (col,row)=" + xTile + ", "
-                + yTile + " zoom:" + zoomLevel.getZoomLevel());
         return new WMTSTile((int) xTile, (int) yTile, zoomLevel, service);
     }
 
