@@ -1,0 +1,92 @@
+    private WMTSLayer parseLayer(LayerType layerType) {
+        String title = ((LanguageStringType) layerType.getTitle().get(0)).getValue();
+        WMTSLayer layer = new WMTSLayer(title);
+        layer.setName(layerType.getIdentifier().getValue());
+        EList<TileMatrixSetLinkType> tmsLinks = layerType.getTileMatrixSetLink();
+        for (TileMatrixSetLinkType linkType : tmsLinks) {
+            TileMatrixSetLink link = new TileMatrixSetLink();
+            link.setIdentifier(linkType.getTileMatrixSet());
+            TileMatrixSetLimitsType limits = linkType.getTileMatrixSetLimits();
+            if (limits != null) {
+                for (TileMatrixLimitsType tmlt : limits.getTileMatrixLimits()) {
+                    TileMatrixLimits tml = new TileMatrixLimits();
+                    tml.setTileMatix(tmlt.getTileMatrix());
+                    tml.setMinCol(tmlt.getMinTileCol().longValue());
+                    tml.setMaxCol(tmlt.getMaxTileCol().longValue());
+                    tml.setMinRow(tmlt.getMinTileRow().longValue());
+                    tml.setMaxRow(tmlt.getMaxTileRow().longValue());
+                    link.addLimit(tml);
+                }
+
+            }
+            layer.addTileMatrixLink(link);
+        }
+        layer.getFormats().addAll(layerType.getFormat());
+        layer.getInfoFormats().addAll(layerType.getInfoFormat());
+        @SuppressWarnings("unchecked")
+        EList<BoundingBoxType> bboxes = layerType.getBoundingBox();
+        Map<String, CRSEnvelope> boundingBoxes = new HashMap<>();
+        for (BoundingBoxType bbox : bboxes) {
+            boundingBoxes.put(bbox.getCrs(), bbox2bbox(bbox));
+        }
+        WGS84BoundingBoxType wgsBBox = null;
+        if (!layerType.getWGS84BoundingBox().isEmpty()) {
+            wgsBBox = (WGS84BoundingBoxType) layerType.getWGS84BoundingBox().get(0);
+        }
+        if (wgsBBox != null) {
+            int y;
+            int x;
+            // in WMTS WGS84 is in lon,lat order - see
+            // https://portal.opengeospatial.org/services/srv_public_issues.php?call=viewIssue&issue_id=898
+            if (CRS.getAxisOrder(DefaultGeographicCRS.WGS84).equals(CRS.AxisOrder.NORTH_EAST)) {
+                x = 1;
+                y = 0;
+            } else {
+                x = 0;
+                y = 1;
+            }
+            boundingBoxes.put("CRS:84",
+                    new CRSEnvelope("CRS:84", (Double) wgsBBox.getLowerCorner().get(x),
+                            (Double) wgsBBox.getLowerCorner().get(y),
+                            (Double) wgsBBox.getUpperCorner().get(x),
+                            (Double) wgsBBox.getUpperCorner().get(y)));
+
+            layer.setLatLonBoundingBox(boundingBoxes.get("CRS:84"));
+
+        }
+        layer.setBoundingBoxes(boundingBoxes);
+        EList<URLTemplateType> resourceURL = layerType.getResourceURL();
+        if (resourceURL != null && !resourceURL.isEmpty()) {
+            for (URLTemplateType resource : resourceURL) {
+                String template = resource.getTemplate();
+                String format = resource.getFormat();
+
+                layer.putResourceURL(format, template);
+            }
+        }
+        EList<DimensionType> dimensionList = layerType.getDimension();
+        if (dimensionList != null && !dimensionList.isEmpty()) {
+            for (DimensionType dimensionType : dimensionList) {
+                CodeType identifierType = dimensionType.getIdentifier();
+                String dimIdentifier = identifierType.getValue();
+                String dimDefault = dimensionType.getDefault();
+
+                DomainMetadataType uom = dimensionType.getUOM();
+                String dimUom = uom == null ? "N/A" : uom.getValue();
+
+                Dimension d = new Dimension(dimIdentifier, dimUom);
+                d.setUnitSymbol(dimensionType.getUnitSymbol());
+                d.setCurrent(dimensionType.isCurrent());
+
+                // TODO: improve values encoding
+                String dimValues = String.join(",", dimensionType.getValue());
+
+                Extent e = new Extent(dimIdentifier, dimDefault, false, false, dimValues);
+                d.setExtent(e);
+
+                layer.getLayerDimensions().add(d);
+            }
+        }
+        return layer;
+    }
+

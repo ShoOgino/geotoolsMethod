@@ -1,0 +1,67 @@
+    private TileMatrixSet selectMatrixSet() throws ServiceException, RuntimeException {
+        TileMatrixSet retMatrixSet = null;
+
+        Map<String, TileMatrixSetLink> links = layer.getTileMatrixLinks();
+        CoordinateReferenceSystem requestCRS = getCrs();
+        if (LOGGER.isLoggable(Level.FINE)) {
+            LOGGER.fine("request CRS " + (requestCRS == null ? "NULL" : requestCRS.getName()));
+        }
+        if (requestCRS == null) {
+            try {
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.fine("request CRS decoding" + srs);
+                }
+                requestCRS = CRS.decode(srs);
+
+            } catch (FactoryException e) {
+                if (LOGGER.isLoggable(Level.FINER)) {
+                    LOGGER.log(Level.FINER, e.getMessage(), e);
+                }
+                throw new RuntimeException(e);
+            }
+        }
+
+        // If the layer provides the requested CRS, use it
+        for (TileMatrixSet matrixSet : capabilities.getMatrixSets()) {
+
+            CoordinateReferenceSystem matrixCRS = matrixSet.getCoordinateReferenceSystem();
+
+            if (CRS.equalsIgnoreMetadata(requestCRS, matrixCRS)) {// matching SRS
+                if (links.containsKey((matrixSet.getIdentifier()))) { // and available for
+                                                                          // this layer
+                    if (LOGGER.isLoggable(Level.FINE)) {
+                        LOGGER.fine("selected matrix set:" + matrixSet.getIdentifier());
+                    }
+                    setProperty(TILEMATRIXSET, matrixSet.getIdentifier());
+                    retMatrixSet = matrixSet;
+
+                    break;
+                }
+            }
+        }
+
+        // The layer does not provide the requested CRS, so just take any one
+        if (retMatrixSet == null) {
+            if (LOGGER.isLoggable(Level.INFO)) {
+                LOGGER.info("Failed to match the requested CRS (" + requestCRS.getName()
+                        + ") with any of the tile matrices!");
+            }
+            for (TileMatrixSet matrix : capabilities.getMatrixSets()) {
+                if (links.containsKey((matrix.getIdentifier()))) { // available for this layer
+                    if (LOGGER.isLoggable(Level.FINE)) {
+                        LOGGER.fine("defaulting matrix set:" + matrix.getIdentifier());
+                    }
+                    setProperty(TILEMATRIXSET, matrix.getIdentifier());
+                    retMatrixSet = matrix;
+
+                    break;
+                }
+            }
+        }
+        if (retMatrixSet == null) {
+            throw new ServiceException("Unable to find a matching TileMatrixSet for layer "
+                    + layer.getName() + " and SRS: " + requestCRS.getName());
+        }
+        return retMatrixSet;
+    }
+

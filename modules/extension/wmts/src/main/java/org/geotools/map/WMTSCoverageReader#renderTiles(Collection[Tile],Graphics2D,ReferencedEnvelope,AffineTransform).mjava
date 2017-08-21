@@ -1,0 +1,41 @@
+    protected void renderTiles(Collection<Tile> tiles, Graphics2D g2d,
+            ReferencedEnvelope viewportExtent, AffineTransform worldToImageTransform) {
+
+        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+
+        double[] inPoints = new double[4];
+        double[] outPoints = new double[4];
+
+        for (Tile tile : tiles) {
+            ReferencedEnvelope nativeTileEnvelope = tile.getExtent();
+
+            ReferencedEnvelope tileEnvViewport;
+            try {
+                tileEnvViewport = nativeTileEnvelope
+                        .transform(viewportExtent.getCoordinateReferenceSystem(), true);
+            } catch (TransformException | FactoryException e) {
+                throw new RuntimeException(e);
+            }
+
+            inPoints[0] = tileEnvViewport.getMinX();
+            inPoints[3] = tileEnvViewport.getMinY();
+            inPoints[2] = tileEnvViewport.getMaxX();
+            inPoints[1] = tileEnvViewport.getMaxY();
+            worldToImageTransform.transform(inPoints, 0, outPoints, 0, 2);
+
+            renderTile(tile, g2d, outPoints);
+
+            if (debug) {
+                g2d.setColor(Color.RED);
+                g2d.drawRect((int) outPoints[0], (int) outPoints[1],
+                        (int) Math.ceil(outPoints[2] - outPoints[0]),
+                        (int) Math.ceil(outPoints[3] - outPoints[1]));
+                int x = (int) outPoints[0] + (int) (Math.ceil(outPoints[2] - outPoints[0]) / 2);
+                int y = (int) outPoints[1] + (int) (Math.ceil(outPoints[3] - outPoints[1]) / 2);
+                g2d.drawString(tile.getId(), x, y);
+            }
+        }
+
+    }
+
