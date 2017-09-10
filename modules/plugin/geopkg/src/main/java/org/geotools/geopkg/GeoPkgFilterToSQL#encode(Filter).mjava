@@ -1,0 +1,27 @@
+    /**
+     * Override done to ensure we don't complain if there is a BBOX filter, even if we claim not to support it
+     */
+    public void encode(Filter filter) throws FilterToSQLException {
+        if (out == null) throw new FilterToSQLException("Can't encode to a null writer.");
+        // hack, we lied about being able to support BBOX, because the implementation is
+        // just partial, so here don't complain if we got one, it means the dialect already
+        // set the filter correctly
+        FilterCapabilities caps = createFilterCapabilities();
+        caps.addType(BBOX.class);
+        if (caps.fullySupports(filter)) {
+
+            try {
+                if (!inline) {
+                    out.write("WHERE ");
+                }
+
+                filter.accept(this, null);
+            } catch (java.io.IOException ioe) {
+                LOGGER.warning("Unable to export filter" + ioe);
+                throw new FilterToSQLException("Problem writing filter: ", ioe);
+            }
+        } else {
+            throw new FilterToSQLException("Filter type not supported");
+        }
+    }
+
