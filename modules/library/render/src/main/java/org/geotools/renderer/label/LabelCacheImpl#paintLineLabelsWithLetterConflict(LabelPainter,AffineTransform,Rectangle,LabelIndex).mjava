@@ -34,13 +34,23 @@
         boolean allowOverruns = labelItem.allowOverruns();
         double maxAngleDelta = labelItem.getMaxAngleDelta();
 
+        final int perpendicularOffset = painter.getLabel().getTextStyle().getPerpendicularOffset();
+        OffsetCurveBuilder offsetBuilder = null;
+        if (perpendicularOffset != 0) {
+            offsetBuilder = new OffsetCurveBuilder(perpendicularOffset, 2);
+        }
         int labelCount = 0;
         for (LineString line : lines) {
             // if we are following lines, use a simplified version of the line,
             // we don't want very small segments to influence the character
             // orientation
-            if (labelItem.isFollowLineEnabled())
+            if (labelItem.isFollowLineEnabled()) {
                 line = decimateLineString(line, step);
+                if (offsetBuilder != null) {
+                    // offset the line and replace it
+                    line = (LineString) offsetBuilder.offset(line);
+                }
+            }
 
             // max distance between candidate label points, if any
             final double lineStringLength = line.getLength();
@@ -53,36 +63,14 @@
                 return labelCount > 0;
             }
 
-            // create the candidate positions for the labels over the line. If
-            // we can place just one
-            // label or we're not supposed to replicate them, create the mid
-            // position, otherwise
-            // create mid and then create the sequence of before and after
-            // labels
-            double[] labelPositions;
-            if (labelDistance > 0 && labelDistance < lineStringLength / 2) {
-                // one label in the middle, plus all the labels we can fit before/after on the two half lines
-                final int positionCount = (int) ((lineStringLength / 2) / labelDistance) * 2 + 1;
-                labelPositions = new double[positionCount];
-                labelPositions[0] = lineStringLength / 2;
-                double offset = labelDistance;
-                for (int i = 1; i < labelPositions.length; i++) {
-                    labelPositions[i] = labelPositions[i - 1] + offset;
-                    // this will generate a sequence like s, -2s, 3s, -4s, ...
-                    // which will make the cursor alternate on mid + s, mid - s,
-                    // mid + 2s, mid - 2s, mid + 3s, ...
-                    offset = nextOffset(offset, labelDistance);
-                }
-            } else {
-                labelPositions = new double[1];
-                labelPositions[0] = lineStringLength / 2;
-            }
+            double[] labelPositions = buildLabelPositions(labelDistance, lineStringLength);
 
             // Ok, now we try to paint each of the labels in each position, and
             // we take into
             // account that we might have to displace the labels
             LineStringCursor cursor = new LineStringCursor(line);
             AffineTransform tx = new AffineTransform();
+            boolean mightSkipLastLabel = line.isClosed() && (lineStringLength - ((labelPositions.length - 1) * labelDistance)) < labelDistance;
             for (int i = 0; i < labelPositions.length; i++) {
                 cursor.moveTo(labelPositions[i]);
                 Coordinate centroid = cursor.getCurrentPosition();
@@ -106,7 +94,7 @@
                     if (labelItem.followLineEnabled) {
                         // curved label, but we might end up drawing a straight
                         // one as an optimization
-                        maxAngleChange = cursor.getMaxAngleChange(startOrdinate, endOrdinate);
+                        maxAngleChange = cursor.getMaxAngleChange(startOrdinate, endOrdinate, step);
                         setupLineTransform(painter, cursor, centroid, tx, true);
                         curved = maxAngleChange >= MIN_CURVED_DELTA;
                     } else {
@@ -136,7 +124,7 @@
                             // for curved labels we never paint in case of
                             // overrun
                             if ((startOrdinate > 0 && endOrdinate <= cursor.getLineStringLength())) {
-                                if (maxAngleChange < maxAngleDelta) {
+                                if (maxAngleChange <= maxAngleDelta) {
                                     // a max distance related to both the font size, but also having a visual limit
                                     // of a couple of millimeters assuming 90dpi
                                     double maxDistance = Math.min(painter.getLineHeight() / 2, 7);
@@ -178,6 +166,13 @@
 
                             // Add each glyph's bounding box to the index
                             glyphVectorProcessor.process(new GlyphProcessor.IndexAdder(painter, paintedBounds));
+                        }
+                        
+                        // do not paint the last label on a ring if we have painted its symmetric
+                        // one and the residual space at the ends does not guarantee labelDistance
+                        // between last and second to last
+                        if((i == labelPositions.length - 2) && painted &&  mightSkipLastLabel) {
+                            i++;
                         }
                     } else {
                         // generate a sequence like s, -2s, 3s, -4s,...

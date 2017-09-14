@@ -1,0 +1,22 @@
+    @Override
+    public int read(byte targetBuffer[], int off, int len) throws IOException {
+
+        int readRemaining = len;
+        ByteBuffer readBuffer = ByteBuffer.allocate(len);
+        while (readRemaining > 0 && streamPos < this.length) {
+            int block = getBlockIndex();
+            int offset = getCurrentOffset();
+            byte[] blockBytes = this.getFromCache(block);
+            //block could be longer than what we want to read... or shorter, or longer than the rest of the block
+            int bytesToRead = Math.min(readRemaining, blockBytes.length - offset);
+            readBuffer.put(blockBytes, offset, bytesToRead);
+            readRemaining -= bytesToRead;
+            streamPos += bytesToRead;
+        }
+
+        ByteBuffer inputByteBuffer = ByteBuffer.wrap(targetBuffer, off, len);
+        inputByteBuffer.put(readBuffer.array(), 0, len);
+
+        return len - readRemaining;
+    }
+

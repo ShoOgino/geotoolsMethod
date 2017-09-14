@@ -1,0 +1,35 @@
+    public BufferedImage read(byte[] data) throws IOException {
+        ByteArrayInputStream bis = new ByteArrayInputStream(data);
+        ImageInputStream iis = new MemoryCacheImageInputStream(bis);
+        if (lastReader != null) {
+            lastReader.reset();
+            lastReader.setInput(iis);
+        }
+        if (lastReader == null || !lastReader.getOriginatingProvider().canDecodeInput(iis)) {
+            boolean found = false;
+            for (ImageReader ir : readersCache) {
+                if (ir != lastReader) {
+                    ir.reset();
+                    ir.setInput(iis);
+                    if (ir.canReadRaster()) {
+                        lastReader = ir;
+                        found = true;
+                    }
+                }
+            }
+            if (!found) {
+                Iterator<ImageReader> readers = ImageIO.getImageReaders(iis);
+                if (!readers.hasNext()) {
+                    throw new IOException(
+                            "Unexpected, cannot find a reader for the current tile image format");
+                }
+                lastReader = readers.next();
+                lastReader.setInput(iis);
+                readersCache.add(lastReader);
+            }
+        }
+
+        ImageReadParam param = lastReader.getDefaultReadParam();
+        return lastReader.read(0, param);
+    }
+
