@@ -1,0 +1,27 @@
+    @Override
+    public Filter[] splitFilter(Filter filter, SimpleFeatureType schema) {
+        // sqlite does not have ST_* function support but can do a rtree search, assuming
+        // there are rtrees to hit
+        // This implementation only supports figuring a bbox in case there is a single
+        // indexed spatial attribute (could be extended to use multiple spatial attributes if need be)
+        final GeometryDescriptor searchAttribute = simpleSpatialSearch(filter, schema);
+        if (searchAttribute != null) {
+            Envelope envelope = (Envelope) filter.accept(ExtractBoundsFilterVisitor.BOUNDS_VISITOR,
+                    null);
+            if (envelope != null && !envelope.isNull() 
+                    && !Double.isInfinite(envelope.getWidth())
+                    && !Double.isInfinite(envelope.getHeight())) {
+                // split assuming there is no spatial support
+                Filter[] split = super.splitFilter(filter, schema);
+                FilterFactory ff = dataStore.getFilterFactory();
+                BBOX bbox = ff.bbox(searchAttribute.getLocalName(), envelope.getMinX(),
+                        envelope.getMinY(), envelope.getMaxX(), envelope.getMaxY(), null);
+                split[0] = ff.and(split[0], bbox);
+                
+                return split;
+            }
+        }
+        // fallback, use normal encoding
+        return super.splitFilter(filter, schema);
+    }
+
