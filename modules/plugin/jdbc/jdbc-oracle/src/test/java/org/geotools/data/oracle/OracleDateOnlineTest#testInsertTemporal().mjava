@@ -1,0 +1,36 @@
+    public void testInsertTemporal() throws Exception {
+        TimeZone originalTimeZone = TimeZone.getDefault();
+        TimeZone gmtTimeZone = TimeZone.getTimeZone("GMT");
+        try {
+            TimeZone.setDefault(gmtTimeZone);
+
+            final String timestampsTable = tname("timestamps");
+            SimpleFeatureType ft = dataStore.getSchema(timestampsTable);
+            SimpleFeatureBuilder builder = new SimpleFeatureBuilder(ft);
+            long theTimestamp = 1503926476000L; // August 28, 2017 13:21:16 GMT
+            builder.add(new Timestamp(theTimestamp));
+            SimpleFeature feature = builder.buildFeature(null);
+
+            Transaction t = new DefaultTransaction("add");
+            JDBCFeatureStore fs = (JDBCFeatureStore) dataStore.getFeatureSource(timestampsTable, t);
+            try {
+                fs.addFeatures(DataUtilities.collection(feature));
+                t.commit();
+            } catch (Exception ex) {
+                t.rollback();
+                throw ex;
+            } finally {
+                t.close();
+            }
+
+            FilterFactory ff = dataStore.getFilterFactory();
+            Filter f = ff.equals(ff.property(aname("t")), ff.literal("2017-08-28 13:21:16"));
+
+            JDBCFeatureStore fs2 = (JDBCFeatureStore) dataStore.getFeatureSource(timestampsTable);
+
+            assertEquals(1, fs2.getCount(new Query(timestampsTable, f)));
+        } finally {
+            TimeZone.setDefault(originalTimeZone);
+        }
+    }
+
