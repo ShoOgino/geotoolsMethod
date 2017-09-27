@@ -23,13 +23,8 @@
             initExcessGranuleRemover();
 
             // === create query and basic BBOX filtering
-            final Query query = initQuery();
-
-            // === manage additional filters
-            handleAdditionalFilters(query);
-
-            // === sort by clause
-            handleSortByClause(query);
+            MosaicQueryBuilder queryBuilder = new MosaicQueryBuilder(request, mosaicBBox);
+            final Query query = queryBuilder.build();
 
             // === collect granules
             final MosaicProducer visitor = new MosaicProducer(submosaicProducerFactory
@@ -87,8 +82,15 @@
                 }
             }
 
-            // prepare a blank response
-            return createBlankResponse();
+            // do we return a null (outside of the coverage) or a blank? The choice is "hard" as we
+            // might be in a hole of the coverage and not know it
+            if(!mosaicBBox.intersects((BoundingBox) ReferencedEnvelope.reference(coverageEnvelope)) &&
+                    !mosaicBBox.intersects((BoundingBox) ReferencedEnvelope.reference(rasterManager.spatialDomainManager.coverageBBox))) {
+                return null;
+            } else {
+                // prepare a blank response
+                return createBlankResponse();
+            }
 
         } catch (Exception e) {
             throw new DataSourceException("Unable to create this mosaic", e);
