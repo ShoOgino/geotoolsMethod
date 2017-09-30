@@ -1,0 +1,43 @@
+    /**
+     * Creates a transform from the specified group of parameter values.
+     *
+     * @param parameters The group of parameter values.
+     * @return The created math transform.
+     * @throws ParameterNotFoundException if a required parameter was not found.
+     */
+    protected MathTransform createMathTransform(final ParameterValueGroup parameters) throws
+            ParameterNotFoundException {
+        boolean hasStdParallel1 = getParameter(STANDARD_PARALLEL_1, parameters) != null;
+        double stdParallel1 = doubleValue(STANDARD_PARALLEL_1, parameters);
+        boolean hasStdParallel2 = getParameter(STANDARD_PARALLEL_2, parameters) != null;
+        double stdParallel2 = doubleValue(STANDARD_PARALLEL_2, parameters);
+        boolean hasLatitudeOfOrigin = getParameter(LATITUDE_OF_ORIGIN, parameters) != null;
+        double latitudeOfOrigin = doubleValue(LATITUDE_OF_ORIGIN, parameters);
+
+        if(!hasStdParallel1 && !hasStdParallel2 && hasLatitudeOfOrigin) {
+            // handle the ESRI 1SP case
+            return new LambertConformal1SP(parameters);
+        } else if(hasStdParallel1 && hasStdParallel2 && hasLatitudeOfOrigin && Utilities.equals(stdParallel1, stdParallel2)
+                && Utilities.equals(stdParallel1, latitudeOfOrigin)) {
+            // handle the ESRI 1SP case
+            return new LambertConformal1SP(parameters);
+        } else if(!hasStdParallel2 && hasStdParallel1 && Utilities.equals(stdParallel1, latitudeOfOrigin)) {
+            // handle the ESRI 1SP case
+            return new LambertConformal1SP(parameters);
+        } else {
+            // switch sp1 and sp2 so that we get a consistent ordering, this allows to recognize
+            // two Lambert conformal with the same standard parallels declared in opposite order
+            ParameterValue<Double> sp1 = getParameter(STANDARD_PARALLEL_1, parameters);
+            ParameterValue<Double> sp2 = getParameter(STANDARD_PARALLEL_2, parameters);
+            if (sp1 != null && sp2 != null) {
+                if (sp1.doubleValue() < sp2.doubleValue()) {
+                    final double temp = sp1.doubleValue();
+                    sp1.setValue(sp2.doubleValue());
+                    sp2.setValue(temp);
+                }
+            }
+
+            return new LambertConformal2SP(parameters);
+        }
+    }
+
