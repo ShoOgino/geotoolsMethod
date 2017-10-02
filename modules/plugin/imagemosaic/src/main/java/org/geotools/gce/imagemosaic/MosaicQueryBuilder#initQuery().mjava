@@ -4,12 +4,7 @@
      * @return a {@link Query} object with the BBOX {@link Filter} in it.
      * @throws IOException in case something bad happens
      */
-    private Query initQuery() throws Exception {
-        final GeneralEnvelope levelRasterArea_ = CRS.transform(finalWorldToGridCorner,
-                rasterManager.spatialDomainManager.coverageBBox);
-        final GridEnvelope2D levelRasterArea = new GridEnvelope2D(new Envelope2D(levelRasterArea_),
-                PixelInCell.CELL_CORNER);
-        XRectangle2D.intersect(levelRasterArea, rasterBounds, rasterBounds);
+    private Query initQuery() throws TransformException, FactoryException, IOException {
         final String typeName = rasterManager.getTypeName();
         Filter bbox = null;
         if (typeName != null) {
@@ -21,29 +16,31 @@
             final PropertyName geometryProperty = FeatureUtilities.DEFAULT_FILTER_FACTORY
                     .property(rasterManager.getGranuleCatalog().getType(typeName)
                             .getGeometryDescriptor().getName());
-            if(request.isHeterogeneousGranules()) {
-                ProjectionHandler handler = ProjectionHandlerFinder.getHandler(mosaicBBox, mosaicBBox.getCoordinateReferenceSystem(), true);
-                if(handler != null) {
+            if (request.isHeterogeneousGranules() && queryBBox != null) {
+                ProjectionHandler handler = ProjectionHandlerFinder.getHandler(queryBBox, queryBBox.getCoordinateReferenceSystem(), true);
+                if (handler != null) {
                     List<ReferencedEnvelope> envelopes = handler.getQueryEnvelopes();
-                    if(envelopes != null && envelopes.size() > 0) {
+                    if (envelopes != null && envelopes.size() > 0) {
                         List<Filter> filters = new ArrayList<>();
                         for (ReferencedEnvelope envelope : envelopes) {
                             Filter f = FeatureUtilities.DEFAULT_FILTER_FACTORY.bbox(geometryProperty, envelope);
                             filters.add(f);
                         }
-                        if(envelopes.size() == 1) {
+                        if (envelopes.size() == 1) {
                             bbox = filters.get(0);
                         } else {
                             bbox = FeatureUtilities.DEFAULT_FILTER_FACTORY.or(filters);
                         }
                     }
-                    
+
                 }
             }
-            if(bbox == null) {
-                bbox = FeatureUtilities.DEFAULT_FILTER_FACTORY.bbox(geometryProperty, mosaicBBox);
+            if (bbox == null && queryBBox != null) {
+                bbox = FeatureUtilities.DEFAULT_FILTER_FACTORY.bbox(geometryProperty, queryBBox);
             }
-            query.setFilter(bbox);
+            if (bbox != null) {
+                query.setFilter(bbox);
+            }
             return query;
         } else {
             throw new IllegalStateException("GranuleCatalog feature type was null!!!");

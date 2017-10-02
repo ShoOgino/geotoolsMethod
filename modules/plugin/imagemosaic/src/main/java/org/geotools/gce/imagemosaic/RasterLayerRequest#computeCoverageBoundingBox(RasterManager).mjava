@@ -1,20 +1,33 @@
     protected ReferencedEnvelope computeCoverageBoundingBox(final RasterManager rasterManager) throws IOException {
-        if(filter != null && ! Filter.INCLUDE.equals(filter)) {
-            // limit it to the filtered granules bounding box by full enumeration, to avoid
-            // imprecise datastore optimizations (e.g., loose bounds)
+        try {
+            ReferencedEnvelope queryBounds =  null;
+            if (requestedBounds != null) {
+                try {
+                    ReferencedEnvelope re = ReferencedEnvelope.reference(requestedBounds);
+                    queryBounds = re.transform(rasterManager.spatialDomainManager.coverageCRS2D, true);
+                } catch (TransformException | FactoryException e) {
+                    LOGGER.log(Level.FINE, "Failed to reproject requested envelope in native, skipping spatial filter in output bounds computation", e);
+                }
+            }
+            MosaicQueryBuilder builder = new MosaicQueryBuilder(this, queryBounds);
+            Query query = builder.build();
+            query.setSortBy(null); // no need to actually sort on anything here
             GranuleSource granules = rasterManager.getGranuleSource(true, null);
-            Query query = new Query(granules.getSchema().getTypeName(), filter);
             // ... load only the default geometry if possible
             final GeometryDescriptor gd = granules.getSchema().getGeometryDescriptor();
-            if(gd != null) {
-                query.setPropertyNames(new String[] {gd.getLocalName()});
+            if (gd != null) {
+                query.setPropertyNames(new String[]{gd.getLocalName()});
             }
             SimpleFeatureCollection features = granules.getGranules(query);
             ReferencedEnvelope envelope = DataUtilities.bounds(features);
-            if(envelope != null && !envelope.isEmpty()) {
+            if (envelope != null && !envelope.isEmpty()) {
                 return envelope;
             }
+        } catch (TransformException | FactoryException e) {
+            throw new IOException(e);
         }
+
+        // fallback on cached bbox
         return rasterManager.spatialDomainManager.coverageBBox;
     }
 
