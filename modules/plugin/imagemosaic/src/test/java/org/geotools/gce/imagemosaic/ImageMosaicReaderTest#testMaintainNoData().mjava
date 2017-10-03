@@ -1,0 +1,27 @@
+	@Test
+	public void testMaintainNoData() throws Exception {
+		String testLocation = "hetero_utm_footprint";
+		URL storeUrl = TestData.url(this, testLocation);
+
+		File testDataFolder = new File(storeUrl.toURI());
+		File testDirectory = new File("./target", "keep_nodata");
+		FileUtils.copyDirectory(testDataFolder, testDirectory);
+		// clean up the WKT files
+		Stream.of(testDirectory.listFiles()).filter(f -> f.getName().endsWith(".wkt")).forEach(f -> f.delete());
+
+		ImageMosaicReader imReader = new ImageMosaicReader(testDirectory, null);
+		Assert.assertNotNull(imReader);
+
+		// read a coverage in deferred mode, check the nodata is there
+		ParameterValue<Boolean> deferredLoading = AbstractGridFormat.USE_JAI_IMAGEREAD.createValue();
+		deferredLoading.setValue(true);
+		GridCoverage2D coverageDeferred = imReader.read(new GeneralParameterValue[]{deferredLoading});
+		assertNoData(coverageDeferred, 0d);
+
+		// read in immediate mode, the nodata is also there
+		deferredLoading.setValue(false);
+		GridCoverage2D coverage = imReader.read(new GeneralParameterValue[]{deferredLoading});
+		assertNoData(coverage, 0d);
+
+	}
+
