@@ -10,42 +10,42 @@
      * @param  hints          A {@linkplain Hints map of hints}, or {@code null} if none.
      * @return A factory for the specified category and hints, or {@code null} if none.
      */
-    private <T> T getFactoryImplementation(final Class<T> category, final Class<?> implementation,
+    private <T> Optional<T> getFactoryImplementation(final Class<T> category, final Class<?> implementation,
                                            final Predicate<? super T> filter, final Hints hints)
     {
-        for (final Iterator<T> it = getUnfilteredFactories(category); it.hasNext();) {
-            final T candidate = it.next();
-            // Implementation class must be tested before 'isAcceptable'
-            // in order to avoid StackOverflowError in some situations.
+        Optional<T> factory = getUnfilteredFactories(category)
+                // Implementation class must be tested before 'isAcceptable'
+                // in order to avoid StackOverflowError in some situations.
+                .filter(candidate -> implementation == null || implementation.isInstance(candidate))
+                .filter(candidate -> isAcceptable(candidate, category, hints, filter))
+                .findFirst();
+        if (factory.isPresent()) {
+            return factory;
+        }
+
+        final List<Reference<T>> cached = getCachedProviders(category);
+        if (cached == null) {
+            return Optional.empty();
+        }
+
+        /*
+         * Checks if a factory previously created by FactoryCreator could fit. This
+         * block should never be executed if this instance is not a FactoryCreator.
+         */
+        for (final Iterator<Reference<T>> it=cached.iterator(); it.hasNext();) {
+            final T candidate = it.next().get();
+            if (candidate == null) {
+                it.remove();
+                continue;
+            }
             if (implementation!=null && !implementation.isInstance(candidate)) {
                 continue;
             }
             if (!isAcceptable(candidate, category, hints, filter)) {
                 continue;
             }
-            return candidate;
+            return Optional.of(candidate);
         }
-        final List<Reference<T>> cached = getCachedProviders(category);
-        if (cached != null) {
-            /*
-             * Checks if a factory previously created by FactoryCreator could fit. This
-             * block should never be executed if this instance is not a FactoryCreator.
-             */
-            for (final Iterator<Reference<T>> it=cached.iterator(); it.hasNext();) {
-                final T candidate = it.next().get();
-                if (candidate == null) {
-                    it.remove();
-                    continue;
-                }
-                if (implementation!=null && !implementation.isInstance(candidate)) {
-                    continue;
-                }
-                if (!isAcceptable(candidate, category, hints, filter)) {
-                    continue;
-                }
-                return candidate;
-            }
-        }
-        return null;
+        return Optional.empty();
     }
 
