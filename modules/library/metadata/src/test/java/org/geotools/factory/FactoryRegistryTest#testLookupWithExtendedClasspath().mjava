@@ -4,20 +4,18 @@
         assertNotNull(url);
         
         FactoryRegistry reg = new FactoryCreator( DummyInterface.class );
-        Iterator it = reg.getServiceProviders(DummyInterface.class, false);
-        assertFalse(it.hasNext());
-        
+        Stream<DummyInterface> factories = reg.getFactories(DummyInterface.class, false);
+        assertFalse(factories.findAny().isPresent());
+
         URLClassLoader cl = new URLClassLoader(new URL[]{url});
         GeoTools.addClassLoader(cl);
         reg.scanForPlugins();
 
-        // collect the classes
-        it = reg.getServiceProviders(DummyInterface.class, false);
-        Set<String> classes = new HashSet<String>();
-        while(it.hasNext()) {
-            classes.add(it.next().getClass().getName());
-        }
-        
+        Set<String> classes = reg
+				.getFactories(DummyInterface.class, false)
+				.map(factory -> factory.getClass().getName())
+				.collect(toSet());
+
         assertEquals(2, classes.size());
         assertTrue(classes.contains("pkg.Foo"));
         assertTrue(classes.contains("org.geotools.factory.DummyInterfaceImpl"));

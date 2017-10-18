@@ -1,0 +1,33 @@
+    /**
+     * Called when this factory is added to the given {@code category} of the given
+     * {@code registry}. The factory may already be registered under another category
+     * or categories.
+     * <p>
+     * This method is invoked automatically when this factory is registered as a plugin,
+     * and should not be invoked directly by the user. The default implementation iterates
+     * through all services under the same category that extends the {@code AbstractFactory}
+     * class, and set the ordering according the priority given at construction time.
+     *
+     * @param registry A service registry where this factory has been registered.
+     * @param category The registry category under which this object has been registered.
+     *
+     * @see #MINIMUM_PRIORITY
+     * @see #MAXIMUM_PRIORITY
+     */
+    public void onRegistration(final FactoryRegistry registry, final Class<?> category) {
+        registry.getFactories(category, false)
+                .filter(factory -> factory != this)
+                .filter(AbstractFactory.class::isInstance)
+                .map(factory -> (AbstractFactory) factory)
+                .forEach(factory -> {
+                    final int priority = getPriority();
+                    final int compare  = factory.getPriority();
+                    if (priority > compare) {
+                        registry.setOrdering((Class) category, this, factory);
+                    } else if (priority < compare) {
+                        registry.setOrdering((Class) category, factory, this);
+                    }
+                    // no ordering if priority == compare
+                });
+    }
+
