@@ -16,11 +16,17 @@
         }
         // try to extract an aggregate attribute from the visitor
         Expression aggregateExpression = getAggregateExpression(visitor);
+        AttributeDescriptor att = null;
         // check if aggregation expression is supported
         if (aggregateExpression instanceof FunctionExpression) {
-            FunctionExpression func = (FunctionExpression)aggregateExpression;
-            if(!getSupportedFunctions().containsKey(func.getFunctionName().getName())) {
+            FunctionExpression func = (FunctionExpression) aggregateExpression;
+            if (!getSupportedFunctions().containsKey(func.getFunctionName().getName())) {
                 return null;
+            }
+        } else {
+            att = extractAggregateAttribute(visitor, featureType);
+            if (att == null && !isCountVisitor(visitor)) {
+                 return null; // aggregate function optimization only supported for PropertyName expression
             }
         }
         
@@ -41,11 +47,20 @@
             
             try {
                 if ( dialect instanceof PreparedStatementSQLDialect ) {
-                    st = selectAggregateSQLPS(function, aggregateExpression, groupByAttributes, featureType, query, limitingVisitor,  cx);
+                    if (att == null) {
+                        st = selectAggregateSQLPS(function, aggregateExpression, groupByAttributes, featureType, query, limitingVisitor,  cx);
+                    } else {
+                        st = selectAggregateSQLPS(function, att, groupByAttributes, featureType, query, limitingVisitor,  cx);
+                    }
                     rs = ((PreparedStatement)st).executeQuery();
                 } 
                 else {
-                    String sql = selectAggregateSQL(function, aggregateExpression, groupByAttributes, featureType, query, limitingVisitor);
+                    String sql;
+                    if (att == null) {
+                        sql = selectAggregateSQL(function, aggregateExpression, groupByAttributes, featureType, query, limitingVisitor);
+                    } else {
+                        sql = selectAggregateSQL(function, att, groupByAttributes, featureType, query, limitingVisitor);
+                    }
                     LOGGER.fine( sql );
                     
                     st = cx.createStatement();
