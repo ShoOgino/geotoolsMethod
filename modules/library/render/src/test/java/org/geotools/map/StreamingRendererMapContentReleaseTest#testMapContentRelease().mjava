@@ -1,0 +1,46 @@
+    @Test
+    public void testMapContentRelease() {
+        // create a map content
+        MapContent content = new MapContent();
+
+        DefaultFeatureCollection coll = new DefaultFeatureCollection();
+        FeatureLayer layer = new FeatureLayer(coll, createDefaultStyle());
+        FeatureLayer layer2 = new FeatureLayer(coll, createDefaultStyle());
+        content.addLayer(layer);
+        content.addLayer(layer2);
+
+        SimpleFeatureTypeBuilder tbuilder = new SimpleFeatureTypeBuilder();
+        tbuilder.setName("feature1");
+        tbuilder.setCRS(DefaultGeographicCRS.WGS84);
+        tbuilder.add("geometry", Geometry.class);
+        tbuilder.add("name", String.class);
+        SimpleFeatureType type = tbuilder.buildFeatureType();
+
+        // populate with random features
+        int featureNumber = 50;
+        ReferencedEnvelope bounds = new ReferencedEnvelope(-20, 20, -30, 30, DefaultGeographicCRS.WGS84);
+        PrimitiveIterator.OfDouble rand = new Random().doubles(bounds.getMinX(), bounds.getMaxX()).iterator();
+        SimpleFeatureBuilder fb = new SimpleFeatureBuilder(type);
+        for (int i = 0; i < featureNumber; i++) {
+
+            ArrayList<Coordinate> points = new ArrayList();
+            for (int j = 0; j < 5; j++) {
+                points.add(new Coordinate(rand.next(), rand.next()));
+            }
+
+            fb.add(geom.createLineString(points.toArray(new Coordinate[points.size()])));
+            fb.add("Feature " + i);
+            coll.add(fb.buildFeature(null));
+        }
+
+        // render in a loop, test logs
+        for (int i = 0; i < 10; i++) {
+            grabLogger(Level.SEVERE);
+            renderAndStop(content, bounds);
+            Runtime.getRuntime().runFinalization();
+            String messages = getLogOutput();
+            assertThat(messages, CoreMatchers.not(CoreMatchers.containsString(UNDISPOSED_MAPCONTENT_ERROR)));
+            releaseLogger();
+        }
+    }
+
