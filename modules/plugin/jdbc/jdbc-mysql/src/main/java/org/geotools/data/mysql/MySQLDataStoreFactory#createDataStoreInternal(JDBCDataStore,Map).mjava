@@ -5,12 +5,25 @@
         if (storageEngine == null) {
             storageEngine = (String) STORAGE_ENGINE.sample;
         }
+
+        Boolean enhancedSpatialFlag = (Boolean) ENHANCED_SPATIAL_SUPPORT.lookUp( params );
+        if (enhancedSpatialFlag == null) {
+            //enhanced spatial support should be enabled if MySQL 
+            //version is at least 5.6.
+            enhancedSpatialSupport = isMySqlVersion56(dataStore);
+        } else if (enhancedSpatialFlag && !isMySqlVersion56(dataStore)) {
+            dataStore.getLogger().info("MySQL version does not support enhancedSpatialSupport. Disabling it");
+            enhancedSpatialSupport = false;
+        }
+        
         SQLDialect dialect = dataStore.getSQLDialect();
         if (dialect instanceof MySQLDialectBasic) {
             ((MySQLDialectBasic)dialect).setStorageEngine(storageEngine);
+            ((MySQLDialectBasic)dialect).setUsePreciseSpatialOps(enhancedSpatialSupport);
         }
         else {
             ((MySQLDialectPrepared)dialect).setStorageEngine(storageEngine);
+            ((MySQLDialectPrepared)dialect).setUsePreciseSpatialOps(enhancedSpatialSupport);
         }
         
         return dataStore;
