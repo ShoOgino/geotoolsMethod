@@ -261,6 +261,42 @@
                 targetPt.setOrdinate(i, centerPt.getOrdinate(i));
             }
         }
+
+        MapProjection targetProjection = CRS.getMapProjection(targetCRS);
+        if (targetProjection != null) {
+            // the points intersecting the rays emanating from the center of the projection in polar stereographic 
+            // and other projections is a maximum deformation point, add those to the envelope too
+            getProjectionCenterLonLat(targetCRS, centerPt);
+            // now try to intesect the source envelope with the center point
+            if(isPole(centerPt, DefaultGeographicCRS.WGS84)) {
+                try {
+                    MathTransform geoToTarget;
+                    Envelope geoEnvelope;
+                    if (sourceCRS instanceof GeographicCRS) {
+                        // this is a simplification to avoid dateline flips due to datum differences
+                        geoToTarget = findMathTransform(sourceCRS, targetCRS);
+                        geoEnvelope = envelope;
+                    } else {
+                        MathTransform mtWgs84 = findMathTransform(sourceCRS, DefaultGeographicCRS.WGS84);
+                        geoToTarget = findMathTransform(DefaultGeographicCRS.WGS84, targetCRS);
+                        geoEnvelope = transform(mtWgs84, envelope, null);
+                    }
+                    expandEnvelopeOnExtremePoints(centerPt, transformed, geoToTarget, geoEnvelope);
+                    if (targetProjection instanceof PolarStereographic || targetProjection instanceof LambertAzimuthalEqualArea) {
+                        // sample quadrant points too
+                        centerPt.setOrdinate(0, rollLongitude(centerPt.getOrdinate(0) - 90));
+                        expandEnvelopeOnExtremePoints(centerPt, transformed, geoToTarget, geoEnvelope);
+                        centerPt.setOrdinate(0, rollLongitude(centerPt.getOrdinate(0) - 90));
+                        expandEnvelopeOnExtremePoints(centerPt, transformed, geoToTarget, geoEnvelope);
+                        centerPt.setOrdinate(0, rollLongitude(centerPt.getOrdinate(0) - 90));
+                        expandEnvelopeOnExtremePoints(centerPt, transformed, geoToTarget, geoEnvelope);
+                    }
+                } catch (FactoryException | TransformException e) {
+                    LOGGER.log(Level.FINE, "Failed to transform from source to WGS84 to further enlarge the envelope on extreme points, proceeding without expansion", e);
+                }
+            }
+        }
+
         return transformed;
     }
 
