@@ -9,40 +9,55 @@
      * @see #getFunctionName(Function) 
      */
     public Object visit(Function function, Object extraData) throws RuntimeException {
-        try {
-            List<Expression> parameters = function.getParameters();
-            List contexts = null;
-            //check context, if a list which patches parameter size list assume its context
-            // to pass along to each Expression for encoding
-            if( extraData instanceof List && ((List)extraData).size() == parameters.size() ) {
-                contexts = (List) extraData;
-            }
-            
-            //set the encoding function flag to signal we are inside a function
-            encodingFunction = true;
-            
-            //write the name
-            out.write( getFunctionName(function) );
-            
-            //write the arguments
-            out.write( "(");
-            for ( int i = 0; i < parameters.size(); i++ ) {
-                Expression e = parameters.get( i );
-                
-                Object context = function.getFunctionName().getArguments().get(i).getType();
-                e.accept(this, context);
-                
-                if ( i < parameters.size()-1 ) {
-                    out.write( ",");    
+        // special case for IN functions
+        if (inEncodingEnabled && InFunction.isInFunction(function)) {
+            visitInFunction(function, true, false, extraData);
+        } else {
+            try {
+                List<Expression> parameters = function.getParameters();
+                List contexts = null;
+                //check context, if a list which patches parameter size list assume its context
+                // to pass along to each Expression for encoding
+                if (extraData instanceof List && ((List) extraData).size() == parameters.size()) {
+                    contexts = (List) extraData;
                 }
-                
+
+                // set the encoding function flag to signal we are inside a function
+                encodingFunction = true;
+
+                //write the name
+                out.write(getFunctionName(function));
+
+                //write the arguments
+                out.write("(");
+                List<Parameter<?>> arguments = function.getFunctionName().getArguments();
+                Parameter<?> lastArgument = arguments.isEmpty() ? null : arguments.get(arguments.size() - 1);
+                for (int i = 0; i < parameters.size(); i++) {
+                    Expression e = parameters.get(i);
+
+                    Object context;
+                    // the last argument can be multi-valued
+                    if (arguments.size() <= i 
+                            && (lastArgument.getMaxOccurs() > 0 || lastArgument.getMaxOccurs() == -1)) {
+                        context = lastArgument.getType();
+                    } else {
+                        context = arguments.get(i).getType();
+                    }
+                    
+                    e.accept(this, context);
+
+                    if (i < parameters.size() - 1) {
+                        out.write(",");
+                    }
+
+                }
+                out.write(")");
+
+                //reset the encoding function flag
+                encodingFunction = false;
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
-            out.write( ")");
-            
-            //reset the encoding function flag
-            encodingFunction = false;
-        } catch (IOException e) {
-            throw new RuntimeException( e );
         }
         
         return extraData;

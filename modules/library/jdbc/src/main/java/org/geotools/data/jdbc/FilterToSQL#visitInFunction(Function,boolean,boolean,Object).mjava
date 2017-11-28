@@ -1,0 +1,53 @@
+    /**
+     * Encodes a "in" function (as recognized by {@link InFunction#isInFunction(Expression)}
+     *
+     * @param function
+     * @param extraData
+     */
+    protected void visitInFunction(Function function, boolean encodeAsExpression, boolean negate, Object extraData) {
+        try {
+            if (encodeAsExpression) {
+                out.write("(");
+            }
+
+            // figure out the context, the first property name found will be used as a type reference,
+            // otherwise null context will be used
+            List<Expression> parameters = function.getParameters();
+            Class context = function.getParameters().stream()
+                    .filter(p -> p instanceof PropertyName)
+                    .map(p -> p.evaluate(featureType))
+                    .filter(o -> o instanceof AttributeDescriptor)
+                    .map(o -> ((AttributeDescriptor) o).getType().getBinding())
+                    .findFirst()
+                    .orElse(null);
+
+            // encode the attribute being tested, as is
+            function.getParameters().get(0).accept(this, context);
+
+            if (negate) {
+                out.write(" NOT IN (");
+            } else {
+                out.write(" IN (");
+            }
+            
+
+            // encode all other values to be used
+            int size = parameters.size();
+            for (int i = 1; i < size; i++) {
+                Expression e = function.getParameters().get(i);
+                e.accept(this, context);
+
+                if (i < size - 1) {
+                    out.write(", ");
+                }
+            }
+            out.write(")");
+
+            if (encodeAsExpression) {
+                out.write(")");
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+

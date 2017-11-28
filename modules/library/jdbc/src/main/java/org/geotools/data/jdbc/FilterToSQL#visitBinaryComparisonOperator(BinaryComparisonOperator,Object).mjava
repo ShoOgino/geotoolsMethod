@@ -18,6 +18,21 @@
 
         Expression left = filter.getExpression1();
         Expression right = filter.getExpression2();
+
+        // shortcut for IN case, to have a more natural encoding for the common/sane case of 
+        // "in(property, v1, v2, ... vn) = true" into "property in (v1, v2, ..., vn) 
+        if (inEncodingEnabled && ("=".equals(extraData) || "!=".equals(extraData))) {
+            if (right instanceof Literal && InFunction.isInFunction(left) && 
+                    right.evaluate(null, Boolean.class) != null) {
+                encodeInComparison((Function) left, (Literal) right, extraData);
+                return;
+            } else if (left instanceof Literal && InFunction.isInFunction(right) 
+                    && left.evaluate(null, Boolean.class) != null) {
+                encodeInComparison((Function) right, (Literal) left, extraData);
+                return;
+            }
+        }
+        
         Class leftContext = null, rightContext = null;
         if (left instanceof PropertyName) {
             // aha!  It's a propertyname, we should get the class and pass it in
