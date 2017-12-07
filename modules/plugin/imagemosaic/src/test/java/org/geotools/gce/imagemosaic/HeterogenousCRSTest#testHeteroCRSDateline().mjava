@@ -10,7 +10,7 @@
         ImageMosaicReader imReader = new ImageMosaicReader(testDirectory, creationHints);
         Assert.assertNotNull(imReader);
         assertEquals(CRS.toSRS(imReader.getCoordinateReferenceSystem()), "EPSG:4326");
-        
+
         // read before dateline
         GeneralParameterValue gg1 = buildGridGeometryParameter(new ReferencedEnvelope(179, 180, 60, 62, DefaultGeographicCRS.WGS84), 128, 256);
         GridCoverage2D gcBefore = imReader.read(new GeneralParameterValue[] {gg1});
@@ -22,5 +22,16 @@
         GridCoverage2D gcAfter = imReader.read(new GeneralParameterValue[] {ggAfter});
         RenderedImage riAfter = gcAfter.getRenderedImage();
         ImageAssert.assertEquals(testFile("hetero_crs_dateline_results/after.png"), riAfter, 1000);
+
+        GranuleSource gs = imReader.getGranules(null, true);
+        SimpleFeatureCollection granules = gs.getGranules(Query.ALL);
+        try (SimpleFeatureIterator fi = granules.features()) {
+            while (fi.hasNext()) {
+                SimpleFeature sf = fi.next();
+                Geometry geom = (Geometry) sf.getDefaultGeometry();
+                // check it did not wrap around the globe
+                assertTrue(geom.toText(), geom.getEnvelopeInternal().getWidth() < 3);
+            }
+        }
     }
 
