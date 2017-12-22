@@ -1,0 +1,50 @@
+    @Test
+    public void testTransparentTile() throws IOException, FactoryException {
+
+        Layer layer = new AsyncTileLayer(service);
+//        Layer layer = new TileLayer(service);
+
+        MapContent map = new SingleLayerMapContent(layer);
+
+        GTRenderer renderer = new StreamingRenderer();
+        renderer.setMapContent(map);
+
+        ReferencedEnvelope mapBounds = service.getBounds();
+        double heightToWidth = mapBounds.getSpan(1) / mapBounds.getSpan(0);
+        int imageWidth = 600;
+        Rectangle imageBounds = new Rectangle(0, 0, imageWidth, (int) Math.round(imageWidth * heightToWidth));
+        map.getViewport().setScreenArea(imageBounds);
+        map.getViewport().setBounds(mapBounds);
+
+        BufferedImage image = new BufferedImage(imageBounds.width, imageBounds.height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D gr = image.createGraphics();
+
+        // set background color for assertion
+        gr.setPaint(Color.RED);
+        gr.fill(imageBounds);
+
+        // render tiles
+        renderer.paint(gr, imageBounds, mapBounds);
+//        File fileToSave = new File("d:\\test.bmp");
+//        ImageIO.write(image, "bmp", fileToSave);
+
+        // get first pixel
+        int argb = image.getRGB(0, 0);
+        boolean hasAlphaChannel = image.getAlphaRaster() != null;
+        Color c = new Color(argb, hasAlphaChannel);
+        System.out.println(String.format("First pixel : alpha=%s red=%s green=%s blue=%s", c.getAlpha(), c.getRed(), c.getGreen(), c.getBlue()));
+        Assert.assertEquals("Color should be RED (background)", Color.RED, c);
+
+        // get a rendered pixel
+        argb = image.getRGB(69, 49);
+        c = new Color(argb, hasAlphaChannel);
+        System.out.println(String.format("Rendered pixel : alpha=%s red=%s green=%s blue=%s", c.getAlpha(), c.getRed(), c.getGreen(), c.getBlue()));
+        Assert.assertEquals("Color should be black", Color.BLACK, c);
+
+        // get another rendered pixel
+        argb = image.getRGB(154, 64);
+        c = new Color(argb, hasAlphaChannel);
+        System.out.println(String.format("Rendered pixel : alpha=%s red=%s green=%s blue=%s", c.getAlpha(), c.getRed(), c.getGreen(), c.getBlue()));
+        Assert.assertEquals("Color should be very dark red", new Color(44, 0, 0), c);
+    }
+
