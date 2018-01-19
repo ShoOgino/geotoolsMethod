@@ -1,0 +1,58 @@
+    void addLayer(Layer layer, String style) {
+        this.layers.add(new LayerStyle(layer, style));
+
+        if (srsName == null) {
+            // initialize from first layer
+            for (String srs : layer.getBoundingBoxes().keySet()) {
+                try {
+                    // check it's valid, if not we crap out and move to the next
+                    CRS.decode(srs);
+                    srsName = srs;
+                    break;
+                } catch (Exception e) {
+                    // it's fine, we could not decode that code
+                }
+            }
+
+            if (srsName == null) {
+                if (layer.getSrs().contains("EPSG:4326")) {
+                    // otherwise we try 4326
+                    srsName = "EPSG:4326";
+                } else {
+                    // if not even that works we just take the first...
+                    srsName = layer.getSrs().iterator().next();
+                }
+            }
+            validSRS = layer.getSrs();
+        } else {
+            Set<String> intersection = new HashSet<String>(validSRS);
+            intersection.retainAll(layer.getSrs());
+
+            // can we reuse what we have?
+            if (!intersection.contains(srsName)) {
+                if (intersection.size() == 0) {
+                    throw new IllegalArgumentException("The layer being appended does "
+                            + "not have any SRS in common with the ones already "
+                            + "included in the WMS request, cannot be merged");
+                } else if (intersection.contains("EPSG:4326")) {
+                    srsName = "EPSG:4326";
+                } else {
+                    // if not even that works we just take the first...
+                    srsName = intersection.iterator().next();
+                }
+                this.validSRS = intersection;
+            }
+        }
+
+        CoordinateReferenceSystem crs = null;
+        try {
+            crs = CRS.decode(srsName);
+        } catch (Exception e) {
+            LOGGER.log(Level.FINE, "Bounds unavailable for layer" + layer);
+        }
+        this.crs = crs;
+
+        // update the cached bounds and the reader original envelope
+        updateBounds();
+    }
+
