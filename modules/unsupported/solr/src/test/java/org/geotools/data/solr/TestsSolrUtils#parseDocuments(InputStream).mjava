@@ -1,0 +1,37 @@
+    /**
+     * Extracts Solr documents from a XML document.
+     *
+     * @param xml stream contain a XML document
+     * @return list of extracted Solr document, this list may be empty but never NULL
+     */
+    private static List<SolrInputDocument> parseDocuments(InputStream xml) {
+        ArrayList<SolrInputDocument> solrDocuments = new ArrayList<>();
+        // parse the XMl document
+        Document document = parseXmlDocument(xml);
+        // get all the Solr documents XML nodes and parse them to a Solr document
+        NodeList documentsNodes = document.getElementsByTagName("doc");
+        for (int i = 0; i < documentsNodes.getLength(); i++) {
+            Node documentNode = documentsNodes.item(i);
+            if (documentNode.getNodeType() != Node.ELEMENT_NODE) {
+                // not a Solr document, let's move to the next one
+                continue;
+            }
+            SolrInputDocument solrDocument = new SolrInputDocument();
+            NodeList fieldsNodes = documentNode.getChildNodes();
+            // let's add the document XML node fields to the Solr document
+            for (int j = 0; j < fieldsNodes.getLength(); j++) {
+                Node fieldNode = fieldsNodes.item(j);
+                if (fieldNode.getNodeType() == Node.ELEMENT_NODE) {
+                    // this si a valid element node, let's extract the necessary information
+                    Element field = (Element) fieldNode;
+                    String fieldName = field.getAttribute("name");
+                    String fieldValue = field.getTextContent();
+                    // add the field to the Solr document
+                    solrDocument.addField(fieldName, fieldValue);
+                }
+            }
+            solrDocuments.add(solrDocument);
+        }
+        return solrDocuments;
+    }
+

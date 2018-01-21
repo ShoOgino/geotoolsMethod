@@ -1,0 +1,25 @@
+    /**
+     * Helper method that creates a new field type using the provided attributes.
+     * If a field type with the same name already exists its definition will be
+     * replaced.
+     *
+     * @param client     Sorl client to use, should already point to the desired core
+     * @param attributes attributes of the field type to create
+     */
+    private static void createFieldType(HttpSolrClient client, Map<String, Object> attributes) {
+        FieldTypeDefinition typeDefinition = new FieldTypeDefinition();
+        typeDefinition.setAttributes(attributes);
+        // try to create the field type
+        Response addResponse = runSolrRequest(client, new SchemaRequest.AddFieldType(typeDefinition));
+        if (!addResponse.hasErrors()) {
+            // no errors, which means that the field type was correctly created
+            return;
+        }
+        // something bad happen, let's assume that a field type with the same name already exists
+        Response replaceResponse = runSolrRequest(client, new SchemaRequest.ReplaceFieldType(typeDefinition));
+        if (replaceResponse.hasErrors()) {
+            // trying to replace the field type failed, let's throw an exception with all the messages errors
+            Response.throwIfNeeded(addResponse, replaceResponse);
+        }
+    }
+
