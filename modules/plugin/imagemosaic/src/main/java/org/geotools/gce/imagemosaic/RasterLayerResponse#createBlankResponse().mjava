@@ -12,7 +12,29 @@
         LOGGER.fine("Creating constant image for area with no data");
 
         final ImageLayout2 il = new ImageLayout2();
-        il.setColorModel(rasterManager.defaultCM);
+        ColorModel cm = rasterManager.defaultCM;
+        SampleModel sm = rasterManager.defaultSM;
+        int[] bands = baseReadParameters.getBands();
+
+        if (bands != null && cm != null && bands.length != cm.getNumComponents()) {
+            final int nBands = bands.length;
+            ColorSpace cs = null;
+            switch (nBands) {
+            case 1:
+                cs = ColorSpace.getInstance(ColorSpace.CS_GRAY);
+                break;
+            case 3:
+                cs = ColorSpace.getInstance(ColorSpace.CS_sRGB);
+                break;
+            default:
+                cs = new BogusColorSpace(nBands);
+            }
+            cm = new ComponentColorModel(cs, cm.hasAlpha(), cm.isAlphaPremultiplied(),
+                    cm.getTransparency(), cm.getTransferType());
+            sm = cm.createCompatibleSampleModel(sm.getWidth(), sm.getHeight());
+        }
+
+        il.setColorModel(cm);
         Dimension tileSize = request.getTileDimensions();
         if (tileSize == null) {
             tileSize = JAI.getDefaultTileSize();
@@ -38,10 +60,9 @@
 
             // impose the color model and samplemodel as the constant operation does not take them
             // into account!
-            if (rasterManager.defaultCM != null) {
-                il.setColorModel(rasterManager.defaultCM);
-                il.setSampleModel(rasterManager.defaultCM
-                        .createCompatibleSampleModel(tileSize.width, tileSize.height));
+            if (cm != null) {
+                il.setColorModel(cm);
+                il.setSampleModel(cm.createCompatibleSampleModel(tileSize.width, tileSize.height));
                 finalImage = new ImageWorker(finalImage).setRenderingHints(renderingHints)
                         .format(il.getSampleModel(null).getDataType()).getRenderedImage();
             }
@@ -52,19 +73,26 @@
             }
             // impose the color model and samplemodel as the constant operation does not take them
             // into account!
-            ColorModel cm;
-            if (rasterManager.defaultCM != null) {
-                cm = rasterManager.defaultCM;
-            } else {
+            if (cm == null) {
                 byte[] arr = { (byte) 0, (byte) 0xff };
                 cm = new IndexColorModel(1, 2, arr, arr, arr);
             }
             il.setColorModel(cm);
             il.setSampleModel(cm.createCompatibleSampleModel(tileSize.width, tileSize.height));
 
-            final double[] bkgValues = new double[values.length];
-            for (int i = 0; i < values.length; i++) {
-                bkgValues[i] = values[i].doubleValue();
+            final double[] bkgValues;
+            if (bands != null && bands.length != 0) {
+                // Extract the background values
+                bkgValues = new double[bands.length];
+                for (int k = 0; k < bands.length; k++) {
+                    int index = k > values.length ? 0 : bands[k];
+                    bkgValues[k] = values[index].doubleValue();
+                }
+            } else {
+                bkgValues = new double[values.length];
+                for (int i = 0; i < values.length; i++) {
+                    bkgValues[i] = values[i].doubleValue();
+                }
             }
             Assert.isTrue(il.isValid(ImageLayout.WIDTH_MASK | ImageLayout.HEIGHT_MASK
                     | ImageLayout.SAMPLE_MODEL_MASK));
