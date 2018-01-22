@@ -1,0 +1,46 @@
+    @Test
+    public void testStatisticsOnZeroes() {
+        CoordinateReferenceSystem crs = DefaultEngineeringCRS.GENERIC_2D;
+
+        // prepare a BW image in 3857
+        BufferedImage image = new BufferedImage(100, 100, BufferedImage.TYPE_BYTE_BINARY);
+        Graphics2D graphics = image.createGraphics();
+        graphics.setColor(Color.WHITE);
+        graphics.fillRect(0, 0, 50, 100);
+        graphics.dispose();
+        final MathTransform transform = new AffineTransform2D(AffineTransform.getScaleInstance(1, 1));
+        GridCoverage2D coverage2D = CoverageFactoryFinder.getGridCoverageFactory(null).create(
+                "coverage",
+                image,
+                new GridGeometry2D(new GridEnvelope2D(PlanarImage.wrapRenderedImage(image)
+                        .getBounds()), transform, crs),
+                new GridSampleDimension[] {new GridSampleDimension("coverage")}, null, null);
+        assertNotNull(coverage2D);
+
+        // prepare one rectangle feature that covers (and more) the top half of the raster
+        SimpleFeatureTypeBuilder tb = new SimpleFeatureTypeBuilder();
+        tb.add("geom", Polygon.class, crs);
+        tb.add("cat", Integer.class);
+        tb.setName("zones");
+        SimpleFeatureType schema = tb.buildFeatureType();
+        Polygon poly = JTS.toGeometry(new Envelope(-10, 110, -10, 50));
+        SimpleFeature feature = SimpleFeatureBuilder.build(schema, new Object[]{poly, Integer.valueOf(1)}, "fid123");
+        SimpleFeatureCollection features = DataUtilities.collection(feature);
+
+        RasterZonalStatistics stats = new RasterZonalStatistics();
+        SimpleFeatureCollection results = stats.execute(coverage2D, 0, features, coverage2D);
+        List<SimpleFeature> resultList = DataUtilities.list(results);
+        
+        assertEquals(2, resultList.size());
+        Map<Integer, Integer> countsSummary = new LinkedHashMap<>();
+        for (SimpleFeature sf : resultList) {
+            int cloud = ((Number) sf.getAttribute("max")).intValue();
+            int count = ((Number) sf.getAttribute("count")).intValue();
+            countsSummary.compute(cloud, (k, v) -> v == null ? count : v + count);
+        }
+        // evenly split, half and half
+        assertEquals(2500, countsSummary.get(0), 0d);
+        assertEquals(2500, countsSummary.get(1), 0d);
+
+    }
+
