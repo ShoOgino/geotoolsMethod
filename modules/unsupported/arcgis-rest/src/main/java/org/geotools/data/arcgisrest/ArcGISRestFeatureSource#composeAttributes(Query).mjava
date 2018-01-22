@@ -1,0 +1,42 @@
+    /**
+     * Helper method to return an attribute list as the API expects it
+     *
+     * @param query Query to build the attributes for
+     */
+    protected String composeAttributes(Query query) {
+
+        StringJoiner joiner = new StringJoiner(",");
+
+        // The Object ID is always in to ensure the GeoJSON is correctly processed
+        // by the parser,
+        // For instance, when the GeoJSON properties is null (i.e., only the
+        // geometry is
+        // returned), WMS GetMap requests return an empty image
+        joiner.add(this.objectIdField);
+
+        if (query.retrieveAllProperties()) {
+            Iterator<AttributeDescriptor> iter = this.schema.getAttributeDescriptors()
+                .iterator();
+            while (iter.hasNext()) {
+                AttributeDescriptor attr = iter.next();
+                // Skips ID and geometry field
+                if (!attr.getLocalName().equalsIgnoreCase(this.objectIdField)
+                    && !attr.getLocalName().equalsIgnoreCase(
+                    this.schema.getGeometryDescriptor().getLocalName())) {
+                    joiner.add(iter.next().getLocalName());
+                }
+            }
+        } else {
+            for (String attr : query.getPropertyNames()) {
+                // Skips ID and geometry field
+                if (!attr.equalsIgnoreCase(this.objectIdField)
+                    && !attr.equalsIgnoreCase(
+                    this.schema.getGeometryDescriptor().getLocalName())) {
+                    joiner.add(attr);
+                }
+            }
+        }
+
+        return joiner.toString();
+    }
+

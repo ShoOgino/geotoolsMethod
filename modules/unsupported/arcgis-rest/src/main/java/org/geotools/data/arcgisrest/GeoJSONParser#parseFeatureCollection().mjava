@@ -1,0 +1,64 @@
+    /**
+     * Returns an iterator to navigate the features in the GeoJSON input stream.
+     * Since ArcGIS ReST API may return an error message as a JSON (not a
+     * GeoJSON), this case is handled by throwing an exception
+     *
+     * @return A simple feature collection iterator
+     * @throws IOException
+     */
+    public void parseFeatureCollection() throws IOException {
+
+        this.reader.beginObject();
+
+        while (this.reader.hasNext()) {
+
+            switch (this.reader.nextName()) {
+
+                case ERROR:
+                    // Deals with an error as reported by the ArcGIS ReST API
+                    throw this.parseError();
+
+                case GEOJSON_PROPERTIES:
+                    // TODO: ESRI extension to GeoJSON
+                    this.reader.beginObject();
+                    while (this.reader.hasNext()) {
+                        this.reader.skipValue();
+                    }
+                    this.reader.endObject();
+                    break;
+
+                case GEOJSON_TOTALFEATURES:
+                    // TODO: ESRI extension to GeoJSON
+                    this.reader.skipValue();
+                    break;
+
+                case CRS:
+                    this.reader.beginObject();
+                    while (this.reader.hasNext()) {
+                        // TODO: this should be checked against the CRS of the feature type
+                        this.reader.skipValue();
+                    }
+                    this.reader.endObject();
+                    break;
+
+                case GEOJSON_TYPE:
+                    this.checkPropertyValue(GEOJSON_TYPE_VALUE_FC);
+                    break;
+
+                case FEATURES:
+                    this.reader.beginArray();
+                    this.inFeatureCollection = true;
+
+                    // If there is the features array to read, we can leave this method
+                    return;
+
+                default:
+                    this.LOGGER.log(Level.WARNING, "Unrecognised property");
+            }
+        }
+
+        // If we come to this, the GeoJSON is not correctly formatted
+        this.reader.beginObject();
+        this.inFeatureCollection = false;
+    }
+

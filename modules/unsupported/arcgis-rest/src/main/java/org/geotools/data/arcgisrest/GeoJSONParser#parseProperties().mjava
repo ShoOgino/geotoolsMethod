@@ -1,0 +1,63 @@
+    /**
+     * Parses a GeoJSON feature properties. The values returned in a map is a
+     * Boolean, a String, or a Double (for every numeric values)
+     *
+     * @return A map with property names as keys, and property values as values
+     * @throws IOException, JsonSyntaxException, IllegalStateException
+     */
+    public Map<String, Object> parseProperties()
+        throws JsonSyntaxException, IOException, IllegalStateException {
+
+        Map<String, Object> props = new HashMap<String, Object>();
+        String name;
+
+        // If properties is null, returns a null point
+        // If geometry is null, returns a null point
+        try {
+            if (this.reader.peek() == JsonToken.NULL) {
+                this.reader.nextNull();
+                throw (new MalformedJsonException(
+                    "just here to avoid repeating the return statement"));
+            }
+        } catch (IllegalStateException | MalformedJsonException e) {
+            return props;
+        }
+
+        this.reader.beginObject();
+
+        try {
+            while (this.reader.hasNext()) {
+                name = this.reader.nextName();
+
+                switch (this.reader.peek()) {
+
+                    case BOOLEAN:
+                        props.put(name, this.reader.nextBoolean());
+                        break;
+
+                    case NUMBER:
+                        props.put(name, this.reader.nextDouble());
+                        break;
+
+                    case STRING:
+                        props.put(name, this.reader.nextString());
+                        break;
+
+                    case NULL:
+                        this.reader.nextNull();
+                        props.put(name, null);
+                        break;
+
+                    default:
+                        throw (new JsonSyntaxException("Value expected"));
+                }
+            }
+        } catch (IOException | IllegalStateException e) {
+            throw (new NoSuchElementException(e.getMessage()));
+        }
+
+        this.reader.endObject();
+
+        return props;
+    }
+

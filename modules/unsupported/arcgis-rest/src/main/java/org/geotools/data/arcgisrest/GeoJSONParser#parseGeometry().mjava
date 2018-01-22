@@ -1,0 +1,92 @@
+    /**
+     * Parses a Geometry in GeoJSON format
+     *
+     * @return list of arrays with ring coordinates
+     * @throws IOException, JsonSyntaxException, IllegalStateException
+     */
+    public Geometry parseGeometry()
+        throws JsonSyntaxException, IOException, IllegalStateException {
+
+        double[] coords;
+        GeometryBuilder builder = new GeometryBuilder();
+        GeometryFactory geomFactory = new GeometryFactory();
+
+        // If geometry is null, returns a null point
+        try {
+            if (this.reader.peek() == JsonToken.NULL) {
+                this.reader.nextNull();
+                throw (new MalformedJsonException(
+                    "just here to avoid repeating the return statement"));
+            }
+        } catch (IllegalStateException | MalformedJsonException e) {
+            return builder.point();
+        }
+
+        this.reader.beginObject();
+
+        // Check the presence of feature type
+        if (!reader.nextName().equals(FEATURE_TYPE)) {
+            throw (new JsonSyntaxException("Geometry type expected"));
+        }
+
+        switch (reader.nextString()) {
+
+            case GEOMETRY_POINT:
+                this.checkPropertyName(FEATURE_GEOMETRY_COORDINATES);
+                coords = this.parsePointCoordinates();
+                this.reader.endObject();
+                return (Geometry) builder.point(coords[0], coords[1]);
+
+            case GEOMETRY_MULTIPOINT:
+                this.checkPropertyName(FEATURE_GEOMETRY_COORDINATES);
+                List<double[]> pointCoords = this.parseMultiPointCoordinates();
+                ;
+                Point[] points = new Point[pointCoords.size()];
+                for (int i = 0; i < pointCoords.size(); i++) {
+                    points[i] = (Point) builder.point(pointCoords.get(i)[0],
+                        pointCoords.get(i)[1]);
+                }
+                this.reader.endObject();
+                return (Geometry) new MultiPoint(points, geomFactory);
+
+            case GEOMETRY_LINE:
+                this.checkPropertyName(FEATURE_GEOMETRY_COORDINATES);
+                coords = this.parseLineStringCoordinates();
+                this.reader.endObject();
+                return (Geometry) builder.lineString(coords);
+
+            case GEOMETRY_MULTILINE:
+                this.checkPropertyName(FEATURE_GEOMETRY_COORDINATES);
+                List<double[]> lineArrays = this.parseMultiLineStringCoordinates();
+                LineString[] lines = new LineString[lineArrays.size()];
+                int i = 0;
+                for (double[] array : lineArrays) {
+                    lines[i++] = builder.lineString(array);
+                }
+                this.reader.endObject();
+                return (Geometry) builder.multiLineString(lines);
+
+            case GEOMETRY_POLYGON:
+                this.checkPropertyName(FEATURE_GEOMETRY_COORDINATES);
+                List<double[]> rings = this.parsePolygonCoordinates();
+                this.reader.endObject();
+                return (Geometry) builder.polygon(rings.get(0)); // FIXME: what about
+            // holes?
+
+            case GEOMETRY_MULTIPOLYGON:
+                this.checkPropertyName(FEATURE_GEOMETRY_COORDINATES);
+                List<List<double[]>> polyArrays = this.parseMultiPolygonCoordinates();
+                Polygon[] polys = new Polygon[polyArrays.size()];
+                int j = 0;
+                for (List<double[]> array : polyArrays) {
+                    polys[j++] = builder.polygon(array.get(0)); // FIXME: what about holes?
+                }
+                this.reader.endObject();
+                return (Geometry) builder.multiPolygon(polys);
+
+            default:
+                throw (new JsonSyntaxException("Unrecognized geometry type"));
+        }
+
+    }
+

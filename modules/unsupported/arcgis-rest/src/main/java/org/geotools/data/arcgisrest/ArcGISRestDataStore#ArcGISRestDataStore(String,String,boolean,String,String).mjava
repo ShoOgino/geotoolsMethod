@@ -1,0 +1,94 @@
+    public ArcGISRestDataStore(String namespaceIn, String apiEndpoint,
+                               boolean opendataFlagIn, String user, String password)
+        throws MalformedURLException, JsonSyntaxException, IOException {
+
+        super();
+
+        try {
+            this.namespace = new URL(namespaceIn);
+        } catch (MalformedURLException e) {
+            LOGGER.log(Level.SEVERE,
+                "Namespace \"" + namespaceIn + "\" is not properly formatted", e);
+            throw (e);
+        }
+        try {
+            this.apiUrl = new URL(apiEndpoint);
+        } catch (MalformedURLException e) {
+            LOGGER.log(Level.SEVERE,
+                "URL \"" + apiEndpoint + "\" is not properly formatted", e);
+            throw (e);
+        }
+        this.user = user;
+        this.password = password;
+        this.opendataFlag = opendataFlagIn;
+
+        // Retrieves the catalog JSON document
+        String response = null;
+        Error_ err;
+        try {
+            response = ArcGISRestDataStore.InputStreamToString(
+                this.retrieveJSON("GET", apiUrl, DEFAULT_PARAMS));
+        } catch (IOException e) {
+            LOGGER.log(Level.SEVERE, "Error during retrieval of service '" + apiUrl
+                + "' " + e.getMessage(), e);
+            throw (e);
+        }
+
+        // Gets the catalog of web services in either the Open Data catalog, or
+        // the ArcGIS Server list of services
+
+        // If this is the Open Data catalog, it loads it
+        if (this.opendataFlag == true) {
+            this.catalog = (new Gson()).fromJson(response, Catalog.class);
+            if (this.catalog == null) {
+                throw (new JsonSyntaxException("Malformed JSON"));
+            }
+
+            // It it is an ArcGIS Server, cycles through the services list to
+            // retrieve the web services URL of the FeautreServers
+        } else {
+            this.catalog = new Catalog();
+
+            Featureserver featureServer = null;
+
+            try {
+                featureServer = (new Gson()).fromJson(response, Featureserver.class);
+                if (featureServer == null) {
+                    throw (new JsonSyntaxException("Malformed JSON"));
+                }
+            } catch (JsonSyntaxException e) {
+                // Checks whether we have an ArcGIS error message
+                Error_ errWS = (new Gson()).fromJson(response, Error_.class);
+                LOGGER.log(Level.SEVERE, "Error during retrieval of feature server "
+                    + errWS.getCode() + " " + errWS.getMessage(), e);
+                return;
+            }
+
+            // Checks API version and output format of the endpoint
+            if (featureServer.getCurrentVersion() < MINIMUM_API_VERSION
+                || featureServer.getSupportedQueryFormats().toString().toLowerCase()
+                .contains(FORMAT_JSON.toLowerCase()) == false) {
+                UnsupportedImplementationException e = new UnsupportedImplementationException(
+                    "FeatureServer " + apiEndpoint
+                        + " does not support either the minimum API version required, or the GeoJSON format");
+                LOGGER.log(Level.SEVERE, e.getMessage());
+                throw (e);
+            }
+
+            try {
+                String featureServerURLString = apiUrl.toString();
+                featureServer.getLayers().forEach(layer -> {
+                    Dataset ds = new Dataset();
+                    ds.setWebService(featureServerURLString + "/" + layer.getId());
+                    this.catalog.getDataset().add(ds);
+                });
+            } catch (JsonSyntaxException e) {
+                // Checks whether we have an AercGIS error message
+                err = (new Gson()).fromJson(response, Error_.class);
+                LOGGER.log(Level.SEVERE,
+                    "JSON syntax error " + err.getCode() + " " + err.getMessage(), e);
+                throw (e);
+            }
+        }
+    }
+
