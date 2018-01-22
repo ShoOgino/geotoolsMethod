@@ -1,0 +1,26 @@
+  @Override
+  protected int getCountInternal(Query query) throws IOException {
+
+    try {
+      Queue<InputStream> siteStreams = loadSiteStreams(query,
+          dataStore.retrieveSitesJSON());
+
+      int totalMeasurements = 0;
+      for (InputStream inputStream : siteStreams) {
+        JsonFactory jfactory = new JsonFactory();
+        try (JsonParser jParser = jfactory.createParser(inputStream)) {
+          while (jParser.nextToken() != JsonToken.END_OBJECT) {
+            String fieldname = jParser.getCurrentName();
+            if ("NumberOfMeasurements".equals(fieldname)) {
+              jParser.nextToken();
+              totalMeasurements += jParser.getIntValue();
+            }
+          }
+        }
+      }
+      return totalMeasurements;
+    } catch (CQLException e) {
+      throw new IllegalArgumentException(e);
+    }
+  }
+

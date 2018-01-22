@@ -1,0 +1,67 @@
+  /**
+   * Returns a map of KVP parameters extracted from the ECQL Filter
+   *
+   * @param filter
+   *          ECQL Filter
+   * @return Map of parameters and values
+   */
+  @SuppressWarnings("unchecked")
+  public Map<String, Object> composeRequestParameters(Filter filter)
+      throws CQLException {
+
+    Map<String, Object> requestParams = null;
+    BBOXFilterExtractor bboxExtractor = (new BBOXFilterExtractor());
+
+    try {
+      requestParams = (Map<String, Object>) filter.accept(
+          new EpaVicFeatureSource.VisitFilter(),
+          new TreeMap<String, Object>(String.CASE_INSENSITIVE_ORDER));
+      filter.accept(bboxExtractor, null);
+      BoundingBox bbox = bboxExtractor.getBBox();
+      if (bbox != null) {
+        requestParams.put(BBOXPARAM, bbox);
+      }
+    } catch (Exception e) {
+      CQLException ce = new CQLException("The " + filter.toString()
+          + " CQL expression is incorrect: " + e.getMessage());
+      ce.setStackTrace(e.getStackTrace());
+      throw ce;
+    }
+
+    if (requestParams.isEmpty()) {
+      return requestParams;
+    }
+
+    // Checks that all required parameters are present, and that no parameter
+    // other than the allowed ones is present
+    try {
+      requestParams.forEach((k, v) -> {
+        if (!(BBOXPARAM.equalsIgnoreCase(k) || MONITORID.equalsIgnoreCase(k)
+            || TIMEBASISID.equalsIgnoreCase(k) || FROMDATE.equalsIgnoreCase(k)
+            || TODATE.equalsIgnoreCase(k))) {
+          throw new IllegalArgumentException();
+        }
+      });
+    } catch (IllegalArgumentException e) {
+      throw new CQLException(composeErrorMessage(filter,
+          "Some of the parameter names provieded are not valid"));
+    }
+
+    if (requestParams.size() < FILTERREQUIREDPARAMS) {
+      throw new CQLException(composeErrorMessage(filter,
+          "The number of parameters provided is incorrect"));
+    }
+
+    // Converts timestamps from ISO-8601 to the format EPA Vic API accepts
+    try {
+      requestParams.replace(FROMDATE, convertDateFormatBetweenAurinAndEPA(
+          (String) requestParams.get(FROMDATE)));
+      requestParams.replace(TODATE, convertDateFormatBetweenAurinAndEPA(
+          (String) requestParams.get(TODATE)));
+    } catch (ParseException e) {
+      throw new CQLException(composeErrorMessage(filter, e.getMessage()));
+    }
+
+    return requestParams;
+  }
+

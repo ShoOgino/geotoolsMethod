@@ -1,0 +1,37 @@
+  @Test
+  public void testCreateFeatureSourceAndCountFeature() throws Exception {
+
+    this.clientMock = PowerMockito.mock(HttpClient.class);
+    PowerMockito.whenNew(HttpClient.class).withNoArguments()
+        .thenReturn(clientMock).thenReturn(clientMock);
+    this.getMock = PowerMockito.mock(GetMethod.class);
+    PowerMockito.whenNew(GetMethod.class).withNoArguments().thenReturn(getMock)
+        .thenReturn(getMock);
+    when(clientMock.executeMethod(getMock)).thenReturn(HttpStatus.SC_OK)
+        .thenReturn(HttpStatus.SC_OK).thenReturn(HttpStatus.SC_OK);
+    when(getMock.getResponseBodyAsStream())
+        .thenReturn(
+            EpaVicDataStoreFactoryTest.readJSONAsStream("test-data/sites.json"))
+        .thenReturn(EpaVicDataStoreFactoryTest
+            .readJSONAsStream("test-data/9measurements.json"))
+        .thenReturn(EpaVicDataStoreFactoryTest
+            .readJSONAsStream("test-data/9measurements.json"));
+
+    this.dataStore = (EpaVicDatastore) EpaVicDataStoreFactoryTest
+        .createDefaultOpenDataTestDataStore();
+    this.dataStore.createTypeNames();
+
+    FeatureSource<SimpleFeatureType, SimpleFeature> src = this.dataStore
+        .createFeatureSource(this.dataStore.getEntry(
+            new NameImpl(EpaVicDataStoreFactoryTest.NAMESPACE, TYPENAME1)));
+    src.getSchema();
+    assertTrue(src instanceof EpaVicFeatureSource);
+    assertEquals("measurement", src.getInfo().getName());
+    assertEquals(EpaVicDataStoreFactoryTest.NAMESPACE,
+        src.getInfo().getSchema().toString());
+    assertEquals(CRS.decode("EPSG:4283"), src.getInfo().getCRS());
+
+    // Feature count test
+    assertEquals(18, src.getCount(q));
+  }
+

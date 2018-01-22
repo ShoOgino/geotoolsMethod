@@ -1,0 +1,54 @@
+  @Test
+  public void testFeaturesWithFilter() throws Exception {
+
+    this.clientMock = PowerMockito.mock(HttpClient.class);
+    PowerMockito.whenNew(HttpClient.class).withNoArguments()
+        .thenReturn(clientMock).thenReturn(clientMock);
+    this.getMock = PowerMockito.mock(GetMethod.class);
+    PowerMockito.whenNew(GetMethod.class).withNoArguments().thenReturn(getMock)
+        .thenReturn(getMock);
+    when(clientMock.executeMethod(getMock)).thenReturn(HttpStatus.SC_OK)
+        .thenReturn(HttpStatus.SC_OK).thenReturn(HttpStatus.SC_OK);
+    when(getMock.getResponseBodyAsStream())
+        .thenReturn(
+            EpaVicDataStoreFactoryTest.readJSONAsStream("test-data/sites.json"))
+        .thenReturn(EpaVicDataStoreFactoryTest
+            .readJSONAsStream("test-data/monitors.json"))
+        .thenReturn(EpaVicDataStoreFactoryTest
+            .readJSONAsStream("test-data/9measurements.json"))
+        .thenReturn(EpaVicDataStoreFactoryTest
+            .readJSONAsStream("test-data/9measurements.json"));
+
+    this.dataStore = (EpaVicDatastore) EpaVicDataStoreFactoryTest
+        .createDefaultOpenDataTestDataStore();
+    this.dataStore.createTypeNames();
+
+    FeatureSource<SimpleFeatureType, SimpleFeature> src = this.dataStore
+        .createFeatureSource(this.dataStore.getEntry(
+            new NameImpl(EpaVicDataStoreFactoryTest.NAMESPACE, TYPENAME1)));
+    src.getSchema();
+
+    // Test feature iteration
+    FeatureCollection<SimpleFeatureType, SimpleFeature> fc = src.getFeatures(q);
+    FeatureIterator iter = fc.features();
+    if (iter.hasNext()) {
+      iter.next();
+    }
+
+    NameValuePair[] check = new NameValuePair[4];
+    check[0] = new NameValuePair(EpaVicFeatureSource.FROMDATE, "2009020706");
+    check[1] = new NameValuePair(EpaVicFeatureSource.MONITORID, "PM10");
+    check[2] = new NameValuePair(EpaVicFeatureSource.TIMEBASISID, "24HR_RAV");
+    check[3] = new NameValuePair(EpaVicFeatureSource.TODATE, "2009020723");
+
+    ArgumentCaptor<NameValuePair[]> captor = ArgumentCaptor
+        .forClass(NameValuePair[].class);
+    verify(getMock, times(2)).setQueryString(captor.capture());
+    NameValuePair[] getMethodCalled = captor.getValue();
+    assertArrayEquals(check, getMethodCalled);
+
+    while (iter.hasNext()) {
+      iter.next();
+    }
+  }
+

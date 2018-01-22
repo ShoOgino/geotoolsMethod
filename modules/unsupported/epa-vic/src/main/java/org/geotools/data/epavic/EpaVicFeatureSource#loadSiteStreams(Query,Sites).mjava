@@ -1,0 +1,28 @@
+  private Queue<InputStream> loadSiteStreams(Query query, Sites sites)
+      throws CQLException, IOException {
+    Map<String, Object> params = composeRequestParameters(query.getFilter());
+    ReferencedEnvelope bbox = (ReferencedEnvelope) params.get(BBOXPARAM);
+
+    List<Site> sitesToRetrieve = Collections.emptyList();
+    if (bbox != null) {
+      sitesToRetrieve = sites.getSites().stream()
+          .filter(
+              site -> bbox.contains(site.getLongitude(), site.getLatitude()))
+          .collect(Collectors.toList());
+    } else {
+      sitesToRetrieve = sites.getSites();
+    }
+
+    Queue<InputStream> siteStreams = new LinkedList<>();
+    if (sitesToRetrieve.isEmpty()) {
+      siteStreams.add(this.dataStore.retrieveJSON(params));
+    } else {
+      for (Site s : sitesToRetrieve) {
+        Map<String, Object> p = new HashMap<>(params);
+        p.put(SITEID, s.getSiteId().toString());
+        siteStreams.add(this.dataStore.retrieveJSON(params));
+      }
+    }
+    return siteStreams;
+  }
+
