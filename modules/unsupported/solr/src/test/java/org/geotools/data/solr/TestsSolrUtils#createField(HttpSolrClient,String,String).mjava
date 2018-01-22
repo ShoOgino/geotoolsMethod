@@ -1,0 +1,27 @@
+    /**
+     * Helper method that creates a new field  using the provided name and type (field
+     * type name). If a field with the same name already exists itd definition will be
+     * replaced.
+     *
+     * @param client Sorl client to use, should already point to the desired core
+     * @param name   name of the field
+     * @param type   field type name
+     */
+    private static void createField(HttpSolrClient client, String name, String type) {
+        Map<String, Object> field = new HashMap<>();
+        field.put("name", name);
+        field.put("type", type);
+        // try to create the field
+        Response addResponse = runSolrRequest(client, new SchemaRequest.AddField(field));
+        if (!addResponse.hasErrors()) {
+            // no errors, which means that the field was correctly created
+            return;
+        }
+        // something bad happen, let's assume that a field with the same name already exists
+        Response replaceResponse = runSolrRequest(client, new SchemaRequest.ReplaceField(field));
+        if (replaceResponse.hasErrors()) {
+            // trying to replace the field definition failed, let's throw an exception with all the messages errors
+            Response.throwIfNeeded(addResponse, replaceResponse);
+        }
+    }
+
