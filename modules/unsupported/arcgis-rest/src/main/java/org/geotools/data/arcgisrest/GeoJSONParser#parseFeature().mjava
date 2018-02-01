@@ -1,0 +1,66 @@
+    /**
+     * Parses a GeoJSON feature that conforms to the given FeatureType
+     *
+     * @return the parsed feature
+     */
+    public SimpleFeature parseFeature() {
+
+        Geometry geom = null;
+        String id = SimpleFeatureBuilder.createDefaultFeatureIdentifier(FEATURES)
+            .getID();
+        Map<String, Object> props = new HashMap<String, Object>();
+        List<Object> values = new ArrayList();
+        SimpleFeatureBuilder builder = new SimpleFeatureBuilder(this.featureType);
+
+        // Parses the feature
+        try {
+            this.reader.beginObject();
+
+            while (this.reader.hasNext()) {
+
+                switch (this.reader.nextName()) {
+
+                    case FEATURE_TYPE:
+                        this.checkPropertyValue(FEATURE_TYPE_VALUE);
+                        break;
+
+                    case FEATURE_GEOMETRY:
+                        geom = this.parseGeometry();
+                        break;
+
+                    case FEATURE_PROPERTIES:
+                        props = this.parseProperties();
+                        break;
+
+                    case FEATURE_ID:
+                        id = this.reader.nextString();
+                        break;
+
+                    default:
+                        this.LOGGER.log(Level.WARNING, "Unrecognized feature format");
+                        this.reader.skipValue();
+                }
+            }
+
+            this.reader.endObject();
+
+        } catch (IOException | IllegalStateException e) {
+            throw (new NoSuchElementException(e.getMessage()));
+        }
+
+        // Builds the feature, inserting the properties in the same
+        // order of the atterbiutes in the feature type
+        for (AttributeDescriptor attr : this.featureType
+            .getAttributeDescriptors()) {
+
+            if (this.featureType.getGeometryDescriptor().getLocalName()
+                .equals(attr.getLocalName())) {
+                builder.add(geom);
+            } else {
+                builder.add(props.get(attr.getLocalName()));
+            }
+        }
+
+        return builder.buildFeature(id);
+    }
+

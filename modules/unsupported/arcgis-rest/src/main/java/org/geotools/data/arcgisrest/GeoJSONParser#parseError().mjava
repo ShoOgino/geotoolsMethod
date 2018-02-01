@@ -1,0 +1,47 @@
+    /**
+     * Parses an ArcGIS ReST API error message
+     *
+     * @return the exception reflecting the error
+     * @throws IOException
+     */
+    public IOException parseError() throws IOException {
+
+        Error_ err = new Error_();
+
+        try {
+            this.reader.beginObject();
+
+            while (this.reader.hasNext()) {
+
+                switch (this.reader.nextName()) {
+
+                    case ERROR_CODE:
+                        err.setCode(this.reader.nextInt());
+                        break;
+
+                    case ERROR_MESSAGE:
+                        err.setMessage(this.reader.nextString());
+                        break;
+
+                    case ERROR_DETAILS:
+                        List<String> details = new ArrayList<String>();
+                        this.reader.beginArray();
+                        while (this.reader.hasNext()) {
+                            details.add(this.reader.nextString());
+                        }
+                        this.reader.endArray();
+                        err.setDetails(details);
+                }
+            }
+
+            this.reader.endObject();
+
+        } catch (IOException | IllegalStateException e) {
+            throw (new NoSuchElementException(e.getMessage()));
+        }
+
+        this.close();
+        return new IOException("ArcGIS ReST API Error: " + err.getCode() + " "
+            + err.getMessage() + " " + String.join(",", err.getDetails()));
+    }
+
