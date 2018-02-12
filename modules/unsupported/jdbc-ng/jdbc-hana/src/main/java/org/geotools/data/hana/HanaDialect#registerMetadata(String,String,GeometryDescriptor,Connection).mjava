@@ -1,0 +1,31 @@
+    private void registerMetadata(
+            String schemaName, String tableName, GeometryDescriptor gd, Connection cx)
+            throws SQLException {
+        // HANA accepts 2-, 3- and 4-dimensional geometries in each geometry column.
+        // Therefore, we store the information about the dimension in an extra metadata table.
+        int dimensions = 2;
+        Integer dimHint = (Integer) gd.getUserData().get(Hints.COORDINATE_DIMENSION);
+        if (dimHint != null) {
+            dimensions = dimHint;
+        }
+        if (!tableExists(schemaName, METADATA_TABLE_NAME, cx)) {
+            createMetadataTable(schemaName, cx);
+        }
+        String columnName = gd.getLocalName();
+
+        StringBuffer sql = new StringBuffer();
+        sql.append("INSERT INTO ");
+        encodeIdentifiers(sql, schemaName, METADATA_TABLE_NAME);
+        sql.append(" VALUES(?, ?, ?)");
+
+        PreparedStatement ps = cx.prepareStatement(sql.toString());
+        try {
+            ps.setString(1, tableName);
+            ps.setString(2, columnName);
+            ps.setInt(3, dimensions);
+            ps.executeUpdate();
+        } finally {
+            dataStore.closeSafe(ps);
+        }
+    }
+

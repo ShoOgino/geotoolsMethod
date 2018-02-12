@@ -1,0 +1,33 @@
+    private Object visitBBOXSpatialOperator(
+            BBOX filter, PropertyName property, Literal geometry, Object extraData) {
+        try {
+            property.accept(this, extraData);
+            out.write(".ST_IntersectsRectPlanar(");
+            BoundingBox bbox = clamp(filter.getBounds());
+            Coordinate ll = new Coordinate(bbox.getMinX(), bbox.getMinY());
+            Coordinate ur = new Coordinate(bbox.getMaxX(), bbox.getMaxY());
+            GeometryFactory factory = new GeometryFactory();
+            visitGeometry(factory.createPoint(ll));
+            out.write(", ");
+            visitGeometry(factory.createPoint(ur));
+            out.write(") = 1");
+            if (filter instanceof BBOX3D) {
+                BBOX3D filter3d = (BBOX3D) filter;
+                BoundingBox3D bbox3d = filter3d.getBounds();
+                double minz = bbox3d.getMinZ();
+                double maxz = bbox3d.getMaxZ();
+                out.write(" AND ");
+                property.accept(this, extraData);
+                out.write(".ST_ZMin() <= ");
+                out.write(Double.toString(maxz));
+                out.write(" AND ");
+                property.accept(this, extraData);
+                out.write(".ST_ZMax() >= ");
+                out.write(Double.toString(minz));
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return extraData;
+    }
+
