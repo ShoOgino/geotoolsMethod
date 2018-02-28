@@ -1,0 +1,67 @@
+    public void testImageReaderPolyphemusSimple(Consumer<NetCDFImageReader> readerCustomizer) throws Exception {
+        final File file = TestData.file(this, "O3-NO2.nc");
+        final NetCDFImageReaderSpi unidataImageReaderSpi = new NetCDFImageReaderSpi();
+        assertTrue(unidataImageReaderSpi.canDecodeInput(file));
+        NetCDFImageReader reader = null;
+        try {
+
+            // checking low level
+            reader = (NetCDFImageReader) unidataImageReaderSpi.createReaderInstance();
+            if (readerCustomizer != null) {
+                readerCustomizer.accept(reader);
+            }
+            reader.setInput(file);
+            int numImages = reader.getNumImages(true);
+            LOGGER.info("Found " + numImages + " images.");
+            for (int i = 0; i < numImages; i++) {
+                Slice2DIndex sliceIndex = reader.getSlice2DIndex(i);
+                assertNotNull(sliceIndex);
+                spitOutSliceInformation(i, sliceIndex);
+            }
+
+            // checking slice catalog
+            final CoverageSlicesCatalog cs = reader.getCatalog();
+            assertNotNull(cs);
+
+            // get typenames
+            final String[] typeNames = cs.getTypeNames();
+            for (String typeName : typeNames) {
+                final List<CoverageSlice> granules = cs.getGranules(new Query(typeName,
+                        Filter.INCLUDE));
+                assertNotNull(granules);
+                assertFalse(granules.isEmpty());
+                for (CoverageSlice slice : granules) {
+                    final SimpleFeature sf = slice.getOriginator();
+                    if (TestData.isInteractiveTest()) {
+                        LOGGER.info(DataUtilities.encodeFeature(sf));
+                    }
+
+                    // checks
+                    for (Property p : sf.getProperties()) {
+                        assertNotNull("Property " + p.getName() + " had a null value!",
+                                p.getValue());
+                    }
+                }
+            }
+
+            // check metadata
+            CoreCommonImageMetadata metadata = (CoreCommonImageMetadata) reader.getImageMetadata(0);
+            assertEquals(80, metadata.getWidth());
+            assertEquals(48, metadata.getHeight());
+            assertEquals(80, metadata.getTileWidth());
+            assertEquals(1, metadata.getTileHeight());
+            assertEquals(48, metadata.getSampleModel().getNumBands());
+            assertEquals(48, metadata.getNumBands());
+            assertEquals("FloatDoubleColorModel", metadata.getColorModel().getClass().getSimpleName());
+            assertEquals("EPSG:4326", metadata.getProjection());
+        } finally {
+            if (reader != null) {
+                try {
+                    reader.dispose();
+                } catch (Throwable t) {
+                    // Does nothing
+                }
+            }
+        }
+    }
+
