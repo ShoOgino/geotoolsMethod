@@ -1,40 +1,31 @@
     /**
-     * Creates an operation from a projected to a geographic coordinate reference system.
-     * The default implementation constructs the following operation chain:
+     * Creates an operation from a projected to a geographic coordinate reference system. The default implementation constructs the following
+     * operation chain:
      *
-     * <blockquote><pre>
+     * <blockquote>
+     * 
+     * <pre>
      * sourceCRS  &rarr;  {@linkplain ProjectedCRS#getBaseCRS baseCRS}  &rarr;  targetCRS
-     * </pre></blockquote>
+     * </pre>
+     * 
+     * </blockquote>
      *
-     * where the conversion from {@code sourceCRS} to {@code baseCRS} is obtained
-     * from the inverse of
+     * where the conversion from {@code sourceCRS} to {@code baseCRS} is obtained from the inverse of
      * <code>sourceCRS.{@linkplain ProjectedCRS#getConversionFromBase
      * getConversionFromBase()}</code>.
      *
-     * @param  sourceCRS Input coordinate reference system.
-     * @param  targetCRS Output coordinate reference system.
+     * @param sourceCRS Input coordinate reference system.
+     * @param targetCRS Output coordinate reference system.
      * @return A coordinate operation from {@code sourceCRS} to {@code targetCRS}.
      * @throws FactoryException If the operation can't be constructed.
      *
      * @todo Provides a non-null method.
      */
-    protected CoordinateOperation createOperationStep(final ProjectedCRS  sourceCRS,
-                                                      final GeographicCRS targetCRS)
-            throws FactoryException
-    {
-        final GeographicCRS base  = sourceCRS.getBaseCRS();
-        CoordinateOperation step1 = sourceCRS.getConversionFromBase();
-        CoordinateOperation step2 = tryDB(base, targetCRS);
-        if (step2 == null) {
-            step2 = createOperationStep(base, targetCRS);
+    protected CoordinateOperation createOperationStep(final ProjectedCRS sourceCRS,
+            final GeographicCRS targetCRS) throws FactoryException {
+        for (CoordinateOperation op : findOperationSteps(sourceCRS, targetCRS, 1)) {
+            return op;
         }
-        MathTransform transform = step1.getMathTransform();
-        try {
-            transform = transform.inverse();
-        } catch (NoninvertibleTransformException exception) {
-            throw new OperationNotFoundException(getErrorMessage(sourceCRS, base), exception);
-        }
-        step1 = createFromMathTransform(INVERSE_OPERATION, sourceCRS, base, transform);
-        return concatenate(step1, step2);
+        return null;
     }
 

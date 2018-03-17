@@ -1,0 +1,114 @@
+    /**
+     * Returns the list of available operations for conversion or transformation between two coordinate reference systems. The default implementation
+     * extracts the authority code from the supplied {@code sourceCRS} and {@code targetCRS}, and submit them to the
+     * <code>{@linkplain CoordinateOperationAuthorityFactory#createFromCoordinateReferenceSystemCodes
+     * createFromCoordinateReferenceSystemCodes}(sourceCode, targetCode)</code> methods. If no operation is found for those codes, then this method
+     * returns an empty {@link Set}.
+     * <p>
+     * Note that this method may be invoked recursively. For example no operation may be available from the {@linkplain #getAuthorityFactory
+     * underlying authority factory} between two {@linkplain org.opengis.referencing.crs.CompoundCRS compound CRS}, but an operation may be available
+     * between two components of those compound CRS.
+     *
+     * @param sourceCRS Input coordinate reference system.
+     * @param targetCRS Output coordinate reference system.
+     * @param limit The maximum number of operations to be returned. Use -1 to return all the available operations. Use 1 to return just one
+     *        operation. Currently, the behavior for other values of {@code limit} is undefined.
+     * 
+     * @return A set of coordinate operations from {@code sourceCRS} to {@code targetCRS}, or an empty {@code Set} if no operation is explicitly
+     *         defined in the underlying database for that CRS pair.
+     *
+     * @since 19
+     */
+    @Override
+    protected Set<CoordinateOperation> findFromDatabase(final CoordinateReferenceSystem sourceCRS,
+            final CoordinateReferenceSystem targetCRS, int limit) {
+        HashSet<CoordinateOperation> result = new HashSet<CoordinateOperation>();
+        /*
+         * Safety check against recursivity: returns null if the given source and target CRS
+         * are already under examination by a previous call to this method. Note: there is no
+         * need to synchronize since the Boolean is thread-local.
+         */
+        if (Boolean.TRUE.equals(processing.get())) {
+            return result;
+        }
+        /*
+         * Now performs the real work.
+         */
+        final CoordinateOperationAuthorityFactory authorityFactory = getAuthorityFactory();
+        final Citation authority = authorityFactory.getAuthority();
+        final Identifier sourceID = AbstractIdentifiedObject.getIdentifier(sourceCRS, authority);
+        if (sourceID == null) {
+            return result;
+        }
+        final Identifier targetID = AbstractIdentifiedObject.getIdentifier(targetCRS, authority);
+        if (targetID == null) {
+            return result;
+        }
+        final String sourceCode = sourceID.getCode().trim();
+        final String targetCode = targetID.getCode().trim();
+        if (sourceCode.equals(targetCode)) {
+            /*
+             * NOTE: This check is mandatory because this method may be invoked in some situations
+             *       where (sourceCode == targetCode) but (sourceCRS != targetCRS). Such situation
+             *       should be illegal  (or at least the MathTransform from sourceCRS to targetCRS
+             *       should be the identity transform),   but unfortunatly it still happen because
+             *       EPSG defines axis order as (latitude,longitude) for geographic CRS while most
+             *       softwares expect (longitude,latitude) no matter what the EPSG authority said.
+             *       We will need to computes a transform from sourceCRS to targetCRS ignoring the
+             *       source and target codes. The superclass can do that, providing that we prevent
+             *       the authority database to (legitimately) claims that the transformation from
+             *       sourceCode to targetCode is the identity transform. See GEOT-854.
+             */
+            return result;
+        }
+        final boolean inverse;
+        Set<CoordinateOperation> operations = null;
+        try {
+            operations = authorityFactory.createFromCoordinateReferenceSystemCodes(sourceCode,
+                    targetCode);
+            inverse = (operations == null || operations.isEmpty());
+            if (inverse) {
+                /*
+                 * No operation from 'source' to 'target' available. But maybe there is an inverse
+                 * operation. This is typically the case when the user wants to convert from a
+                 * projected to a geographic CRS. The EPSG database usually contains transformation
+                 * paths for geographic to projected CRS only.
+                 */
+                operations = authorityFactory.createFromCoordinateReferenceSystemCodes(targetCode,
+                        sourceCode);
+            }
+        } catch (NoSuchAuthorityCodeException exception) {
+            /*
+             * sourceCode or targetCode is unknow to the underlying authority factory.
+             * Ignores the exception and fallback on the generic algorithm provided by
+             * the super-class.
+             */
+            return result;
+        } catch (FactoryException exception) {
+            /*
+             * Other kind of error. It may be more serious, but the super-class is capable
+             * to provides a raisonable default behavior. Log as a warning and lets continue.
+             */
+            log(exception, authorityFactory, Level.FINER);
+            return result;
+        }
+        final Iterator<CoordinateOperation> it = operations.iterator();
+        CoordinateOperation candidate;
+        for (int i = 0; (limit < 0 || i < limit) && it.hasNext();) {
+            try {
+                // The call to it.next() must be inside the try..catch block,
+                // which is why we don't use the Java 5 for loop syntax here.
+                candidate = it.next();
+                candidate = validateCandidate(candidate, sourceCRS, targetCRS, inverse);
+                if (candidate != null) {
+                    i++;
+                    result.add(candidate);
+                }
+            } catch (BackingStoreException exc) {
+                log(exc, authorityFactory);
+            }
+
+        }
+        return result;
+    }
+

@@ -1,45 +1,16 @@
     /**
      * Creates an operation between two compound coordinate reference systems.
      *
-     * @param  sourceCRS Input coordinate reference system.
-     * @param  targetCRS Output coordinate reference system.
+     * @param sourceCRS Input coordinate reference system.
+     * @param targetCRS Output coordinate reference system.
      * @return A coordinate operation from {@code sourceCRS} to {@code targetCRS}.
      * @throws FactoryException If the operation can't be constructed.
      */
     protected CoordinateOperation createOperationStep(final CompoundCRS sourceCRS,
-                                                      final CompoundCRS targetCRS)
-            throws FactoryException
-    {
-        final List<SingleCRS> sources = DefaultCompoundCRS.getSingleCRS(sourceCRS);
-        final List<SingleCRS> targets = DefaultCompoundCRS.getSingleCRS(targetCRS);
-        if (targets.size() == 1) {
-            return createOperation(sourceCRS, targets.get(0));
+            final CompoundCRS targetCRS) throws FactoryException {
+        for (CoordinateOperation op : findOperationSteps(sourceCRS, targetCRS, 1)) {
+            return op;
         }
-        if (sources.size() == 1) { // After 'targets' because more likely to fails to transform.
-            return createOperation(sources.get(0), targetCRS);
-        }
-        /*
-         * If the source CRS contains both a geodetic and a vertical CRS, then we can process
-         * only if there is no datum change. If at least one of those CRS appears in the target
-         * CRS with a different datum, then the datum shift must be applied on the horizontal and
-         * vertical components together.
-         */
-        for (final SingleCRS target : targets) {
-            if (needsGeodetic3D(sources, target)) {
-                final ReferencingFactoryContainer factories = getFactoryContainer();
-                final CoordinateReferenceSystem source3D = factories.toGeodetic3D(sourceCRS);
-                final CoordinateReferenceSystem target3D = factories.toGeodetic3D(targetCRS);
-                if (source3D!=sourceCRS || target3D!=targetCRS) {
-                    return createOperation(source3D, target3D);
-                }
-                /*
-                 * TODO: Search for non-ellipsoidal height, and lets supplemental axis pass through.
-                 *       See javadoc comments for createOperation(CompoundCRS, SingleCRS).
-                 */
-                throw new OperationNotFoundException(getErrorMessage(sourceCRS, targetCRS));
-            }
-        }
-        // No need for a datum change (see 'needGeodetic3D' javadoc).
-        return createOperationStep(sourceCRS, sources, targetCRS, targets);
+        return null;
     }
 

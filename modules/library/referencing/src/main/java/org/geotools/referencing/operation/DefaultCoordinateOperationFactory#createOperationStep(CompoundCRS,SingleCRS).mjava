@@ -22,29 +22,9 @@
                                                       final SingleCRS   targetCRS)
             throws FactoryException
     {
-        final List<SingleCRS> sources = DefaultCompoundCRS.getSingleCRS(sourceCRS);
-        if (sources.size() == 1) {
-            return createOperation(sources.get(0), targetCRS);
+        for (CoordinateOperation op: findOperationSteps(sourceCRS, targetCRS, 1)) {
+            return op;
         }
-        if (!needsGeodetic3D(sources, targetCRS)) {
-            // No need for a datum change (see 'needGeodetic3D' javadoc).
-            final List<SingleCRS> targets = Collections.singletonList(targetCRS);
-            return createOperationStep(sourceCRS, sources, targetCRS, targets);
-        }
-        /*
-         * There is a change of datum.  It may be a vertical datum change (for example from
-         * ellipsoidal to geoidal height), in which case geographic coordinates are usually
-         * needed. It may also be a geodetic datum change, in which case the height is part
-         * of computation. Try to convert the source CRS into a 3D-geodetic CRS.
-         */
-        final CoordinateReferenceSystem source3D = getFactoryContainer().toGeodetic3D(sourceCRS);
-        if (source3D != sourceCRS) {
-            return createOperation(source3D, targetCRS);
-        }
-        /*
-         * TODO: Search for non-ellipsoidal height, and lets supplemental axis (e.g. time)
-         *       pass through. See javadoc comments above.
-         */
-        throw new OperationNotFoundException(getErrorMessage(sourceCRS, targetCRS));
+        return null;
     }
 

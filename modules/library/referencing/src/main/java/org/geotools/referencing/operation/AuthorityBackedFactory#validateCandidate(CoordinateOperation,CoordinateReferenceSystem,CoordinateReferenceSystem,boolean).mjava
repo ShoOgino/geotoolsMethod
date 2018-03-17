@@ -1,0 +1,83 @@
+    /**
+     * Selects a valid operation from a set of candidates. Currently, it returns
+     * the first operation which is a valid transformation from the sourceCRS
+     * to targetCRs and that is accepted by this authority.
+     *  
+     * @param operations A set of candidate operations
+     * @param sourceCRS Source CRS
+     * @param targetCRS Target CRS
+     * @param inverse whether the inverse operation has to be applied
+     * @return
+     */
+    protected CoordinateOperation validateCandidate(CoordinateOperation candidate,
+            final CoordinateReferenceSystem sourceCRS, final CoordinateReferenceSystem targetCRS,
+            boolean inverse) {
+        try {
+            if (inverse) {
+                candidate = inverse(candidate);
+            }
+        } catch (NoninvertibleTransformException e) {
+            // The transform is non invertible. Do not log any error message, since it
+            // may be a normal failure - the transform is not required to be invertible.
+            return null;
+        } catch (FactoryException exception) {
+            // Other kind of error. Log a warning and try the next coordinate operation.
+            log(exception, authorityFactory);
+            return null;
+        }
+        /*
+         * It is possible that the Identifier in user's CRS is not quite right.   For
+         * example the user may have created his source and target CRS from WKT using
+         * a different axis order than the official one and still call it "EPSG:xxxx"
+         * as if it were the official CRS. Checks if the source and target CRS for the
+         * operation just created are really the same (ignoring metadata) than the one
+         * specified by the user.
+         */
+        CoordinateReferenceSystem source = candidate.getSourceCRS();
+        CoordinateReferenceSystem target = candidate.getTargetCRS();
+        try {
+            final MathTransform prepend, append;
+            if (!equalsIgnoreMetadata(sourceCRS, source))
+                try {
+                    processing.set(Boolean.TRUE);
+                    prepend = createOperation(sourceCRS, source).getMathTransform();
+                    source = sourceCRS;
+                } finally {
+                    processing.remove();
+                }
+            else {
+                prepend = null;
+            }
+            if (!equalsIgnoreMetadata(target, targetCRS))
+                try {
+                    processing.set(Boolean.TRUE);
+                    append = createOperation(target, targetCRS).getMathTransform();
+                    target = targetCRS;
+                } finally {
+                    processing.remove();
+                }
+            else {
+                append = null;
+            }
+            candidate = transform(source, prepend, candidate, append, target);
+        } catch (FactoryException exception) {
+            /*
+             * We have been unable to create a transform from the user-provided CRS to the
+             * authority-provided CRS. In theory, the two CRS should have been the same and
+             * the transform would have been the identity transform. In practice, it is not
+             * always the case because of axis swapping issue (see GEOT-854). The transform
+             * that we just tried to create in the two previous calls to the createOperation
+             * method should have been merely an affine transform for swapping axis. If they
+             * failed, then we are likely to fail for all other transforms provided in the
+             * database. So stop the loop now (at the very least, do not log the same
+             * warning for every pass of this loop!)
+             */
+            log(exception, authorityFactory);
+            return null;
+        }
+        if (accept(candidate)) {
+            return candidate;
+        }
+        return null;
+    }
+

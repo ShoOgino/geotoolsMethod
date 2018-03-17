@@ -1,54 +1,23 @@
     /**
-     * Creates an operation between two projected coordinate reference systems.
-     * The default implementation can adjust axis order and orientation. It also
-     * performs units conversion if it is the only extra change needed. Otherwise,
-     * it performs three steps:
+     * Creates an operation between two projected coordinate reference systems. The default implementation can adjust axis order and orientation. It
+     * also performs units conversion if it is the only extra change needed. Otherwise, it performs three steps:
      *
      * <ul>
-     *   <li>Unproject from {@code sourceCRS} to its base
-     *       {@linkplain GeographicCRS geographic CRS}.</li>
-     *   <li>Convert the source to target base geographic CRS.</li>
-     *   <li>Project from the base {@linkplain GeographicCRS geographic CRS}
-     *       to the {@code targetCRS}.</li>
+     * <li>Unproject from {@code sourceCRS} to its base {@linkplain GeographicCRS geographic CRS}.</li>
+     * <li>Convert the source to target base geographic CRS.</li>
+     * <li>Project from the base {@linkplain GeographicCRS geographic CRS} to the {@code targetCRS}.</li>
      * </ul>
      *
-     * @param  sourceCRS Input coordinate reference system.
-     * @param  targetCRS Output coordinate reference system.
+     * @param sourceCRS Input coordinate reference system.
+     * @param targetCRS Output coordinate reference system.
      * @return A coordinate operation from {@code sourceCRS} to {@code targetCRS}.
      * @throws FactoryException If the operation can't be constructed.
      */
     protected CoordinateOperation createOperationStep(final ProjectedCRS sourceCRS,
-                                                      final ProjectedCRS targetCRS)
-            throws FactoryException
-    {
-        /*
-         * First, check if a linear path exists from sourceCRS to targetCRS.
-         * If both projected CRS use the same projection and the same horizontal datum,
-         * then only axis orientation and units may have been changed. We do not need
-         * to perform the tedious  ProjectedCRS --> GeographicCRS --> ProjectedCRS  chain.
-         * We can apply a much shorter conversion using only an affine transform.
-         *
-         * This shorter path is essential for proper working of
-         * createOperationStep(GeographicCRS,ProjectedCRS).
-         */
-        final Matrix linear = createLinearConversion(sourceCRS, targetCRS, EPS);
-        if (linear != null) {
-            return createFromAffineTransform(AXIS_CHANGES, sourceCRS, targetCRS, linear);
+            final ProjectedCRS targetCRS) throws FactoryException {
+        for (CoordinateOperation op : findOperationSteps(sourceCRS, targetCRS, 1)) {
+            return op;
         }
-        /*
-         * Apply the transformation in 3 steps (the 3 arrows below):
-         *
-         *     source projected CRS   --(unproject)-->
-         *     source geographic CRS  --------------->
-         *     target geographic CRS  ---(project)--->
-         *     target projected CRS
-         */
-        final GeographicCRS sourceGeo = sourceCRS.getBaseCRS();
-        final GeographicCRS targetGeo = targetCRS.getBaseCRS();
-        CoordinateOperation step1, step2, step3;
-        step1 = tryDB(sourceCRS, sourceGeo); if (step1==null) step1 = createOperationStep(sourceCRS, sourceGeo);
-        step2 = tryDB(sourceGeo, targetGeo); if (step2==null) step2 = createOperationStep(sourceGeo, targetGeo);
-        step3 = tryDB(targetGeo, targetCRS); if (step3==null) step3 = createOperationStep(targetGeo, targetCRS);
-        return concatenate(step1, step2, step3);
+        return null;
     }
 
