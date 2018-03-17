@@ -1,0 +1,44 @@
+    /**
+     * Tests that WFS Transactions causing an ExceptionReport also end in a proper WFSException.
+     * @throws IOException
+     */
+    @Test
+    public void testTransactionExceptionReport() throws IOException{
+        // makes test to use GeoServer_1.7.x/1.0.0/TransactionFailure_poi.xml
+        wfs.setFailOnTransaction(true);
+        
+        ContentFeatureSource source = (ContentFeatureSource) dataStore.getFeatureSource(simpleTypeName1);
+        assertNotNull(source);
+        assertTrue(source instanceof WFSFeatureStore);
+
+        WFSFeatureStore store = (WFSFeatureStore) source;
+                 
+        MemoryFeatureCollection collection = new MemoryFeatureCollection(featureType1);
+        
+        SimpleFeature feat = new SimpleFeatureImpl(Arrays.asList(new Object[]{null, "mypoint",  "pics/x.jpg", "pics/y.jpg"}), featureType1, new FeatureIdImpl("myid") );
+        
+        collection.add(feat);
+        
+        Transaction transaction = new DefaultTransaction();
+        store.setTransaction(transaction);
+        
+        List<FeatureId> fids = store.addFeatures((SimpleFeatureCollection) collection);        
+        assertEquals(1, fids.size());
+          
+        try {
+            transaction.commit();
+        } catch (WFSException e) {
+            // WFS 1.0.0: Parser fails to parse the response properly
+            // probably because the parser configuration for WFS 1.0 misses 
+            // ExceptionReport bindings. 
+            // So here, in WFS 1.0 case textual information is available only.
+            StringWriter writer = new StringWriter();
+            PrintWriter printer = new PrintWriter(writer);
+            e.printStackTrace(printer);
+            printer.close();
+            assertTrue(writer.toString().contains("MyErrorMessage"));
+            return;
+        }
+        Assert.fail("Expected WFSException.");
+    }
+
