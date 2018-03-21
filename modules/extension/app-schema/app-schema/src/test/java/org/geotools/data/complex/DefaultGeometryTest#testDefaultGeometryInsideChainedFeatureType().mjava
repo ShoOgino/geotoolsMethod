@@ -1,0 +1,37 @@
+    /**
+     * Tests that properties nested inside chained feature types may be used as default geometry.
+     */
+    @Test
+    public void testDefaultGeometryInsideChainedFeatureType() throws IOException {
+        FeatureTypeMapping mappingChained = stationsDataAccess
+                .getMappingByName(STATION_WITH_MEASUREMENTS_FEATURE);
+        assertNotNull(mappingChained);
+        assertEquals("st:measurements/ms:Measurement/ms:sampledArea/ms:SampledArea/ms:geometry",
+                mappingChained.getDefaultGeometryXPath());
+
+        FeatureType ftChained = stationsDataAccess.getSchema(STATION_WITH_MEASUREMENTS_FEATURE);
+        assertNotNull(ftChained.getGeometryDescriptor());
+        assertEquals(ComplexFeatureConstants.DEFAULT_GEOMETRY_LOCAL_NAME,
+                ftChained.getGeometryDescriptor().getLocalName());
+
+        FeatureSource fs = stationsDataAccess.getFeatureSource(STATION_WITH_MEASUREMENTS_FEATURE);
+        Id filter = ff.id(ff.featureId("st.1"));
+        FeatureCollection fc = fs.getFeatures(filter);
+        assertEquals(1, size(fc));
+        try (FeatureIterator it = fc.features()) {
+            Feature station1 = it.next();
+            assertEquals("st.1", station1.getIdentifier().toString());
+
+            GeometryAttribute defaultGeom = station1.getDefaultGeometryProperty();
+            assertNotNull(defaultGeom);
+            assertNotNull(defaultGeom.getValue());
+            // the geometry property of the chained feature type has been picked
+            // --> must be a Polygon
+            assertTrue(defaultGeom.getValue() instanceof Polygon);
+
+            // check geometry value
+            Polygon poly = (Polygon) defaultGeom.getValue();
+            assertEquals("POLYGON ((-2 2, 0 2, 0 -2, -2 -2, -2 2))", writer.write(poly));
+        }
+    }
+
