@@ -1,14 +1,12 @@
     /**
-     * Suggests an unit for measuring distances in this coordinate system. The default
-     * implementation scans all {@linkplain CoordinateSystemAxis#getUnit axis units},
-     * ignoring angular ones (this also implies ignoring {@linkplain Unit#ONE dimensionless} ones).
-     * If more than one non-angular unit is found, the default implementation returns the "largest"
-     * one (e.g. kilometers instead of meters).
+     * Suggests an unit for measuring distances in this coordinate system. The default implementation scans all
+     * {@linkplain CoordinateSystemAxis#getUnit axis units}, ignoring angular ones (this also implies ignoring {@linkplain Unit#ONE dimensionless}
+     * ones). If more than one non-angular unit is found, the default implementation returns the "largest" one (e.g. kilometers instead of meters).
      *
      * @return Suggested distance unit.
-     * @throws ConversionException if some non-angular units are incompatibles.
+     * @throws IllegalArgumentException if some non-angular units are incompatibles.
      */
-    final Unit<?> getDistanceUnit() throws ConversionException {
+    final Unit<?> getDistanceUnit() {
         Unit<?> unit = distanceUnit;  // Avoid the need for synchronization.
         if (unit == null) {
             for (int i=0; i<axis.length; i++) {
@@ -16,13 +14,18 @@
                 if (candidate!=null && !candidate.isCompatible(SI.RADIAN)) {
                     // TODO: checks the unit scale type (keeps RATIO only).
                     if (unit != null) {
-                        final UnitConverter converter = candidate.getConverterTo(unit);
+                        UnitConverter converter;
+                        try {
+                            converter = candidate.getConverterToAny(unit);
+                        } catch (UnconvertibleException | IncommensurableException e) {
+                            throw new IllegalArgumentException(
+                                    "Can't convert to the candidate unit", e);
+                        }
                         if (!converter.isLinear()) {
                             // TODO: use the localization provided in 'swapAxis'. We could also
                             //       do a more intelligent work by checking the unit scale type.
-                            throw new ConversionException("Unit conversion is non-linear");
+                            throw new IllegalArgumentException("Unit conversion is non-linear");
                         }
-// JSR-275              final double scale = converter.derivative(0);
                         final double scale = converter.convert(1) - converter.convert(0);
                         if (Math.abs(scale) <= 1) {
                             // The candidate is a "smaller" unit than the current one

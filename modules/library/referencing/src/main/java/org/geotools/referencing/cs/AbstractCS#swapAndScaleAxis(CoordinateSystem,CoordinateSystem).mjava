@@ -25,7 +25,7 @@
      */
     public static Matrix swapAndScaleAxis(final CoordinateSystem sourceCS,
                                           final CoordinateSystem targetCS)
-            throws IllegalArgumentException, ConversionException
+            throws IllegalArgumentException
     {
         if (!Classes.sameInterfaces(sourceCS.getClass(), targetCS.getClass(), CoordinateSystem.class)) {
             throw new IllegalArgumentException(Errors.format(
@@ -69,13 +69,17 @@
                     // between source[i] and target[j].
                     continue;
                 }
-                final UnitConverter converter = sourceUnit.getConverterTo(targetUnit);
+                UnitConverter converter;
+                try {
+                    converter = sourceUnit.getConverterToAny(targetUnit);
+                } catch (UnconvertibleException | IncommensurableException e) {
+                    throw new IllegalArgumentException("Can't convert to the candidate unit", e);
+                }
                 if (!converter.isLinear()) {
-                    throw new ConversionException(Errors.format(
+                    throw new IllegalArgumentException(Errors.format(
                               ErrorKeys.NON_LINEAR_UNIT_CONVERSION_$2, sourceUnit, targetUnit));
                 }
                 final double offset = converter.convert(0);
-// JSR-275      final double scale  = converter.derivative(0);
                 final double scale  = converter.convert(1) - offset;
                 matrix.setElement(j,i, element*scale);
                 matrix.setElement(j,sourceDim, matrix.getElement(j,sourceDim) + element*offset);

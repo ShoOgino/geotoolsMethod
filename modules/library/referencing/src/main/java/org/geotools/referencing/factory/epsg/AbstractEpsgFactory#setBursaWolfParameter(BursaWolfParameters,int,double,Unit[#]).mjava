@@ -1,11 +1,12 @@
     /**
      * Set a Bursa-Wolf parameter from an EPSG parameter.
      *
-     * @param  parameters The Bursa-Wolf parameters to modify.
-     * @param  code       The EPSG code for a parameter   from [PARAMETER_CODE]  column.
-     * @param  value      The value of the parameter      from [PARAMETER_VALUE] column.
-     * @param  unit       The unit of the parameter value from [UOM_CODE]        column.
+     * @param parameters The Bursa-Wolf parameters to modify.
+     * @param code The EPSG code for a parameter from [PARAMETER_CODE] column.
+     * @param value The value of the parameter from [PARAMETER_VALUE] column.
+     * @param unit The unit of the parameter value from [UOM_CODE] column.
      * @throws FactoryException if the code is unrecognized.
+     * @throws IllegalArgumentException if the value could not be converted to the provided Unit
      */
     private static void setBursaWolfParameter(final BursaWolfParameters parameters,
                                               final int code, double value, final Unit<?> unit)
@@ -13,12 +14,17 @@
     {
         Unit<?> target = unit;
         if (code >= 8605) {
-            if      (code <= 8607) target = SI   .METER;
+            if (code <= 8607)
+                target = SI.METRE;
             else if (code <= 8710) target = NonSI.SECOND_ANGLE;
             else if (code == 8611) target = Units.PPM;
         }
         if (target != unit) {
-            value = unit.getConverterTo(target).convert(value);
+            try {
+                value = unit.getConverterToAny(target).convert(value);
+            } catch (UnconvertibleException | IncommensurableException e) {
+                throw new IllegalArgumentException();
+            }
         }
         switch (code) {
             case 8605: parameters.dx  = value; break;
