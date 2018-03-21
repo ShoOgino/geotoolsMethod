@@ -5,11 +5,11 @@
      *             {@link Integer}, {@link Long}, {@link Float} or {@link Double}.
      * @param  targetUnit the target units.
      * @return The casted range, or {@code this}.
-     * @throws ConversionException if the target units are not compatible with
+     * @throws IllegalArgumentException if the target units are not compatible with
      *         this {@linkplain #getUnits range units}.
      */
     private <N extends Number & Comparable<? super N>> MeasurementRange<N>
-            convertAndCast(final Class<N> type, final Unit<?> targetUnits) throws ConversionException
+            convertAndCast(final Class<N> type, final Unit<?> targetUnits) 
     {
         if (targetUnits == null || targetUnits.equals(units)) {
             if (type.equals(elementClass)) {
@@ -23,8 +23,13 @@
         if (units == null) {
             return new MeasurementRange<N>(type, this, targetUnits);
         }
-        final UnitConverter converter = units.getConverterTo(targetUnits);
-        if (converter.equals(UnitConverter.IDENTITY)) {
+        UnitConverter converter;
+		try {
+			converter = units.getConverterToAny(targetUnits);
+		} catch (UnconvertibleException | IncommensurableException e) {
+			throw new IllegalArgumentException( e );
+		}
+        if (converter.isIdentity()) {
             return new MeasurementRange<N>(type, this, targetUnits);
         }
         boolean isMinIncluded = isMinIncluded();
