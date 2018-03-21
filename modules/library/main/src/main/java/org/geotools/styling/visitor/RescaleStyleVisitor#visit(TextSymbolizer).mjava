@@ -1,0 +1,52 @@
+    @Override
+    public void visit(TextSymbolizer text) {
+        this.defaultUnit = text.getUnitOfMeasure();
+        try {
+            super.visit(text);
+            TextSymbolizer copy = (TextSymbolizer) pages.peek();
+
+            // rescales fonts
+            for (Font font : copy.fonts()) {
+                if( font != null ){
+                    font.setSize(rescale(font.getSize()));
+                }
+            }
+            
+            // rescales label placement
+            LabelPlacement placement = copy.getLabelPlacement();
+            if (placement instanceof PointPlacement) {
+                // rescales point label placement
+                PointPlacement pointPlacement = (PointPlacement) placement;
+                Displacement disp = pointPlacement.getDisplacement();
+                if (disp != null) {
+                    disp.setDisplacementX(rescale(disp.getDisplacementX()));
+                    disp.setDisplacementY(rescale(disp.getDisplacementY()));
+                    pointPlacement.setDisplacement(disp);
+                }
+            } else if (placement instanceof LinePlacement) {
+                // rescales line label placement
+                LinePlacement linePlacement = (LinePlacement) placement;
+                linePlacement.setGap(rescale(linePlacement.getGap()));
+                linePlacement.setInitialGap(rescale(linePlacement.getInitialGap()));
+                linePlacement.setPerpendicularOffset(rescale(linePlacement.getPerpendicularOffset()));
+            }
+            copy.setLabelPlacement(placement);
+            
+            // rescale the halo
+            if(copy.getHalo() != null) {
+                copy.getHalo().setRadius(rescale(copy.getHalo().getRadius()));
+            }
+            
+            // deal with the format options specified in pixels
+            Map<String, String> options = copy.getOptions();
+            rescaleOption(options, SPACE_AROUND_KEY, DEFAULT_SPACE_AROUND);
+            rescaleOption(options, MAX_DISPLACEMENT_KEY, DEFAULT_MAX_DISPLACEMENT);
+            rescaleOption(options, MIN_GROUP_DISTANCE_KEY, DEFAULT_MIN_GROUP_DISTANCE);
+            rescaleOption(options, LABEL_REPEAT_KEY, DEFAULT_LABEL_REPEAT);
+            rescaleOption(options, AUTO_WRAP_KEY, DEFAULT_AUTO_WRAP);
+            rescaleArrayOption(options, GRAPHIC_MARGIN_KEY, 0);
+        } finally {
+            this.defaultUnit = null;
+        }     
+    }
+

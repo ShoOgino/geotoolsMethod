@@ -1,0 +1,85 @@
+    /**
+     * Creates operations from coordinate reference system codes.
+     * The returned set is ordered with the most accurate operations first.
+     *
+     * @param sourceCode Coded value of source coordinate reference system.
+     * @param targetCode Coded value of target coordinate reference system.
+     * @throws FactoryException if the object creation failed.
+     *
+     * @todo The ordering is not consistent among all database software, because the "accuracy"
+     *       column may contains null values. When used in an "ORDER BY" clause, PostgreSQL put
+     *       null values last, while Access and HSQL put them first. The PostgreSQL's behavior is
+     *       better for what we want (put operations with unknow accuracy last). Unfortunatly,
+     *       I don't know yet how to instruct Access to put null values last using standard SQL
+     *       ("IIF" is not standard, and Access doesn't seem to understand "CASE ... THEN" clauses).
+     */
+    @Override
+    public synchronized Set createFromCoordinateReferenceSystemCodes(final String sourceCode,
+                                                                     final String targetCode)
+            throws FactoryException
+    {
+        ensureNonNull("sourceCode", sourceCode);
+        ensureNonNull("targetCode", targetCode);
+        final String pair = sourceCode + " \u21E8 " + targetCode;
+        final CoordinateOperationSet set = new CoordinateOperationSet(buffered);
+        try {
+            final String sourceKey = toPrimaryKeyCRS(sourceCode);
+            final String targetKey = toPrimaryKeyCRS(targetCode);
+            boolean searchTransformations = false;
+            do {
+                /*
+                 * This 'do' loop is executed twice: the first time for searching defining
+                 * conversions, and the second time for searching all other kind of operations.
+                 * Defining conversions are searched first because they are, by definition, the
+                 * most accurate operations.
+                 */
+                final String key, sql;
+                if (searchTransformations) {
+                    key = "TransformationFromCRS";
+                    sql = "SELECT COORD_OP_CODE"
+                        +    " FROM [Coordinate_Operation] left join [Area] on [Coordinate_Operation].area_of_use_code = [Area].area_code"
+                        +    " WHERE SOURCE_CRS_CODE = ?"
+                        +      " AND TARGET_CRS_CODE = ?"
+                        + " ORDER BY ABS([Coordinate_Operation].DEPRECATED), COORD_OP_ACCURACY," 
+                        + "	(AREA_NORTH_BOUND_LAT - AREA_SOUTH_BOUND_LAT) * " +
+                        		" (CASE WHEN AREA_EAST_BOUND_LON > AREA_WEST_BOUND_LON " +
+                        		"     THEN (AREA_EAST_BOUND_LON - AREA_WEST_BOUND_LON) " +
+                        		"     ELSE (360 - AREA_WEST_BOUND_LON - AREA_EAST_BOUND_LON) END) DESC," +
+                        		" COORD_OP_CODE DESC";
+                } else {
+                    key = "ConversionFromCRS";
+                    sql = "SELECT PROJECTION_CONV_CODE"
+                        +    " FROM [Coordinate Reference System]"
+                        +    " WHERE SOURCE_GEOGCRS_CODE = ?"
+                        +      " AND COORD_REF_SYS_CODE = ?";
+                }
+                final PreparedStatement stmt = prepareStatement(key, sql);
+                stmt.setString(1, sourceKey);
+                stmt.setString(2, targetKey);
+                final ResultSet result = stmt.executeQuery();
+                while (result.next()) {
+                    final String code = getString(result, 1, pair);
+                    set.addAuthorityCode(code, searchTransformations ? null : targetKey);
+                }
+                result.close();
+            } while ((searchTransformations = !searchTransformations) == true);
+            /*
+             * Search finished. We may have a lot of coordinate operations
+             * (e.g. about 40 for "ED50" (EPSG:4230) to "WGS 84" (EPSG:4326)).
+             * Alter the ordering using the information supplied in the supersession table.
+             */
+            final String[] codes = set.getAuthorityCodes();
+            sort(codes);
+            set.setAuthorityCodes(codes);
+        } catch (SQLException exception) {
+            throw databaseFailure(CoordinateOperation.class, pair, exception);
+        }
+        /*
+         * Before to return the set, tests the creation of 1 object in order to report early
+         * (i.e. now) any problems with SQL statements. Remaining operations will be created
+         * only when first needed.
+         */
+        set.resolve(1);
+        return set;
+    }
+

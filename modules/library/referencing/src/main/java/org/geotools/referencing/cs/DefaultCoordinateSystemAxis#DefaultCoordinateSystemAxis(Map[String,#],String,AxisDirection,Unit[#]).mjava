@@ -1,0 +1,51 @@
+    /**
+     * Constructs an unbounded axis from a set of properties. The properties map is given
+     * unchanged to the {@linkplain AbstractIdentifiedObject#AbstractIdentifiedObject(Map)
+     * super-class constructor}. The {@linkplain #getMinimumValue minimum} and
+     * {@linkplain #getMaximumValue maximum} values are inferred from the axis unit and
+     * direction.
+     *
+     * @param properties   Set of properties. Should contains at least {@code "name"}.
+     * @param abbreviation The {@linkplain #getAbbreviation abbreviation} used for this
+     *                     coordinate system axes.
+     * @param direction    The {@linkplain #getDirection direction} of this coordinate system axis.
+     * @param unit         The {@linkplain #getUnit unit of measure} used for this coordinate
+     *                     system axis.
+     */
+    public DefaultCoordinateSystemAxis(final Map<String,?> properties,
+                                       final String        abbreviation,
+                                       final AxisDirection direction,
+                                       final Unit<?>       unit)
+    {
+        // NOTE: we would invoke this(properties, abbreviation, ...) instead if Sun fixed
+        // RFE #4093999 ("Relax constraint on placement of this()/super() call in constructors").
+        super(properties);
+        this.abbreviation = abbreviation;
+        this.direction    = direction;
+        this.unit         = unit;
+        ensureNonNull("abbreviation", abbreviation);
+        ensureNonNull("direction",    direction);
+        ensureNonNull("unit",         unit);
+        if (unit.isCompatible(NonSI.DEGREE_ANGLE)) {
+            final UnitConverter fromDegrees = NonSI.DEGREE_ANGLE.getConverterTo(unit);
+            final AxisDirection dir = direction.absolute();
+            if (dir.equals(AxisDirection.NORTH)) {
+                final double range = Math.abs(fromDegrees.convert(90));
+                minimum = -range;
+                maximum = +range;
+                rangeMeaning = RangeMeaning.EXACT; // 90°N do not wraps to 90°S
+                return;
+            }
+            if (dir.equals(AxisDirection.EAST)) {
+                final double range = Math.abs(fromDegrees.convert(180));
+                minimum = -range;
+                maximum = +range;
+                rangeMeaning = RangeMeaning.WRAPAROUND; // 180°E wraps to 180°W
+                return;
+            }
+        }
+        minimum = Double.NEGATIVE_INFINITY;
+        maximum = Double.POSITIVE_INFINITY;
+        rangeMeaning = RangeMeaning.EXACT;
+    }
+

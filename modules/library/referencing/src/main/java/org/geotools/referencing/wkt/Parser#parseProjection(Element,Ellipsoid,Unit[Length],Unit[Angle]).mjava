@@ -1,0 +1,71 @@
+    /**
+     * Parses a "PROJECTION" element. This element has the following pattern:
+     *
+     * <blockquote><code>
+     * PROJECTION["<name>" {,<authority>}]
+     * </code></blockquote>
+     *
+     * @param  parent The parent element.
+     * @param  ellipsoid The ellipsoid, or {@code null} if none.
+     * @param  linearUnit The linear unit of the parent PROJCS element, or {@code null}.
+     * @param  angularUnit The angular unit of the parent GEOCS element, or {@code null}.
+     * @return The "PROJECTION" element as a {@link ParameterValueGroup} object.
+     * @throws ParseException if the "PROJECTION" element can't be parsed.
+     */
+    private ParameterValueGroup parseProjection(final Element      parent,
+                                                final Ellipsoid    ellipsoid,
+                                                final Unit<Length> linearUnit,
+                                                final Unit<Angle>  angularUnit)
+            throws ParseException
+    {
+        final Element          element = parent.pullElement("PROJECTION");
+        final String    classification = element.pullString("name");
+        final Map<String,?> properties = parseAuthority(element, classification);
+        element.close();
+        /*
+         * Set the list of parameters.  NOTE: Parameters are defined in
+         * the parent Element (usually a "PROJCS" element), not in this
+         * "PROJECTION" element.
+         *
+         * We will set the semi-major and semi-minor parameters from the
+         * ellipsoid first. If those values were explicitly specified in
+         * a "PARAMETER" statement, they will overwrite the values inferred
+         * from the ellipsoid.
+         */
+        final ParameterValueGroup parameters;
+        try {
+            parameters = mtFactory.getDefaultParameters(classification);
+        } catch (NoSuchIdentifierException exception) {
+            throw element.parseFailed(exception, null);
+        }
+        Element param = parent;
+        try {
+            if (ellipsoid != null) {
+                final Unit<Length> axisUnit = ellipsoid.getAxisUnit();
+                parameters.parameter("semi_major").setValue(ellipsoid.getSemiMajorAxis(), axisUnit);
+                parameters.parameter("semi_minor").setValue(ellipsoid.getSemiMinorAxis(), axisUnit);
+            }
+            while ((param=parent.pullOptionalElement("PARAMETER")) != null) {
+                final String paramName  = param.pullString("name");
+                final double paramValue = param.pullDouble("value");
+                final ParameterValue<?> parameter = parameters.parameter(paramName);
+                final Unit<?> expected = parameter.getDescriptor().getUnit();
+                if (expected!=null && !AbstractUnit.ONE.equals(expected)) {
+                    if (linearUnit!=null && SI.METRE.isCompatible(expected)) {
+                        parameter.setValue(paramValue, linearUnit);
+                        continue;
+                    }
+                    if (angularUnit!=null && SI.RADIAN.isCompatible(expected)) {
+                        parameter.setValue(paramValue, angularUnit);
+                        continue;
+                    }
+                }
+                parameter.setValue(paramValue);
+            }
+        } catch (ParameterNotFoundException exception) {
+            throw param.parseFailed(exception, Errors.format(ErrorKeys.UNEXPECTED_PARAMETER_$1,
+                                                             exception.getParameterName()));
+        }
+        return parameters;
+    }
+

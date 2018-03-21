@@ -1,0 +1,40 @@
+        /**
+         * Transforms the specified (<var>&lambda;</var>,<var>&phi;</var>) coordinates
+         * (units in radians) and stores the result in {@code ptDst} (linear distance
+         * on a unit sphere).
+         */
+        @Override
+        protected Point2D transformNormalized(double x, double y, Point2D ptDst)
+                throws ProjectionException
+        {
+            // Compute using ellipsoidal formulas, for comparaison later.
+            assert (ptDst = super.transformNormalized(x, y, ptDst)) != null;
+            final double coslat = cos(y);
+            final double sinlat = sin(y);
+            final double coslon = cos(x);
+            final double sinlon = sin(x);
+            if (southPole) {
+                if (abs(1 - sinlat) < EPSILON) {
+                    throw new ProjectionException(ErrorKeys.VALUE_TEND_TOWARD_INFINITY);
+                }
+                // (21-12)
+                final double f = k0 * coslat / (1-sinlat); // == tan (pi/4 + phi/2)
+                x = f * sinlon; // (21-9)
+                y = f * coslon; // (21-10)
+            } else {
+                if (abs(1 + sinlat) < EPSILON) {
+                    throw new ProjectionException(ErrorKeys.VALUE_TEND_TOWARD_INFINITY);
+                }
+                // (21-8)
+                final double f = k0 * coslat / (1+sinlat); // == tan (pi/4 - phi/2)
+                x =  f * sinlon; // (21-5)
+                y = -f * coslon; // (21-6)
+            }
+            assert checkTransform(x, y, ptDst);
+            if (ptDst != null) {
+                ptDst.setLocation(x,y);
+                return ptDst;
+            }
+            return new Point2D.Double(x,y);
+        }
+

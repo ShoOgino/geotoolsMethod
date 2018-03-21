@@ -1,0 +1,87 @@
+	/**
+	 * Looks up the Geodetic Datum as specified in the GeoTIFFWritingUtilities
+	 * file. The geotools definition of the geodetic datum includes both an
+	 * ellipsoid and a prime meridian, but the code in the
+	 * GeoTIFFWritingUtilities file does NOT include the prime meridian, as it
+	 * is specified separately. This code currently does not support user
+	 * defined datum.
+	 * 
+	 * @param unit
+	 *            to use for building this {@link GeodeticDatum}.
+	 * 
+	 * @return a {@link GeodeticDatum}.
+	 * 
+	 * @throws IOException
+	 * 
+	 * @throws GeoTiffException
+	 * 
+	 */
+	private GeodeticDatum createGeodeticDatum(final Unit<?> unit,
+			final GeoTiffIIOMetadataDecoder metadata) throws IOException {
+		// lookup the datum (w/o PrimeMeridian), error if "user defined"
+		GeodeticDatum datum = null;
+		final String datumCode = metadata.getGeoKey(GeoTiffGCSCodes.GeogGeodeticDatumGeoKey);
+
+		if (datumCode == null) {
+			throw new GeoTiffException(
+					metadata,
+					"GeoTiffMetadata2CRSAdapter::createGeodeticDatum(Unit unit):A user defined Geographic Coordinate system must include a predefined datum!",
+					null);
+		}
+
+		if (datumCode.equals(GeoTiffConstants.GTUserDefinedGeoKey_String)) {
+			/**
+			 * 
+			 * USER DEFINED DATUM
+			 * 
+			 * From the spec:
+			 * 
+			 * GeoKey Requirements for User-Defined Horizontal Datum: 
+			 *   GeogCitationGeoKey
+			 *   GeogEllipsoidGeoKey
+			 *   
+			 */
+			// datum name
+			String name = metadata.getGeoKey(GeoTiffGCSCodes.GeogCitationGeoKey);
+			if(name==null){
+			    name="unnamed";
+			} else {
+                            String[] values = name.split("\\|");
+                            if(values!=null&&values.length>=2){
+                                name=values[1];
+                            }   			    
+			}
+
+			// is it WGS84?
+			if (name.trim().equalsIgnoreCase("WGS84")){
+			    return DefaultGeodeticDatum.WGS84;
+			}
+
+			// ELLIPSOID
+			final Ellipsoid ellipsoid = createEllipsoid(unit, metadata);
+
+			// PRIME MERIDIAN
+			// lookup the Prime Meridian.
+			final PrimeMeridian primeMeridian = createPrimeMeridian(metadata,unit);
+
+			// DATUM
+			datum = new DefaultGeodeticDatum(cleanName(name), ellipsoid,primeMeridian);
+		} else {
+			/**
+			 * NOT USER DEFINED DATUM
+			 */
+
+			// we are going to use the provided EPSG code
+			try {
+				datum = (GeodeticDatum) (this.allAuthoritiesFactory
+						.createDatum("EPSG:"+datumCode));
+			} catch (Exception cce) {
+				final GeoTiffException ex = new GeoTiffException(metadata, cce
+						.getLocalizedMessage(), cce);
+				throw ex;
+			}
+		}
+
+		return datum;
+	}
+

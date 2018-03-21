@@ -1,0 +1,78 @@
+	/**
+	 * Creating an ellipsoid following the GeoTiff spec.
+	 * 
+	 * @param unit
+	 *            to build this {@link Ellipsoid}..
+	 * 
+	 * @return an {@link Ellipsoid}.
+	 * 
+	 * @throws GeoTiffException
+	 */
+	private Ellipsoid createEllipsoid(final Unit unit,
+			final GeoTiffIIOMetadataDecoder metadata) throws GeoTiffException {
+		// /////////////////////////////////////////////////////////////////////
+		//
+		// Getting the ellipsoid key in order to understand if we are working
+		// against a common ellipsoid or a user defined one.
+		//
+		// /////////////////////////////////////////////////////////////////////
+		// ellipsoid key
+		final String ellipsoidKey = metadata.getGeoKey(GeoTiffGCSCodes.GeogEllipsoidGeoKey);
+		String temp = null;
+		// is the ellipsoid user defined?
+		if (ellipsoidKey.equals(GeoTiffConstants.GTUserDefinedGeoKey_String)) {
+			//
+			// USER DEFINED ELLIPSOID
+			//
+			String name = metadata.getGeoKey(GeoTiffGCSCodes.GeogCitationGeoKey);
+			if (name == null){
+			    name = "unnamed";
+			} else {
+	                    name=cleanName(name);
+                            String[] values = name.split("\\|");
+                            if(values!=null&&values.length>=3){
+                                name=values[2];
+                            }  	                    
+	                }
+			// is it the default for WGS84?
+			if (name.trim().equalsIgnoreCase("WGS84")){
+			    return DefaultEllipsoid.WGS84;
+			}
+
+			// //
+			//
+			// It is worth to point out that I ALWAYS use the inverse flattening
+			// along with the semi-major axis to builde the Flattened Sphere.
+			// This
+			// has to be done in order to comply with the opposite process of
+			// going from CRS to metadata where this coupls is always used.
+			//
+			// //
+			// getting temporary parameters
+			temp = metadata.getGeoKey(GeoTiffGCSCodes.GeogSemiMajorAxisGeoKey);
+			final double semiMajorAxis = (temp != null ? Double.parseDouble(temp) : Double.NaN);
+			temp = metadata.getGeoKey(GeoTiffGCSCodes.GeogInvFlatteningGeoKey);
+			final double inverseFlattening;
+			if (temp != null) {
+			    inverseFlattening = (temp != null ? Double.parseDouble(temp): Double.NaN);
+			} else {
+				temp = metadata.getGeoKey(GeoTiffGCSCodes.GeogSemiMinorAxisGeoKey);
+				final double semiMinorAxis = (temp != null ? Double.parseDouble(temp) : Double.NaN);
+				inverseFlattening = semiMajorAxis / (semiMajorAxis - semiMinorAxis);
+
+			}
+			// look for the Ellipsoid first then build the datum
+			return DefaultEllipsoid.createFlattenedSphere(name,semiMajorAxis, inverseFlattening, unit);
+		}
+
+		try {
+			//
+			// EPSG STANDARD ELLIPSOID
+			//
+			return this.allAuthoritiesFactory.createEllipsoid(new StringBuilder("EPSG:").append(ellipsoidKey).toString());
+		} catch (FactoryException fe) {
+			final GeoTiffException ex = new GeoTiffException(metadata, fe.getLocalizedMessage(), fe);
+			throw ex;
+		}
+	}
+

@@ -1,0 +1,85 @@
+    /**
+     * Creates an operation between two geocentric coordinate reference systems.
+     * The default implementation can adjust for axis order and orientation,
+     * performs units conversion and apply Bursa Wolf transformation if needed.
+     *
+     * @param  sourceCRS Input coordinate reference system.
+     * @param  targetCRS Output coordinate reference system.
+     * @return A coordinate operation from {@code sourceCRS} to {@code targetCRS}.
+     * @throws FactoryException If the operation can't be constructed.
+     *
+     * @todo Rotation of prime meridian not yet implemented.
+     * @todo Transformation version set to "(unknow)". We should search this information somewhere.
+     */
+    protected CoordinateOperation createOperationStep(final GeocentricCRS sourceCRS,
+                                                      final GeocentricCRS targetCRS)
+            throws FactoryException
+    {
+        final GeodeticDatum sourceDatum = sourceCRS.getDatum();
+        final GeodeticDatum targetDatum = targetCRS.getDatum();
+        final CoordinateSystem sourceCS = sourceCRS.getCoordinateSystem();
+        final CoordinateSystem targetCS = targetCRS.getCoordinateSystem();
+        final double sourcePM, targetPM;
+        sourcePM = getGreenwichLongitude(sourceDatum.getPrimeMeridian());
+        targetPM = getGreenwichLongitude(targetDatum.getPrimeMeridian());
+        if (equalsIgnorePrimeMeridian(sourceDatum, targetDatum)) {
+            if (sourcePM == targetPM) {
+                /*
+                 * If both CRS use the same datum and the same prime meridian,
+                 * then the transformation is probably just axis swap or unit
+                 * conversions.
+                 */
+                final Matrix matrix = swapAndScaleAxis(sourceCS, targetCS);
+                return createFromAffineTransform(AXIS_CHANGES, sourceCRS, targetCRS, matrix);
+            }
+            // Prime meridians are differents. Performs the full transformation.
+        }
+        if (sourcePM != targetPM) {
+            throw new OperationNotFoundException("Rotation of prime meridian not yet implemented");
+        }
+        /*
+         * Transform between differents ellipsoids using Bursa Wolf parameters.
+         * The Bursa Wolf parameters are used with "standard" geocentric CS, i.e.
+         * with x axis towards the prime meridian, y axis towards East and z axis
+         * toward North. The following steps are applied:
+         *
+         *     source CRS                      -->
+         *     standard CRS with source datum  -->
+         *     standard CRS with target datum  -->
+         *     target CRS
+         */
+        final CartesianCS STANDARD = DefaultCartesianCS.GEOCENTRIC;
+        final XMatrix matrix;
+        ReferenceIdentifier identifier = DATUM_SHIFT;
+        try {
+            Matrix datumShift = DefaultGeodeticDatum.getAffineTransform(
+                                    TemporaryDatum.unwrap(sourceDatum),
+                                    TemporaryDatum.unwrap(targetDatum));
+            if (datumShift == null) {
+                if (lenientDatumShift) {
+                    datumShift = new Matrix4(); // Identity transform.
+                    identifier = ELLIPSOID_SHIFT;
+                } else {
+                    throw new OperationNotFoundException(Errors.format(
+                                ErrorKeys.BURSA_WOLF_PARAMETERS_REQUIRED));
+                }
+            }
+            final Matrix normalizeSource = swapAndScaleAxis(sourceCS, STANDARD);
+            final Matrix normalizeTarget = swapAndScaleAxis(STANDARD, targetCS);
+            /*
+             * Since all steps are matrix, we can multiply them into a single matrix operation.
+             * Note: XMatrix.multiply(XMatrix) is equivalents to AffineTransform.concatenate(...):
+             *       First transform by the supplied transform and then transform the result
+             *       by the original transform.
+             *
+             * We compute: matrix = normalizeTarget * datumShift * normalizeSource
+             */
+            matrix = new Matrix4(normalizeTarget);
+            matrix.multiply(datumShift);
+            matrix.multiply(normalizeSource);
+        } catch (SingularMatrixException cause) {
+            throw new OperationNotFoundException(getErrorMessage(sourceDatum, targetDatum), cause);
+        }
+        return createFromAffineTransform(identifier, sourceCRS, targetCRS, matrix);
+    }
+

@@ -1,0 +1,40 @@
+    /**
+     * Returns the authority for this EPSG database.
+     * This authority will contains the database version in the {@linkplain Citation#getEdition
+     * edition} attribute, together with the {@linkplain Citation#getEditionDate edition date}.
+     */
+    public Citation getAuthority() {
+        if (authority == null) try {
+            synchronized (this) {
+                if(authority == null) {
+                    // we sort on version_number too since in v7.4 they had two entries with the same version date
+                    final String query = adaptSQL("SELECT VERSION_NUMBER, VERSION_DATE FROM [Version History]" +
+                                                  " ORDER BY VERSION_DATE DESC, VERSION_NUMBER DESC");
+                    final DatabaseMetaData metadata  = getConnection().getMetaData();
+                    final Statement        statement = getConnection().createStatement();
+                    final ResultSet        result    = statement.executeQuery(query);
+                    if (result.next()) {
+                        final String version = result.getString(1);
+                        final Date   date    = result.getDate  (2);
+                        final String engine  = metadata.getDatabaseProductName();
+                        final CitationImpl c = new CitationImpl(Citations.EPSG);
+                        c.getAlternateTitles().add(Vocabulary.formatInternational(
+                                VocabularyKeys.DATA_BASE_$3, "EPSG", version, engine));
+                        c.setEdition(new SimpleInternationalString(version));
+                        c.setEditionDate(date);
+                        authority = (Citation) c.unmodifiable();
+                        hints.put(Hints.VERSION, new Version(version));  // For getImplementationHints()
+                    } else {
+                        authority = Citations.EPSG;
+                    }
+                    result.close();
+                    statement.close();
+                }
+            }
+        } catch (SQLException exception) {
+            Logging.unexpectedException(LOGGER, DirectEpsgFactory.class, "getAuthority", exception);
+            return Citations.EPSG;
+        }
+        return authority;
+    }
+

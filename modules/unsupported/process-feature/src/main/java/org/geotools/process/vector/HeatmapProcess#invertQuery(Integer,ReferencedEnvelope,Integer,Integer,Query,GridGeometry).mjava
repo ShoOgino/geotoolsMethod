@@ -1,0 +1,48 @@
+    /**
+     * Given a target query and a target grid geometry returns the query to be used to read the
+     * input data of the process involved in rendering. In this process this method is used to:
+     * <ul>
+     * <li>determine the extent & CRS of the output grid
+     * <li>expand the query envelope to ensure stable surface generation
+     * <li>modify the query hints to ensure point features are returned
+     * </ul>
+     * Note that in order to pass validation, all parameters named here must also appear in the
+     * parameter list of the <tt>execute</tt> method, even if they are not used there.
+     * 
+     * @param argRadiusPixels the feature type attribute that contains the observed surface value
+     * @param targetQuery the query used against the data source
+     * @param targetGridGeometry the grid geometry of the destination image
+     * @return The transformed query
+     */
+    public Query invertQuery(
+            @DescribeParameter(name = "radiusPixels", description = "Radius to use for the kernel", min = 0, max = 1) Integer argRadiusPixels,
+            // output image parameters
+            @DescribeParameter(name = "outputBBOX", description = "Georeferenced bounding box of the output") ReferencedEnvelope argOutputEnv,
+            @DescribeParameter(name = "outputWidth", description = "Width of the output raster") Integer argOutputWidth,
+            @DescribeParameter(name = "outputHeight", description = "Height of the output raster") Integer argOutputHeight,
+
+            Query targetQuery, GridGeometry targetGridGeometry) throws ProcessException {
+
+        // TODO: handle different CRSes in input and output
+        
+        int radiusPixels = argRadiusPixels > 0 ? argRadiusPixels : 0;
+        // input parameters are required, so should be non-null
+        double queryBuffer = radiusPixels / pixelSize(argOutputEnv, argOutputWidth, argOutputHeight);
+        /*
+         * if (argQueryBuffer != null) { queryBuffer = argQueryBuffer; }
+         */
+        targetQuery.setFilter(expandBBox(targetQuery.getFilter(), queryBuffer));
+
+        // clear properties to force all attributes to be read
+        // (required because the SLD processor cannot see the value attribute specified in the
+        // transformation)
+        // TODO: set the properties to read only the specified value attribute
+        targetQuery.setProperties(null);
+
+        // set the decimation hint to ensure points are read
+        Hints hints = targetQuery.getHints();
+        hints.put(Hints.GEOMETRY_DISTANCE, 0.0);
+
+        return targetQuery;
+    }
+

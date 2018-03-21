@@ -1,0 +1,38 @@
+    /**
+     * Returns the name and description for the specified {@linkplain CoordinateSystemAxis
+     * coordinate system axis} code. Many axis share the same name and description, so it
+     * is worth to cache them.
+     */
+    private AxisName getAxisName(final String code) throws FactoryException {
+        assert Thread.holdsLock(this);
+        AxisName returnValue = axisNames.get(code);
+        if (returnValue == null) try {
+            final PreparedStatement stmt;
+            stmt = prepareStatement("AxisName", "SELECT COORD_AXIS_NAME, DESCRIPTION, REMARKS"
+                                    +       " FROM [Coordinate Axis Name]"
+                                    +       " WHERE COORD_AXIS_NAME_CODE = ?");
+            stmt.setString(1, code);
+            ResultSet result = stmt.executeQuery();
+            while (result.next()) {
+                final String name  = getString(result, 1, code);
+                String description = result.getString (2);
+                String remarks     = result.getString (3);
+                if (description == null) {
+                    description = remarks;
+                } else if (remarks != null) {
+                    description += System.getProperty("line.separator", "\n") + remarks;
+                }
+                final AxisName axis = new AxisName(name, description);
+                returnValue = ensureSingleton(axis, returnValue, code);
+            }
+            result.close();
+            if (returnValue == null) {
+                throw noSuchAuthorityCode(AxisName.class, code);
+            }
+            axisNames.put(code, returnValue);
+        } catch (SQLException exception) {
+            throw databaseFailure(AxisName.class, code, exception);
+        }
+        return returnValue;
+    }
+

@@ -1,0 +1,83 @@
+    /**
+     * Returns an ellipsoid from a code.
+     *
+     * @param  code The EPSG value.
+     * @return The ellipsoid object.
+     * @throws NoSuchAuthorityCodeException if this method can't find the requested code.
+     * @throws FactoryException if some other kind of failure occured in the backing
+     *         store. This exception usually have {@link SQLException} as its cause.
+     */
+    public synchronized Ellipsoid generateEllipsoid(final String code)
+            throws FactoryException
+    {
+        ensureNonNull("code", code);
+        Ellipsoid returnValue = null;
+        try {
+            final String primaryKey = toPrimaryKey(Ellipsoid.class, code,
+                    "[Ellipsoid]", "ELLIPSOID_CODE", "ELLIPSOID_NAME");
+            final PreparedStatement stmt;
+            stmt = prepareStatement("Ellipsoid", "SELECT ELLIPSOID_CODE,"
+                                               +       " ELLIPSOID_NAME,"
+                                               +       " SEMI_MAJOR_AXIS,"
+                                               +       " INV_FLATTENING,"
+                                               +       " SEMI_MINOR_AXIS,"
+                                               +       " UOM_CODE,"
+                                               +       " REMARKS"
+                                               + " FROM [Ellipsoid]"
+                                               + " WHERE ELLIPSOID_CODE = ?");
+            stmt.setString(1, primaryKey);
+            final ResultSet result = stmt.executeQuery();
+            while (result.next()) {
+                /*
+                 * One of 'semiMinorAxis' and 'inverseFlattening' values can be NULL in
+                 * the database. Consequently, we don't use 'getString(ResultSet, int)'
+                 * because we don't want to thrown an exception if a NULL value is found.
+                 */
+                final String epsg              = getString(result, 1, code);
+                final String name              = getString(result, 2, code);
+                final double semiMajorAxis     = getDouble(result, 3, code);
+                final double inverseFlattening = result.getDouble( 4);
+                final double semiMinorAxis     = result.getDouble( 5);
+                final String unitCode          = getString(result, 6, code);
+                final String remarks           = result.getString( 7);
+                final Unit   unit              = createUnit(unitCode);
+                final Map<String,Object> properties = generateProperties(name, epsg, remarks);
+                final Ellipsoid ellipsoid;
+                if (inverseFlattening == 0) {
+                    if (semiMinorAxis == 0) {
+                        // Both are null, which is not allowed.
+                        final String column = result.getMetaData().getColumnName(3);
+                        result.close();
+                        throw new FactoryException(Errors.format(ErrorKeys.NULL_VALUE_IN_TABLE_$3, code, column));
+                    } else {
+                        // We only have semiMinorAxis defined -> it's OK
+                        ellipsoid = factories.getDatumFactory().createEllipsoid(
+                                    properties, semiMajorAxis, semiMinorAxis, unit);
+                    }
+                } else {
+                    if (semiMinorAxis != 0) {
+                        // Both 'inverseFlattening' and 'semiMinorAxis' are defined.
+                        // Log a warning and create the ellipsoid using the inverse flattening.
+                        final LogRecord record = Loggings.format(Level.WARNING, LoggingKeys.AMBIGUOUS_ELLIPSOID,code);
+                        record.setLoggerName(LOGGER.getName());
+                        LOGGER.log(record);
+                    }
+                    ellipsoid = factories.getDatumFactory().createFlattenedSphere(
+                                properties, semiMajorAxis, inverseFlattening, unit);
+                }
+                /*
+                 * Now that we have built an ellipsoid, compare
+                 * it with the previous one (if any).
+                 */
+                returnValue = ensureSingleton(ellipsoid, returnValue, code);
+            }
+            result.close();
+        } catch (SQLException exception) {
+            throw databaseFailure(Ellipsoid.class, code, exception);
+        }
+        if (returnValue == null) {
+             throw noSuchAuthorityCode(Ellipsoid.class, code);
+        }
+        return returnValue;
+    }
+

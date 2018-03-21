@@ -1,0 +1,45 @@
+    /**
+     * Returns an axis direction constants from its name.
+     *
+     * @param  direction The direction name (e.g. "north", "east", etc.).
+     * @return The axis direction for the given name.
+     * @throws NoSuchElementException if the given name is not a know axis direction.
+     */
+    public static AxisDirection getDirection(String direction) throws NoSuchElementException {
+        ensureNonNull("direction", direction);
+        direction = direction.trim();
+        AxisDirection candidate = DirectionAlongMeridian.findDirection(direction);
+        if (candidate != null) {
+            return candidate;
+        }
+
+        /*
+         * In latest version of the database north-east and north-west are now northeast and northwest respectively,
+         * and none of these heuristics pick that up, so we add a few special cases here.
+         */
+        if ("northeast".equalsIgnoreCase(direction)) {
+            return AxisDirection.NORTH_EAST;
+        }
+        if ("northwest".equalsIgnoreCase(direction)) {
+            return AxisDirection.NORTH_WEST;
+        }
+
+        /*
+         * Some EPSG direction names are of the form "South along 180 deg". We check that the
+         * direction before "along" is valid and create a new axis direction if it is. We can
+         * not just replace "South along 180 deg" by "South" because the same CRS may use two
+         * of those directions. For example EPSG:32661 has the following axis direction:
+         *
+         * South along 180 deg
+         * South along 90 deg East
+         */
+        final DirectionAlongMeridian meridian = DirectionAlongMeridian.parse(direction);
+        if (meridian != null) {
+            candidate = meridian.getDirection();
+            assert candidate == DirectionAlongMeridian.findDirection(meridian.toString());
+            return candidate;
+        }
+        throw new NoSuchElementException(
+                Errors.format(ErrorKeys.UNKNOW_AXIS_DIRECTION_$1, direction));
+    }
+

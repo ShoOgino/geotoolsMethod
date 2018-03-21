@@ -1,0 +1,116 @@
+    /**
+     * Returns an arbitrary object from a code.
+     * The default implementation invokes one of {@link #createCoordinateReferenceSystem},
+     * {@link #createCoordinateSystem}, {@link #createDatum}, {@link #createEllipsoid}, or
+     * {@link #createUnit} methods according the object type.
+     *
+     * @param  code The EPSG value.
+     * @return The object.
+     * @throws NoSuchAuthorityCodeException if this method can't find the requested code.
+     * @throws FactoryException if some other kind of failure occured in the backing
+     *         store. This exception usually have {@link SQLException} as its cause.
+     */
+    public synchronized IdentifiedObject generateObject(final String code) throws FactoryException {
+        ensureNonNull("code", code);
+        final String       KEY = "IdentifiedObject";
+        PreparedStatement stmt = statements.get(KEY); // Null allowed.
+        StringBuilder    query = null; // Will be created only if the last statement doesn't suit.
+        /*
+         * Iterates through all tables listed in TABLES_INFO, starting with the table used during
+         * the last call to 'createObject(code)'.  This approach assumes that two consecutive calls
+         * will often return the same type of object.  If the object type changed, then this method
+         * will have to discard the old prepared statement and prepare a new one, which may be a
+         * costly operation. Only the last successful prepared statement is cached, in order to keep
+         * the amount of statements low. Unsuccessful statements are immediately disposed.
+         */
+        final String  epsg         = trimAuthority(code);
+        final boolean isPrimaryKey = isPrimaryKey(epsg);
+        final int     tupleToSkip  = isPrimaryKey ? lastObjectType : -1;
+        int index = -1;
+        for (int i=-1; i<TABLES_INFO.length; i++) {
+            if (i == tupleToSkip) {
+                // Avoid to test the same table twice.  Note that this test also avoid a
+                // NullPointerException if 'stmt' is null, since 'lastObjectType' should
+                // be -1 in this case.
+                continue;
+            }
+            try {
+                if (i >= 0) {
+                    final TableInfo table = TABLES_INFO[i];
+                    final String column = isPrimaryKey ? table.codeColumn : table.nameColumn;
+                    if (column == null) {
+                        continue;
+                    }
+                    if (query == null) {
+                        query = new StringBuilder("SELECT ");
+                    }
+                    query.setLength(7); // 7 is the length of "SELECT " in the line above.
+                    query.append(table.codeColumn);
+                    query.append(" FROM ");
+                    query.append(table.table);
+                    query.append(" WHERE ");
+                    query.append(column);
+                    query.append(" = ?");
+                    if (isPrimaryKey) {
+                        assert !statements.containsKey(KEY) : table;
+                        stmt = prepareStatement(KEY, query.toString());
+                    } else {
+                        // Do not cache the statement for names.
+                        stmt = getConnection().prepareStatement(adaptSQL(query.toString()));
+                    }
+                }
+                /*
+                 * Checks if at least one record is found for the code. If the code is the primary
+                 * key, then we will stop at the first table found since a well-formed EPSG database
+                 * should not contains any duplicate identifiers. In the code is a name, then search
+                 * in all tables since duplicate names exist.
+                 */
+                stmt.setString(1, epsg);
+                final ResultSet result = stmt.executeQuery();
+                final boolean  present = result.next();
+                result.close();
+                if (present) {
+                    if (index >= 0) {
+                        throw new FactoryException(Errors.format(ErrorKeys.DUPLICATED_VALUES_$1, code));
+                    }
+                    index = (i < 0) ? lastObjectType : i;
+                    if (isPrimaryKey) {
+                        // Don't scan other tables, since primary keys should be unique.
+                        // Note that names may be duplicated, so we don't stop for names.
+                        break;
+                    }
+                }
+                if (isPrimaryKey) {
+                    if (statements.remove(KEY) == null) {
+                        throw new AssertionError(code); // Should never happen.
+                    }
+                }
+                stmt.close();
+            } catch (SQLException exception) {
+                throw databaseFailure(IdentifiedObject.class, code, exception);
+            }
+        }
+        /*
+         * If a record has been found in one table, then delegates to the appropriate method.
+         */
+        if (isPrimaryKey) {
+            lastObjectType = index;
+        }
+        if (index >= 0) {
+            switch (index) {
+                case 0:  return createCoordinateReferenceSystem(code);
+                case 1:  return createCoordinateSystem         (code);
+                case 2:  return createCoordinateSystemAxis     (code);
+                case 3:  return createDatum                    (code);
+                case 4:  return createEllipsoid                (code);
+                case 5:  return createPrimeMeridian            (code);
+                case 6:  return createCoordinateOperation      (code);
+                case 7:  return generateOperationMethod          (code);
+                case 8:  return generateParameterDescriptor      (code);
+                case 9:  break; // Can't cast Unit to IdentifiedObject
+                default: throw new AssertionError(index); // Should not happen
+            }
+        }
+        return super.createObject(code);
+    }
+

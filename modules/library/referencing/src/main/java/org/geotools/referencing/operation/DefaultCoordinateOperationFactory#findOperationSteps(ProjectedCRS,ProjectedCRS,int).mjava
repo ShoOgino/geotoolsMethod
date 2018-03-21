@@ -1,0 +1,60 @@
+    /**
+     * Returns all available operations between two projected coordinate reference systems. The default implementation can adjust axis order and
+     * orientation. It also performs units conversion if it is the only extra change needed. Otherwise, it performs three steps:
+     *
+     * <ul>
+     * <li>Unproject from {@code sourceCRS} to its base {@linkplain GeographicCRS geographic CRS}.</li>
+     * <li>Convert the source to target base geographic CRS.</li>
+     * <li>Project from the base {@linkplain GeographicCRS geographic CRS} to the {@code targetCRS}.</li>
+     * </ul>
+     *
+     * @param sourceCRS Input coordinate reference system.
+     * @param targetCRS Output coordinate reference system.
+     * @param limit The maximum number of operations to be returned. Use -1 to return all the available operations. Use 1 to return just one
+     *        operation. Currently, the behavior for other values of {@code limit} is undefined.
+     * @return A {@code Set} of coordinate operations from {@code sourceCRS} to {@code targetCRS}.
+     * @throws FactoryException If the operation can't be constructed.
+     */
+    protected Set<CoordinateOperation> findOperationSteps(final ProjectedCRS sourceCRS,
+            final ProjectedCRS targetCRS, int limit)
+            throws FactoryException
+    {
+        /*
+         * First, check if a linear path exists from sourceCRS to targetCRS.
+         * If both projected CRS use the same projection and the same horizontal datum,
+         * then only axis orientation and units may have been changed. We do not need
+         * to perform the tedious  ProjectedCRS --> GeographicCRS --> ProjectedCRS  chain.
+         * We can apply a much shorter conversion using only an affine transform.
+         *
+         * This shorter path is essential for proper working of
+         * createOperationStep(GeographicCRS,ProjectedCRS).
+         */
+        final Matrix linear = createLinearConversion(sourceCRS, targetCRS, EPS);
+        if (linear != null) {
+            return Collections.singleton(
+                    createFromAffineTransform(AXIS_CHANGES, sourceCRS, targetCRS, linear));
+        }
+        /*
+         * Apply the transformation in 3 steps (the 3 arrows below):
+         *
+         *     source projected CRS   --(unproject)-->
+         *     source geographic CRS  --------------->
+         *     target geographic CRS  ---(project)--->
+         *     target projected CRS
+         */
+        final GeographicCRS sourceGeo = sourceCRS.getBaseCRS();
+        final GeographicCRS targetGeo = targetCRS.getBaseCRS();
+        Set<CoordinateOperation> step1, step2, step3;
+
+        step1 = tryDB(sourceCRS, sourceGeo, limit);
+        if (step1.isEmpty())
+            step1 = findOperationSteps(sourceCRS, sourceGeo, limit);
+        step2 = tryDB(sourceGeo, targetGeo, limit);
+        if (step2.isEmpty())
+            step2 = Collections.singleton(createOperationStep(sourceGeo, targetGeo));
+        step3 = tryDB(targetGeo, targetCRS, limit);
+        if (step3.isEmpty())
+            step3 = findOperationSteps(targetGeo, targetCRS, limit);
+        return concatenate(step1, step2, step3);
+    }
+
