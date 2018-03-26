@@ -1,0 +1,35 @@
+    protected RenderableSVG toRenderableSVG(String svgfile, URL svgUrl) throws SAXException, IOException {
+        RenderableSVG svg;
+        String parser = XMLResourceDescriptor.getXMLParserClassName();
+        SAXSVGDocumentFactory f = new SAXSVGDocumentFactory(parser) {
+            @Override
+            public InputSource resolveEntity(String publicId, String systemId)
+                    throws SAXException {
+                InputSource source = super.resolveEntity(publicId, systemId);
+                if (source == null) {
+                    try {
+                        return resolver.resolveEntity(publicId, systemId);
+                    } catch (IOException e) {
+                        throw new SAXException(e);
+                    }
+                }
+                return source;
+            }
+        };
+        String svgUri = svgfile;
+        // Remove parameters from file URLs, as it is not supported by Windows
+        if ("file".equals(svgUrl.getProtocol()) && svgUrl.getQuery() != null) {
+            int idx = svgfile.indexOf('?');
+            if (idx > -1) {
+                svgUri = svgfile.substring(0, idx);
+            }
+        }
+        Document doc = f.createDocument(svgUri);
+        Map<String, String> parameters = getParametersFromUrl(svgfile);
+        if (!parameters.isEmpty() || hasParameters(doc.getDocumentElement())) {
+            replaceParameters(doc.getDocumentElement(), parameters);
+        }
+        svg = new RenderableSVG(doc);
+        return svg;
+    }
+
