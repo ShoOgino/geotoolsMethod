@@ -1,0 +1,38 @@
+    /**
+     * Determines if the expression and all its sub expressions are supported.  
+     *
+     * @param expression the expression to be tested.
+     *
+     * @return true if all sub filters are supported, false otherwise.
+     *
+     * @throws IllegalArgumentException If a null filter is passed in.  As this
+     *         function is recursive a null in a logic filter will also cause
+     *         an error.
+     */
+    private boolean fullySupports(Expression expression) {
+        if (expression  == null) {
+            throw new IllegalArgumentException("Null expression can not be unpacked");
+        }
+
+        FilterCapabilities filterCapabilities = getFilterCapabilities();
+
+        if (!filterCapabilities.supports(expression.getClass())) {
+            return false;
+        }
+
+        // check the known composite expressions
+        if (expression instanceof BinaryExpression) {
+            BinaryExpression be = (BinaryExpression) expression;
+            return fullySupports(be.getExpression1()) && fullySupports(be.getExpression2());
+        } else if (expression instanceof Function) {
+            Function function = (Function) expression;
+            for (Expression fe : function.getParameters()) {
+                if (!fullySupports(fe)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
