@@ -1,44 +1,39 @@
         public BaseGT2Format() {
-            //FIXME: this constructor is apparently not useful. Should we remove it?
-            
-            // make sure Units registers the extar units in the default format
-            Unit<?> forceInit = Units.SEXAGESIMAL_DMS;
+            super();
 
+            /**
+             * Labels and alias are only defined on the DEFAULT format instance, so these definitions are not inherited by subclassing DefaultFormat.
+             * Therefore, we need to clone these definitions in our GT formats
+             */
             DefaultFormat base = (DefaultFormat) SimpleUnitFormat.getInstance();
+            try {
 
-            // clone non si units
-            Set<Unit<?>> nonSiUnits = NonSI.getInstance().getUnits();
-            for (Unit<?> unit : nonSiUnits) {
-                String name = unit.getName();
-                if (name != null) {
-                    label(unit, name);
-                }
-            }
-            // clone si units
-            Set<Unit<?>> siUnits = SI.getInstance().getUnits();
-            for (Unit<?> unit : siUnits) {
-                String name = unit.getName();
-                if (name != null) {
-                    label(unit, name);
-                }
-            }
+                java.lang.reflect.Field nameToUnitField = DefaultFormat.class
+                        .getDeclaredField("_nameToUnit");
+                nameToUnitField.setAccessible(true);
+                HashMap<String, Unit<?>> nameToUnitMap = (HashMap<String, Unit<?>>) nameToUnitField
+                        .get(base);
 
-            // clone extra gt units
-            for (java.lang.reflect.Field field : Units.class.getFields()) {
-                if (Modifier.isStatic(field.getModifiers())
-                        && Unit.class.isAssignableFrom(field.getType())) {
-                    try {
-                        field.setAccessible(true);
-                        Unit unit = (Unit) field.get(null);
-                        String name = unit.getName();
-                        if (name != null) {
-                            label(unit, name);
-                        }
-                    } catch (Throwable t) {
-                        // we tried...
+                java.lang.reflect.Field unitToNameField = DefaultFormat.class
+                        .getDeclaredField("_unitToName");
+                unitToNameField.setAccessible(true);
+                HashMap<String, Unit<?>> unitToNameMap = (HashMap<String, Unit<?>>) unitToNameField
+                        .get(base);
+                for (Map.Entry<String, Unit<?>> entry : nameToUnitMap.entrySet()) {
+                    String name = entry.getKey();
+                    Unit<?> unit = entry.getValue();
+                    if (unitToNameMap.containsKey(unit)
+                            && name.equals(unitToNameMap.get(unit))) {
+                        label(unit, name);
+                    } else {
+                        alias(unit, name);
                     }
                 }
+            } catch (Throwable t) {
+                // we tried...
             }
 
+            // labels and aliases for custom GT units
+            Units.registerCustomUnits(this);
         }
 
