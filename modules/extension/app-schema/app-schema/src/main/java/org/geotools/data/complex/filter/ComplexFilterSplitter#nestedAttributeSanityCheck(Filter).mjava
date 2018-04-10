@@ -1,0 +1,51 @@
+    private void nestedAttributeSanityCheck(Filter filter) {
+        if (nestedAttributes != null) {
+            for (FeatureChainedAttributeDescriptor descr : nestedAttributes) {
+                FeatureTypeMapping ownerType = descr.getFeatureTypeOwningAttribute();
+                StepList attrPath = descr.getAttributePath();
+                StepList xpathSteps = attrPath.clone();
+                if (Types.isSimpleContentType(ownerType.getTargetFeature().getType())) {
+                    // if chaining a simple content type, XPath expression may point directly to the
+                    // type,
+                    // and not to one of its attributes: if this is the case, the XPath expression
+                    // should
+                    // be tested against the container type, i.e. the previous link in the chain
+                    String ownerTypeName =
+                            Types.toPrefixedName(
+                                    ownerType.getTargetFeature().getName(),
+                                    ownerType.getNamespaces());
+                    boolean chainingSimpleType =
+                            ownerTypeName.equals(descr.getAttributePath().toString());
+                    FeatureChainLink lastLink = descr.getLastLink();
+                    if (chainingSimpleType && lastLink.previous() != null) {
+                        ownerType = lastLink.previous().getFeatureTypeMapping();
+                        StepList prevXPathSteps =
+                                lastLink.previous().getNestedFeatureAttribute().getTargetXPath();
+                        Step prevLastStep = prevXPathSteps.get(prevXPathSteps.size() - 1);
+                        if (!prevLastStep.equalsIgnoreIndex(attrPath.get(0))) {
+                            xpathSteps = prevXPathSteps.clone();
+                            xpathSteps.add(attrPath.get(0));
+                        }
+                    } else {
+                        LOGGER.warning(
+                                String.format(
+                                        "Cound not run sanity check for nested attribute \"%s\" of type \"%s\"",
+                                        descr.getAttributePath(),
+                                        ownerType.getTargetFeature().getName()));
+                    }
+                }
+                xpathSteps = removeIndexesAndPredicates(xpathSteps);
+                if (FeatureChainedAttributeVisitor.isXlinkHref(xpathSteps)
+                        || FeatureChainedAttributeVisitor.isFid(xpathSteps)) {
+                    // if XPath expression points to xlink:href or to a FID, the only reliable thing
+                    // to is to check the existence of its parent attribute
+                    xpathSteps.remove(xpathSteps.size() - 1);
+                }
+                if (!xpathSteps.isEmpty()) {
+                    Class<?> expectedType = determineExpectedType(filter, xpathSteps);
+                    checkPropetyExistenceAndType(ownerType, xpathSteps.toString(), expectedType);
+                }
+            }
+        }
+    }
+
