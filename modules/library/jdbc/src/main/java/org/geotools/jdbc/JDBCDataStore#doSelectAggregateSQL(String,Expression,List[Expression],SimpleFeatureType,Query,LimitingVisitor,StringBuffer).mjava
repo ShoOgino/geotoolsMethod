@@ -1,0 +1,141 @@
+    /**
+     * Helper method to factor out some commonalities between selectAggregateSQL, and selectAggregateSQLPS 
+     */
+    List<FilterToSQL> doSelectAggregateSQL(String function, Expression expr, List<Expression> groupByExpressions,
+            SimpleFeatureType featureType, Query query, LimitingVisitor visitor, StringBuffer sql) throws SQLException, IOException {
+        JoinInfo join = !query.getJoins().isEmpty() 
+            ? JoinInfo.create(query, featureType, this) : null;
+
+        List<FilterToSQL> toSQL = new ArrayList();
+        boolean queryLimitOffset = checkLimitOffset(query.getStartIndex(), query.getMaxFeatures());
+        boolean visitorLimitOffset = visitor == null ? false : visitor.hasLimits()
+                && dialect.isLimitOffsetSupported();
+        // grouping over expressions is complex, as we need 
+        boolean groupByComplexExpressions = hasComplexExpressions(groupByExpressions);
+        if(queryLimitOffset && !visitorLimitOffset && !groupByComplexExpressions) {
+            if (join != null) {
+                //don't select * to avoid ambigous result set
+                sql.append("SELECT ");
+                dialect.encodeColumnName(null, join.getPrimaryAlias(), sql);
+                sql.append(".* FROM ");
+            }
+            else {
+                sql.append("SELECT * FROM ");
+            }
+        } else {
+            sql.append("SELECT ");
+            FilterToSQL filterToSQL = getFilterToSQL(featureType);
+            if (groupByExpressions != null && !groupByExpressions.isEmpty()) {
+                try {
+                    // we encode all the group by attributes as columns names
+                    int i = 1;
+                    for (Expression expression : groupByExpressions) {
+                        sql.append(filterToSQL.encodeToString(expression));
+                        // if we are using complex group by, we have to given them an alias
+                        if (groupByComplexExpressions) {
+                            sql.append(" as ").append(getAggregateExpressionAlias(i++));
+                        }
+                        sql.append(", ");
+                    }
+                } catch (FilterToSQLException e) {
+                    throw new RuntimeException("Failed to encode group by expressions", e);
+                }
+            }
+
+            if (groupByComplexExpressions) {
+                // if encoding a sub-query, the source of the aggregation function must
+                // also be given an alias (we could use * too, but there is a risk of conflicts)
+                if (expr != null) {
+                    try {
+                        sql.append(filterToSQL.encodeToString(expr));
+                        sql.append(" as gt_agg_src");
+                    } catch (FilterToSQLException e) {
+                        throw new RuntimeException("Failed to encode group by expressions", e);
+                    }
+                } else {
+                    // remove the last comma and space
+                    sql.setLength(sql.length() - 2);
+                }
+            } else {
+                encodeFunction(function, expr, sql, filterToSQL);
+            }
+            toSQL.add(filterToSQL);
+            sql.append( " FROM ");
+        }
+        
+        if (join != null) {
+            encodeTableJoin(featureType, join, query, sql);
+        }
+        else {
+            encodeTableName(featureType.getTypeName(), sql, query.getHints());
+        }
+
+        
+        if (join != null) {
+            toSQL.addAll(encodeWhereJoin(featureType, join, sql));
+        } else {
+            Filter filter = query.getFilter();
+            if (filter != null && !Filter.INCLUDE.equals(filter)) {
+                sql.append(" WHERE ");
+                toSQL.add(filter(featureType, filter, sql));
+            }
+        }
+        if (dialect.isAggregatedSortSupported(function)) {
+            sort(featureType, query.getSortBy(), null, sql);
+        }
+
+        // apply limits
+        if (visitorLimitOffset) {
+            applyLimitOffset(sql, visitor.getStartIndex(), visitor.getMaxFeatures());
+        } else if (queryLimitOffset) {
+            applyLimitOffset(sql, query.getStartIndex(), query.getMaxFeatures()); 
+        }
+
+        // if the limits were in query or there is a group by with complex expressions 
+        // we need to roll what was built so far in a sub-query
+        if (queryLimitOffset || groupByComplexExpressions) {
+            StringBuffer sql2 = new StringBuffer("SELECT ");
+            try {
+                if (groupByExpressions != null && !groupByExpressions.isEmpty()) {
+                    FilterToSQL filterToSQL = getFilterToSQL(featureType);
+                    int i = 1;
+                    for (Expression expression : groupByExpressions) {
+                        if (groupByComplexExpressions) {
+                            sql2.append(getAggregateExpressionAlias(i++));
+                        } else {
+                            sql2.append(filterToSQL.encodeToString(expression));
+                        }
+                        sql2.append(",");
+                    }
+                    toSQL.add(filterToSQL);
+                }
+            } catch (FilterToSQLException e) {
+                throw new RuntimeException("Failed to encode group by expressions", e);
+            }
+            FilterToSQL filterToSQL = getFilterToSQL(featureType);
+            if (groupByComplexExpressions) {
+                if ("count".equals(function)) {
+                    sql2.append("count(*)");
+                } else {
+                    sql2.append(function).append("(").append("gt_agg_src").append(")");
+                }
+            } else {
+                encodeFunction(function, expr, sql2, filterToSQL);
+            }
+            toSQL.add(filterToSQL);
+            sql2.append(" AS gt_result_");
+            sql2.append(" FROM (");
+            sql.insert(0, sql2.toString());
+            sql.append(") gt_limited_");
+        }
+
+        FilterToSQL filterToSQL = getFilterToSQL(featureType);
+        encodeGroupByStatement(groupByExpressions, sql, filterToSQL, groupByComplexExpressions);
+        toSQL.add(filterToSQL);
+
+        // add search hints if the dialect supports them
+        applySearchHints(featureType, query, sql);
+
+        return toSQL;
+    }
+

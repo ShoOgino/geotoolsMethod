@@ -4,8 +4,9 @@
      */
     protected Object getAggregateValue(FeatureVisitor visitor, SimpleFeatureType featureType, Query query, Connection cx)
             throws IOException {
-        // check if group by is supported by the udnerlign store
-        if(isGroupByVisitor(visitor) && !dialect.isGroupBySupported()) {
+        // check if group by is supported by the underlying store
+        if (isGroupByVisitor(visitor) && 
+                (!dialect.isGroupBySupported() || !isSupportedGroupBy((GroupByVisitor) visitor))) {
             return null;
         }
         // try to match the visitor with an aggregate function
@@ -15,18 +16,11 @@
             return null;
         }
         // try to extract an aggregate attribute from the visitor
-        Expression aggregateExpression = getAggregateExpression(visitor);
-        AttributeDescriptor att = null;
-        // check if aggregation expression is supported
-        if (aggregateExpression instanceof FunctionExpression) {
-            FunctionExpression func = (FunctionExpression) aggregateExpression;
-            if (!getSupportedFunctions().containsKey(func.getFunctionName().getName())) {
+        Expression aggregateExpression = null;
+        if (!isCountVisitor(visitor)) {
+            aggregateExpression = getAggregateExpression(visitor);
+            if (aggregateExpression != null && !fullySupports(aggregateExpression)) {
                 return null;
-            }
-        } else {
-            att = extractAggregateAttribute(visitor, featureType);
-            if (att == null && !isCountVisitor(visitor)) {
-                 return null; // aggregate function optimization only supported for PropertyName expression
             }
         }
         
@@ -37,8 +31,8 @@
             limitingVisitor = (LimitingVisitor) visitor;
         }
         // if the visitor is a group by visitor we extract the group by attributes
-        List<AttributeDescriptor> groupByAttributes = extractGroupByAttributes(visitor, featureType);
-        //result of the function
+        List<Expression> groupByExpressions = extractGroupByExpressions(visitor);
+        // result of the function
         try {
             Object result = null;
             List results = new ArrayList();
@@ -47,20 +41,11 @@
             
             try {
                 if ( dialect instanceof PreparedStatementSQLDialect ) {
-                    if (att == null) {
-                        st = selectAggregateSQLPS(function, aggregateExpression, groupByAttributes, featureType, query, limitingVisitor,  cx);
-                    } else {
-                        st = selectAggregateSQLPS(function, att, groupByAttributes, featureType, query, limitingVisitor,  cx);
-                    }
+                    st = selectAggregateSQLPS(function, aggregateExpression, groupByExpressions, featureType, query, limitingVisitor,  cx);
                     rs = ((PreparedStatement)st).executeQuery();
                 } 
                 else {
-                    String sql;
-                    if (att == null) {
-                        sql = selectAggregateSQL(function, aggregateExpression, groupByAttributes, featureType, query, limitingVisitor);
-                    } else {
-                        sql = selectAggregateSQL(function, att, groupByAttributes, featureType, query, limitingVisitor);
-                    }
+                    String sql = selectAggregateSQL(function, aggregateExpression, groupByExpressions, featureType, query, limitingVisitor);
                     LOGGER.fine( sql );
                     
                     st = cx.createStatement();
@@ -69,21 +54,24 @@
                 }
              
                 while(rs.next()) {
-                    if (groupByAttributes == null || groupByAttributes.isEmpty()) {
+                    if (groupByExpressions == null || groupByExpressions.isEmpty()) {
                         Object value = rs.getObject(1);
                         result = value;
                         results.add(value);
                     }
                     else {
-                        results.add(extractValuesFromResultSet(rs, groupByAttributes.size()));
+                        results.add(extractValuesFromResultSet(rs, groupByExpressions.size()));
                     }
                 }
             } finally {
                 closeSafe( rs );
                 closeSafe( st );
             }
-            
-            if ( setResult(visitor, results.size() > 1 ? results : result) ){
+
+            if (groupByExpressions != null && !groupByExpressions.isEmpty()) {
+                setResult(visitor, results);
+                return results;
+            } else if ( setResult(visitor, results.size() > 1 ? results : result) ){
                 return result == null ? results : result;
             }
             
