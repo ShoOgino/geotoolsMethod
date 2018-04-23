@@ -1,0 +1,49 @@
+    /**
+     * Interpolates a JTS polygon from a circle definition. Assumes WGS84 CRS.
+     *
+     * @param centreCoord The centre of the circle
+     * @param radius Consists of a numeric value with a units string appended to
+     * it.
+     * @return A polygon that is an interpolated form of a circle
+     */
+    private Geometry createCircle(Coordinate centreCoord, String radius) {
+        
+        if (centreCoord == null) {
+            return null;
+        }
+
+        final double radM;
+        try {
+            radM = convertToMeters(radius);
+        }
+        catch(Exception e) {
+            return null;
+        }
+        
+        // Reject circles with radii below an arbitrary minimum.
+        if (radM < MIN_CIRCLE_RADIUS_M) {
+            return null;
+        }
+
+        // Interpolate a circle on the surface of the ellipsoid at an arbitrary
+        // interval and then ensure that the number of interpolated points are
+        // within a specified range
+        final double circumferance = radM * 2.0 * Math.PI;
+        int numPoints = (int) (circumferance / CIRCLE_INTERPOLATION_INTERVAL);
+        numPoints = Math.max(MIN_CIRCLE_POINTS, numPoints);
+        numPoints = Math.min(MAX_CIRCLE_POINTS, numPoints);
+        final double angularIncrement = 360.0 / numPoints;
+        geodeticCalculator.setStartingGeographicPoint(centreCoord.x, centreCoord.y);
+        final Coordinate[] linearRingCoords = new Coordinate[numPoints + 1];
+        double angle = 0.0;
+        for (int i = 0; i < numPoints; i++) {
+            geodeticCalculator.setDirection(angle, radM);
+            Point2D point2D = geodeticCalculator.getDestinationGeographicPoint();
+            linearRingCoords[i] = new Coordinate(point2D.getX(), point2D.getY());
+            angle += angularIncrement;
+        }
+        linearRingCoords[numPoints] = linearRingCoords[0];
+        final LinearRing linearRing = geometryFactory.createLinearRing(linearRingCoords);
+        return geometryFactory.createPolygon(linearRing);
+    }
+
