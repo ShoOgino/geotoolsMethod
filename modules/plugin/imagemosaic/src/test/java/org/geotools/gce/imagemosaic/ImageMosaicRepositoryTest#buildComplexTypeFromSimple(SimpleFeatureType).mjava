@@ -1,0 +1,52 @@
+    /**
+     * Builds a complex feature type by decorating a simple one with some extras, code borrowed by
+     * GeoServer OpenSearch for EO
+     *
+     * @param base
+     * @return
+     */
+    FeatureType buildComplexTypeFromSimple(SimpleFeatureType base) {
+        TypeBuilder typeBuilder = new TypeBuilder(CommonFactoryFinder.getFeatureTypeFactory(null));
+        String nsURI = "http://www.geotools.org/test";
+
+        // map the source attributes
+        AttributeTypeBuilder ab = new AttributeTypeBuilder();
+        for (AttributeDescriptor ad : base.getAttributeDescriptors()) {
+            String name = ad.getLocalName();
+            String namespaceURI = nsURI;
+
+            // map into output type
+            ab.init(ad);
+            ab.setMinOccurs(0);
+            AttributeDescriptor mappedDescriptor;
+            if (ad instanceof GeometryDescriptor) {
+                GeometryType at = ab.buildGeometryType();
+                ab.setCRS(((GeometryDescriptor) ad).getCoordinateReferenceSystem());
+                mappedDescriptor = ab.buildDescriptor(new NameImpl(namespaceURI, name), at);
+            } else {
+                AttributeType at = ab.buildType();
+                mappedDescriptor = ab.buildDescriptor(new NameImpl(namespaceURI, name), at);
+            }
+
+            typeBuilder.add(mappedDescriptor);
+        }
+        // adding the metadata property
+        AttributeDescriptor metadataDescriptor =
+                buildSimpleDescriptor(new NameImpl("metadata"), String.class);
+        typeBuilder.add(metadataDescriptor);
+
+        // adding the quicklook property
+        AttributeDescriptor quicklookDescriptor =
+                buildSimpleDescriptor(new NameImpl("quicklook"), byte[].class);
+        typeBuilder.add(quicklookDescriptor);
+
+        // map OGC links
+        AttributeDescriptor linksDescriptor =
+                buildFeatureListDescriptor(new NameImpl("ogcLinks"), base);
+        typeBuilder.add(linksDescriptor);
+
+        typeBuilder.setName("product");
+        typeBuilder.setNamespaceURI(nsURI);
+        return typeBuilder.feature();
+    }
+
