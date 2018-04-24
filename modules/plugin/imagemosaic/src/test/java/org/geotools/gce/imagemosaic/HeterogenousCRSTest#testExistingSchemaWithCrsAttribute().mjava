@@ -1,0 +1,36 @@
+    @Test
+    public void testExistingSchemaWithCrsAttribute() throws Exception {
+        // prepare test data and let it run once
+        String testLocation = "hetero_utm";
+        URL storeUrl = TestData.url(this, testLocation);
+
+        File testDataFolder = new File(storeUrl.toURI());
+        File testDirectory = crsMosaicFolder.newFolder(testLocation);
+        FileUtils.copyDirectory(testDataFolder, testDirectory);
+
+        ImageMosaicReader imReader = new ImageMosaicReader(testDirectory, null);
+        GridCoverage2D coverage = imReader.read(null);
+        if (coverage.getRenderedImage() instanceof PlanarImage) {
+            ImageUtilities.disposePlanarImageChain((PlanarImage) coverage.getRenderedImage());
+        }
+        coverage.dispose(true);
+        imReader.dispose();
+
+        // append the CrsAttribute to the indexer.properties
+        FileWriter out = null;
+        try {
+            out = new FileWriter(new File(testDirectory, "hetero_utm.properties"),true);
+            out.write("UseExistingSchema=true\n");
+            out.write("CrsAttribute=crs\n");
+            out.flush();
+        } finally {
+            if (out != null) {
+                IOUtils.closeQuietly(out);
+            }
+        }
+        
+        // now rebuild mosaic (used to fail)
+        imReader = new ImageMosaicReader(testDirectory, null);
+        imReader.dispose();
+    }
+
