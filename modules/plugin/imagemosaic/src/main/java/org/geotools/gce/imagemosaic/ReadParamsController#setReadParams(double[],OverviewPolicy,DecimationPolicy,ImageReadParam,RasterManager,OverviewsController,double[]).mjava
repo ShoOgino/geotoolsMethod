@@ -15,7 +15,8 @@
      */
     static int setReadParams(final double[] requestedResolution, OverviewPolicy overviewPolicy,
             DecimationPolicy decimationPolicy, final ImageReadParam readParams,
-            final RasterManager rasterManager, final OverviewsController overviewController)
+            final RasterManager rasterManager, final OverviewsController overviewController,
+            final double[] virtualNativeResolution)
             throws IOException, TransformException {
 
         Utilities.ensureNonNull("readParams", readParams);
@@ -37,17 +38,24 @@
 
         // requested to ignore overviews
         if (overviewPolicy.equals(OverviewPolicy.IGNORE)
-                && decimationPolicy.equals(DecimationPolicy.DISALLOW))
+                && decimationPolicy.equals(DecimationPolicy.DISALLOW)
+                && virtualNativeResolution == null)
             return imageChoice;
 
         if (!overviewPolicy.equals(OverviewPolicy.IGNORE)) {
-            imageChoice = overviewController.pickOverviewLevel(overviewPolicy, requestedResolution);
+            imageChoice = overviewController.pickOverviewLevel(overviewPolicy, requestedResolution, virtualNativeResolution);
+            if (virtualNativeResolution != null && !Double.isNaN(virtualNativeResolution[0]) && !Double.isNaN(virtualNativeResolution[1])){
+                if (LOGGER.isLoggable(Level.FINE)){
+                    LOGGER.fine("Specified Resolution is: resX=" + virtualNativeResolution[0] + " ; resY=" + virtualNativeResolution[1]
+                    + " . Choosing imageIndex = " + imageChoice);
+                }
+            }
         }
 
         // DECIMATION ON READING
         if (!decimationPolicy.equals(DecimationPolicy.DISALLOW)) {
             ReadParamsController.performDecimation(rasterManager.spatialDomainManager,
-                    requestedResolution, imageChoice, readParams, overviewController);
+                    requestedResolution, imageChoice, readParams, overviewController, virtualNativeResolution);
         }
         return imageChoice;
 
