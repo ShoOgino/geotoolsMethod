@@ -1,5 +1,7 @@
     protected void init(final BoundingBox granuleBBOX, final URL granuleUrl,
-            final ImageReaderSpi suggestedSPI, final MultiLevelROI roiProvider,
+            final AbstractGridFormat suggestedFormat,
+            final ImageReaderSpi suggestedSPI, final ImageInputStreamSpi suggestedIsSPI, 
+            final MultiLevelROI roiProvider,
             final boolean heterogeneousGranules, final boolean handleArtifactsFiltering,
             final Hints hints) {
         this.granuleBBOX = ReferencedEnvelope.reference(granuleBBOX);
@@ -9,15 +11,16 @@
         filterMe = handleArtifactsFiltering && roiProvider != null;
 
         // When looking for formats which may parse this file, make sure to exclude the ImageMosaicFormat as return
-        File granuleFile = URLs.urlToFile(granuleUrl);
-        AbstractGridFormat format = GridFormatFinder.findFormat(granuleFile, EXCLUDE_MOSAIC);
+        AbstractGridFormat format = suggestedFormat == null ?
+                GridFormatFinder.findFormat(granuleUrl, EXCLUDE_MOSAIC) :
+                    suggestedFormat;
         // create the base grid to world transformation
         AbstractGridCoverage2DReader gcReader = null;
         ImageInputStream inStream = null;
         ImageReader reader = null;
         try {
 
-            gcReader = format.getReader(granuleFile, hints);
+            gcReader = format.getReader(granuleUrl, hints);
             // Getting Dataset Layout
             layout = gcReader.getDatasetLayout();
             if(heterogeneousGranules) {
@@ -27,32 +30,34 @@
             //
             // get info about the raster we have to read
             //
-            SpiHelper spiProvider = new SpiHelper(granuleFile, suggestedSPI);
+            SpiHelper spiProvider = new SpiHelper(granuleUrl, suggestedSPI, suggestedIsSPI);
             boolean isMultidim = spiProvider.isMultidim();
 
 
             GeneralEnvelope envelope = gcReader.getOriginalEnvelope();
             this.granuleEnvelope = envelope;
 
-            ovrProvider = new MaskOverviewProvider(layout, granuleFile, spiProvider);
+            ovrProvider = new MaskOverviewProvider(layout, granuleUrl, spiProvider);
 
             // get a stream
             if (cachedStreamSPI == null) {
                 cachedStreamSPI = ovrProvider.getInputStreamSpi();
             }
             assert cachedStreamSPI != null : "no cachedStreamSPI available!";
-            inStream = cachedStreamSPI.createInputStreamInstance(granuleUrl, ImageIO.getUseCache(),
-                    ImageIO.getCacheDirectory());
             if (inStream == null) {
-                final File file = URLs.urlToFile(granuleUrl);
-                if (file != null) {
-                    if (LOGGER.isLoggable(Level.WARNING)) {
-                        LOGGER.log(Level.WARNING, Utils.getFileInfo(file));
+                inStream = cachedStreamSPI.createInputStreamInstance(granuleUrl, ImageIO.getUseCache(),
+                    ImageIO.getCacheDirectory());
+                if (inStream == null) {
+                    final File file = URLs.urlToFile(granuleUrl);
+                    if (file != null) {
+                        if (LOGGER.isLoggable(Level.WARNING)) {
+                            LOGGER.log(Level.WARNING, Utils.getFileInfo(file));
+                        }
                     }
+                    throw new IllegalArgumentException(
+                            "Unable to get an input stream for the provided file "
+                                    + granuleUrl.toString());
                 }
-                throw new IllegalArgumentException(
-                        "Unable to get an input stream for the provided file "
-                                + granuleUrl.toString());
             }
 
             // get a reader and try to cache the suggested SPI first
