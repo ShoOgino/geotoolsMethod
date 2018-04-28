@@ -1,22 +1,21 @@
     private void getWorldBox(final UUIDBoxMetadataNode uuid) throws IOException {
-		
-    	// //
-    	//
-    	// Parsing Header 
-    	//
-    	// //
-    	final byte[] bb = uuid.getData();
-        if (bb[0]!='M'||bb[1]!='S'||bb[2]!='I'||bb[3]!='G')
-			 return;
-		
+
+        // //
+        //
+        // Parsing Header
+        //
+        // //
+        final byte[] bb = uuid.getData();
+        if (bb[0] != 'M' || bb[1] != 'S' || bb[2] != 'I' || bb[3] != 'G') return;
+
         // Version number: not used
         // bb[4] bb[5]
-        
-        final int worldFileInterpretation = bb[6]; 
 
-        // Not used.       
+        final int worldFileInterpretation = bb[6];
+
+        // Not used.
         // final int chunkNumber = bb[14];
-        
+
         // //
         //
         // Parsing Chunk
@@ -24,30 +23,29 @@
         // //
         final int ckIndex = 16;
         final int chunkIndex = bb[ckIndex];
-        final long chunkLength = Utils.bytes2long(bb, ckIndex+2);
-        
-        if (chunkIndex!=0 && chunkLength!=48)
-        	return;
-        
+        final long chunkLength = Utils.bytes2long(bb, ckIndex + 2);
+
+        if (chunkIndex != 0 && chunkLength != 48) return;
+
         // //
         // Parsing the Grid to World transformation
         // //
-        final double xScale = Utils.bytes2double(bb,ckIndex+6);
-        final double xRotation = Utils.bytes2double(bb,ckIndex+14);
-        final double yRotation = Utils.bytes2double(bb,ckIndex+22);
-        final double yScale = Utils.bytes2double(bb,ckIndex+30);
-        final double xUpperLeft = Utils.bytes2double(bb,ckIndex+38);
-        final double yUpperLeft = Utils.bytes2double(bb,ckIndex+46);
-        
-        // Not used.       
-        // final boolean footerOk = (bb[ckIndex + 54] == (byte)0xFF) && (bb[ckIndex + 55] == (byte)0x00);
+        final double xScale = Utils.bytes2double(bb, ckIndex + 6);
+        final double xRotation = Utils.bytes2double(bb, ckIndex + 14);
+        final double yRotation = Utils.bytes2double(bb, ckIndex + 22);
+        final double yScale = Utils.bytes2double(bb, ckIndex + 30);
+        final double xUpperLeft = Utils.bytes2double(bb, ckIndex + 38);
+        final double yUpperLeft = Utils.bytes2double(bb, ckIndex + 46);
+
+        // Not used.
+        // final boolean footerOk = (bb[ckIndex + 54] == (byte)0xFF) && (bb[ckIndex + 55] ==
+        // (byte)0x00);
 
         // //
         // Setting up the grid to world transformation
-        // // 
-        final AffineTransform tempTransform = new AffineTransform(
-        		xScale, yRotation, xRotation,
-        		yScale, xUpperLeft, yUpperLeft);
+        // //
+        final AffineTransform tempTransform =
+                new AffineTransform(xScale, yRotation, xRotation, yScale, xUpperLeft, yUpperLeft);
 
         // ////////////////////////////////////////////////////////////////////
         //
@@ -61,32 +59,36 @@
         //	geotiff data, but is shifted by 0.5*scale to the center of the pixel."
         //
         // Finally note that:
-        // If the world chunk is present, these values should override 
+        // If the world chunk is present, these values should override
         // the corresponding values in the GeoTIFF box.
         //
         // ////////////////////////////////////////////////////////////////////
-        if (worldFileInterpretation == WORLD_FILE_INTERPRETATION_PIXEL_CORNER){
-        	AffineTransform transform = (AffineTransform) ProjectiveTransform.create(tempTransform);
-        	final double tr = -PixelTranslation.getPixelTranslation(PixelInCell.CELL_CORNER);
-        	transform.translate(tr, tr);
-        	this.raster2Model = ProjectiveTransform.create(transform);
+        if (worldFileInterpretation == WORLD_FILE_INTERPRETATION_PIXEL_CORNER) {
+            AffineTransform transform = (AffineTransform) ProjectiveTransform.create(tempTransform);
+            final double tr = -PixelTranslation.getPixelTranslation(PixelInCell.CELL_CORNER);
+            transform.translate(tr, tr);
+            this.raster2Model = ProjectiveTransform.create(transform);
         } else {
-        	this.raster2Model = ProjectiveTransform.create(tempTransform);
-        	tempTransform.translate(-0.5, -0.5);
+            this.raster2Model = ProjectiveTransform.create(tempTransform);
+            tempTransform.translate(-0.5, -0.5);
         }
-       
+
         try {
-        	final GeneralEnvelope envelope = CRS.transform(ProjectiveTransform.create(tempTransform),
-        			new GeneralEnvelope(nativeGridRange));
-        	envelope.setCoordinateReferenceSystem(crs);
-        	this.nativeEnvelope = envelope;
+            final GeneralEnvelope envelope =
+                    CRS.transform(
+                            ProjectiveTransform.create(tempTransform),
+                            new GeneralEnvelope(nativeGridRange));
+            envelope.setCoordinateReferenceSystem(crs);
+            this.nativeEnvelope = envelope;
         } catch (TransformException e) {
             if (LOGGER.isLoggable(Level.FINE))
-                LOGGER.log(Level.FINE,"Unable to parse CRS from underlying TIFF", e);
+                LOGGER.log(Level.FINE, "Unable to parse CRS from underlying TIFF", e);
         } catch (UnsupportedOperationException e) {
             if (LOGGER.isLoggable(Level.FINE))
-                LOGGER.log(Level.FINE,"Unable to parse CRS from underlying TIFF due to an unsupported CRS", e);
-        } 
-        
+                LOGGER.log(
+                        Level.FINE,
+                        "Unable to parse CRS from underlying TIFF due to an unsupported CRS",
+                        e);
+        }
     }
 

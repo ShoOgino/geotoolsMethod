@@ -1,6 +1,6 @@
     /**
      * Paints a graphic fill for a given shape.
-     * 
+     *
      * @param graphics Graphics2D on which to paint.
      * @param shape Shape whose fill is to be painted.
      * @param graphicFill a Style2D that specified the graphic fill.
@@ -8,31 +8,35 @@
      * @throws TransformException
      * @throws FactoryException
      */
-    protected void paintGraphicFill(Graphics2D graphics, Shape shape, Style2D graphicFill, double scale) 
-    {
+    protected void paintGraphicFill(
+            Graphics2D graphics, Shape shape, Style2D graphicFill, double scale) {
         // retrieves the bounds of the provided shape
         Rectangle2D boundsShape = shape.getBounds2D();
-        
+
         // retrieves the size of the stipple to be painted based on the provided graphic fill
         Rectangle2D stippleSize = null;
-        if (graphicFill instanceof MarkStyle2D)
-        {
+        if (graphicFill instanceof MarkStyle2D) {
             final MarkStyle2D ms2d = (MarkStyle2D) graphicFill;
             final Shape markShape = ms2d.getShape();
             double size = ms2d.getSize();
             Rectangle2D boundsFill = markShape.getBounds2D();
-            double aspect = (boundsFill.getHeight() > 0 && boundsFill.getWidth() > 0) ? boundsFill.getWidth() / boundsFill.getHeight() : 1.0;
+            double aspect =
+                    (boundsFill.getHeight() > 0 && boundsFill.getWidth() > 0)
+                            ? boundsFill.getWidth() / boundsFill.getHeight()
+                            : 1.0;
             stippleSize = new Rectangle2D.Double(0, 0, size * aspect, size);
-            
+
             double scaleFactor = size;
-            if(boundsFill.getHeight() > 0) {
+            if (boundsFill.getHeight() > 0) {
                 scaleFactor = size / boundsFill.getHeight();
             }
-            if(OPTIMIZE_VECTOR_HATCH_FILLS) {
-                final Shape rescaledStipple = AffineTransform.getScaleInstance(scaleFactor, scaleFactor).createTransformedShape(markShape);
+            if (OPTIMIZE_VECTOR_HATCH_FILLS) {
+                final Shape rescaledStipple =
+                        AffineTransform.getScaleInstance(scaleFactor, scaleFactor)
+                                .createTransformedShape(markShape);
                 ParallelLinesFiller filler = ParallelLinesFiller.fromStipple(rescaledStipple);
-                if(filler != null) {
-                    Graphics2D clippedGraphics = (Graphics2D)graphics.create();
+                if (filler != null) {
+                    Graphics2D clippedGraphics = (Graphics2D) graphics.create();
                     // adds the provided shape to the Graphics current clip region
                     clippedGraphics.clip(shape);
                     LineStyle2D lineStyle = new LineStyle2D();
@@ -44,10 +48,10 @@
                     return;
                 }
             }
-        } else if(graphicFill instanceof IconStyle2D) {
-            Icon icon = ((IconStyle2D)graphicFill).getIcon();
+        } else if (graphicFill instanceof IconStyle2D) {
+            Icon icon = ((IconStyle2D) graphicFill).getIcon();
             stippleSize = new Rectangle2D.Double(0, 0, icon.getIconWidth(), icon.getIconHeight());
-        } else if(graphicFill instanceof GraphicStyle2D) {
+        } else if (graphicFill instanceof GraphicStyle2D) {
             BufferedImage image = ((GraphicStyle2D) graphicFill).getImage();
             stippleSize = new Rectangle2D.Double(0, 0, image.getWidth(), image.getHeight());
         } else {
@@ -59,59 +63,77 @@
         // computes the number of times the graphic will be painted as a stipple
         int toX = (int) Math.ceil(boundsShape.getWidth() / stippleSize.getWidth());
         int toY = (int) Math.ceil(boundsShape.getHeight() / stippleSize.getHeight());
-        
+
         // creates a copy of the Graphics so that we can change it freely
-        Graphics2D g = (Graphics2D)graphics.create();
+        Graphics2D g = (Graphics2D) graphics.create();
         // adds the provided shape to the Graphics current clip region
         g.clip(shape);
         // retrieves the full clip region
         Shape clipShape = g.getClip();
         Rectangle2D boundsClip = clipShape.getBounds2D();
-        
-        // adjust the iteration indexes to avoid iterating a lot over areas that we won't be rendering
+
+        // adjust the iteration indexes to avoid iterating a lot over areas that we won't be
+        // rendering
         int fromX = 0;
-        if(boundsClip.getMinX() > boundsShape.getMinX()) {
-            fromX = (int) Math.floor((boundsClip.getMinX() - boundsShape.getMinX()) / stippleSize.getWidth());
+        if (boundsClip.getMinX() > boundsShape.getMinX()) {
+            fromX =
+                    (int)
+                            Math.floor(
+                                    (boundsClip.getMinX() - boundsShape.getMinX())
+                                            / stippleSize.getWidth());
         }
-        if(boundsClip.getMaxX() < boundsShape.getMaxX()) {
-            toX -= (int) Math.floor((boundsShape.getMaxX() - boundsClip.getMaxX()) / stippleSize.getWidth());
+        if (boundsClip.getMaxX() < boundsShape.getMaxX()) {
+            toX -=
+                    (int)
+                            Math.floor(
+                                    (boundsShape.getMaxX() - boundsClip.getMaxX())
+                                            / stippleSize.getWidth());
         }
-        
-        // adjust the iteration indexes to avoid iterating a lot over areas that we won't be rendering
+
+        // adjust the iteration indexes to avoid iterating a lot over areas that we won't be
+        // rendering
         int fromY = 0;
-        if(boundsClip.getMinY() > boundsShape.getMinY()) {
-            fromY = (int) Math.floor((boundsClip.getMinY() - boundsShape.getMinY()) / stippleSize.getHeight());
+        if (boundsClip.getMinY() > boundsShape.getMinY()) {
+            fromY =
+                    (int)
+                            Math.floor(
+                                    (boundsClip.getMinY() - boundsShape.getMinY())
+                                            / stippleSize.getHeight());
         }
-        if(boundsClip.getMaxY() < boundsShape.getMaxY()) {
-            toY -= (int) Math.floor((boundsShape.getMaxY() - boundsClip.getMaxY()) / stippleSize.getHeight());
+        if (boundsClip.getMaxY() < boundsShape.getMaxY()) {
+            toY -=
+                    (int)
+                            Math.floor(
+                                    (boundsShape.getMaxY() - boundsClip.getMaxY())
+                                            / stippleSize.getHeight());
         }
-        
+
         // builds the JTS geometry for the translated stipple
         GeometryFactory geomFactory = new GeometryFactory();
-        Coordinate stippleCoord = new Coordinate(stippleSize.getCenterX(), stippleSize.getCenterY());
+        Coordinate stippleCoord =
+                new Coordinate(stippleSize.getCenterX(), stippleSize.getCenterY());
         Geometry stipplePoint = geomFactory.createPoint(stippleCoord);
-        
+
         // builds a LiteShape2 object from the JTS geometry
         AffineTransform2D identityTransf = new AffineTransform2D(new AffineTransform());
         Decimator nullDecimator = new Decimator(-1, -1);
-        
+
         // paints graphic fill as a stipple
-        for (int i = fromX; i <= toX; i++)
-        {
-            for (int j = fromY; j <= toY; j++)
-            {
+        for (int i = fromX; i <= toX; i++) {
+            for (int j = fromY; j <= toY; j++) {
                 // computes this stipple's shift in the X and Y directions
                 double translateX = boundsShape.getMinX() + i * stippleSize.getWidth();
                 double translateY = boundsShape.getMinY() + j * stippleSize.getHeight();
-                
-                // translate the stipple point 
+
+                // translate the stipple point
                 stippleCoord.x = stippleSize.getCenterX() + translateX;
                 stippleCoord.y = stippleSize.getCenterY() + translateY;
                 stipplePoint.geometryChanged();
                 LiteShape2 stippleShape;
                 try {
-                    stippleShape = new LiteShape2(stipplePoint, identityTransf, nullDecimator, false);
-                } catch(Exception e) {
+                    stippleShape =
+                            new LiteShape2(stipplePoint, identityTransf, nullDecimator, false);
+                } catch (Exception e) {
                     throw new RuntimeException("Unxpected exception building lite shape", e);
                 }
                 paint(g, stippleShape, graphicFill, scale);

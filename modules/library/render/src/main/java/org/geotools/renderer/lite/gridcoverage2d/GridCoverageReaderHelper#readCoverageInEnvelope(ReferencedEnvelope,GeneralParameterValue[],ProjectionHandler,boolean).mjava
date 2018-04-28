@@ -1,12 +1,15 @@
-    List<GridCoverage2D> readCoverageInEnvelope(ReferencedEnvelope envelope,
-            GeneralParameterValue[] readParams, ProjectionHandler handler, boolean paddingRequired)
-                    throws TransformException, FactoryException, IOException {
+    List<GridCoverage2D> readCoverageInEnvelope(
+            ReferencedEnvelope envelope,
+            GeneralParameterValue[] readParams,
+            ProjectionHandler handler,
+            boolean paddingRequired)
+            throws TransformException, FactoryException, IOException {
         Polygon polygon = JTS.toGeometry(envelope);
         CoordinateReferenceSystem readerCRS = reader.getCoordinateReferenceSystem();
 
         GridGeometry2D gg = new GridGeometry2D(new GridEnvelope2D(mapRasterArea), mapExtent);
-        GridGeometry2D readingGridGeometry = computeReadingGeometry(gg, readerCRS, polygon,
-                handler);
+        GridGeometry2D readingGridGeometry =
+                computeReadingGeometry(gg, readerCRS, polygon, handler);
         if (readingGridGeometry == null) {
             return null;
         }
@@ -19,18 +22,19 @@
         }
 
         // cut and slice the geometry as required by the projection handler
-        ReferencedEnvelope readingEnvelope = ReferencedEnvelope
-                .reference(readingGridGeometry.getEnvelope2D());
-        ReferencedEnvelope coverageEnvelope = ReferencedEnvelope
-                .reference(coverage.getEnvelope2D());
+        ReferencedEnvelope readingEnvelope =
+                ReferencedEnvelope.reference(readingGridGeometry.getEnvelope2D());
+        ReferencedEnvelope coverageEnvelope =
+                ReferencedEnvelope.reference(coverage.getEnvelope2D());
         Polygon coverageFootprint = JTS.toGeometry(coverageEnvelope);
         Geometry preProcessed = handler.preProcess(coverageFootprint);
         if (preProcessed != null && !preProcessed.isEmpty()) {
             if (coverageFootprint.equals(preProcessed)) {
                 // we might still have read more than requested
                 if (!readingEnvelope.contains((Envelope) coverageEnvelope)) {
-                    ReferencedEnvelope cropEnvelope = new ReferencedEnvelope(
-                            readingEnvelope.intersection(coverageEnvelope), readerCRS);
+                    ReferencedEnvelope cropEnvelope =
+                            new ReferencedEnvelope(
+                                    readingEnvelope.intersection(coverageEnvelope), readerCRS);
                     GridCoverage2D cropped = cropCoverage(coverage, cropEnvelope);
                     return singleton(cropped);
                 } else {
@@ -40,14 +44,16 @@
                 final List<Polygon> polygons = PolygonExtractor.INSTANCE.getPolygons(preProcessed);
                 final List<GridCoverage2D> coverages = new ArrayList<>();
                 for (Polygon p : polygons) {
-                    ReferencedEnvelope cropEnvelope = new ReferencedEnvelope(
-                            p.getEnvelopeInternal(), readerCRS);
-                    cropEnvelope = new ReferencedEnvelope(
-                            cropEnvelope.intersection(coverageEnvelope), readerCRS);
-                    cropEnvelope = new ReferencedEnvelope(
-                            cropEnvelope.intersection(readingEnvelope), readerCRS);
+                    ReferencedEnvelope cropEnvelope =
+                            new ReferencedEnvelope(p.getEnvelopeInternal(), readerCRS);
+                    cropEnvelope =
+                            new ReferencedEnvelope(
+                                    cropEnvelope.intersection(coverageEnvelope), readerCRS);
+                    cropEnvelope =
+                            new ReferencedEnvelope(
+                                    cropEnvelope.intersection(readingEnvelope), readerCRS);
                     GridCoverage2D cropped = cropCoverage(coverage, cropEnvelope);
-                    if(cropped != null) {
+                    if (cropped != null) {
                         coverages.add(cropped);
                     }
                 }

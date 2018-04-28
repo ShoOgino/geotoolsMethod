@@ -1,8 +1,9 @@
-    protected void initialiseSourceFeatures(FeatureTypeMapping mapping, Query query,
-            CoordinateReferenceSystem targetCRS) throws IOException {
+    protected void initialiseSourceFeatures(
+            FeatureTypeMapping mapping, Query query, CoordinateReferenceSystem targetCRS)
+            throws IOException {
         mappedSource = mapping.getSource();
 
-        //NC - joining query
+        // NC - joining query
         if (query instanceof JoiningQuery) {
             JoiningJDBCFeatureSource joiningJdbcFS = null;
             if (mappedSource instanceof JDBCFeatureSource) {
@@ -10,15 +11,19 @@
             } else if (mappedSource instanceof JDBCFeatureStore) {
                 joiningJdbcFS = new JoiningJDBCFeatureSource((JDBCFeatureStore) mappedSource);
             } else {
-                throw new IllegalArgumentException("Joining queries are only supported on JDBC data stores");
+                throw new IllegalArgumentException(
+                        "Joining queries are only supported on JDBC data stores");
             }
 
-            // we have a database backend and Joining is enabled: make sure a transaction is available
-            // to allow downstream iterators (i.e. iterators going through nested features) to share the
+            // we have a database backend and Joining is enabled: make sure a transaction is
+            // available
+            // to allow downstream iterators (i.e. iterators going through nested features) to share
+            // the
             // connection stored in the transaction's state (note that this is possible only if the
             // source data store of the nested feature types is the same as their parent's).
             if (this.transaction != null) {
-                // transaction provided by calling code: iterator shall not consider itself owner of the
+                // transaction provided by calling code: iterator shall not consider itself owner of
+                // the
                 // transaction and hence shall not close it when done
                 this.isTransactionOwner = false;
             } else {
@@ -30,60 +35,69 @@
             joiningJdbcFS.setTransaction(transaction);
             mappedSource = joiningJdbcFS;
         }
-        String version=(String)this.mapping.getTargetFeature().getType().getUserData().get("targetVersion");
+        String version =
+                (String)
+                        this.mapping
+                                .getTargetFeature()
+                                .getType()
+                                .getUserData()
+                                .get("targetVersion");
         // might be because top level feature has no geometry
-        // GEOT-4550: exclude this part for WMS requests because the reprojection happens during rendering
+        // GEOT-4550: exclude this part for WMS requests because the reprojection happens during
+        // rendering
         // not at ReprojectingFilterVisitor.
         // The original CRS should be preserved so the reprojection could happen at rendering.
         if (targetCRS == null && version != null && !version.contains("wms")) {
             // figure out the crs the data is in
-            CoordinateReferenceSystem crs=null;
-            try{
+            CoordinateReferenceSystem crs = null;
+            try {
                 crs = this.mappedSource.getSchema().getCoordinateReferenceSystem();
-            }catch(UnsupportedOperationException e){
-                //do nothing as mappedSource is a WSFeatureSource
+            } catch (UnsupportedOperationException e) {
+                // do nothing as mappedSource is a WSFeatureSource
             }
             // gather declared CRS
             CoordinateReferenceSystem declaredCRS = this.getDeclaredCrs(crs, version);
             CoordinateReferenceSystem target;
-            Object crsobject = this.mapping.getTargetFeature().getType().getUserData().get("targetCrs");
+            Object crsobject =
+                    this.mapping.getTargetFeature().getType().getUserData().get("targetCrs");
             if (crsobject instanceof CoordinateReferenceSystem) {
-            	target = (CoordinateReferenceSystem) crsobject;
+                target = (CoordinateReferenceSystem) crsobject;
             } else if (crsobject instanceof URI) {
-            
-	            URI uri=(URI) crsobject;
-	            if (uri != null) {
-	                try {
-	                    target = CRS.decode(uri.toString());
-	                } catch (Exception e) {
-	                    String msg = "Unable to support srsName: " + uri;
-	                    throw new UnsupportedOperationException(msg, e);
-	                }
-	            } else {
-	                target = declaredCRS;
-	            }
+
+                URI uri = (URI) crsobject;
+                if (uri != null) {
+                    try {
+                        target = CRS.decode(uri.toString());
+                    } catch (Exception e) {
+                        String msg = "Unable to support srsName: " + uri;
+                        throw new UnsupportedOperationException(msg, e);
+                    }
+                } else {
+                    target = declaredCRS;
+                }
             } else {
-            	target = declaredCRS;
+                target = declaredCRS;
             }
             this.reprojection = target;
-            
+
         } else {
             this.reprojection = targetCRS;
         }
-        
-        //clean up user data related to request
+
+        // clean up user data related to request
         mapping.getTargetFeature().getType().getUserData().put("targetVersion", null);
         mapping.getTargetFeature().getType().getUserData().put("targetCrs", null);
-        
-        //reproject target feature
+
+        // reproject target feature
         targetFeature = reprojectAttribute(mapping.getTargetFeature());
         query.setMaxFeatures(dataMaxFeatures);
         sourceFeatures = mappedSource.getFeatures(query);
         if (reprojection != null) {
             xpathAttributeBuilder.setCRS(reprojection);
             if (sourceFeatures.getSchema().getGeometryDescriptor() == null
-                    || this.isReprojectionCrsEqual(this.mappedSource.getSchema()
-                            .getCoordinateReferenceSystem(), this.reprojection)) {
+                    || this.isReprojectionCrsEqual(
+                            this.mappedSource.getSchema().getCoordinateReferenceSystem(),
+                            this.reprojection)) {
                 // VT: No point trying to re-project without any geometry.
                 query.setCoordinateSystemReproject(null);
             }
@@ -97,10 +111,7 @@
 
             if (attMapping instanceof JoiningNestedAttributeMapping) {
                 ((JoiningNestedAttributeMapping) attMapping).open(this, query, mapping);
-
             }
-
         }
-
     }
 

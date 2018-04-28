@@ -1,36 +1,43 @@
     /**
-     * Returns a coordinate operation from a code.
-     * The returned object will either be a {@linkplain Conversion conversion} or a
-     * {@linkplain Transformation transformation}, depending on the code.
+     * Returns a coordinate operation from a code. The returned object will either be a {@linkplain
+     * Conversion conversion} or a {@linkplain Transformation transformation}, depending on the
+     * code.
      *
-     * @param  code Value allocated by authority.
+     * @param code Value allocated by authority.
      * @return The coordinate operation object.
      * @throws NoSuchAuthorityCodeException if this method can't find the requested code.
-     * @throws FactoryException if some other kind of failure occured in the backing
-     *         store. This exception usually have {@link SQLException} as its cause.
+     * @throws FactoryException if some other kind of failure occured in the backing store. This
+     *     exception usually have {@link SQLException} as its cause.
      */
     public synchronized CoordinateOperation generateCoordinateOperation(final String code)
-            throws FactoryException
-    {
+            throws FactoryException {
         ensureNonNull("code", code);
         CoordinateOperation returnValue = null;
         try {
-            final String primaryKey = toPrimaryKey(CoordinateOperation.class, code,
-                    "[Coordinate_Operation]", "COORD_OP_CODE", "COORD_OP_NAME");
+            final String primaryKey =
+                    toPrimaryKey(
+                            CoordinateOperation.class,
+                            code,
+                            "[Coordinate_Operation]",
+                            "COORD_OP_CODE",
+                            "COORD_OP_NAME");
             final PreparedStatement stmt;
-            stmt = prepareStatement("CoordinateOperation", "SELECT COORD_OP_CODE,"
-                                                         +       " COORD_OP_NAME,"
-                                                         +       " COORD_OP_TYPE,"
-                                                         +       " SOURCE_CRS_CODE,"
-                                                         +       " TARGET_CRS_CODE,"
-                                                         +       " COORD_OP_METHOD_CODE,"
-                                                         +       " COORD_TFM_VERSION,"
-                                                         +       " COORD_OP_ACCURACY,"
-                                                         +       " AREA_OF_USE_CODE,"
-                                                         +       " COORD_OP_SCOPE,"
-                                                         +       " REMARKS"
-                                                         + " FROM [Coordinate_Operation]"
-                                                         + " WHERE COORD_OP_CODE = ?");
+            stmt =
+                    prepareStatement(
+                            "CoordinateOperation",
+                            "SELECT COORD_OP_CODE,"
+                                    + " COORD_OP_NAME,"
+                                    + " COORD_OP_TYPE,"
+                                    + " SOURCE_CRS_CODE,"
+                                    + " TARGET_CRS_CODE,"
+                                    + " COORD_OP_METHOD_CODE,"
+                                    + " COORD_TFM_VERSION,"
+                                    + " COORD_OP_ACCURACY,"
+                                    + " AREA_OF_USE_CODE,"
+                                    + " COORD_OP_SCOPE,"
+                                    + " REMARKS"
+                                    + " FROM [Coordinate_Operation]"
+                                    + " WHERE COORD_OP_CODE = ?");
             stmt.setString(1, primaryKey);
             ResultSet result = stmt.executeQuery();
             while (result.next()) {
@@ -38,8 +45,8 @@
                 final String name = getString(result, 2, code);
                 final String type = getString(result, 3, code).trim().toLowerCase();
                 final boolean isTransformation = type.equals("transformation");
-                final boolean isConversion     = type.equals("conversion");
-                final boolean isConcatenated   = type.equals("concatenated operation");
+                final boolean isConversion = type.equals("conversion");
+                final boolean isConcatenated = type.equals("concatenated operation");
                 final String sourceCode, targetCode, methodCode;
                 if (isConversion) {
                     // Optional for conversions, mandatory for all others.
@@ -55,11 +62,12 @@
                 } else {
                     methodCode = getString(result, 6, code);
                 }
-                String version  = result.getString( 7);
-                double accuracy = result.getDouble( 8); if (result.wasNull()) accuracy=Double.NaN;
-                String area     = result.getString( 9);
-                String scope    = result.getString(10);
-                String remarks  = result.getString(11);
+                String version = result.getString(7);
+                double accuracy = result.getDouble(8);
+                if (result.wasNull()) accuracy = Double.NaN;
+                String area = result.getString(9);
+                String scope = result.getString(10);
+                String remarks = result.getString(11);
                 /*
                  * Gets the source and target CRS. They are mandatory for transformations (it
                  * was checked above in this method) and optional for conversions. Conversions
@@ -90,13 +98,13 @@
                  * (it was checked above in this method) but optional for concatenated operations.
                  * Fetching parameter values is part of this block.
                  */
-                final boolean             isBursaWolf;
-                OperationMethod           method;
+                final boolean isBursaWolf;
+                OperationMethod method;
                 final ParameterValueGroup parameters;
                 if (methodCode == null) {
                     isBursaWolf = false;
-                    method      = null;
-                    parameters  = null;
+                    method = null;
+                    parameters = null;
                 } else {
                     final int num;
                     try {
@@ -105,14 +113,15 @@
                         result.close();
                         throw new FactoryException(exception);
                     }
-                    isBursaWolf = (num>=BURSA_WOLF_MIN_CODE && num<=BURSA_WOLF_MAX_CODE);
+                    isBursaWolf = (num >= BURSA_WOLF_MIN_CODE && num <= BURSA_WOLF_MAX_CODE);
                     // Reminder: The source and target dimensions MUST be computed when
                     //           the information is available. Dimension is not always 2!!
                     method = generateOperationMethod(methodCode);
-                    if (method.getSourceDimensions() != sourceDimensions ||
-                        method.getTargetDimensions() != targetDimensions)
-                    {
-                        method = new DefaultOperationMethod(method, sourceDimensions, targetDimensions);
+                    if (method.getSourceDimensions() != sourceDimensions
+                            || method.getTargetDimensions() != targetDimensions) {
+                        method =
+                                new DefaultOperationMethod(
+                                        method, sourceDimensions, targetDimensions);
                     }
                     /*
                      * Note that some parameters required for MathTransform creation are implicit in
@@ -134,25 +143,28 @@
                  *       methods like createCoordinateReferenceSystem and createOperationMethod
                  *       overwrite the properties map.
                  */
-                final Map<String,Object> properties = generateProperties(name, epsg, area, scope, remarks);
-                if (version!=null && (version=version.trim()).length()!=0) {
+                final Map<String, Object> properties =
+                        generateProperties(name, epsg, area, scope, remarks);
+                if (version != null && (version = version.trim()).length() != 0) {
                     properties.put(CoordinateOperation.OPERATION_VERSION_KEY, version);
                 }
                 if (!Double.isNaN(accuracy)) {
-                    final QuantitativeResultImpl                 accuracyResult;
+                    final QuantitativeResultImpl accuracyResult;
                     final AbsoluteExternalPositionalAccuracyImpl accuracyElement;
-                    accuracyResult = new QuantitativeResultImpl(new double[]{accuracy});
+                    accuracyResult = new QuantitativeResultImpl(new double[] {accuracy});
                     // TODO: Need to invoke something equivalent to:
                     // accuracyResult.setValueType(Float.class);
                     // This is the type declared in the MS-Access database.
-                    accuracyResult.setValueUnit(SI.METRE); // In meters by definition in the EPSG database.
+                    accuracyResult.setValueUnit(
+                            SI.METRE); // In meters by definition in the EPSG database.
                     accuracyElement = new AbsoluteExternalPositionalAccuracyImpl(accuracyResult);
                     accuracyElement.setMeasureDescription(TRANSFORMATION_ACCURACY);
                     accuracyElement.setEvaluationMethodType(EvaluationMethodType.DIRECT_EXTERNAL);
-                    properties.put(CoordinateOperation.COORDINATE_OPERATION_ACCURACY_KEY,
-                                   new PositionalAccuracy[] {
-                                       (PositionalAccuracy)accuracyElement.unmodifiable()
-                                   });
+                    properties.put(
+                            CoordinateOperation.COORDINATE_OPERATION_ACCURACY_KEY,
+                            new PositionalAccuracy[] {
+                                (PositionalAccuracy) accuracyElement.unmodifiable()
+                            });
                 }
                 /*
                  * Creates the operation. Conversions should be the only operations allowed to
@@ -163,7 +175,7 @@
                  * this specific case - not to be generalized to the whole EPSG database).
                  */
                 final CoordinateOperation operation;
-                if (isConversion && (sourceCRS==null || targetCRS==null)) {
+                if (isConversion && (sourceCRS == null || targetCRS == null)) {
                     // Note: we usually can't resolve sourceCRS and targetCRS because there
                     // is many of them for the same coordinate operation (projection) code.
                     operation = new DefiningConversion(properties, method, parameters);
@@ -179,11 +191,13 @@
                      */
                     result.close();
                     result = null;
-                    final PreparedStatement cstmt = prepareStatement("ConcatenatedOperation",
-                                                        "SELECT SINGLE_OPERATION_CODE"
-                                                   +    " FROM [Coordinate_Operation Path]"
-                                                   +   " WHERE (CONCAT_OPERATION_CODE = ?)"
-                                                   + " ORDER BY OP_PATH_STEP");
+                    final PreparedStatement cstmt =
+                            prepareStatement(
+                                    "ConcatenatedOperation",
+                                    "SELECT SINGLE_OPERATION_CODE"
+                                            + " FROM [Coordinate_Operation Path]"
+                                            + " WHERE (CONCAT_OPERATION_CODE = ?)"
+                                            + " ORDER BY OP_PATH_STEP");
                     cstmt.setString(1, epsg);
                     final ResultSet cr = cstmt.executeQuery();
                     final List<String> codes = new ArrayList<String>();
@@ -194,8 +208,9 @@
                     final CoordinateOperation[] operations = new CoordinateOperation[codes.size()];
                     if (!safetyGuard.add(epsg)) {
                         throw recursiveCall(ConcatenatedOperation.class, epsg);
-                    } try {
-                        for (int i=0; i<operations.length; i++) {
+                    }
+                    try {
+                        for (int i = 0; i < operations.length; i++) {
                             operations[i] = createCoordinateOperation(codes.get(i));
                         }
                     } finally {
@@ -215,27 +230,42 @@
                      * for "geocentric translations" is implicit in the EPSG database. Even in
                      * the case of Molodenski transforms, the axis length to set are the same.
                      */
-                    if (isBursaWolf) try {
-                        Ellipsoid ellipsoid = CRSUtilities.getHeadGeoEllipsoid(sourceCRS);
-                        if (ellipsoid != null) {
-                            final Unit axisUnit = ellipsoid.getAxisUnit();
-                            parameters.parameter("src_semi_major").setValue(ellipsoid.getSemiMajorAxis(), axisUnit);
-                            parameters.parameter("src_semi_minor").setValue(ellipsoid.getSemiMinorAxis(), axisUnit);
-                            parameters.parameter("src_dim").setValue(sourceCRS.getCoordinateSystem().getDimension());
+                    if (isBursaWolf)
+                        try {
+                            Ellipsoid ellipsoid = CRSUtilities.getHeadGeoEllipsoid(sourceCRS);
+                            if (ellipsoid != null) {
+                                final Unit axisUnit = ellipsoid.getAxisUnit();
+                                parameters
+                                        .parameter("src_semi_major")
+                                        .setValue(ellipsoid.getSemiMajorAxis(), axisUnit);
+                                parameters
+                                        .parameter("src_semi_minor")
+                                        .setValue(ellipsoid.getSemiMinorAxis(), axisUnit);
+                                parameters
+                                        .parameter("src_dim")
+                                        .setValue(sourceCRS.getCoordinateSystem().getDimension());
+                            }
+                            ellipsoid = CRSUtilities.getHeadGeoEllipsoid(targetCRS);
+                            if (ellipsoid != null) {
+                                final Unit axisUnit = ellipsoid.getAxisUnit();
+                                parameters
+                                        .parameter("tgt_semi_major")
+                                        .setValue(ellipsoid.getSemiMajorAxis(), axisUnit);
+                                parameters
+                                        .parameter("tgt_semi_minor")
+                                        .setValue(ellipsoid.getSemiMinorAxis(), axisUnit);
+                                parameters
+                                        .parameter("tgt_dim")
+                                        .setValue(targetCRS.getCoordinateSystem().getDimension());
+                            }
+                        } catch (ParameterNotFoundException exception) {
+                            result.close();
+                            throw new FactoryException(
+                                    Errors.format(
+                                            ErrorKeys.GEOTOOLS_EXTENSION_REQUIRED_$1,
+                                            method.getName().getCode(),
+                                            exception));
                         }
-                        ellipsoid = CRSUtilities.getHeadGeoEllipsoid(targetCRS);
-                        if (ellipsoid != null) {
-                            final Unit axisUnit = ellipsoid.getAxisUnit();
-                            parameters.parameter("tgt_semi_major").setValue(ellipsoid.getSemiMajorAxis(), axisUnit);
-                            parameters.parameter("tgt_semi_minor").setValue(ellipsoid.getSemiMinorAxis(), axisUnit);
-                            parameters.parameter("tgt_dim").setValue(targetCRS.getCoordinateSystem().getDimension());
-                        }
-                    } catch (ParameterNotFoundException exception) {
-                        result.close();
-                        throw new FactoryException(Errors.format(
-                                ErrorKeys.GEOTOOLS_EXTENSION_REQUIRED_$1,
-                                method.getName().getCode(), exception));
-                    }
                     /*
                      * At this stage, the parameters are ready for use. Creates the math transform
                      * and wraps it in the final operation (a Conversion or a Transformation).
@@ -249,11 +279,15 @@
                         result.close();
                         throw new FactoryException(Errors.format(ErrorKeys.UNKNOW_TYPE_$1, type));
                     }
-                    final MathTransform mt = factories.getMathTransformFactory().createBaseToDerived(
-                            sourceCRS, parameters, targetCRS.getCoordinateSystem());
+                    final MathTransform mt =
+                            factories
+                                    .getMathTransformFactory()
+                                    .createBaseToDerived(
+                                            sourceCRS, parameters, targetCRS.getCoordinateSystem());
                     // TODO: uses GeoAPI factory method once available.
-                    operation = DefaultOperation.create(properties, sourceCRS, targetCRS,
-                                                        mt, method, expected);
+                    operation =
+                            DefaultOperation.create(
+                                    properties, sourceCRS, targetCRS, mt, method, expected);
                 }
                 returnValue = ensureSingleton(operation, returnValue, code);
                 if (result == null) {
@@ -267,7 +301,7 @@
             throw databaseFailure(CoordinateOperation.class, code, exception);
         }
         if (returnValue == null) {
-             throw noSuchAuthorityCode(CoordinateOperation.class, code);
+            throw noSuchAuthorityCode(CoordinateOperation.class, code);
         }
         return returnValue;
     }

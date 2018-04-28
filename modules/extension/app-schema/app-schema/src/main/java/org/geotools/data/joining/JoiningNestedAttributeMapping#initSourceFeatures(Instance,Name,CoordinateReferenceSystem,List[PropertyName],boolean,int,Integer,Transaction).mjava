@@ -1,6 +1,6 @@
     /**
      * Initialise a new iterator (for polymorphism, there could be multiple per instance)
-     * 
+     *
      * @param instance
      * @param featureTypeName
      * @param reprojection
@@ -9,21 +9,26 @@
      * @return
      * @throws IOException
      */
-    public DataAccessMappingFeatureIterator initSourceFeatures(Instance instance,
-            Name featureTypeName, CoordinateReferenceSystem reprojection,
-            List<PropertyName> selectedProperties, boolean includeMandatory, int resolveDepth,
-            Integer resolveTimeOut, Transaction transaction) throws IOException {
+    public DataAccessMappingFeatureIterator initSourceFeatures(
+            Instance instance,
+            Name featureTypeName,
+            CoordinateReferenceSystem reprojection,
+            List<PropertyName> selectedProperties,
+            boolean includeMandatory,
+            int resolveDepth,
+            Integer resolveTimeOut,
+            Transaction transaction)
+            throws IOException {
         JoiningQuery query = new JoiningQuery();
         query.setCoordinateSystemReproject(reprojection);
 
-        query.setRootMapping(((JoiningQuery)instance.baseTableQuery).getRootMapping());
+        query.setRootMapping(((JoiningQuery) instance.baseTableQuery).getRootMapping());
         FeatureTypeMapping fMapping = AppSchemaDataAccessRegistry.getMappingByName(featureTypeName);
 
-        AttributeMapping mapping = fMapping
-                .getAttributeMapping(this.nestedTargetXPath);
+        AttributeMapping mapping = fMapping.getAttributeMapping(this.nestedTargetXPath);
         if (mapping == null) {
-            throw new IllegalArgumentException("Mapping is missing for: '" + this.nestedTargetXPath
-                    + "'!");
+            throw new IllegalArgumentException(
+                    "Mapping is missing for: '" + this.nestedTargetXPath + "'!");
         }
         Expression nestedSourceExpression = mapping.getSourceExpression();
 
@@ -39,19 +44,19 @@
         join.setJoiningKeyName(nestedSourceExpression);
         join.setJoiningTypeName(instance.baseTableQuery.getTypeName());
         join.setDenormalised(fMapping.isDenormalised());
-        join.setSortBy(instance.baseTableQuery.getSortBy()); // incorporate order 
+        join.setSortBy(instance.baseTableQuery.getSortBy()); // incorporate order
         // pass on paging from the parent table to the same query within this join
         join.setMaxFeatures(instance.baseTableQuery.getMaxFeatures());
-        join.setRootMapping(((JoiningQuery)instance.baseTableQuery).getRootMapping());
+        join.setRootMapping(((JoiningQuery) instance.baseTableQuery).getRootMapping());
         join.setStartIndex(instance.baseTableQuery.getStartIndex());
         FilterAttributeExtractor extractor = new FilterAttributeExtractor();
         instance.mapping.getFeatureIdExpression().accept(extractor, null);
         for (String pn : extractor.getAttributeNameSet()) {
             join.addId(pn);
-        }   
+        }
         joins.add(0, join);
         query.setQueryJoins(joins);
-        
+
         if (selectedProperties != null && !selectedProperties.isEmpty()) {
             selectedProperties = new ArrayList<PropertyName>(selectedProperties);
             selectedProperties.add(filterFac.property(this.nestedTargetXPath.toString()));
@@ -59,15 +64,15 @@
 
         final Hints hints = new Hints();
         hints.put(Query.INCLUDE_MANDATORY_PROPS, includeMandatory);
-        
-        if (resolveDepth > 0 ) {
+
+        if (resolveDepth > 0) {
             hints.put(Hints.RESOLVE, ResolveValueType.ALL);
             hints.put(Hints.ASSOCIATION_TRAVERSAL_DEPTH, resolveDepth);
             hints.put(Hints.RESOLVE_TIMEOUT, resolveTimeOut);
         } else {
             hints.put(Hints.RESOLVE, ResolveValueType.NONE);
         }
-        
+
         query.setHints(hints);
 
         query.setProperties(selectedProperties);
@@ -81,14 +86,13 @@
         FeatureCollection collection = fSource.getFeatures(query);
 
         if (!(collection instanceof MappingFeatureCollection)) {
-            throw new IOException("Internal error: Mapping feature Collection expected but found "
-                    + collection);
+            throw new IOException(
+                    "Internal error: Mapping feature Collection expected but found " + collection);
         }
 
         MappingFeatureCollection mfc = ((MappingFeatureCollection) collection);
         // copy unrolled filter
-        mfc.setUnrolledFilter(instance.baseTableQuery
-                .getFilter());
+        mfc.setUnrolledFilter(instance.baseTableQuery.getFilter());
 
         // propagate transaction to nested feature iterators
         FeatureIterator featureIterator = mfc.features(transaction);
@@ -99,16 +103,18 @@
                             + featureIterator);
         }
 
-        DataAccessMappingFeatureIterator daFeatureIterator = (DataAccessMappingFeatureIterator) featureIterator;
+        DataAccessMappingFeatureIterator daFeatureIterator =
+                (DataAccessMappingFeatureIterator) featureIterator;
 
         List<Expression> foreignIds = new ArrayList<Expression>();
         for (int i = 0; i < query.getQueryJoins().size(); i++) {
             for (int j = 0; j < query.getQueryJoins().get(i).getIds().size(); j++) {
-                foreignIds.add(filterFac.property(JoiningJDBCFeatureSource.FOREIGN_ID + "_" + i
-                        + "_" + j));
+                foreignIds.add(
+                        filterFac.property(
+                                JoiningJDBCFeatureSource.FOREIGN_ID + "_" + i + "_" + j));
             }
         }
-        
+
         daFeatureIterator.setForeignIds(foreignIds);
 
         instance.featureIterators.put(featureTypeName, daFeatureIterator);
@@ -122,6 +128,5 @@
         }
 
         return daFeatureIterator;
-
     }
 

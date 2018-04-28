@@ -1,55 +1,68 @@
     /**
-     * Changes a "normal" text string into a pattern compatible with {@link MessageFormat}.
-     * The main operation consists of changing ' for '', except for '{' and '}' strings.
+     * Changes a "normal" text string into a pattern compatible with {@link MessageFormat}. The main
+     * operation consists of changing ' for '', except for '{' and '}' strings.
      */
     private static String toMessageFormatString(final String text) {
-        int level =  0;
-        int last  = -1;
+        int level = 0;
+        int last = -1;
         final StringBuilder buffer = new StringBuilder(text);
-search: for (int i=0; i<buffer.length(); i++) { // Length of 'buffer' will vary.
+        search:
+        for (int i = 0; i < buffer.length(); i++) { // Length of 'buffer' will vary.
             switch (buffer.charAt(i)) {
-                /*
-                 * Left and right braces take us up or down a level.  Quotes will only be doubled
-                 * if we are at level 0.  If the brace is between quotes it will not be taken into
-                 * account as it will have been skipped over during the previous pass through the
-                 * loop.
-                 */
-                case '{' : level++; last=i; break;
-                case '}' : level--; last=i; break;
-                case '\'': {
                     /*
-                     * If a brace ('{' or '}') is found between quotes, the entire block is
-                     * ignored and we continue with the character following the closing quote.
+                     * Left and right braces take us up or down a level.  Quotes will only be doubled
+                     * if we are at level 0.  If the brace is between quotes it will not be taken into
+                     * account as it will have been skipped over during the previous pass through the
+                     * loop.
                      */
-                    if (i+2<buffer.length() && buffer.charAt(i+2)=='\'') {
-                        switch (buffer.charAt(i+1)) {
-                            case '{': i+=2; continue search;
-                            case '}': i+=2; continue search;
-                        }
-                    }
-                    if (level <= 0) {
+                case '{':
+                    level++;
+                    last = i;
+                    break;
+                case '}':
+                    level--;
+                    last = i;
+                    break;
+                case '\'':
+                    {
                         /*
-                         * If we weren't between braces, we must double the quotes.
+                         * If a brace ('{' or '}') is found between quotes, the entire block is
+                         * ignored and we continue with the character following the closing quote.
                          */
-                        buffer.insert(i++, '\'');
-                        continue search;
-                    }
-                    /*
-                     * If we find ourselves between braces, we don't normally need to double
-                     * our quotes.  However, the format {0,choice,...} is an exception.
-                     */
-                    if (last>=0 && buffer.charAt(last)=='{') {
-                        int scan=last;
-                        do if (scan>=i) continue search;
-                        while (Character.isDigit(buffer.charAt(++scan)));
-                        final String choice=",choice,";
-                        final int end=scan+choice.length();
-                        if (end<buffer.length() && buffer.substring(scan, end).equalsIgnoreCase(choice)) {
+                        if (i + 2 < buffer.length() && buffer.charAt(i + 2) == '\'') {
+                            switch (buffer.charAt(i + 1)) {
+                                case '{':
+                                    i += 2;
+                                    continue search;
+                                case '}':
+                                    i += 2;
+                                    continue search;
+                            }
+                        }
+                        if (level <= 0) {
+                            /*
+                             * If we weren't between braces, we must double the quotes.
+                             */
                             buffer.insert(i++, '\'');
                             continue search;
                         }
+                        /*
+                         * If we find ourselves between braces, we don't normally need to double
+                         * our quotes.  However, the format {0,choice,...} is an exception.
+                         */
+                        if (last >= 0 && buffer.charAt(last) == '{') {
+                            int scan = last;
+                            do if (scan >= i) continue search;
+                            while (Character.isDigit(buffer.charAt(++scan)));
+                            final String choice = ",choice,";
+                            final int end = scan + choice.length();
+                            if (end < buffer.length()
+                                    && buffer.substring(scan, end).equalsIgnoreCase(choice)) {
+                                buffer.insert(i++, '\'');
+                                continue search;
+                            }
+                        }
                     }
-                }
             }
         }
         return buffer.toString();

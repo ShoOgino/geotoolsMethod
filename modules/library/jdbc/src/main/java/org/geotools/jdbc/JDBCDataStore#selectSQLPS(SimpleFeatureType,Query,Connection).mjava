@@ -1,26 +1,21 @@
     /**
      * Generates a 'SELECT p1, p2, ... FROM ... WHERE ...' prepared statement.
-     * 
-     * @param featureType
-     *            the feature type that the query must return (may contain less
-     *            attributes than the native one)
-     * @param attributes
-     *            the properties queried, or {@link Query#ALL_NAMES} to gather
-     *            all of them
-     * @param query
-     *            the query to be run. The type name and property will be ignored, as they are
-     *            supposed to have been already embedded into the provided feature type
-     * @param cx
-     *            The database connection to be used to create the prepared
-     *            statement
+     *
+     * @param featureType the feature type that the query must return (may contain less attributes
+     *     than the native one)
+     * @param attributes the properties queried, or {@link Query#ALL_NAMES} to gather all of them
+     * @param query the query to be run. The type name and property will be ignored, as they are
+     *     supposed to have been already embedded into the provided feature type
+     * @param cx The database connection to be used to create the prepared statement
      */
-    protected PreparedStatement selectSQLPS( SimpleFeatureType featureType, Query query, Connection cx )
-        throws SQLException, IOException {
-        
+    protected PreparedStatement selectSQLPS(
+            SimpleFeatureType featureType, Query query, Connection cx)
+            throws SQLException, IOException {
+
         StringBuffer sql = new StringBuffer();
         sql.append("SELECT ");
 
-        //column names
+        // column names
         selectColumns(featureType, null, query, sql);
         sql.setLength(sql.length() - 1);
         dialect.encodePostSelect(featureType, sql);
@@ -28,33 +23,35 @@
         sql.append(" FROM ");
         encodeTableName(featureType.getTypeName(), sql, query.getHints());
 
-        //filtering
+        // filtering
         PreparedFilterToSQL toSQL = null;
         Filter filter = query.getFilter();
         if (filter != null && !Filter.INCLUDE.equals(filter)) {
             sql.append(" WHERE ");
-            
-            //encode filter
+
+            // encode filter
             toSQL = (PreparedFilterToSQL) filter(featureType, filter, sql);
         }
 
-        //sorting
+        // sorting
         sort(featureType, query.getSortBy(), null, sql);
-        
+
         // finally encode limit/offset, if necessary
         applyLimitOffset(sql, query.getStartIndex(), query.getMaxFeatures());
 
         // add search hints if the dialect supports them
         applySearchHints(featureType, query, sql);
 
-        LOGGER.fine( sql.toString() );
-        PreparedStatement ps = cx.prepareStatement(sql.toString(), ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
+        LOGGER.fine(sql.toString());
+        PreparedStatement ps =
+                cx.prepareStatement(
+                        sql.toString(), ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
         ps.setFetchSize(fetchSize);
-        
-        if ( toSQL != null ) {
-            setPreparedFilterValues( ps, toSQL, 0, cx );
-        } 
-        
+
+        if (toSQL != null) {
+            setPreparedFilterValues(ps, toSQL, 0, cx);
+        }
+
         return ps;
     }
 

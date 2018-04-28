@@ -1,29 +1,35 @@
     @Override
-    public Geometry decodeGeometryValue(GeometryDescriptor descriptor, ResultSet rs, String column,
-                                        GeometryFactory factory, Connection cx, Hints hints) throws IOException, SQLException {
+    public Geometry decodeGeometryValue(
+            GeometryDescriptor descriptor,
+            ResultSet rs,
+            String column,
+            GeometryFactory factory,
+            Connection cx,
+            Hints hints)
+            throws IOException, SQLException {
         try {
             // first check for the inline geometry value, applied in td 13 and above
             String wkt = null;
             try {
                 wkt = rs.getString(column + "_inline");
+            } catch (SQLException e) {
             }
-            catch(SQLException e) {}
-            
+
             if (wkt != null) {
                 return new WKTReader(factory).read(wkt);
             }
-            
-            //in "locator" form the geometry comes across as text
-            
-            //figure out index so we can inspect type
+
+            // in "locator" form the geometry comes across as text
+
+            // figure out index so we can inspect type
             int index = -1;
             for (int i = 0; i < rs.getMetaData().getColumnCount(); i++) {
-                if (column.equals(rs.getMetaData().getColumnName(i+1))) {
-                    index = i+1;
+                if (column.equals(rs.getMetaData().getColumnName(i + 1))) {
+                    index = i + 1;
                     break;
                 }
             }
-            
+
             if ("java.lang.String".equals(rs.getMetaData().getColumnClassName(index))) {
                 wkt = rs.getString(index);
                 if (wkt == null) {
@@ -31,9 +37,9 @@
                 }
                 return new WKTReader(factory).read(wkt);
             }
-            
-            //assume its a clob
-            
+
+            // assume its a clob
+
             Clob clob = rs.getClob(column);
             if (clob == null) {
                 return null;
@@ -41,12 +47,10 @@
             InputStream in = clob.getAsciiStream();
             try {
                 return new WKTReader(factory).read(new InputStreamReader(in));
-            }
-            finally {
+            } finally {
                 if (in != null) in.close();
             }
-        }
-        catch (ParseException e) {
+        } catch (ParseException e) {
             throw (IOException) new IOException("Error parsing geometry").initCause(e);
         }
     }

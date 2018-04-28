@@ -1,58 +1,56 @@
     /**
-     * Returns the bounds of the results of the specified query against the 
-     * feature source.
-     * <p>
-     * This method calls through to {@link #getBoundsInternal(Query)} which 
-     * subclasses must implement. It also contains optimizations which check 
-     * state for cached values.
-     * </p>
+     * Returns the bounds of the results of the specified query against the feature source.
+     *
+     * <p>This method calls through to {@link #getBoundsInternal(Query)} which subclasses must
+     * implement. It also contains optimizations which check state for cached values.
      */
     public final ReferencedEnvelope getBounds(Query query) throws IOException {
-        query = joinQuery( query );
+        query = joinQuery(query);
         query = resolvePropertyNames(query);
 
         //
-        //calculate the bounds
+        // calculate the bounds
         //
         ReferencedEnvelope bounds;
-        if(!canTransact() && transaction != null && transaction != Transaction.AUTO_COMMIT) {
+        if (!canTransact() && transaction != null && transaction != Transaction.AUTO_COMMIT) {
             // grab the in memory transaction diff
-            DiffTransactionState state = (DiffTransactionState) getTransaction().getState(getEntry());
+            DiffTransactionState state =
+                    (DiffTransactionState) getTransaction().getState(getEntry());
             Diff diff = state.getDiff();
-            
+
             // don't compute the bounds of the features that are modified or removed in the diff
             Iterator<String> i = diff.getModified().keySet().iterator();
             FilterFactory2 ff = CommonFactoryFinder.getFilterFactory2();
             Set<FeatureId> modifiedFids = new HashSet<FeatureId>();
-            while(i.hasNext()){
+            while (i.hasNext()) {
                 String featureId = i.next();
                 modifiedFids.add(ff.featureId(featureId));
             }
-            Filter skipFilter = ff.not( ff.id(modifiedFids) );
-            
+            Filter skipFilter = ff.not(ff.id(modifiedFids));
+
             Query q = new Query(query);
             q.setFilter(ff.and(skipFilter, query.getFilter()));
             bounds = getBoundsInternal(q);
-            
+
             // update with the diff contents, all added feature and all modified, not deleted ones
-            if(bounds != null) {
+            if (bounds != null) {
                 // new ones
                 Iterator<SimpleFeature> it = diff.getAdded().values().iterator();
-                while(it.hasNext()){
+                while (it.hasNext()) {
                     SimpleFeature feature = it.next();
                     BoundingBox fb = feature.getBounds();
-                    if(fb != null) {
+                    if (fb != null) {
                         bounds.expandToInclude(ReferencedEnvelope.reference(fb));
                     }
                 }
-                
+
                 // modified ones
                 it = diff.getModified().values().iterator();
-                while(it.hasNext()){
+                while (it.hasNext()) {
                     SimpleFeature feature = it.next();
-                    if(feature != Diff.NULL) {
+                    if (feature != Diff.NULL) {
                         BoundingBox fb = feature.getBounds();
-                        if(fb != null) {
+                        if (fb != null) {
                             bounds.expandToInclude(ReferencedEnvelope.reference(fb));
                         }
                     }
@@ -62,35 +60,36 @@
             bounds = getBoundsInternal(query);
         }
         // reprojection
-        if ( !canReproject() ) {
+        if (!canReproject()) {
             CoordinateReferenceSystem sourceCRS = query.getCoordinateSystem();
             CoordinateReferenceSystem targetCRS = query.getCoordinateSystemReproject();
             CoordinateReferenceSystem nativeCRS = getSchema().getCoordinateReferenceSystem();
-            
+
             if (sourceCRS != null && !sourceCRS.equals(nativeCRS)) {
-                //override native crs
+                // override native crs
                 bounds = new ReferencedEnvelope(bounds, sourceCRS);
             } else {
-                //no override
+                // no override
                 sourceCRS = nativeCRS;
             }
             if (targetCRS != null) {
-                
-                if(sourceCRS == null) {
+
+                if (sourceCRS == null) {
                     throw new IOException("Cannot reproject data, the source CRS is not available");
-                } else if(!sourceCRS.equals(targetCRS)) {
+                } else if (!sourceCRS.equals(targetCRS)) {
                     try {
                         bounds = bounds.transform(targetCRS, true);
                     } catch (Exception e) {
-                        if(e instanceof IOException)
-                            throw (IOException) e;
+                        if (e instanceof IOException) throw (IOException) e;
                         else
-                            throw (IOException) new IOException("Error occurred trying to reproject data").initCause(e);
+                            throw (IOException)
+                                    new IOException("Error occurred trying to reproject data")
+                                            .initCause(e);
                     }
                 }
-            }    
+            }
         }
-        
+
         return bounds;
     }
 

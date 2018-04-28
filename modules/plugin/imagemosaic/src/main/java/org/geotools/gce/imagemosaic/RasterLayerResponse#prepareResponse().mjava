@@ -1,5 +1,6 @@
     /**
-     * This method loads the granules which overlap the requested {@link GeneralEnvelope} using the provided values for alpha and input ROI.
+     * This method loads the granules which overlap the requested {@link GeneralEnvelope} using the
+     * provided values for alpha and input ROI.
      *
      * @return the mosaic output for the request
      * @throws DataSourceException
@@ -18,7 +19,7 @@
 
             // === init raster bounds
             initRasterBounds();
-            
+
             // === init excess granule removal if needed
             initExcessGranuleRemover();
 
@@ -27,8 +28,10 @@
             final Query query = queryBuilder.build();
 
             // === collect granules
-            final MosaicProducer visitor = new MosaicProducer(submosaicProducerFactory
-                    .createProducers(this.getRequest(), this.getRasterManager(), this, false));
+            final MosaicProducer visitor =
+                    new MosaicProducer(
+                            submosaicProducerFactory.createProducers(
+                                    this.getRequest(), this.getRasterManager(), this, false));
             rasterManager.getGranuleDescriptors(query, visitor);
 
             // get those granules and create the final mosaic
@@ -49,8 +52,11 @@
             //
             if (returnValue != null) {
                 if (LOGGER.isLoggable(Level.FINE)) {
-                    LOGGER.fine("Loaded bbox " + mosaicBBox.toString() + " while crop bbox "
-                            + request.spatialRequestHelper.getComputedBBox().toString());
+                    LOGGER.fine(
+                            "Loaded bbox "
+                                    + mosaicBBox.toString()
+                                    + " while crop bbox "
+                                    + request.spatialRequestHelper.getComputedBBox().toString());
                 }
                 return returnValue;
             }
@@ -62,34 +68,43 @@
                 // spawn any loading tasks, we also ensure we get only 1 feature at most
                 // to make this blazing fast
                 LOGGER.fine("We got no granules, let's do a dry run with no filters");
-                List<SubmosaicProducer> collectors = submosaicProducerFactory
-                        .createProducers(this.getRequest(), this.getRasterManager(), this, true);
+                List<SubmosaicProducer> collectors =
+                        submosaicProducerFactory.createProducers(
+                                this.getRequest(), this.getRasterManager(), this, true);
                 final MosaicProducer dryRunVisitor = new MosaicProducer(true, collectors);
                 final Utils.BBOXFilterExtractor bboxExtractor = new Utils.BBOXFilterExtractor();
                 query.getFilter().accept(bboxExtractor, null);
-                query.setFilter(FeatureUtilities.DEFAULT_FILTER_FACTORY.bbox(
-                        FeatureUtilities.DEFAULT_FILTER_FACTORY.property(rasterManager
-                                .getGranuleCatalog().getType(rasterManager.getTypeName())
-                                .getGeometryDescriptor().getName()),
-                        bboxExtractor.getBBox()));
+                query.setFilter(
+                        FeatureUtilities.DEFAULT_FILTER_FACTORY.bbox(
+                                FeatureUtilities.DEFAULT_FILTER_FACTORY.property(
+                                        rasterManager
+                                                .getGranuleCatalog()
+                                                .getType(rasterManager.getTypeName())
+                                                .getGeometryDescriptor()
+                                                .getName()),
+                                bboxExtractor.getBBox()));
                 query.setMaxFeatures(1);
                 rasterManager.getGranuleDescriptors(query, dryRunVisitor);
                 if (dryRunVisitor.granulesNumber > 0) {
                     LOGGER.fine(
                             "Dry run got a target granule, returning null as the additional filters did filter all the granules out");
-                    // It means the previous lack of granule was due to a filter excluding all the results. Then we return null
+                    // It means the previous lack of granule was due to a filter excluding all the
+                    // results. Then we return null
                     return null;
                 }
             }
 
             // do we return a null (outside of the coverage) or a blank? The choice is "hard" as we
             // might be in a hole of the coverage and not know it
-            if (!mosaicBBox.intersects((BoundingBox) ReferencedEnvelope.reference(coverageEnvelope)) &&
-                    !mosaicBBox.intersects((BoundingBox) ReferencedEnvelope.reference(rasterManager
-                            .spatialDomainManager.coverageBBox))) {
+            if (!mosaicBBox.intersects((BoundingBox) ReferencedEnvelope.reference(coverageEnvelope))
+                    && !mosaicBBox.intersects(
+                            (BoundingBox)
+                                    ReferencedEnvelope.reference(
+                                            rasterManager.spatialDomainManager.coverageBBox))) {
                 if (LOGGER.isLoggable(Level.FINE)) {
-                    LOGGER.fine("Could not locate any granule in the requested bbox, returning null as it does not " +
-                            "match the cached bbox of the mosaic");
+                    LOGGER.fine(
+                            "Could not locate any granule in the requested bbox, returning null as it does not "
+                                    + "match the cached bbox of the mosaic");
                 }
                 return null;
             } else {

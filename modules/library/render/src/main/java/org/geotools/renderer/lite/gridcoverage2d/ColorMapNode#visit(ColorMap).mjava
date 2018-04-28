@@ -1,43 +1,42 @@
-	/**
-	 * Visits the provided {@link ColorMapTransform} and build up a {@link Domain1D}
-	 * for later creation of a palette rendering for this coverage.
-	 */
-	public void visit(ColorMap colorMap) {
-		// //
-		//
-		// This allows this node to work in store-and-forward way in case we had
-		// nothing to do
-		//
-		// //
-		if (colorMap == null)
-			return;
+    /**
+     * Visits the provided {@link ColorMapTransform} and build up a {@link Domain1D} for later
+     * creation of a palette rendering for this coverage.
+     */
+    public void visit(ColorMap colorMap) {
+        // //
+        //
+        // This allows this node to work in store-and-forward way in case we had
+        // nothing to do
+        //
+        // //
+        if (colorMap == null) return;
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// Get the type and check it. In case the type or the entries are
-		// invalid we skip this node.
-		//
-		// /////////////////////////////////////////////////////////////////////
-		this.type = colorMap.getType();
-		this.extendedColors = colorMap.getExtendedColors();
-		final ColorMapEntry[] cmEntries = colorMap.getColorMapEntries();
-		if (cmEntries != null && cmEntries.length > 0) {
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Get the type and check it. In case the type or the entries are
+        // invalid we skip this node.
+        //
+        // /////////////////////////////////////////////////////////////////////
+        this.type = colorMap.getType();
+        this.extendedColors = colorMap.getExtendedColors();
+        final ColorMapEntry[] cmEntries = colorMap.getColorMapEntries();
+        if (cmEntries != null && cmEntries.length > 0) {
 
-			// /////////////////////////////////////////////////////////////////////
-			//
-			// Check the source coverage and, if it has more than one band
-			// reduce it to 1 band using the visible band.
-			//
-			// If do not manage to do so, let's throw an exception since as per
-			// Craig Bruce email it is an error to apply a ColoMap to a
-			// multiband coverage.
-			//
-			// /////////////////////////////////////////////////////////////////////
-			final CoverageProcessingNode source=getSource(0);
-			GridCoverageRendererUtilities.ensureSourceNotNull(source, "ColorMapNode");
-			final GridCoverage2D sourceCoverage = (GridCoverage2D) source.getOutput();
-			GridCoverageRendererUtilities.ensureSourceNotNull(sourceCoverage, "ColorMapNode");
-			final int numSD = sourceCoverage.getNumSampleDimensions();
+            // /////////////////////////////////////////////////////////////////////
+            //
+            // Check the source coverage and, if it has more than one band
+            // reduce it to 1 band using the visible band.
+            //
+            // If do not manage to do so, let's throw an exception since as per
+            // Craig Bruce email it is an error to apply a ColoMap to a
+            // multiband coverage.
+            //
+            // /////////////////////////////////////////////////////////////////////
+            final CoverageProcessingNode source = getSource(0);
+            GridCoverageRendererUtilities.ensureSourceNotNull(source, "ColorMapNode");
+            final GridCoverage2D sourceCoverage = (GridCoverage2D) source.getOutput();
+            GridCoverageRendererUtilities.ensureSourceNotNull(sourceCoverage, "ColorMapNode");
+            final int numSD = sourceCoverage.getNumSampleDimensions();
             if (numSD > 1) {
                 // check it, is it gray + alpha?
                 ColorModel cm = sourceCoverage.getRenderedImage().getColorModel();
@@ -47,59 +46,55 @@
                             Errors.format(ErrorKeys.BAD_BAND_NUMBER_$1, Integer.valueOf(numSD)));
                 }
             }
-			// /////////////////////////////////////////////////////////////////////
-			//
-			// Check the sample dimension we are going to use for NoData
-			// categories.
-			//
-			// It is important to have such categories since we might have holes
-			// in the categories we are going to build hence it is important to
-			// have a valid NoDataValue that we can use.
-			//
-			// /////////////////////////////////////////////////////////////////////
-			final GridSampleDimension candidateSD = sourceCoverage.getSampleDimension(0);
-			double[] candidateNoDataValues = preparaNoDataValues(candidateSD);
+            // /////////////////////////////////////////////////////////////////////
+            //
+            // Check the sample dimension we are going to use for NoData
+            // categories.
+            //
+            // It is important to have such categories since we might have holes
+            // in the categories we are going to build hence it is important to
+            // have a valid NoDataValue that we can use.
+            //
+            // /////////////////////////////////////////////////////////////////////
+            final GridSampleDimension candidateSD = sourceCoverage.getSampleDimension(0);
+            double[] candidateNoDataValues = preparaNoDataValues(candidateSD);
 
-			// /////////////////////////////////////////////////////////////////////
-			//
-			// Main Loop
-			//
-			// /////////////////////////////////////////////////////////////////////
-			//TODO MAKE THE COLORS CONFIGURABLE 
-			final SLDColorMapBuilder builder = new SLDColorMapBuilder();
-			builder.setExtendedColors(this.extendedColors)
-					.setLinearColorMapType(this.type)
-					.setNumberColorMapEntries(cmEntries.length)
-					.setColorForValuesToPreserve(new Color(0, 0, 0, 0))
-					.setGapsColor(new Color(0, 0, 0, 0));
-			for (int i = 0; i < cmEntries.length; i++) {
-				builder.addColorMapEntry(cmEntries[i]);
+            // /////////////////////////////////////////////////////////////////////
+            //
+            // Main Loop
+            //
+            // /////////////////////////////////////////////////////////////////////
+            // TODO MAKE THE COLORS CONFIGURABLE
+            final SLDColorMapBuilder builder = new SLDColorMapBuilder();
+            builder.setExtendedColors(this.extendedColors)
+                    .setLinearColorMapType(this.type)
+                    .setNumberColorMapEntries(cmEntries.length)
+                    .setColorForValuesToPreserve(new Color(0, 0, 0, 0))
+                    .setGapsColor(new Color(0, 0, 0, 0));
+            for (int i = 0; i < cmEntries.length; i++) {
+                builder.addColorMapEntry(cmEntries[i]);
+            }
 
-			}
+            // /////////////////////////////////////////////////////////////////////
+            //
+            // Create the list of no data colorMapTransform domain elements. Note that all of them
+            //
+            // /////////////////////////////////////////////////////////////////////
+            if (candidateNoDataValues != null && candidateNoDataValues.length > 0) {
+                final LinearColorMapElement noDataCategories[] =
+                        new LinearColorMapElement[candidateNoDataValues.length];
+                for (int i = 0; i < noDataCategories.length; i++) {
+                    builder.addValueToPreserve(candidateNoDataValues[i]);
+                }
+            }
 
+            // /////////////////////////////////////////////////////////////////////
+            //
+            // Create the list of colorMapTransform categories
+            //
+            // /////////////////////////////////////////////////////////////////////
+            colorMapTransform = builder.buildLinearColorMap();
 
-
-			// /////////////////////////////////////////////////////////////////////
-			//
-			// Create the list of no data colorMapTransform domain elements. Note that all of them 
-			//
-			// /////////////////////////////////////////////////////////////////////
-			if(candidateNoDataValues!=null&&candidateNoDataValues.length>0){
-				final LinearColorMapElement noDataCategories[] = new LinearColorMapElement[candidateNoDataValues.length];
-				for (int i = 0; i < noDataCategories.length; i++) {
-					builder.addValueToPreserve(candidateNoDataValues[i]);
-				}
-			}
-
-			// /////////////////////////////////////////////////////////////////////
-			//
-			// Create the list of colorMapTransform categories
-			//
-			// /////////////////////////////////////////////////////////////////////
-			colorMapTransform = builder.buildLinearColorMap();
-
-		} else
-			this.type = -1;
-
-	}
+        } else this.type = -1;
+    }
 

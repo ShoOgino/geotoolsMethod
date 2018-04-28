@@ -1,41 +1,49 @@
-    protected ReferencedEnvelope transformEnvelope(ReferencedEnvelope envelope,
-            CoordinateReferenceSystem targetCRS) throws TransformException, FactoryException {
+    protected ReferencedEnvelope transformEnvelope(
+            ReferencedEnvelope envelope, CoordinateReferenceSystem targetCRS)
+            throws TransformException, FactoryException {
         try {
             if (validAreaBounds != null) {
-                ReferencedEnvelope validAreaInTargetCRS = validAreaBounds.transform(envelope.getCoordinateReferenceSystem(), true);
+                ReferencedEnvelope validAreaInTargetCRS =
+                        validAreaBounds.transform(envelope.getCoordinateReferenceSystem(), true);
                 envelope = envelope.intersection(validAreaInTargetCRS);
                 if (envelope.isEmpty()) {
                     return null;
                 }
             }
-            
+
             ReferencedEnvelope transformed = envelope.transform(targetCRS, true, 10);
-            ProjectionHandler handler = ProjectionHandlerFinder.getHandler(new ReferencedEnvelope(targetCRS),
-                    DefaultGeographicCRS.WGS84, true);
+            ProjectionHandler handler =
+                    ProjectionHandlerFinder.getHandler(
+                            new ReferencedEnvelope(targetCRS), DefaultGeographicCRS.WGS84, true);
             // does the target CRS have a strict notion of what's possible in terms of
             // valid coordinate ranges?
-            if(handler == null || handler instanceof WrappingProjectionHandler) {
+            if (handler == null || handler instanceof WrappingProjectionHandler) {
                 return transformed;
             }
-            
+
             // if so, cut
             final ReferencedEnvelope validAreaBounds = handler.getValidAreaBounds();
-            ReferencedEnvelope validArea  = validAreaBounds.transform(targetCRS, true);
+            ReferencedEnvelope validArea = validAreaBounds.transform(targetCRS, true);
             ReferencedEnvelope reduced = transformed.intersection(validArea);
-            if(reduced.isNull()) {
+            if (reduced.isNull()) {
                 return null;
             } else {
                 return reduced;
             }
         } catch (Exception e) {
-            LOGGER.fine("Failed to reproject the envelope " + envelope + " to " + targetCRS
-                    + " trying an area restriction");
+            LOGGER.fine(
+                    "Failed to reproject the envelope "
+                            + envelope
+                            + " to "
+                            + targetCRS
+                            + " trying an area restriction");
 
             ReferencedEnvelope envWGS84 = envelope.transform(DefaultGeographicCRS.WGS84, true);
-            
+
             // do we have restrictions on the target CRS?
-            ProjectionHandler handler = ProjectionHandlerFinder.getHandler(new ReferencedEnvelope(targetCRS),
-                    DefaultGeographicCRS.WGS84, false);
+            ProjectionHandler handler =
+                    ProjectionHandlerFinder.getHandler(
+                            new ReferencedEnvelope(targetCRS), DefaultGeographicCRS.WGS84, false);
             if (handler != null && handler.validAreaBounds != null) {
                 ReferencedEnvelope validAreaBounds = handler.validAreaBounds;
                 envWGS84 = envWGS84.intersection(validAreaBounds);
@@ -43,33 +51,39 @@
 
             // let's see if we can restrict the area we're reprojecting back using a projection
             // handler for the source CRS
-            handler = ProjectionHandlerFinder.getHandler(envelope,
-                    envelope.getCoordinateReferenceSystem(), false);
+            handler =
+                    ProjectionHandlerFinder.getHandler(
+                            envelope, envelope.getCoordinateReferenceSystem(), false);
             if (handler != null && handler.validAreaBounds != null) {
                 ReferencedEnvelope validAreaBounds = handler.validAreaBounds;
                 envWGS84 = envWGS84.intersection(validAreaBounds);
             }
-            
+
             // try to reproject
             if (envWGS84.isNull()) {
                 return null;
             } else {
                 try {
-                    return ReferencedEnvelope.reference(envWGS84)
-                            .transform(targetCRS, true);
+                    return ReferencedEnvelope.reference(envWGS84).transform(targetCRS, true);
                 } catch (Exception e2) {
-                    LOGGER.fine("Failed to reproject the restricted envelope " + envWGS84 + " to " + targetCRS);
+                    LOGGER.fine(
+                            "Failed to reproject the restricted envelope "
+                                    + envWGS84
+                                    + " to "
+                                    + targetCRS);
                 }
             }
-            
-            
+
             // ok, let's see if we have an area of validity then
             GeographicBoundingBox bbox = CRS.getGeographicBoundingBox(targetCRS);
             if (bbox != null) {
-                ReferencedEnvelope restriction = new ReferencedEnvelope(
-                        bbox.getEastBoundLongitude(), bbox.getWestBoundLongitude(),
-                        bbox.getSouthBoundLatitude(), bbox.getNorthBoundLatitude(),
-                        DefaultGeographicCRS.WGS84);
+                ReferencedEnvelope restriction =
+                        new ReferencedEnvelope(
+                                bbox.getEastBoundLongitude(),
+                                bbox.getWestBoundLongitude(),
+                                bbox.getSouthBoundLatitude(),
+                                bbox.getNorthBoundLatitude(),
+                                DefaultGeographicCRS.WGS84);
                 Envelope intersection = envWGS84.intersection(restriction);
                 if (intersection.isNull()) {
                     return null;
@@ -78,16 +92,21 @@
                         return ReferencedEnvelope.reference(intersection)
                                 .transform(targetCRS, true);
                     } catch (Exception e2) {
-                        LOGGER.fine("Failed to reproject the restricted envelope " + intersection
-                                + " to " + targetCRS);
+                        LOGGER.fine(
+                                "Failed to reproject the restricted envelope "
+                                        + intersection
+                                        + " to "
+                                        + targetCRS);
                     }
-
                 }
-
             }
 
-            throw new TransformException("All attemptsto reproject the envelope " + envelope
-                    + " to " + targetCRS + " failed");
+            throw new TransformException(
+                    "All attemptsto reproject the envelope "
+                            + envelope
+                            + " to "
+                            + targetCRS
+                            + " failed");
         }
     }
 

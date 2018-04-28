@@ -1,22 +1,24 @@
-    protected ReferencedEnvelope getBoundsInternal(Query query)
-            throws IOException {
+    protected ReferencedEnvelope getBoundsInternal(Query query) throws IOException {
         JDBCDataStore dataStore = getDataStore();
 
-        //split the filter
-        Filter[] split = splitFilter( query.getFilter() );
+        // split the filter
+        Filter[] split = splitFilter(query.getFilter());
         Filter preFilter = split[0];
         Filter postFilter = split[1];
-        
+
         try {
-            
-            if ((postFilter != null) && (postFilter != Filter.INCLUDE) 
+
+            if ((postFilter != null) && (postFilter != Filter.INCLUDE)
                     || (query.getMaxFeatures() < Integer.MAX_VALUE && !canLimit())
-                    || (query.getStartIndex() != null && query.getStartIndex() > 0 && !canOffset())) {
-                //calculate manually, don't use datastore optimization
+                    || (query.getStartIndex() != null
+                            && query.getStartIndex() > 0
+                            && !canOffset())) {
+                // calculate manually, don't use datastore optimization
                 getDataStore().getLogger().fine("Calculating bounds manually");
 
-                // grab the 2d part of the crs 
-                CoordinateReferenceSystem flatCRS = CRS.getHorizontalCRS(getSchema().getCoordinateReferenceSystem());
+                // grab the 2d part of the crs
+                CoordinateReferenceSystem flatCRS =
+                        CRS.getHorizontalCRS(getSchema().getCoordinateReferenceSystem());
                 ReferencedEnvelope bounds = new ReferencedEnvelope(flatCRS);
 
                 // grab a reader
@@ -38,20 +40,18 @@
                 }
 
                 return bounds;
-            } 
-            else {
-                //post filter was null... pre can be set or null... either way
+            } else {
+                // post filter was null... pre can be set or null... either way
                 // use datastore optimization
                 Connection cx = dataStore.getConnection(getState());
                 try {
                     DefaultQuery q = new DefaultQuery(query);
                     q.setFilter(preFilter);
                     return dataStore.getBounds(getSchema(), q, cx);
+                } finally {
+                    getDataStore().releaseConnection(cx, getState());
                 }
-                finally {
-                    getDataStore().releaseConnection( cx, getState() );
-                }
-            } 
+            }
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

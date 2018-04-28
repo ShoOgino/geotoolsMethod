@@ -1,39 +1,42 @@
     /**
      * Commits the transaction and returns the connection to the pool. A new one will be grabbed
      * when needed.
-     * <p>
-     * Preconditions:
+     *
+     * <p>Preconditions:
+     *
      * <ul>
-     * <li>{@link #setTransaction(Transaction)} already called with non <code>null</code> argument.
-     * <li>
+     *   <li>{@link #setTransaction(Transaction)} already called with non <code>null</code>
+     *       argument.
+     *   <li>
      * </ul>
-     * </p>
      */
     public void commit() throws IOException {
         failIfClosed();
         final ISession session = this.getConnection();
 
-        final Command<Void> commitCommand = new Command<Void>() {
-            @Override
-            public Void execute(ISession session, SeConnection connection) throws SeException,
-                    IOException {
+        final Command<Void> commitCommand =
+                new Command<Void>() {
+                    @Override
+                    public Void execute(ISession session, SeConnection connection)
+                            throws SeException, IOException {
 
-                try {
-                    if (currentVersionState != null) {
-                        SeObjectId parentStateId = initialStateId;
-                        // Change the version's state pointer to the last edit state.
-                        defaultVersion.changeState(currentVersionState.getId());
-                        // Trim the state tree.
-                        currentVersionState.trimTree(parentStateId, currentVersionState.getId());
+                        try {
+                            if (currentVersionState != null) {
+                                SeObjectId parentStateId = initialStateId;
+                                // Change the version's state pointer to the last edit state.
+                                defaultVersion.changeState(currentVersionState.getId());
+                                // Trim the state tree.
+                                currentVersionState.trimTree(
+                                        parentStateId, currentVersionState.getId());
+                            }
+                        } catch (SeException se) {
+                            LOGGER.log(Level.WARNING, se.getMessage(), se);
+                            close();
+                            throw se;
+                        }
+                        return null;
                     }
-                } catch (SeException se) {
-                    LOGGER.log(Level.WARNING, se.getMessage(), se);
-                    close();
-                    throw se;
-                }
-                return null;
-            }
-        };
+                };
 
         try {
             session.issue(commitCommand);

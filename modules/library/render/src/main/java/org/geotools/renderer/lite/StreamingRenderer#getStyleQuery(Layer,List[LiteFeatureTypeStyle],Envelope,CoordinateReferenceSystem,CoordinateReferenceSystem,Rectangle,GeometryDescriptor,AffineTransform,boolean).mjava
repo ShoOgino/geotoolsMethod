@@ -1,46 +1,39 @@
     /**
-     * Queries a given layer's features to be rendered based on the target
-     * rendering bounding box.
-     * <p>
-     * The following optimization will be performed in order to limit the number of features returned:
+     * Queries a given layer's features to be rendered based on the target rendering bounding box.
+     *
+     * <p>The following optimization will be performed in order to limit the number of features
+     * returned:
+     *
      * <ul>
-     * <li>Just the features whose geometric attributes lies within
-     * <code>envelope</code> will be queried</li>
-     * <li>The queried attributes will be limited to just those needed to
-     * perform the rendering, based on the required geometric and non geometric
-     * attributes found in the Layer's style rules</li>
-     * <li>If a <code>Query</code> has been set to limit the resulting
-     * layer's features, the final filter to obtain them will respect it. This
-     * means that the bounding box filter and the Query filter will be combined,
-     * also including maxFeatures from Query</li>
-     * <li>At least that the layer's definition query explicitly says to
-     * retrieve some attribute, no attributes will be requested from it, for
-     * performance reasons. So it is desirable to not use a Query for filtering
-     * a layer which includes attributes. Note that including the attributes in
-     * the result is not necessary for the query's filter to get properly
-     * processed. </li>
+     *   <li>Just the features whose geometric attributes lies within <code>envelope</code> will be
+     *       queried
+     *   <li>The queried attributes will be limited to just those needed to perform the rendering,
+     *       based on the required geometric and non geometric attributes found in the Layer's style
+     *       rules
+     *   <li>If a <code>Query</code> has been set to limit the resulting layer's features, the final
+     *       filter to obtain them will respect it. This means that the bounding box filter and the
+     *       Query filter will be combined, also including maxFeatures from Query
+     *   <li>At least that the layer's definition query explicitly says to retrieve some attribute,
+     *       no attributes will be requested from it, for performance reasons. So it is desirable to
+     *       not use a Query for filtering a layer which includes attributes. Note that including
+     *       the attributes in the result is not necessary for the query's filter to get properly
+     *       processed.
      * </ul>
-     * </p>
-     * <p>
-     * <b>NOTE </b>: This is an internal method and should only be called by
-     * <code>paint(Graphics2D, Rectangle, AffineTransform)</code>. It is
-     * package protected just to allow unit testing it.
-     * </p>
-     * 
+     *
+     * <p><b>NOTE </b>: This is an internal method and should only be called by <code>
+     * paint(Graphics2D, Rectangle, AffineTransform)</code>. It is package protected just to allow
+     * unit testing it.
+     *
      * @param schema
      * @param source
-     * @param envelope
-     *            the spatial extent which is the target area of the rendering
-     *            process
-     * @param destinationCRS
-     *            DOCUMENT ME!
+     * @param envelope the spatial extent which is the target area of the rendering process
+     * @param destinationCRS DOCUMENT ME!
      * @param sourceCrs
      * @param screenSize
      * @param geometryAttribute
-     * @return the set of features resulting from <code>currLayer</code> after
-     *         querying its feature source
-     * @throws IllegalFilterException
-     *             if something goes wrong constructing the bbox filter
+     * @return the set of features resulting from <code>currLayer</code> after querying its feature
+     *     source
+     * @throws IllegalFilterException if something goes wrong constructing the bbox filter
      * @throws IOException
      * @see MapLayer#setQuery(org.geotools.data.Query)
      */
@@ -48,41 +41,48 @@
      * Default visibility for testing purposes
      */
 
-    Query getStyleQuery(Layer layer, List<LiteFeatureTypeStyle> styleList,
-            Envelope mapArea, CoordinateReferenceSystem mapCRS,
-            CoordinateReferenceSystem featCrs, Rectangle screenSize,
+    Query getStyleQuery(
+            Layer layer,
+            List<LiteFeatureTypeStyle> styleList,
+            Envelope mapArea,
+            CoordinateReferenceSystem mapCRS,
+            CoordinateReferenceSystem featCrs,
+            Rectangle screenSize,
             GeometryDescriptor geometryAttribute,
-            AffineTransform worldToScreenTransform, boolean hasRenderingTransformation)
+            AffineTransform worldToScreenTransform,
+            boolean hasRenderingTransformation)
             throws IllegalFilterException, IOException, FactoryException {
-        FeatureSource<FeatureType, Feature> source = (FeatureSource<FeatureType, Feature>) layer.getFeatureSource();
+        FeatureSource<FeatureType, Feature> source =
+                (FeatureSource<FeatureType, Feature>) layer.getFeatureSource();
         FeatureType schema = source.getSchema();
         Query query = new Query(Query.ALL);
         Filter filter = null;
-        
+
         // if map extent are not already expanded by a constant buffer, try to compute a layer
         // specific one based on stroke widths
-        if(getRenderingBuffer() == 0) {
+        if (getRenderingBuffer() == 0) {
             int metaBuffer = findRenderingBuffer(styleList);
             if (metaBuffer > 0) {
-                mapArea = expandEnvelope(mapArea, worldToScreenTransform,
-                        metaBuffer);
-                LOGGER.fine("Expanding rendering area by " + metaBuffer 
-                        + " pixels to consider stroke width");
-                
+                mapArea = expandEnvelope(mapArea, worldToScreenTransform, metaBuffer);
+                LOGGER.fine(
+                        "Expanding rendering area by "
+                                + metaBuffer
+                                + " pixels to consider stroke width");
+
                 // expand the screenmaps by the meta buffer, otherwise we'll throw away geomtries
                 // that sit outside of the map, but whose symbolizer may contribute to it
                 for (LiteFeatureTypeStyle lfts : styleList) {
-                    if(lfts.screenMap != null) {
+                    if (lfts.screenMap != null) {
                         lfts.screenMap = new ScreenMap(lfts.screenMap, metaBuffer);
                     }
                 }
             }
             setMetaBuffer(styleList, metaBuffer);
         }
-        
+
         // take care of rendering transforms
-        mapArea = expandEnvelopeByTransformations(styleList,
-                new ReferencedEnvelope(mapArea, mapCRS));
+        mapArea =
+                expandEnvelopeByTransformations(styleList, new ReferencedEnvelope(mapArea, mapCRS));
 
         // build a list of attributes used in the rendering
         List<PropertyName> attributes;
@@ -104,24 +104,26 @@
             // enable advanced projection handling with the updated map extent
             if (isAdvancedProjectionHandlingEnabled()) {
                 // get the projection handler and set a tentative envelope
-                ProjectionHandler projectionHandler = ProjectionHandlerFinder.getHandler(envelope,
-                        featCrs,
-                        isMapWrappingEnabled());
+                ProjectionHandler projectionHandler =
+                        ProjectionHandlerFinder.getHandler(
+                                envelope, featCrs, isMapWrappingEnabled());
                 if (projectionHandler != null) {
                     setProjectionHandler(styleList, projectionHandler);
                     envelopes = projectionHandler.getQueryEnvelopes();
                 }
             }
-            if(envelopes == null) {
-                if (mapCRS != null && featCrs != null && !CRS.equalsIgnoreMetadata(featCrs, mapCRS)) {
+            if (envelopes == null) {
+                if (mapCRS != null
+                        && featCrs != null
+                        && !CRS.equalsIgnoreMetadata(featCrs, mapCRS)) {
                     envelopes = Collections.singletonList(envelope.transform(featCrs, true, 10));
                 } else {
                     envelopes = Collections.singletonList(envelope);
                 }
             }
 
-            if(LOGGER.isLoggable(Level.FINE))
-                LOGGER.fine("Querying layer " + schema.getName() +  " with bbox: " + envelope);
+            if (LOGGER.isLoggable(Level.FINE))
+                LOGGER.fine("Querying layer " + schema.getName() + " with bbox: " + envelope);
             filter = createBBoxFilters(schema, attributes, envelopes);
 
             // now build the query using only the attributes and the
@@ -135,38 +137,45 @@
             final Exception txException = new Exception("Error transforming bbox", e);
             LOGGER.log(Level.SEVERE, "Error querying layer", txException);
             fireErrorEvent(txException);
-            
+
             canTransform = false;
             query = new Query(schema.getName().getLocalPart());
             query.setProperties(attributes);
             Envelope bounds = source.getBounds();
             if (bounds != null && envelope.intersects(bounds)) {
-                LOGGER.log(Level.WARNING, "Got a tranform exception while trying to de-project the current " +
-                        "envelope, bboxs intersect therefore using envelope)", e);
-                filter = null;                    
+                LOGGER.log(
+                        Level.WARNING,
+                        "Got a tranform exception while trying to de-project the current "
+                                + "envelope, bboxs intersect therefore using envelope)",
+                        e);
+                filter = null;
                 filter = createBBoxFilters(schema, attributes, Collections.singletonList(envelope));
                 query.setFilter(filter);
             } else {
-                LOGGER.log(Level.WARNING, "Got a tranform exception while trying to de-project the current " +
-                        "envelope, falling back on full data loading (no bbox query)", e);
+                LOGGER.log(
+                        Level.WARNING,
+                        "Got a tranform exception while trying to de-project the current "
+                                + "envelope, falling back on full data loading (no bbox query)",
+                        e);
                 query.setFilter(Filter.INCLUDE);
             }
             processRuleForQuery(styleList, query);
-
         }
 
         // get the eventual sort-by from the styles
         SortBy[] sortBy = getSortByFromLiteStyles(styleList);
-        if(sortBy != null) {
+        if (sortBy != null) {
             QueryCapabilities qc = source.getQueryCapabilities();
             if (qc != null && !qc.supportsSorting(sortBy)) {
-                throw new IllegalArgumentException("The feature source in layer " + layer.getTitle()
-                        + " cannot sort on " + Arrays.toString(sortBy));
+                throw new IllegalArgumentException(
+                        "The feature source in layer "
+                                + layer.getTitle()
+                                + " cannot sort on "
+                                + Arrays.toString(sortBy));
             }
             query.setSortBy(sortBy);
         }
-        
-        
+
         // prepare hints
         // ... basic one, we want fast and compact coordinate sequences and geometries optimized
         // for the collection of one item case (typical in shapefiles)
@@ -175,22 +184,24 @@
         Hints hints = new Hints(Hints.JTS_COORDINATE_SEQUENCE_FACTORY, csFactory);
         hints.put(Hints.JTS_GEOMETRY_FACTORY, gFactory);
         hints.put(Hints.FEATURE_2D, Boolean.TRUE);
-        
+
         // update the screenmaps
         try {
             CoordinateReferenceSystem crs = getNativeCRS(schema, attributes);
-            if(crs != null) {
+            if (crs != null) {
                 Set<RenderingHints.Key> fsHints = source.getSupportedHints();
-                
+
                 SingleCRS crs2D = crs == null ? null : CRS.getHorizontalCRS(crs);
                 MathTransform mt = buildFullTransform(crs2D, mapCRS, worldToScreenTransform);
-                double[] spans = Decimator.computeGeneralizationDistances(mt.inverse(), screenSize, generalizationDistance);
+                double[] spans =
+                        Decimator.computeGeneralizationDistances(
+                                mt.inverse(), screenSize, generalizationDistance);
                 double distance = spans[0] < spans[1] ? spans[0] : spans[1];
                 for (LiteFeatureTypeStyle fts : styleList) {
-                    if(fts.screenMap != null) {
+                    if (fts.screenMap != null) {
                         fts.screenMap.setTransform(mt);
                         fts.screenMap.setSpans(spans[0], spans[1]);
-                        if(fsHints.contains(Hints.SCREENMAP)) {
+                        if (fsHints.contains(Hints.SCREENMAP)) {
                             // replace the renderer screenmap with the hint, and avoid doing
                             // the work twice
                             hints.put(Hints.SCREENMAP, fts.screenMap);
@@ -198,33 +209,33 @@
                         }
                     }
                 }
-            
-                if(hasRenderingTransformation) {
+
+                if (hasRenderingTransformation) {
                     // the RT might need valid geometries, we can at most apply a topology
                     // preserving generalization
-                    if(fsHints.contains(Hints.GEOMETRY_GENERALIZATION)) {
+                    if (fsHints.contains(Hints.GEOMETRY_GENERALIZATION)) {
                         hints.put(Hints.GEOMETRY_GENERALIZATION, distance);
                         disableInMemoryGeneralization(styleList);
                     }
                 } else {
                     // ... if possible we let the datastore do the generalization
-                    if(fsHints.contains(Hints.GEOMETRY_SIMPLIFICATION)) {
+                    if (fsHints.contains(Hints.GEOMETRY_SIMPLIFICATION)) {
                         // good, we don't need to perform in memory generalization, the datastore
                         // does it all for us
                         hints.put(Hints.GEOMETRY_SIMPLIFICATION, distance);
                         disableInMemoryGeneralization(styleList);
-                    } else if(fsHints.contains(Hints.GEOMETRY_DISTANCE)) {
+                    } else if (fsHints.contains(Hints.GEOMETRY_DISTANCE)) {
                         // in this case the datastore can get us close, but we can still
                         // perform some in memory generalization
                         hints.put(Hints.GEOMETRY_DISTANCE, distance);
                     }
                 }
             }
-        } catch(Exception e) {
+        } catch (Exception e) {
             LOGGER.log(Level.INFO, "Error computing the generalization hints", e);
         }
 
-        if(query.getHints() == null) {
+        if (query.getHints() == null) {
             query.setHints(hints);
         } else {
             query.getHints().putAll(hints);
@@ -235,7 +246,7 @@
         simplifier.setFeatureType(source.getSchema());
         Filter simplifiedFilter = (Filter) query.getFilter().accept(simplifier, null);
         query.setFilter(simplifiedFilter);
-        
+
         return query;
     }
 

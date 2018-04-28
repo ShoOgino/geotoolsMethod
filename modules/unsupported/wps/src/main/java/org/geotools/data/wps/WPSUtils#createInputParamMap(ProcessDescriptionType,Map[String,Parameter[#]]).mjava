@@ -2,63 +2,51 @@
      * Create a map of <String name, Parameter> inputs for a process based on its describeProcess.
      *
      * @param processDesc
-     * @param map
-     *            add the inputs to the given map (create it if null)
+     * @param map add the inputs to the given map (create it if null)
      * @return map of name,Parameter representing the input params for this process
      */
-    public static Map<String, Parameter<?>> createInputParamMap(ProcessDescriptionType processDesc,
-        Map<String, Parameter<?>> map)
-    {
-        if (map == null)
-        {
+    public static Map<String, Parameter<?>> createInputParamMap(
+            ProcessDescriptionType processDesc, Map<String, Parameter<?>> map) {
+        if (map == null) {
             map = new TreeMap<String, Parameter<?>>();
         }
 
         // loop through the process desc and setup each input param
         DataInputsType dataInputs = processDesc.getDataInputs();
-        if (dataInputs == null)
-        {
+        if (dataInputs == null) {
             return null;
         }
 
         EList inputs = dataInputs.getInput();
-        if ((inputs == null) || inputs.isEmpty())
-        {
+        if ((inputs == null) || inputs.isEmpty()) {
             return null;
         }
 
         Iterator iterator = inputs.iterator();
-        while (iterator.hasNext())
-        {
+        while (iterator.hasNext()) {
             InputDescriptionType idt = (InputDescriptionType) iterator.next();
             // determine if the input is a literal or complex data, and from that
             // find out what type the object should be
             LiteralInputType literalData = idt.getLiteralData();
             SupportedComplexDataInputType complexData = idt.getComplexData();
             Class type = Object.class;
-            if (literalData != null)
-            {
+            if (literalData != null) {
                 String reference = literalData.getDataType().getReference();
                 type = getLiteralTypeFromReference(reference);
-            }
-            else if (complexData != null)
-            {
+            } else if (complexData != null) {
                 // TODO: get all supported types and determine how to handle that, not just the
                 // default.
                 ComplexDataDescriptionType format = complexData.getDefault().getFormat();
                 String encoding = format.getEncoding();
                 String mimetype = format.getMimeType();
                 String schema = format.getSchema();
-                if (encoding == null)
-                {
+                if (encoding == null) {
                     encoding = "";
                 }
-                if (mimetype == null)
-                {
+                if (mimetype == null) {
                     mimetype = "";
                 }
-                if (schema == null)
-                {
+                if (schema == null) {
                     schema = "";
                 }
                 type = getComplexType(encoding, mimetype, schema);
@@ -66,15 +54,25 @@
 
             // create the parameter
             boolean required = true;
-            if (idt.getMinOccurs().intValue() < 1)
-            {
+            if (idt.getMinOccurs().intValue() < 1) {
                 required = false;
             }
 
             String identifier = idt.getIdentifier().getValue();
             InternationalString title = Text.text(idt.getTitle().getValue());
-            InternationalString description = Text.text(isAbstractNull(idt) ? "" : idt.getAbstract().getValue());
-            Parameter<?> param = new Parameter(identifier, type, title, description, required, idt.getMinOccurs().intValue(), idt.getMaxOccurs().intValue(), null, null);
+            InternationalString description =
+                    Text.text(isAbstractNull(idt) ? "" : idt.getAbstract().getValue());
+            Parameter<?> param =
+                    new Parameter(
+                            identifier,
+                            type,
+                            title,
+                            description,
+                            required,
+                            idt.getMinOccurs().intValue(),
+                            idt.getMaxOccurs().intValue(),
+                            null,
+                            null);
             map.put(identifier, param);
         }
 

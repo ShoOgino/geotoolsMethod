@@ -3,12 +3,15 @@
 
         // Extracts informaton about the type name (as per this.entry) from the API
         Dataset ds = this.dataStore.getDataset(this.entry.getName());
-        Webservice ws = (new Gson())
-            .fromJson(
-                ArcGISRestDataStore.InputStreamToString(this.dataStore.retrieveJSON(
-                    "GET", new URL(ds.getWebService().toString()),
-                    ArcGISRestDataStore.DEFAULT_PARAMS)),
-                Webservice.class);
+        Webservice ws =
+                (new Gson())
+                        .fromJson(
+                                ArcGISRestDataStore.InputStreamToString(
+                                        this.dataStore.retrieveJSON(
+                                                "GET",
+                                                new URL(ds.getWebService().toString()),
+                                                ArcGISRestDataStore.DEFAULT_PARAMS)),
+                                Webservice.class);
 
         if (ws == null) {
             throw new IOException("Type name " + entry.getName() + " not found");
@@ -17,15 +20,14 @@
         // Sets the information about the resource
         this.resInfo = new DefaultResourceInfo();
         try {
-            this.resInfo
-                .setSchema(new URI(this.dataStore.getNamespace().toExternalForm()));
+            this.resInfo.setSchema(new URI(this.dataStore.getNamespace().toExternalForm()));
         } catch (URISyntaxException e) {
             // Re-packages the exception to be compatible with method signature
             throw new IOException(e.getMessage(), e.fillInStackTrace());
         }
         try {
-            this.resInfo.setCRS(CRS.decode(
-                "EPSG:" + ws.getExtent().getSpatialReference().getLatestWkid()));
+            this.resInfo.setCRS(
+                    CRS.decode("EPSG:" + ws.getExtent().getSpatialReference().getLatestWkid()));
         } catch (FactoryException e) {
             // FIXME: this is not nice: exceptions should not be re-packaged
             throw new IOException(e.getMessage());
@@ -38,13 +40,16 @@
 
         this.resInfo.setTitle(ds.getTitle() != null ? ds.getTitle() : ws.getName());
         this.resInfo.setName(ws.getName());
-        ReferencedEnvelope geoBbox = new ReferencedEnvelope(
-            ws.getExtent().getXmin(), ws.getExtent().getXmax(),
-            ws.getExtent().getYmin(), ws.getExtent().getYmax(),
-            this.resInfo.getCRS());
+        ReferencedEnvelope geoBbox =
+                new ReferencedEnvelope(
+                        ws.getExtent().getXmin(),
+                        ws.getExtent().getXmax(),
+                        ws.getExtent().getYmin(),
+                        ws.getExtent().getYmax(),
+                        this.resInfo.getCRS());
         this.resInfo.setBounds(geoBbox);
-        this.objectIdField = (ws.getObjectIdField() != null) ? ws.getObjectIdField()
-            : ws.getGlobalIdField();
+        this.objectIdField =
+                (ws.getObjectIdField() != null) ? ws.getObjectIdField() : ws.getGlobalIdField();
 
         // Builds the feature type
         SimpleFeatureTypeBuilder builder = new SimpleFeatureTypeBuilder();
@@ -53,24 +58,30 @@
         // not set
         builder.setName(this.entry.getName());
         // FIXME: the abstract of the feature type is not set
-        builder.setDescription(ds.getDescription() != null
-            ? new SimpleInternationalString(ds.getDescription()) : null);
+        builder.setDescription(
+                ds.getDescription() != null
+                        ? new SimpleInternationalString(ds.getDescription())
+                        : null);
 
         // Adds non-geometry field descriptions
-        ws.getFields().forEach((fld) -> {
-            Class clazz = EsriJavaMapping.get(fld.getType());
-            if (clazz == null) {
-                this.getDataStore().getLogger()
-                    .severe("Type " + fld.getType() + " not found");
-            }
-            builder.add(fld.getName(), clazz);
-        });
+        ws.getFields()
+                .forEach(
+                        (fld) -> {
+                            Class clazz = EsriJavaMapping.get(fld.getType());
+                            if (clazz == null) {
+                                this.getDataStore()
+                                        .getLogger()
+                                        .severe("Type " + fld.getType() + " not found");
+                            }
+                            builder.add(fld.getName(), clazz);
+                        });
 
         // Adds the geometry field
         Class clazz = EsriJTSMapping.get(ws.getGeometryType());
         if (clazz == null) {
-            this.getDataStore().getLogger()
-                .severe("Geometry type " + ws.getGeometryType() + " not found");
+            this.getDataStore()
+                    .getLogger()
+                    .severe("Geometry type " + ws.getGeometryType() + " not found");
         }
 
         builder.add(ArcGISRestDataStore.GEOMETRY_ATTR, clazz);

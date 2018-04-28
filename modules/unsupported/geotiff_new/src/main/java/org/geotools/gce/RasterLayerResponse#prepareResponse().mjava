@@ -1,28 +1,33 @@
     /**
-     * This method loads the granules which overlap the requested {@link GeneralEnvelope} using 
-     * the provided values for alpha and input ROI.
+     * This method loads the granules which overlap the requested {@link GeneralEnvelope} using the
+     * provided values for alpha and input ROI.
      */
     private RenderedImage prepareResponse() throws DataSourceException {
 
         try {
 
-            // select the relevant overview, notice that at this time we have relaxed a bit the 
-            // requirement to have the same exact resolution for all the levels, but still we 
-            // do not allow for reading the various grid to world transform directly from the 
-            // input files, therefore we are assuming that each rasterDescriptor has a scale 
-            // and translate only grid to world that can be deduced from its base level dimension 
-            // and envelope. The grid to world transforms for the other levels can be computed 
+            // select the relevant overview, notice that at this time we have relaxed a bit the
+            // requirement to have the same exact resolution for all the levels, but still we
+            // do not allow for reading the various grid to world transform directly from the
+            // input files, therefore we are assuming that each rasterDescriptor has a scale
+            // and translate only grid to world that can be deduced from its base level dimension
+            // and envelope. The grid to world transforms for the other levels can be computed
             // accordingly knowning the scale factors.
             if (request.getRequestedBBox() != null && request.getRequestedRasterArea() != null) {
-                overviewsLevel = setReadParams(request.getOverviewPolicy(), baseReadParameters, request);
+                overviewsLevel =
+                        setReadParams(request.getOverviewPolicy(), baseReadParameters, request);
             } else {
                 overviewsLevel = 0;
             }
             assert overviewsLevel >= 0;
             if (LOGGER.isLoggable(Level.FINE)) {
-                LOGGER.fine("Loading level " + overviewsLevel + " with subsampling factors "
-                        + baseReadParameters.getSourceXSubsampling() + " "
-                        + baseReadParameters.getSourceYSubsampling());
+                LOGGER.fine(
+                        "Loading level "
+                                + overviewsLevel
+                                + " with subsampling factors "
+                                + baseReadParameters.getSourceXSubsampling()
+                                + " "
+                                + baseReadParameters.getSourceYSubsampling());
             }
 
             final BoundingBox cropBBOX = request.getCropBBox();
@@ -37,59 +42,69 @@
             g2w.concatenate(CoverageUtilities.CENTER_TO_CORNER);
 
             // keep into account levels and subsampling
-            final OverviewLevel level = rasterManager.overviewsController.resolutionsLevels.get(overviewsLevel);
-            final OverviewLevel baseLevel = rasterManager.overviewsController.resolutionsLevels.get(0);
-            final AffineTransform2D adjustments = new AffineTransform2D(
-                    (level.resolutionX / baseLevel.resolutionX)
-                            * baseReadParameters.getSourceXSubsampling(), 0, 0,
-                    (level.resolutionY / baseLevel.resolutionY)
-                            * baseReadParameters.getSourceYSubsampling(), 0, 0);
+            final OverviewLevel level =
+                    rasterManager.overviewsController.resolutionsLevels.get(overviewsLevel);
+            final OverviewLevel baseLevel =
+                    rasterManager.overviewsController.resolutionsLevels.get(0);
+            final AffineTransform2D adjustments =
+                    new AffineTransform2D(
+                            (level.resolutionX / baseLevel.resolutionX)
+                                    * baseReadParameters.getSourceXSubsampling(),
+                            0,
+                            0,
+                            (level.resolutionY / baseLevel.resolutionY)
+                                    * baseReadParameters.getSourceYSubsampling(),
+                            0,
+                            0);
             g2w.concatenate(adjustments);
-            
+
             // move it to the corner
             finalGridToWorldCorner = new AffineTransform2D(g2w);
-            finalWorldToGridCorner = finalGridToWorldCorner.inverse();            
-            final GeneralEnvelope tempRasterBounds = CRS.transform(finalWorldToGridCorner, finalBBox);
-            rasterBounds=tempRasterBounds.toRectangle2D().getBounds();
-            if (rasterBounds.width == 0)
-                rasterBounds.width++;
-            if (rasterBounds.height == 0)
-                rasterBounds.height++;
-            
+            finalWorldToGridCorner = finalGridToWorldCorner.inverse();
+            final GeneralEnvelope tempRasterBounds =
+                    CRS.transform(finalWorldToGridCorner, finalBBox);
+            rasterBounds = tempRasterBounds.toRectangle2D().getBounds();
+            if (rasterBounds.width == 0) rasterBounds.width++;
+            if (rasterBounds.height == 0) rasterBounds.height++;
+
             final double[] requestRes = request.getRequestedResolution();
             final double resX = baseLevel.resolutionX;
-            final double resY = baseLevel.resolutionY;            
-            if ((requestRes[0] < resX || requestRes[1] < resY) ) {
+            final double resY = baseLevel.resolutionY;
+            if ((requestRes[0] < resX || requestRes[1] < resY)) {
                 // Using the best available resolution
                 oversampledRequest = true;
-            }             
-            if(oversampledRequest)
-                rasterBounds.grow(2, 2);            
+            }
+            if (oversampledRequest) rasterBounds.grow(2, 2);
 
-
-
-            RenderedImage theImage=null;
+            RenderedImage theImage = null;
             try {
 
-                RasterLoadingResult result = rasterManager.rasterDescriptor.loadRaster(baseReadParameters, overviewsLevel, finalBBox,
-                        finalWorldToGridCorner, request, request.getTileDimensions());
-                theImage =result.getRaster();
+                RasterLoadingResult result =
+                        rasterManager.rasterDescriptor.loadRaster(
+                                baseReadParameters,
+                                overviewsLevel,
+                                finalBBox,
+                                finalWorldToGridCorner,
+                                request,
+                                request.getTileDimensions());
+                theImage = result.getRaster();
                 if (theImage == null) {
                     if (LOGGER.isLoggable(Level.FINE)) {
-                        LOGGER.log(Level.FINE, "Unable to load the raster with request " + request.toString());
+                        LOGGER.log(
+                                Level.FINE,
+                                "Unable to load the raster with request " + request.toString());
                     }
-
                 }
-                
+
                 //
                 // Set final transformation
                 //
-                RasterLayerResponse.this.finalGridToWorldCorner=new AffineTransform2D(result.gridToWorld);
-
+                RasterLayerResponse.this.finalGridToWorldCorner =
+                        new AffineTransform2D(result.gridToWorld);
 
             } catch (ImagingException e) {
                 if (LOGGER.isLoggable(Level.INFO)) {
-                    LOGGER.fine("Unable to load the raster with request "  + request);
+                    LOGGER.fine("Unable to load the raster with request " + request);
                 }
                 theImage = null;
             } catch (Throwable e) {
@@ -103,23 +118,25 @@
                 LOGGER.fine("Processing loaded raster data ");
             }
 
-
             //
-            // Did we actually load anything?? Notice that it might happen that either we have 
-            // wholes inside the definition area for the image or we had some problem with 
-            // missing tiles, therefore it might happen that for some bboxes we don't have 
+            // Did we actually load anything?? Notice that it might happen that either we have
+            // wholes inside the definition area for the image or we had some problem with
+            // missing tiles, therefore it might happen that for some bboxes we don't have
             // anything to load.
             //
             if (theImage != null) {
 
                 //
-                // Create the mosaic image by doing a crop if necessary and also managing the 
-                // transparent color if applicable. Be aware that management of the transparent 
+                // Create the mosaic image by doing a crop if necessary and also managing the
+                // transparent color if applicable. Be aware that management of the transparent
                 // color involves removing transparency information from the input images.
                 //
                 if (LOGGER.isLoggable(Level.FINE)) {
-                    LOGGER.fine("Loaded finalBBox " + finalBBox.toString()
-                            + " while crop finalBBox " + request.getCropBBox());
+                    LOGGER.fine(
+                            "Loaded finalBBox "
+                                    + finalBBox.toString()
+                                    + " while crop finalBBox "
+                                    + request.getCropBBox());
                 }
 
                 return theImage;
@@ -131,26 +148,37 @@
                 // if provided (defaulting to 0), as well as the compute raster
                 // bounds, envelope and grid to world.
 
-                final Number[] values = ImageUtilities.getBackgroundValues(rasterManager.baseImageType.getSampleModel(), backgroundValues);
+                final Number[] values =
+                        ImageUtilities.getBackgroundValues(
+                                rasterManager.baseImageType.getSampleModel(), backgroundValues);
                 // create a constant image with a proper layout
-                final RenderedImage finalImage = ConstantDescriptor.create(
-                        Float.valueOf(rasterBounds.width),
-                        Float.valueOf(rasterBounds.height),
-                        values,
-                        null);
-                if(rasterManager.baseImageType!=null&&rasterManager.baseImageType.getColorModel()!=null){
-                    final ImageLayout2 il= new ImageLayout2();
+                final RenderedImage finalImage =
+                        ConstantDescriptor.create(
+                                Float.valueOf(rasterBounds.width),
+                                Float.valueOf(rasterBounds.height),
+                                values,
+                                null);
+                if (rasterManager.baseImageType != null
+                        && rasterManager.baseImageType.getColorModel() != null) {
+                    final ImageLayout2 il = new ImageLayout2();
                     il.setColorModel(rasterManager.baseImageType.getColorModel());
-                    Dimension tileSize= request.getTileDimensions();
-                    if(tileSize==null){
-                        tileSize=JAI.getDefaultTileSize();
-                    } 
-                    il.setSampleModel(rasterManager.baseImageType.getColorModel().createCompatibleSampleModel(tileSize.width, tileSize.height));
-                    il.setTileGridXOffset(0).setTileGridYOffset(0).setTileWidth((int)tileSize.getWidth()).setTileHeight((int)tileSize.getHeight());
+                    Dimension tileSize = request.getTileDimensions();
+                    if (tileSize == null) {
+                        tileSize = JAI.getDefaultTileSize();
+                    }
+                    il.setSampleModel(
+                            rasterManager
+                                    .baseImageType
+                                    .getColorModel()
+                                    .createCompatibleSampleModel(tileSize.width, tileSize.height));
+                    il.setTileGridXOffset(0)
+                            .setTileGridYOffset(0)
+                            .setTileWidth((int) tileSize.getWidth())
+                            .setTileHeight((int) tileSize.getHeight());
                     return FormatDescriptor.create(
                             finalImage,
                             Integer.valueOf(il.getSampleModel(null).getDataType()),
-                            new RenderingHints(JAI.KEY_IMAGE_LAYOUT,il));
+                            new RenderingHints(JAI.KEY_IMAGE_LAYOUT, il));
                 }
                 return finalImage;
             }

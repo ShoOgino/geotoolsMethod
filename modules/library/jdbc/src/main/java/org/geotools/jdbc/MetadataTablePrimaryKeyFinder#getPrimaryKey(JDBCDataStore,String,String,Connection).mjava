@@ -3,19 +3,19 @@
             throws SQLException {
         ResultSet rs = null;
         PreparedStatement st = null;
-        
+
         String metadataSchema = getMetadataSchema(store);
-        
+
         try {
             // first off, make sure the metadata table is there (we'll also
             // catch errors later but log them at a higher level in case the table
             // is there but does not have the required structure). We just don't want
-            // to fill the logs of people not using the metadata table with errors 
-            if(metadataTableExists == null) {
+            // to fill the logs of people not using the metadata table with errors
+            if (metadataTableExists == null) {
                 synchronized (this) {
-                    if(metadataTableExists == null) {
+                    if (metadataTableExists == null) {
                         try {
-                            
+
                             StringBuffer sb = new StringBuffer();
                             sb.append("SELECT * FROM ");
                             if (metadataSchema != null) {
@@ -26,7 +26,7 @@
                             st = cx.prepareStatement(sb.toString());
                             rs = st.executeQuery();
                             metadataTableExists = true;
-                        } catch(Exception e) {
+                        } catch (Exception e) {
                             // clean up the transaction status in case we are in auto-commit mode
                             if (e instanceof SQLException && !cx.getAutoCommit()) {
                                 cx.rollback();
@@ -39,10 +39,10 @@
                     }
                 }
             }
-            if(!metadataTableExists) {
+            if (!metadataTableExists) {
                 return null;
             }
-            
+
             // build query against the metadata table
             List<String> parameters = new ArrayList<String>();
             StringBuffer sb = new StringBuffer();
@@ -63,13 +63,16 @@
             sb.append("pk_column_idx");
             sb.append(" ASC");
             String sql = sb.toString();
-            LOGGER.log(Level.FINE, "Reading metadata table metadata: {0} [ parameters = {1} ]", new Object[] { sql, parameters });
+            LOGGER.log(
+                    Level.FINE,
+                    "Reading metadata table metadata: {0} [ parameters = {1} ]",
+                    new Object[] {sql, parameters});
 
             // extract information column by column
             DatabaseMetaData metaData = cx.getMetaData();
             st = cx.prepareStatement(sql);
             for (int i = 0; i < parameters.size(); i++) {
-                st.setString(i+1, parameters.get(i));
+                st.setString(i + 1, parameters.get(i));
             }
             rs = st.executeQuery();
 
@@ -79,24 +82,26 @@
                 String colName = rs.getString("pk_column");
                 String policyStr = rs.getString("pk_policy");
                 String sequence = rs.getString("pk_sequence");
-                
+
                 // check the column name is known
-                if(colNames == null) {
+                if (colNames == null) {
                     colNames = getColumnNames(store, metaData, schema, table);
                 }
-                if(!colNames.contains(colName)) {
+                if (!colNames.contains(colName)) {
                     LOGGER.warning("Unknown column " + colName + " in table " + table);
                     return null;
                 }
-                    
 
                 Policy policy = Policy.assigned;
                 if (policyStr != null) {
                     try {
                         policy = Policy.valueOf(policyStr.toLowerCase());
                     } catch (IllegalArgumentException e) {
-                        LOGGER.warning("Invalid policy value " + policyStr + ", valid values are"
-                                + Arrays.asList(Policy.values()));
+                        LOGGER.warning(
+                                "Invalid policy value "
+                                        + policyStr
+                                        + ", valid values are"
+                                        + Arrays.asList(Policy.values()));
                         return null;
                     }
                 }
@@ -111,15 +116,13 @@
                     columns.add(new SequencedPrimaryKeyColumn(colName, columnType, sequence));
                 }
             }
-            
+
             // see if we accumulated any info about this table
-            if(columns.size() > 0)
-                return new PrimaryKey(table, columns);
-            else
-                return null;
+            if (columns.size() > 0) return new PrimaryKey(table, columns);
+            else return null;
         } catch (SQLException e) {
-            LOGGER.log(Level.WARNING, "Errors occurred accessing the primary key metadata table ",
-                    e);
+            LOGGER.log(
+                    Level.WARNING, "Errors occurred accessing the primary key metadata table ", e);
             return null;
         } finally {
             store.closeSafe(rs);

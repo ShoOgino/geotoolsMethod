@@ -1,205 +1,196 @@
-	/**
-	 * This is a recursive method that returns any object that belongs to the
-	 * complexType specified. The return object is wrapped in a ReturnAttribute
-	 * which carries through some values related to the object. They are: its
-	 * GML Id and its name.
-	 * 
-	 * @param complexType
-	 *            The complex type that the CALLER is trying to build. NB: this
-	 *            is NOT the type that the method will build, it's the type that
-	 *            the caller wants.
-	 * @return A ReturnAttribute object which groups a (Name) name, (String) id,
-	 *         and (Object) value that represent an attribute that belongs in
-	 *         the complexType specified. Returns null once there are no more
-	 *         elements in the complex type you're trying to parse.
-	 * @throws XmlPullParserException
-	 * @throws IOException
-	 */
-	private ReturnAttribute parseNextAttribute(ComplexType complexType)
-			throws XmlPullParserException, IOException {
+    /**
+     * This is a recursive method that returns any object that belongs to the complexType specified.
+     * The return object is wrapped in a ReturnAttribute which carries through some values related
+     * to the object. They are: its GML Id and its name.
+     *
+     * @param complexType The complex type that the CALLER is trying to build. NB: this is NOT the
+     *     type that the method will build, it's the type that the caller wants.
+     * @return A ReturnAttribute object which groups a (Name) name, (String) id, and (Object) value
+     *     that represent an attribute that belongs in the complexType specified. Returns null once
+     *     there are no more elements in the complex type you're trying to parse.
+     * @throws XmlPullParserException
+     * @throws IOException
+     */
+    private ReturnAttribute parseNextAttribute(ComplexType complexType)
+            throws XmlPullParserException, IOException {
 
-		// 1. Read through the XML until you come across a start tag, end tag or
-		// the end of the document:
-		int tagType;
-		do {
-			tagType = parser.next();
-		} while (tagType != XmlPullParser.START_TAG
-				&& tagType != XmlPullParser.END_TAG
-				&& tagType != XmlPullParser.END_DOCUMENT);
+        // 1. Read through the XML until you come across a start tag, end tag or
+        // the end of the document:
+        int tagType;
+        do {
+            tagType = parser.next();
+        } while (tagType != XmlPullParser.START_TAG
+                && tagType != XmlPullParser.END_TAG
+                && tagType != XmlPullParser.END_DOCUMENT);
 
-		// 2. We'll take an action depending on the type of tag we got.
-		if (tagType == XmlPullParser.START_TAG) {
-			// 2a. A start tag has been found; if it belongs to the complexType
-			// then we should parse it and return it.
+        // 2. We'll take an action depending on the type of tag we got.
+        if (tagType == XmlPullParser.START_TAG) {
+            // 2a. A start tag has been found; if it belongs to the complexType
+            // then we should parse it and return it.
 
-			// 3. Convert the tag's name into a NameImpl and then see if
-			// there's a descriptor by that name in the type:
-			Name currentTagName = new NameImpl(parser.getNamespace(),
-					parser.getName());
+            // 3. Convert the tag's name into a NameImpl and then see if
+            // there's a descriptor by that name in the type:
+            Name currentTagName = new NameImpl(parser.getNamespace(), parser.getName());
 
-			PropertyDescriptor descriptor = complexType
-					.getDescriptor(currentTagName);
-			if (descriptor != null) {
-				// 3a. We've found a descriptor for the tag's name in the
-				// complexType.
+            PropertyDescriptor descriptor = complexType.getDescriptor(currentTagName);
+            if (descriptor != null) {
+                // 3a. We've found a descriptor for the tag's name in the
+                // complexType.
 
-				// Get the type that the descriptor relates to, and get the GML
-				// Id if it's set:
-				PropertyType type = descriptor.getType();
+                // Get the type that the descriptor relates to, and get the GML
+                // Id if it's set:
+                PropertyType type = descriptor.getType();
 
-				String id = parser.getAttributeValue(GML.id.getNamespaceURI(),
-						GML.id.getLocalPart());
+                String id =
+                        parser.getAttributeValue(GML.id.getNamespaceURI(), GML.id.getLocalPart());
 
-				// Is it defined by an xlink?
-				String href = parser.getAttributeValue(
-						"http://www.w3.org/1999/xlink", "href");
+                // Is it defined by an xlink?
+                String href = parser.getAttributeValue("http://www.w3.org/1999/xlink", "href");
 
-				// 4. Parse the tag's contents based on whether it's a:
-				if (href != null) {
-					// Resolve the href:
-					Attribute hrefAttribute = resolveHref(href,
-							(AttributeType) type);
+                // 4. Parse the tag's contents based on whether it's a:
+                if (href != null) {
+                    // Resolve the href:
+                    Attribute hrefAttribute = resolveHref(href, (AttributeType) type);
 
-					// We've got the attribute but the parser is still
-					// pointing at this tag so
-					// we have to advance it till we get to the end tag.
-					while (parser.next() != XmlPullParser.END_TAG)
-						;
+                    // We've got the attribute but the parser is still
+                    // pointing at this tag so
+                    // we have to advance it till we get to the end tag.
+                    while (parser.next() != XmlPullParser.END_TAG) ;
 
-					return new ReturnAttribute(id, currentTagName,
-							hrefAttribute);
-				}
-				// ComplexType or an AttributeType.
-				else if (type instanceof ComplexType) {
-					// 4a. The element is a complex type so we must loop through
-					// each of its internal elements and construct a complex
-					// attribute.
+                    return new ReturnAttribute(id, currentTagName, hrefAttribute);
+                }
+                // ComplexType or an AttributeType.
+                else if (type instanceof ComplexType) {
+                    // 4a. The element is a complex type so we must loop through
+                    // each of its internal elements and construct a complex
+                    // attribute.
 
-					// The attribute that we get from parsing the next
-					// attribute.
-					ReturnAttribute innerAttribute;
+                    // The attribute that we get from parsing the next
+                    // attribute.
+                    ReturnAttribute innerAttribute;
 
-					// Configure the attribute builder to help build the complex
-					// attribute.
-					AttributeBuilder attributeBuilder = new AttributeBuilder(
-							new LenientFeatureFactoryImpl());
-					attributeBuilder.setType((AttributeType) type);
+                    // Configure the attribute builder to help build the complex
+                    // attribute.
+                    AttributeBuilder attributeBuilder =
+                            new AttributeBuilder(new LenientFeatureFactoryImpl());
+                    attributeBuilder.setType((AttributeType) type);
 
-					if (type.getBinding() == Collection.class
-							&& Types.isSimpleContentType(type)) {
+                    if (type.getBinding() == Collection.class && Types.isSimpleContentType(type)) {
 
-						// Get the value
-					
-						// I'm calling 'next()' to move the cursor off the tag
-						// and into its body, otherwise getText() pulls the
-						// wrong part.
-						parser.next();
-						Object value = parser.getText();
+                        // Get the value
 
-						// create an empty list
-						ArrayList<Property> list = new ArrayList<Property>();
+                        // I'm calling 'next()' to move the cursor off the tag
+                        // and into its body, otherwise getText() pulls the
+                        // wrong part.
+                        parser.next();
+                        Object value = parser.getText();
 
-						// Add the value to the list if it's not null or if
-						// nulls are allowed by the descriptor.
-						if (value != null || descriptor.isNillable()) {// add
-																		// the
-																		// result
-																		// of
-																		// buildSimpleContent(type,
-																		// value)
-																		// to
-																		// the
-																		// list
-																		// and
-																		// return
-																		// it.
-							AttributeType simpleContentType = getSimpleContentType((AttributeType) type);
+                        // create an empty list
+                        ArrayList<Property> list = new ArrayList<Property>();
 
-							FilterFactory ff = CommonFactoryFinder
-									.getFilterFactory(null);
-							Object convertedValue = ff.literal(value).evaluate(
-									value, simpleContentType.getBinding());
+                        // Add the value to the list if it's not null or if
+                        // nulls are allowed by the descriptor.
+                        if (value != null || descriptor.isNillable()) { // add
+                            // the
+                            // result
+                            // of
+                            // buildSimpleContent(type,
+                            // value)
+                            // to
+                            // the
+                            // list
+                            // and
+                            // return
+                            // it.
+                            AttributeType simpleContentType =
+                                    getSimpleContentType((AttributeType) type);
 
-							AttributeDescriptor simpleContentDescriptor = new AttributeDescriptorImpl(
-									simpleContentType,
-									ComplexFeatureConstants.SIMPLE_CONTENT, 1,
-									1, true, (Object) null);
-							list.add(new AttributeImpl(convertedValue,
-									simpleContentDescriptor, null));
-						}
+                            FilterFactory ff = CommonFactoryFinder.getFilterFactory(null);
+                            Object convertedValue =
+                                    ff.literal(value)
+                                            .evaluate(value, simpleContentType.getBinding());
 
-						// We've got the attribute but the parser is still
-						// pointing at this tag so
-						// we have to advance it till we get to the end tag.
-						while (parser.next() != XmlPullParser.END_TAG)
-							;
+                            AttributeDescriptor simpleContentDescriptor =
+                                    new AttributeDescriptorImpl(
+                                            simpleContentType,
+                                            ComplexFeatureConstants.SIMPLE_CONTENT,
+                                            1,
+                                            1,
+                                            true,
+                                            (Object) null);
+                            list.add(
+                                    new AttributeImpl(
+                                            convertedValue, simpleContentDescriptor, null));
+                        }
 
-						return new ReturnAttribute(id, currentTagName, list);
-					}
+                        // We've got the attribute but the parser is still
+                        // pointing at this tag so
+                        // we have to advance it till we get to the end tag.
+                        while (parser.next() != XmlPullParser.END_TAG) ;
 
-					// 5. Loop over and parse all the attributes in this complex
-					// feature.
-					while ((innerAttribute = parseNextAttribute((ComplexType) type)) != null) {
-						// 6. Check the type of the parsed attribute.
-						if (ComplexAttribute.class
-								.isAssignableFrom(innerAttribute.value
-										.getClass())) {
-							// 6a. If it's a Property then we must add it to
-							// a list before sending it to the builder.
-							ArrayList<Property> properties = new ArrayList<Property>();
-							properties.add((Property) innerAttribute.value);
-							attributeBuilder.add(innerAttribute.id, properties,
-									innerAttribute.name);
-						} else {
-							// 6b. If the parsed attribute is actually just
-							// an object then it must belong to a simple
-							// type in which case we can just add it to the
-							// builder as is.
+                        return new ReturnAttribute(id, currentTagName, list);
+                    }
 
-							attributeBuilder.add(innerAttribute.id,
-									getValue(innerAttribute), innerAttribute.name);
-						}
-					}
+                    // 5. Loop over and parse all the attributes in this complex
+                    // feature.
+                    while ((innerAttribute = parseNextAttribute((ComplexType) type)) != null) {
+                        // 6. Check the type of the parsed attribute.
+                        if (ComplexAttribute.class.isAssignableFrom(
+                                innerAttribute.value.getClass())) {
+                            // 6a. If it's a Property then we must add it to
+                            // a list before sending it to the builder.
+                            ArrayList<Property> properties = new ArrayList<Property>();
+                            properties.add((Property) innerAttribute.value);
+                            attributeBuilder.add(
+                                    innerAttribute.id, properties, innerAttribute.name);
+                        } else {
+                            // 6b. If the parsed attribute is actually just
+                            // an object then it must belong to a simple
+                            // type in which case we can just add it to the
+                            // builder as is.
 
-					Attribute attribteValue;
-					if (type instanceof FeatureType) {
-						attribteValue = attributeBuilder.build(id);
-					} else {
-						attribteValue = attributeBuilder.build();
-					}
+                            attributeBuilder.add(
+                                    innerAttribute.id,
+                                    getValue(innerAttribute),
+                                    innerAttribute.name);
+                        }
+                    }
 
-					// If this item has an id we'll register it in case
-					// anything else points to it with an xlink:
-					if (id != null) {
-						this.registerGmlTarget(id,
-								(ComplexAttribute) attribteValue);
-					}
+                    Attribute attribteValue;
+                    if (type instanceof FeatureType) {
+                        attribteValue = attributeBuilder.build(id);
+                    } else {
+                        attribteValue = attributeBuilder.build();
+                    }
 
-					return new ReturnAttribute(id, currentTagName,
-							attribteValue);
-				} else if (type instanceof AttributeType
-						|| type instanceof GeometryType) {
-					// 4b. It's a simple type so we can use super's
-					// parseAttributeValue method.
-					Object attributeValue = super
-							.parseAttributeValue((AttributeDescriptor) descriptor);
-					return new ReturnAttribute(id, currentTagName,
-							attributeValue);
-				}
-			} else {
-				// 3b. If the tag name doesn't belong to this type then
-				// something is wrong.
-				throw new RuntimeException(
-						String.format(
-								"WFS response structure unexpected. Could not find descriptor in type '%s' for '%s'.",
-								complexType, currentTagName));
-			}
-		} else if (tagType == XmlPullParser.END_DOCUMENT) {
-			// 2b. Close the parser if we're at the end of the document.
-			close();
-		}
+                    // If this item has an id we'll register it in case
+                    // anything else points to it with an xlink:
+                    if (id != null) {
+                        this.registerGmlTarget(id, (ComplexAttribute) attribteValue);
+                    }
 
-		// We don't need any special action if the tagType was END_TAG.
-		return null;
-	}
+                    return new ReturnAttribute(id, currentTagName, attribteValue);
+                } else if (type instanceof AttributeType || type instanceof GeometryType) {
+                    // 4b. It's a simple type so we can use super's
+                    // parseAttributeValue method.
+                    Object attributeValue =
+                            super.parseAttributeValue((AttributeDescriptor) descriptor);
+                    return new ReturnAttribute(id, currentTagName, attributeValue);
+                }
+            } else {
+                // 3b. If the tag name doesn't belong to this type then
+                // something is wrong.
+                throw new RuntimeException(
+                        String.format(
+                                "WFS response structure unexpected. Could not find descriptor in type '%s' for '%s'.",
+                                complexType, currentTagName));
+            }
+        } else if (tagType == XmlPullParser.END_DOCUMENT) {
+            // 2b. Close the parser if we're at the end of the document.
+            close();
+        }
+
+        // We don't need any special action if the tagType was END_TAG.
+        return null;
+    }
 

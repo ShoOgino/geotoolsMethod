@@ -1,105 +1,88 @@
-	/**
-	 *  1. get an actual Feature Node 
-	 *  2. go through each of its subtags
-	 *  3. if that subtag contains a geometry, then it an attribute of type geometry, otherwise string
-	 * 
-	 * NOTE: we set the namespace to be "http://temp.inline.feature.sld.com"
-	 * NOTE: we set the featuretype name to be whatever the enclosing tag is.  For example:
-	 * <FeatureCollection>
-	 *   <gml:featureMember>
-     *       <tiger:point_landmark fid="point_landmark.490053">
-     *            <tiger:wkb_geometry>
-     *   	         <gml:Point srsName="http://www.opengis.net/gml/srs/epsg.xml#4326">
-     *   	             <gml:coordinates decimal="." cs="," ts=" ">-73.983597,40.736308</gml:coordinates>
-     *   	         </gml:Point>
-     *   	      </tiger:wkb_geometry>
-     *   	      <tiger:laname>Cabrini Medical Center</tiger:laname>
-     *       </tiger:point_landmark>
-     *   <gml:featureMember>
-	 * </FeatureCollection>
-	 * 
-	 *   Would have a Featuretype name of "tiger:wkb_geometry" with 2 attributes:
-	 *       wkb_geometry  -- geometry
-	 *       laname        -- string
-	 * 
-	 * @param root
-	 */
-	private SimpleFeatureType makeFeatureType(Node root,boolean isCollection) throws Exception
-	{
-		Node feature = null;
-		//get a Feature node
-		Node featureMember =root;
-		if (isCollection)
-			featureMember = getNode(root,"featureMember");
-		
-		//next node under featureMember what we want.  Unless its a boundedBy, in which case we dont want it.
-		NodeList children = featureMember.getChildNodes();
+    /**
+     * 1. get an actual Feature Node 2. go through each of its subtags 3. if that subtag contains a
+     * geometry, then it an attribute of type geometry, otherwise string
+     *
+     * <p>NOTE: we set the namespace to be "http://temp.inline.feature.sld.com" NOTE: we set the
+     * featuretype name to be whatever the enclosing tag is. For example: <FeatureCollection>
+     * <gml:featureMember> <tiger:point_landmark fid="point_landmark.490053"> <tiger:wkb_geometry>
+     * <gml:Point srsName="http://www.opengis.net/gml/srs/epsg.xml#4326"> <gml:coordinates
+     * decimal="." cs="," ts=" ">-73.983597,40.736308</gml:coordinates> </gml:Point>
+     * </tiger:wkb_geometry> <tiger:laname>Cabrini Medical Center</tiger:laname>
+     * </tiger:point_landmark> <gml:featureMember> </FeatureCollection>
+     *
+     * <p>Would have a Featuretype name of "tiger:wkb_geometry" with 2 attributes: wkb_geometry --
+     * geometry laname -- string
+     *
+     * @param root
+     */
+    private SimpleFeatureType makeFeatureType(Node root, boolean isCollection) throws Exception {
+        Node feature = null;
+        // get a Feature node
+        Node featureMember = root;
+        if (isCollection) featureMember = getNode(root, "featureMember");
 
-				// look for next element that's not "boundedBy"
-		for (int i = 0; i < children.getLength(); i++) 
-		{
-			Node child = children.item(i);
-			if ((child == null) || (child.getNodeType() != Node.ELEMENT_NODE)) {
-				continue;
-			}
-			String childName = child.getLocalName();
-			if (childName == null) {
-				childName = child.getNodeName();
-			}
-			if (!(childName.equalsIgnoreCase("boundedBy")) )
-			{
-					feature = child;
-					break;
-			}
-		}
-		if (feature == null)
-			throw new Exception ("couldnt find a Feature in the Inline Features!");
-		
-		//okay, we have a feature, we now need to figure out its feature type.
-		// method:
-		//   step through each node, its name is a new element in the Feature
-		//   we look for any internal tags (nesting).  There there are, we check to see if its a geometry
-		//   otherwise the type is string. 
-		//   simple!
-		
-		String featureName = feature.getLocalName();
-		if (featureName == null) {
-			featureName = feature.getNodeName();
-		}
-		
-		//DJB:I considered making each featuretype unique (thats the uniquenumber), but decided against
-		//    it so that the standard feature type filtering stuff would work ("<FeatureTypeStyle>" 
-		//    and <FeatureTypeConsraint>
-		  SimpleFeatureTypeBuilder build = new SimpleFeatureTypeBuilder();  
-		  build.setName(featureName);  
-		  build.setNamespaceURI(new URI("http://temp.inline.feature.sld.com"));  
+        // next node under featureMember what we want.  Unless its a boundedBy, in which case we
+        // dont want it.
+        NodeList children = featureMember.getChildNodes();
 
-		  
-		children = feature.getChildNodes();
-		for (int i = 0; i < children.getLength(); i++) 
-		{
-			Node child = children.item(i);
-			if ((child == null) || (child.getNodeType() != Node.ELEMENT_NODE)) {
-				continue;
-			}
-			String childName = child.getLocalName();
-			if (childName == null)
-			{
-				childName = child.getNodeName();
-			}	
-			//AttributeDescriptor attType = null;
-			//okay, have a tag, check to see if its a geometry
-			if (isGeometry(child))
-			{
-			    // force full geometry parsing so that we get to know the declared SRS
-			    getValue(child);
-				build.add(childName, Geometry.class, SRS);
-			}
-			else
-			{
-				build.add(childName,String.class);
-			}
-		}
-		return build.buildFeatureType();
-	}
+        // look for next element that's not "boundedBy"
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if ((child == null) || (child.getNodeType() != Node.ELEMENT_NODE)) {
+                continue;
+            }
+            String childName = child.getLocalName();
+            if (childName == null) {
+                childName = child.getNodeName();
+            }
+            if (!(childName.equalsIgnoreCase("boundedBy"))) {
+                feature = child;
+                break;
+            }
+        }
+        if (feature == null) throw new Exception("couldnt find a Feature in the Inline Features!");
+
+        // okay, we have a feature, we now need to figure out its feature type.
+        // method:
+        //   step through each node, its name is a new element in the Feature
+        //   we look for any internal tags (nesting).  There there are, we check to see if its a
+        // geometry
+        //   otherwise the type is string.
+        //   simple!
+
+        String featureName = feature.getLocalName();
+        if (featureName == null) {
+            featureName = feature.getNodeName();
+        }
+
+        // DJB:I considered making each featuretype unique (thats the uniquenumber), but decided
+        // against
+        //    it so that the standard feature type filtering stuff would work ("<FeatureTypeStyle>"
+        //    and <FeatureTypeConsraint>
+        SimpleFeatureTypeBuilder build = new SimpleFeatureTypeBuilder();
+        build.setName(featureName);
+        build.setNamespaceURI(new URI("http://temp.inline.feature.sld.com"));
+
+        children = feature.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if ((child == null) || (child.getNodeType() != Node.ELEMENT_NODE)) {
+                continue;
+            }
+            String childName = child.getLocalName();
+            if (childName == null) {
+                childName = child.getNodeName();
+            }
+            // AttributeDescriptor attType = null;
+            // okay, have a tag, check to see if its a geometry
+            if (isGeometry(child)) {
+                // force full geometry parsing so that we get to know the declared SRS
+                getValue(child);
+                build.add(childName, Geometry.class, SRS);
+            } else {
+                build.add(childName, String.class);
+            }
+        }
+        return build.buildFeatureType();
+    }
 

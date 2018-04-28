@@ -3,17 +3,17 @@
      *
      * @param parameters The parameter values in standard units.
      * @param expected The expected parameter descriptors.
-     * @param twoPoint {@code true} for the "two points" case, or {@code false} for the
-     *         "azimuth" case. The former is used by ESRI but not EPSG.
-     * @param hotine {@code true} only if invoked by the {@link HotineObliqueMercator}
-     *         constructor.
+     * @param twoPoint {@code true} for the "two points" case, or {@code false} for the "azimuth"
+     *     case. The former is used by ESRI but not EPSG.
+     * @param hotine {@code true} only if invoked by the {@link HotineObliqueMercator} constructor.
      * @throws ParameterNotFoundException if a mandatory parameter is missing.
      */
-    ObliqueMercator(final ParameterValueGroup parameters,
-                    final Collection<GeneralParameterDescriptor> expected,
-                    final boolean twoPoint, final boolean hotine)
-            throws ParameterNotFoundException
-    {
+    ObliqueMercator(
+            final ParameterValueGroup parameters,
+            final Collection<GeneralParameterDescriptor> expected,
+            final boolean twoPoint,
+            final boolean hotine)
+            throws ParameterNotFoundException {
         // Fetch parameters
         super(parameters, expected);
         this.twoPoint = twoPoint;
@@ -22,7 +22,7 @@
          * (they are not 'ObliqueMercator' parameters, so the super-class initialized
          * them to 0.0 by default). The 'centralMeridian' value will be computed later.
          */
-        centralMeridian  = Double.NaN;
+        centralMeridian = Double.NaN;
         latitudeOfOrigin = Double.NaN;
         latitudeOfCentre = doubleValue(expected, Provider.LATITUDE_OF_CENTRE, parameters);
         /*
@@ -36,7 +36,7 @@
          * a single 'if (twoPoint) ... else' statement, which help us to keep every fields
          * final and catch some potential errors at compile-time (e.g. unitialized fields).
          */
-        final double com     = sqrt(1.0 - excentricitySquared);
+        final double com = sqrt(1.0 - excentricitySquared);
         final double sinphi0 = sin(latitudeOfCentre);
         final double cosphi0 = cos(latitudeOfCentre);
         double temp = cosphi0 * cosphi0;
@@ -49,7 +49,7 @@
             F = 0.0;
         } else {
             F = sqrt(F);
-            if (latitudeOfCentre < 0.0) {  // Taking sign of 'latitudeOfCentre'
+            if (latitudeOfCentre < 0.0) { // Taking sign of 'latitudeOfCentre'
                 F = -F;
             }
         }
@@ -63,16 +63,20 @@
          */
         final double gamma0;
         if (twoPoint) {
-            longitudeOfCentre  = Double.NaN; // This is for the "azimuth" case only.
-            latitudeOf1stPoint = doubleValue(expected, Provider_TwoPoint.LAT_OF_1ST_POINT, parameters);
+            longitudeOfCentre = Double.NaN; // This is for the "azimuth" case only.
+            latitudeOf1stPoint =
+                    doubleValue(expected, Provider_TwoPoint.LAT_OF_1ST_POINT, parameters);
             // Checks that latOf1stPoint is not +-90 degrees
             ensureLatitudeInRange(Provider_TwoPoint.LAT_OF_1ST_POINT, latitudeOf1stPoint, false);
-            longitudeOf1stPoint = doubleValue(expected, Provider_TwoPoint.LONG_OF_1ST_POINT, parameters);
+            longitudeOf1stPoint =
+                    doubleValue(expected, Provider_TwoPoint.LONG_OF_1ST_POINT, parameters);
             ensureLongitudeInRange(Provider_TwoPoint.LONG_OF_1ST_POINT, longitudeOf1stPoint, true);
-            latitudeOf2ndPoint = doubleValue(expected, Provider_TwoPoint.LAT_OF_2ND_POINT, parameters);
+            latitudeOf2ndPoint =
+                    doubleValue(expected, Provider_TwoPoint.LAT_OF_2ND_POINT, parameters);
             ensureLatitudeInRange(Provider_TwoPoint.LAT_OF_2ND_POINT, latitudeOf2ndPoint, true);
             double longitudeOf2ndPoint; // Will be assigned to the field later.
-            longitudeOf2ndPoint = doubleValue(expected, Provider_TwoPoint.LONG_OF_2ND_POINT, parameters);
+            longitudeOf2ndPoint =
+                    doubleValue(expected, Provider_TwoPoint.LONG_OF_2ND_POINT, parameters);
             ensureLongitudeInRange(Provider_TwoPoint.LONG_OF_2ND_POINT, longitudeOf2ndPoint, true);
             /*
              * Ensures that (phi1 != phi2), (phi1 != 0°) and (phi2 != -90°),
@@ -81,24 +85,24 @@
             ParameterDescriptor desc = null;
             Object value = null;
             if (abs(latitudeOf1stPoint - latitudeOf2ndPoint) < EPSILON_LATITUDE) {
-                desc  = Provider_TwoPoint.LAT_OF_1ST_POINT;
+                desc = Provider_TwoPoint.LAT_OF_1ST_POINT;
                 value = Provider_TwoPoint.LAT_OF_2ND_POINT.getName().getCode();
                 // Exception will be thrown below.
             }
             if (abs(latitudeOf1stPoint) < EPSILON_LATITUDE) {
-                desc  = Provider_TwoPoint.LAT_OF_1ST_POINT;
+                desc = Provider_TwoPoint.LAT_OF_1ST_POINT;
                 value = new Latitude(latitudeOf1stPoint);
                 // Exception will be thrown below.
             }
-            if (abs(latitudeOf2ndPoint + PI/2.0) < EPSILON_LATITUDE) {
-                desc  = Provider_TwoPoint.LAT_OF_2ND_POINT;
+            if (abs(latitudeOf2ndPoint + PI / 2.0) < EPSILON_LATITUDE) {
+                desc = Provider_TwoPoint.LAT_OF_2ND_POINT;
                 value = new Latitude(latitudeOf2ndPoint);
                 // Exception will be thrown below.
             }
             if (desc != null) {
                 final String name = desc.getName().getCode();
-                throw new InvalidParameterValueException(Errors.format(
-                        ErrorKeys.ILLEGAL_ARGUMENT_$2, name, value), name, value);
+                throw new InvalidParameterValueException(
+                        Errors.format(ErrorKeys.ILLEGAL_ARGUMENT_$2, name, value), name, value);
             }
             /*
              * The coefficients for the "two points" case.
@@ -116,10 +120,23 @@
                 longitudeOf2ndPoint += 2.0 * PI;
             }
             this.longitudeOf2ndPoint = longitudeOf2ndPoint;
-            centralMeridian = rollLongitude(0.5 * (longitudeOf1stPoint + longitudeOf2ndPoint) -
-                     atan(J * tan(0.5 * B * (longitudeOf1stPoint - longitudeOf2ndPoint)) / P) / B);
-            gamma0 = atan(2.0 * sin(B * rollLongitude(longitudeOf1stPoint - centralMeridian)) /
-                     (Fp - 1.0 / Fp));
+            centralMeridian =
+                    rollLongitude(
+                            0.5 * (longitudeOf1stPoint + longitudeOf2ndPoint)
+                                    - atan(
+                                                    J
+                                                            * tan(
+                                                                    0.5
+                                                                            * B
+                                                                            * (longitudeOf1stPoint
+                                                                                    - longitudeOf2ndPoint))
+                                                            / P)
+                                            / B);
+            gamma0 =
+                    atan(
+                            2.0
+                                    * sin(B * rollLongitude(longitudeOf1stPoint - centralMeridian))
+                                    / (Fp - 1.0 / Fp));
             azimuth = asin(D * sin(gamma0));
             rectifiedGridAngle = azimuth;
         } else {
@@ -128,21 +145,20 @@
              * to (NaN,NaN) since they are specific to the "two points" case.  They are
              * involved in WKT formatting only, not in transformation calculation.
              */
-            latitudeOf1stPoint  = Double.NaN;
+            latitudeOf1stPoint = Double.NaN;
             longitudeOf1stPoint = Double.NaN;
-            latitudeOf2ndPoint  = Double.NaN;
+            latitudeOf2ndPoint = Double.NaN;
             longitudeOf2ndPoint = Double.NaN;
             longitudeOfCentre = doubleValue(expected, Provider.LONGITUDE_OF_CENTRE, parameters);
             ensureLongitudeInRange(Provider.LONGITUDE_OF_CENTRE, longitudeOfCentre, true);
             azimuth = doubleValue(expected, Provider.AZIMUTH, parameters);
             // Already checked for +-360 deg. above.
-            if ((azimuth > -1.5*PI && azimuth < -0.5*PI) ||
-                (azimuth >  0.5*PI && azimuth <  1.5*PI))
-            {
+            if ((azimuth > -1.5 * PI && azimuth < -0.5 * PI)
+                    || (azimuth > 0.5 * PI && azimuth < 1.5 * PI)) {
                 final String name = Provider.AZIMUTH.getName().getCode();
                 final Angle value = new Angle(toDegrees(azimuth));
-                throw new InvalidParameterValueException(Errors.format(
-                        ErrorKeys.ILLEGAL_ARGUMENT_$2, name, value), name, value);
+                throw new InvalidParameterValueException(
+                        Errors.format(ErrorKeys.ILLEGAL_ARGUMENT_$2, name, value), name, value);
             }
             temp = doubleValue(expected, Provider.RECTIFIED_GRID_ANGLE, parameters);
             if (Double.isNaN(temp)) {
@@ -165,17 +181,17 @@
          */
         singamma0 = sin(gamma0);
         cosgamma0 = cos(gamma0);
-        sinrot    = sin(rectifiedGridAngle);
-        cosrot    = cos(rectifiedGridAngle);
-        ArB       = A / B;
-        AB        = A * B;
-        BrA       = B / A;
-        v_pole_n  = ArB * log(tan(0.5 * (PI/2.0 - gamma0)));
-        v_pole_s  = ArB * log(tan(0.5 * (PI/2.0 + gamma0)));
+        sinrot = sin(rectifiedGridAngle);
+        cosrot = cos(rectifiedGridAngle);
+        ArB = A / B;
+        AB = A * B;
+        BrA = B / A;
+        v_pole_n = ArB * log(tan(0.5 * (PI / 2.0 - gamma0)));
+        v_pole_s = ArB * log(tan(0.5 * (PI / 2.0 + gamma0)));
         if (hotine) {
             u_c = 0.0;
         } else {
-            if (abs(abs(azimuth) - PI/2.0) < EPSILON_LATITUDE) {
+            if (abs(abs(azimuth) - PI / 2.0) < EPSILON_LATITUDE) {
                 // LongitudeOfCentre = NaN in twoPoint, but azimuth cannot be 90 here (lat1 != lat2)
                 u_c = A * (longitudeOfCentre - centralMeridian);
             } else {

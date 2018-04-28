@@ -2,42 +2,48 @@
      * Special handling for polymorphic mapping. Works out the polymorphic type name by evaluating
      * the function on the feature, then set the relevant sub-type values.
      *
-     * @param target
-     *            The target feature to be encoded
-     * @param id
-     *            The target feature id
-     * @param nestedMapping
-     *            The mapping that is polymorphic
-     * @param source
-     *            The source simple feature
-     * @param xpath
-     *            The xpath of polymorphic type
-     * @param clientPropsMappings
-     *            Client properties
+     * @param target The target feature to be encoded
+     * @param id The target feature id
+     * @param nestedMapping The mapping that is polymorphic
+     * @param source The source simple feature
+     * @param xpath The xpath of polymorphic type
+     * @param clientPropsMappings Client properties
      * @throws IOException
      */
-    private Attribute setPolymorphicValues(Name mappingName, Attribute target, String id,
-            NestedAttributeMapping nestedMapping, Object source, StepList xpath,
-            Map<Name, Expression> clientPropsMappings) throws IOException {
+    private Attribute setPolymorphicValues(
+            Name mappingName,
+            Attribute target,
+            String id,
+            NestedAttributeMapping nestedMapping,
+            Object source,
+            StepList xpath,
+            Map<Name, Expression> clientPropsMappings)
+            throws IOException {
         // process sub-type mapping
         DataAccess<FeatureType, Feature> da = DataAccessRegistry.getDataAccess((Name) mappingName);
         if (da instanceof AppSchemaDataAccess) {
             // why wouldn't it be? check just to be safe
-            FeatureTypeMapping fTypeMapping = ((AppSchemaDataAccess) da)
-                    .getMappingByName((Name) mappingName);
+            FeatureTypeMapping fTypeMapping =
+                    ((AppSchemaDataAccess) da).getMappingByName((Name) mappingName);
             List<AttributeMapping> polymorphicMappings = fTypeMapping.getAttributeMappings();
             AttributeDescriptor attDescriptor = fTypeMapping.getTargetFeature();
             AttributeType type = attDescriptor.getType();
             Name polymorphicTypeName = attDescriptor.getName();
             StepList prefixedXpath = xpath.clone();
-            prefixedXpath.add(new Step(new QName(polymorphicTypeName.getNamespaceURI(),
-                    polymorphicTypeName.getLocalPart(), this.namespaces
-                            .getPrefix(polymorphicTypeName.getNamespaceURI())), 1));
-            if (!fTypeMapping.getFeatureIdExpression().equals (Expression.NIL)) {
+            prefixedXpath.add(
+                    new Step(
+                            new QName(
+                                    polymorphicTypeName.getNamespaceURI(),
+                                    polymorphicTypeName.getLocalPart(),
+                                    this.namespaces.getPrefix(
+                                            polymorphicTypeName.getNamespaceURI())),
+                            1));
+            if (!fTypeMapping.getFeatureIdExpression().equals(Expression.NIL)) {
                 id = fTypeMapping.getFeatureIdExpression().evaluate(source, String.class);
             }
-            Attribute instance = xpathAttributeBuilder.set(target, prefixedXpath, null, id,
-                    type, false, attDescriptor, null);
+            Attribute instance =
+                    xpathAttributeBuilder.set(
+                            target, prefixedXpath, null, id, type, false, attDescriptor, null);
             setClientProperties(instance, source, clientPropsMappings);
             for (AttributeMapping mapping : polymorphicMappings) {
                 if (skipTopElement(polymorphicTypeName, mapping, type)) {
@@ -46,7 +52,14 @@
                     setClientProperties(instance, source, mapping.getClientProperties());
                     continue;
                 }
-                setAttributeValue(instance, null, source, mapping, null, null, selectedProperties.get(mapping));
+                setAttributeValue(
+                        instance,
+                        null,
+                        source,
+                        mapping,
+                        null,
+                        null,
+                        selectedProperties.get(mapping));
             }
             return instance;
         }

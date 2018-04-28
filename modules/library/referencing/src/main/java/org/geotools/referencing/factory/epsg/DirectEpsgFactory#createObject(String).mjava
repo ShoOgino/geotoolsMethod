@@ -1,21 +1,20 @@
     /**
-     * Returns an arbitrary object from a code.
-     * The default implementation invokes one of {@link #createCoordinateReferenceSystem},
-     * {@link #createCoordinateSystem}, {@link #createDatum}, {@link #createEllipsoid}, or
-     * {@link #createUnit} methods according the object type.
+     * Returns an arbitrary object from a code. The default implementation invokes one of {@link
+     * #createCoordinateReferenceSystem}, {@link #createCoordinateSystem}, {@link #createDatum},
+     * {@link #createEllipsoid}, or {@link #createUnit} methods according the object type.
      *
-     * @param  code The EPSG value.
+     * @param code The EPSG value.
      * @return The object.
      * @throws NoSuchAuthorityCodeException if this method can't find the requested code.
-     * @throws FactoryException if some other kind of failure occured in the backing
-     *         store. This exception usually have {@link SQLException} as its cause.
+     * @throws FactoryException if some other kind of failure occured in the backing store. This
+     *     exception usually have {@link SQLException} as its cause.
      */
     @Override
     public synchronized IdentifiedObject createObject(final String code) throws FactoryException {
         ensureNonNull("code", code);
-        final String       KEY = "IdentifiedObject";
+        final String KEY = "IdentifiedObject";
         PreparedStatement stmt = statements.get(KEY); // Null allowed.
-        StringBuilder    query = null; // Will be created only if the last statement doesn't suit.
+        StringBuilder query = null; // Will be created only if the last statement doesn't suit.
         /*
          * Iterates through all tables listed in TABLES_INFO, starting with the table used during
          * the last call to 'createObject(code)'.  This approach assumes that two consecutive calls
@@ -24,11 +23,11 @@
          * costly operation. Only the last successful prepared statement is cached, in order to keep
          * the amount of statements low. Unsuccessful statements are immediately disposed.
          */
-        final String  epsg         = trimAuthority(code);
+        final String epsg = trimAuthority(code);
         final boolean isPrimaryKey = isPrimaryKey(epsg);
-        final int     tupleToSkip  = isPrimaryKey ? lastObjectType : -1;
+        final int tupleToSkip = isPrimaryKey ? lastObjectType : -1;
         int index = -1;
-        for (int i=-1; i<TABLES_INFO.length; i++) {
+        for (int i = -1; i < TABLES_INFO.length; i++) {
             if (i == tupleToSkip) {
                 // Avoid to test the same table twice.  Note that this test also avoid a
                 // NullPointerException if 'stmt' is null, since 'lastObjectType' should
@@ -68,11 +67,12 @@
                  */
                 stmt.setString(1, epsg);
                 final ResultSet result = stmt.executeQuery();
-                final boolean  present = result.next();
+                final boolean present = result.next();
                 result.close();
                 if (present) {
                     if (index >= 0) {
-                        throw new FactoryException(Errors.format(ErrorKeys.DUPLICATED_VALUES_$1, code));
+                        throw new FactoryException(
+                                Errors.format(ErrorKeys.DUPLICATED_VALUES_$1, code));
                     }
                     index = (i < 0) ? lastObjectType : i;
                     if (isPrimaryKey) {
@@ -99,17 +99,28 @@
         }
         if (index >= 0) {
             switch (index) {
-                case 0:  return buffered.createCoordinateReferenceSystem(code);
-                case 1:  return buffered.createCoordinateSystem         (code);
-                case 2:  return buffered.createCoordinateSystemAxis     (code);
-                case 3:  return buffered.createDatum                    (code);
-                case 4:  return buffered.createEllipsoid                (code);
-                case 5:  return buffered.createPrimeMeridian            (code);
-                case 6:  return buffered.createCoordinateOperation      (code);
-                case 7:  return buffered.createOperationMethod          (code);
-                case 8:  return buffered.createParameterDescriptor      (code);
-                case 9:  break; // Can't cast Unit to IdentifiedObject
-                default: throw new AssertionError(index); // Should not happen
+                case 0:
+                    return buffered.createCoordinateReferenceSystem(code);
+                case 1:
+                    return buffered.createCoordinateSystem(code);
+                case 2:
+                    return buffered.createCoordinateSystemAxis(code);
+                case 3:
+                    return buffered.createDatum(code);
+                case 4:
+                    return buffered.createEllipsoid(code);
+                case 5:
+                    return buffered.createPrimeMeridian(code);
+                case 6:
+                    return buffered.createCoordinateOperation(code);
+                case 7:
+                    return buffered.createOperationMethod(code);
+                case 8:
+                    return buffered.createParameterDescriptor(code);
+                case 9:
+                    break; // Can't cast Unit to IdentifiedObject
+                default:
+                    throw new AssertionError(index); // Should not happen
             }
         }
         return super.createObject(code);

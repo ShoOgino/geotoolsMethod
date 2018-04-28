@@ -1,20 +1,17 @@
     /**
-     * 
      * Step 3 of the bootstrapping process.
-     * 
-     * Calculating the the resolution for each image level (original + pyramids). This calculation
-     * is only done if the resoltion info in the master table is SQL NULL. After calculation the
-     * meta table is updated with the result to avoid this operation in the future.
-     * 
-     * @param coverageName
-     *            The coverage name in the sql meta table
-     * @param con
-     *            JDBC Connection
+     *
+     * <p>Calculating the the resolution for each image level (original + pyramids). This
+     * calculation is only done if the resoltion info in the master table is SQL NULL. After
+     * calculation the meta table is updated with the result to avoid this operation in the future.
+     *
+     * @param coverageName The coverage name in the sql meta table
+     * @param con JDBC Connection
      * @throws SQLException
      * @throws IOException
      */
-    void calculateResolutionsFromDB(String coverageName, Connection con) throws SQLException,
-            IOException {
+    void calculateResolutionsFromDB(String coverageName, Connection con)
+            throws SQLException, IOException {
         PreparedStatement stmt = null;
 
         // isOutDBMap = new HashMap<ImageLevelInfo, Boolean>();
@@ -34,17 +31,26 @@
             if (LOGGER.isLoggable(Level.INFO))
                 LOGGER.info("Calculate resolutions for " + li.toString());
 
-            String select = "select " + "st_scalex("
-                    + getConfig().getBlobAttributeNameInTileTable() + ")," + "st_scaley("
-                    + getConfig().getBlobAttributeNameInTileTable() + ")," + "st_srid("
-                    + getConfig().getBlobAttributeNameInTileTable() + ") " + " from "
-                    + li.getTileTableName() + " LIMIT 1";
+            String select =
+                    "select "
+                            + "st_scalex("
+                            + getConfig().getBlobAttributeNameInTileTable()
+                            + "),"
+                            + "st_scaley("
+                            + getConfig().getBlobAttributeNameInTileTable()
+                            + "),"
+                            + "st_srid("
+                            + getConfig().getBlobAttributeNameInTileTable()
+                            + ") "
+                            + " from "
+                            + li.getTileTableName()
+                            + " LIMIT 1";
 
             double resolutions[] = null;
             PreparedStatement ps = con.prepareStatement(select);
             ResultSet rs = ps.executeQuery();
             if (rs.next()) {
-                resolutions = new double[] { rs.getDouble(1), rs.getDouble(2) };
+                resolutions = new double[] {rs.getDouble(1), rs.getDouble(2)};
                 li.setSrsId(rs.getInt(3));
             }
             rs.close();
@@ -57,19 +63,17 @@
                 continue;
             }
 
-            if (resolutions[0] < 0)
-                resolutions[0] *= -1;
-            if (resolutions[1] < 0)
-                resolutions[1] *= -1;
+            if (resolutions[0] < 0) resolutions[0] *= -1;
+            if (resolutions[1] < 0) resolutions[1] *= -1;
             li.setResX(resolutions[0]);
             li.setResY(resolutions[1]);
             if (LOGGER.isLoggable(Level.INFO))
                 LOGGER.info("ResX: " + li.getResX() + " ResY: " + li.getResY());
 
             /*
-             moved code from here into method 'populateStatementsMap' below
-             which is called at initialisation. Otherwise this code was skipped in line #496
-             */
+            moved code from here into method 'populateStatementsMap' below
+            which is called at initialisation. Otherwise this code was skipped in line #496
+            */
             stmt.setDouble(1, li.getResX().doubleValue());
             stmt.setDouble(2, li.getResY().doubleValue());
             stmt.setString(3, li.getCoverageName());
@@ -79,9 +83,12 @@
             long msecs = (new Date()).getTime() - start.getTime();
 
             if (LOGGER.isLoggable(Level.INFO))
-                LOGGER.info("Calculate resolutions for " + li.toString() + " finished in " + msecs
-                        + " ms ");
-
+                LOGGER.info(
+                        "Calculate resolutions for "
+                                + li.toString()
+                                + " finished in "
+                                + msecs
+                                + " ms ");
         }
 
         getLevelInfos().removeAll(toBeRemoved);

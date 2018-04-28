@@ -1,28 +1,33 @@
-    void visitComparisonSpatialOperator(BinarySpatialOperator filter,
-            PropertyName property, Literal geometry, boolean swapped, Object extraData)
+    void visitComparisonSpatialOperator(
+            BinarySpatialOperator filter,
+            PropertyName property,
+            Literal geometry,
+            boolean swapped,
+            Object extraData)
             throws IOException {
 
         // if geography case, sanitize geometry first
-        if(isCurrentGeography()) {
+        if (isCurrentGeography()) {
             geometry = clipToWorld(geometry);
-            if(isWorld(geometry)) {
+            if (isWorld(geometry)) {
                 // nothing to filter in this case
                 out.write(" TRUE ");
                 return;
-            } else if(isEmpty(geometry)) {
-                if(!(filter instanceof Disjoint)) {
-                    out.write(" FALSE ");       
+            } else if (isEmpty(geometry)) {
+                if (!(filter instanceof Disjoint)) {
+                    out.write(" FALSE ");
                 } else {
                     out.write(" TRUE ");
                 }
                 return;
             }
         }
-        
+
         // special case for 3D bbox, it requires a "weird" encoding, from a postgis mail
         // No, just construct a 3D geometry as your query filter, not a 3d box.
-        // select count(*) from "3dfloor" where geom &&& ST_Makeline(ST_MakePoint(0,0,0), ST_MakePoint(1000000,1000000,1));
-        if(filter instanceof BBOX3D) {
+        // select count(*) from "3dfloor" where geom &&& ST_Makeline(ST_MakePoint(0,0,0),
+        // ST_MakePoint(1000000,1000000,1));
+        if (filter instanceof BBOX3D) {
             property.accept(delegate, extraData);
             out.write(" &&& ");
             BBOX3D bbox = (BBOX3D) filter;
@@ -34,26 +39,27 @@
             out.write("))");
         } else {
             // add && filter if possible
-            if(!(filter instanceof Disjoint)) {
-                if(encodeBBOXFilterAsEnvelope && !isCurrentGeography()) {
+            if (!(filter instanceof Disjoint)) {
+                if (encodeBBOXFilterAsEnvelope && !isCurrentGeography()) {
                     out.write("ST_envelope(");
                 }
                 property.accept(delegate, extraData);
-                if(encodeBBOXFilterAsEnvelope && !isCurrentGeography()) {
+                if (encodeBBOXFilterAsEnvelope && !isCurrentGeography()) {
                     out.write(")");
                 }
                 out.write(" && ");
                 geometry.accept(delegate, extraData);
 
-                // if we're just encoding a bbox in loose mode, we're done 
-                if(filter instanceof BBOX && looseBBOXEnabled) {
+                // if we're just encoding a bbox in loose mode, we're done
+                if (filter instanceof BBOX && looseBBOXEnabled) {
                     return;
                 }
 
                 out.write(" AND ");
             }
-    
-            visitBinarySpatialOperator(filter, (Expression)property, (Expression)geometry, swapped, extraData);
+
+            visitBinarySpatialOperator(
+                    filter, (Expression) property, (Expression) geometry, swapped, extraData);
         }
     }
 

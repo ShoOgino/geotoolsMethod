@@ -1,52 +1,54 @@
     @SuppressWarnings("deprecation")
     Filter[] splitFilter(Filter f) {
-        PostPreProcessFilterSplittingVisitor splitter = new PostPreProcessFilterSplittingVisitor(
-                getDataStore().getFilterCapabilities(), null, null){
+        PostPreProcessFilterSplittingVisitor splitter =
+                new PostPreProcessFilterSplittingVisitor(
+                        getDataStore().getFilterCapabilities(), null, null) {
 
-            @Override
-            protected void visitBinaryComparisonOperator(BinaryComparisonOperator filter) {
-                Expression expression1 = filter.getExpression1();
-                Expression expression2 = filter.getExpression2();
-                if ((expression1 instanceof JsonSelectFunction
-                        || expression1 instanceof JsonSelectAllFunction) && expression2 instanceof Literal) {
-                    preStack.push(filter);
-                } else if ((expression2 instanceof JsonSelectFunction
-                        || expression2 instanceof JsonSelectAllFunction) && expression1 instanceof Literal) {
-                    preStack.push(filter);
-                }
-            }
+                    @Override
+                    protected void visitBinaryComparisonOperator(BinaryComparisonOperator filter) {
+                        Expression expression1 = filter.getExpression1();
+                        Expression expression2 = filter.getExpression2();
+                        if ((expression1 instanceof JsonSelectFunction
+                                        || expression1 instanceof JsonSelectAllFunction)
+                                && expression2 instanceof Literal) {
+                            preStack.push(filter);
+                        } else if ((expression2 instanceof JsonSelectFunction
+                                        || expression2 instanceof JsonSelectAllFunction)
+                                && expression1 instanceof Literal) {
+                            preStack.push(filter);
+                        }
+                    }
 
-            public Object visit(PropertyIsLike filter, Object notUsed) {
-                if (original == null)
-                    original = filter;
+                    public Object visit(PropertyIsLike filter, Object notUsed) {
+                        if (original == null) original = filter;
 
-                if (!fcs.supports(PropertyIsLike.class)) {
-                    // MongoDB can only encode like expressions using propertyName
-                    postStack.push(filter);
-                    return null;
-                }
-                if(!(filter.getExpression() instanceof PropertyName)){
-                    // MongoDB can only encode like expressions using propertyName
-                    postStack.push(filter);
-                    return null;
-                }
-                
-                int i = postStack.size();
-                filter.getExpression().accept(this, null);
+                        if (!fcs.supports(PropertyIsLike.class)) {
+                            // MongoDB can only encode like expressions using propertyName
+                            postStack.push(filter);
+                            return null;
+                        }
+                        if (!(filter.getExpression() instanceof PropertyName)) {
+                            // MongoDB can only encode like expressions using propertyName
+                            postStack.push(filter);
+                            return null;
+                        }
 
-                if (i < postStack.size()) {
-                    postStack.pop();
-                    postStack.push(filter);
+                        int i = postStack.size();
+                        filter.getExpression().accept(this, null);
 
-                    return null;
-                }
+                        if (i < postStack.size()) {
+                            postStack.pop();
+                            postStack.push(filter);
 
-                preStack.pop(); // value
-                preStack.push(filter);
-                return null;
-            }
-        };
+                            return null;
+                        }
+
+                        preStack.pop(); // value
+                        preStack.push(filter);
+                        return null;
+                    }
+                };
         f.accept(splitter, null);
-        return new Filter[] { splitter.getFilterPre(), splitter.getFilterPost() };
+        return new Filter[] {splitter.getFilterPre(), splitter.getFilterPost()};
     }
 

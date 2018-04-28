@@ -1,68 +1,65 @@
     protected int getCountInternal(Query query) throws IOException {
         JDBCDataStore dataStore = getDataStore();
 
-        //split the filter
-        Filter[] split = splitFilter( query.getFilter() );
+        // split the filter
+        Filter[] split = splitFilter(query.getFilter());
         Filter preFilter = split[0];
         Filter postFilter = split[1];
-        
+
         boolean manual = (postFilter != null) && (postFilter != Filter.INCLUDE);
         if (!manual && !query.getJoins().isEmpty()) {
-            //check any join post filters as well
+            // check any join post filters as well
             JoinInfo join = JoinInfo.create(query, this);
             manual = join.hasPostFilters();
         }
-            if (manual) {
+        if (manual) {
+            try {
+                // calculate manually, dont use datastore optimization
+                getDataStore().getLogger().fine("Calculating size manually");
+
+                int count = 0;
+
+                // grab a reader
+                Query preQuery = new Query(query);
+                query.setFilter(preFilter);
+                FeatureReader<SimpleFeatureType, SimpleFeature> preReader = getReader(preQuery);
+                // wrap with post filter
+                FilteringFeatureReader reader = new FilteringFeatureReader(preReader, postFilter);
                 try {
-                    //calculate manually, dont use datastore optimization
-                    getDataStore().getLogger().fine("Calculating size manually");
-    
-                    int count = 0;
-    
-                    // grab a reader
-                    Query preQuery = new Query(query);
-                    query.setFilter(preFilter);
-                    FeatureReader<SimpleFeatureType, SimpleFeature> preReader = getReader( preQuery );
-                    // wrap with post filter
-                    FilteringFeatureReader reader = new FilteringFeatureReader(preReader, postFilter);
-                    try {
-                        while (reader.hasNext()) {
-                            reader.next();
-                            count++;
-                        }
-                    } finally {
-                        reader.close();
+                    while (reader.hasNext()) {
+                        reader.next();
+                        count++;
                     }
-    
-                    return count;
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
+                } finally {
+                    reader.close();
                 }
-            } else {
-                //no post filter, we have a preFilter, or preFilter is null.. 
-                // either way we can use the datastore optimization
-                Connection cx = dataStore.getConnection(getState());
-                try {
-                    DefaultQuery q = new DefaultQuery(query);
-                    q.setFilter(preFilter);
-                    int count = dataStore.getCount(getSchema(), q, cx);
-                    // if native support for limit and offset is not implemented, we have to ajust the result
-                    if(!dataStore.getSQLDialect().isLimitOffsetSupported()) {
-                        if(query.getStartIndex() != null && query.getStartIndex() > 0) {
-                            if(query.getStartIndex() > count)
-                                count = 0;
-                            else
-                                count -= query.getStartIndex();
-                        }
-                        if(query.getMaxFeatures() > 0 && count > query.getMaxFeatures())
-                            count = query.getMaxFeatures();
+
+                return count;
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            // no post filter, we have a preFilter, or preFilter is null..
+            // either way we can use the datastore optimization
+            Connection cx = dataStore.getConnection(getState());
+            try {
+                DefaultQuery q = new DefaultQuery(query);
+                q.setFilter(preFilter);
+                int count = dataStore.getCount(getSchema(), q, cx);
+                // if native support for limit and offset is not implemented, we have to ajust the
+                // result
+                if (!dataStore.getSQLDialect().isLimitOffsetSupported()) {
+                    if (query.getStartIndex() != null && query.getStartIndex() > 0) {
+                        if (query.getStartIndex() > count) count = 0;
+                        else count -= query.getStartIndex();
                     }
-                    return count;
+                    if (query.getMaxFeatures() > 0 && count > query.getMaxFeatures())
+                        count = query.getMaxFeatures();
                 }
-                finally {
-                    dataStore.releaseConnection(cx, getState());
-                }
-            } 
-        
+                return count;
+            } finally {
+                dataStore.releaseConnection(cx, getState());
+            }
+        }
     }
 

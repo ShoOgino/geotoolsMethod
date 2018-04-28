@@ -1,37 +1,40 @@
     /**
-     * Reduces the color model to {@linkplain IndexColorModel index color model} with {@linkplain Transparency#OPAQUE opaque} or
-     * {@linkplain Transparency#BITMASK bitmask} transparency. If the current {@linkplain #image} already uses a suitable color model, then this
-     * method do nothing.
-     * 
+     * Reduces the color model to {@linkplain IndexColorModel index color model} with {@linkplain
+     * Transparency#OPAQUE opaque} or {@linkplain Transparency#BITMASK bitmask} transparency. If the
+     * current {@linkplain #image} already uses a suitable color model, then this method do nothing.
+     *
      * @param suggestedTransparent A suggested pixel index to define as the transparent pixel. *
-     * @param errorDiffusion Tells if I should use {@link ErrorDiffusionDescriptor} or {@link OrderedDitherDescriptor} JAi operations. errorDiffusion
+     * @param errorDiffusion Tells if I should use {@link ErrorDiffusionDescriptor} or {@link
+     *     OrderedDitherDescriptor} JAi operations. errorDiffusion
      * @return this {@link ImageWorker}.
-     * 
      * @see #isIndexed
      * @see #isTranslucent
      * @see #forceIndexColorModel
      * @see #forceIndexColorModelForGIF
      */
-    public final ImageWorker forceBitmaskIndexColorModel(int suggestedTransparent,
-            final boolean errorDiffusion) {
+    public final ImageWorker forceBitmaskIndexColorModel(
+            int suggestedTransparent, final boolean errorDiffusion) {
         final ColorModel cm = image.getColorModel();
         if (cm instanceof IndexColorModel) {
             final IndexColorModel oldCM = (IndexColorModel) cm;
             switch (oldCM.getTransparency()) {
-            case Transparency.OPAQUE: {
-                // Suitable color model. There is nothing to do.
-                return this;
-            }
-            case Transparency.BITMASK: {
-                if (oldCM.getTransparentPixel() == suggestedTransparent) {
-                    // Suitable color model. There is nothing to do.
-                    return this;
-                }
-                break;
-            }
-            default: {
-                break;
-            }
+                case Transparency.OPAQUE:
+                    {
+                        // Suitable color model. There is nothing to do.
+                        return this;
+                    }
+                case Transparency.BITMASK:
+                    {
+                        if (oldCM.getTransparentPixel() == suggestedTransparent) {
+                            // Suitable color model. There is nothing to do.
+                            return this;
+                        }
+                        break;
+                    }
+                default:
+                    {
+                        break;
+                    }
             }
 
             // check if we already have a pixel fully transparent
@@ -43,10 +46,9 @@
              */
             final int mapSize = oldCM.getMapSize();
             if (transparentPixel < 0)
-                suggestedTransparent = suggestedTransparent <= mapSize ? mapSize + 1
-                        : suggestedTransparent;
-            else
-                suggestedTransparent = transparentPixel;
+                suggestedTransparent =
+                        suggestedTransparent <= mapSize ? mapSize + 1 : suggestedTransparent;
+            else suggestedTransparent = transparentPixel;
             final int newSize = Math.max(mapSize, suggestedTransparent);
             final int newPixelSize = ColorUtilities.getBitCount(newSize);
             if (newPixelSize > 16)
@@ -58,8 +60,8 @@
                 for (int i = 0; i < mapSize; i++) {
                     table[i] = (byte) ((oldCM.getAlpha(i) == 0) ? suggestedTransparent : i);
                 }
-                lookupTable = LookupTableFactory
-                        .create(table, image.getSampleModel().getDataType());
+                lookupTable =
+                        LookupTableFactory.create(table, image.getSampleModel().getDataType());
             } else {
                 final short[] table = new short[mapSize];
                 for (int i = 0; i < mapSize; i++) {
@@ -75,8 +77,9 @@
             oldCM.getReds(rgb[0]);
             oldCM.getGreens(rgb[1]);
             oldCM.getBlues(rgb[2]);
-            final IndexColorModel newCM = new IndexColorModel(newPixelSize, newSize, rgb[0],
-                    rgb[1], rgb[2], suggestedTransparent);
+            final IndexColorModel newCM =
+                    new IndexColorModel(
+                            newPixelSize, newSize, rgb[0], rgb[1], rgb[2], suggestedTransparent);
             final RenderingHints hints = getRenderingHints();
             final ImageLayout layout = getImageLayout(hints);
             layout.setColorModel(newCM);
@@ -120,7 +123,7 @@
                 // ParameterBlock creation
                 ParameterBlock pb = new ParameterBlock();
                 pb.setSource(image, 0);
-                pb.set(new int[] { --numBands }, 0);
+                pb.set(new int[] {--numBands}, 0);
                 final RenderedOp alphaChannel = JAI.create("BandSelect", pb, hints);
                 retainBands(numBands);
                 forceIndexColorModel(errorDiffusion);
@@ -130,10 +133,9 @@
                  * Adding transparency if needed, which means using the alpha channel to build a new color model. The method call below implies
                  * 'forceColorSpaceRGB()' and 'forceIndexColorModel()' method calls.
                  */
-                addTransparencyToIndexColorModel(alphaChannel, false, suggestedTransparent,
-                        errorDiffusion);
-            } else
-                forceIndexColorModel(errorDiffusion);
+                addTransparencyToIndexColorModel(
+                        alphaChannel, false, suggestedTransparent, errorDiffusion);
+            } else forceIndexColorModel(errorDiffusion);
         }
         // All post conditions for this method contract.
         assert isIndexed();

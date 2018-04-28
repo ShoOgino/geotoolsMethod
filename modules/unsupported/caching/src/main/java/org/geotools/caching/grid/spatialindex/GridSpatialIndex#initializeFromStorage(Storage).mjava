@@ -1,45 +1,51 @@
-    public void initializeFromStorage( Storage storage ) {
-        //add feature types to marshaller so it'll know how to build features
+    public void initializeFromStorage(Storage storage) {
+        // add feature types to marshaller so it'll know how to build features
         Collection<FeatureType> types = store.getFeatureTypes();
-        for( Iterator<FeatureType> iterator = types.iterator(); iterator.hasNext(); ) {
-            GridData.getFeatureMarshaller().registerType((SimpleFeatureType)iterator.next());            
+        for (Iterator<FeatureType> iterator = types.iterator(); iterator.hasNext(); ) {
+            GridData.getFeatureMarshaller().registerType((SimpleFeatureType) iterator.next());
         }
-        
-        //find the root node an initialize it here
+
+        // find the root node an initialize it here
         ReferencedEnvelope bounds = store.getBounds();
-        if(bounds == null){
-            return;             //cannot do anything because we need to know the bounds of the data.
+        if (bounds == null) {
+            return; // cannot do anything because we need to know the bounds of the data.
         }
-        this.mbr = new Region(new double[] { bounds.getMinX(), bounds.getMinY() }, new double[] { bounds.getMaxX(), bounds.getMaxY() });
+        this.mbr =
+                new Region(
+                        new double[] {bounds.getMinX(), bounds.getMinY()},
+                        new double[] {bounds.getMaxX(), bounds.getMaxY()});
         this.dimension = this.mbr.getDimension();
         NodeIdentifier id = findUniqueInstance(new RegionNodeIdentifier(this.mbr));
-        //GridRootNode tmpRootNode = new GridRootNode(gridsize, (RegionNodeIdentifier)id);
-        
+        // GridRootNode tmpRootNode = new GridRootNode(gridsize, (RegionNodeIdentifier)id);
+
         this.rootNode = null;
-        try{
+        try {
             this.rootNode = storage.get(id);
-        }catch (Exception ex){
-            //could not find root node in storage
+        } catch (Exception ex) {
+            // could not find root node in storage
         }
-        
-        if (this.rootNode == null){
+
+        if (this.rootNode == null) {
             this.root = null;
-        }else{
-        	this.stats.reset();
+        } else {
+            this.stats.reset();
             this.root = this.rootNode.getIdentifier();
-            this.gridsize = ((GridRootNode)this.rootNode).getCapacity();
-        
-            this.stats.addToDataCounter(((GridRootNode)this.rootNode).getCapacity() + 1);	//children + 1 for root
+            this.gridsize = ((GridRootNode) this.rootNode).getCapacity();
+
+            this.stats.addToDataCounter(
+                    ((GridRootNode) this.rootNode).getCapacity() + 1); // children + 1 for root
             this.stats.addToDataCounter(this.rootNode.getDataCount());
-            
-            //here we need to match node identifies in the root.children list to the 
-            //node identifiers in the data store
-            for (int i = 0; i < this.rootNode.getChildrenCount(); i ++){
-            	RegionNodeIdentifier cid = (RegionNodeIdentifier)findUniqueInstance(this.rootNode.getChildIdentifier(i));
-                ((GridRootNode)this.rootNode).setChildIdentifier(i, cid);
-                if (cid.isValid()){
-                	Node n = readNode(cid);
-                	this.stats.addToDataCounter(n.getDataCount());
+
+            // here we need to match node identifies in the root.children list to the
+            // node identifiers in the data store
+            for (int i = 0; i < this.rootNode.getChildrenCount(); i++) {
+                RegionNodeIdentifier cid =
+                        (RegionNodeIdentifier)
+                                findUniqueInstance(this.rootNode.getChildIdentifier(i));
+                ((GridRootNode) this.rootNode).setChildIdentifier(i, cid);
+                if (cid.isValid()) {
+                    Node n = readNode(cid);
+                    this.stats.addToDataCounter(n.getDataCount());
                 }
             }
         }

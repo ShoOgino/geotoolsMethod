@@ -1,6 +1,4 @@
-    /**
-     * @see org.geotools.styling.StyleVisitor#visit(org.geotools.styling.Graphic)
-     */
+    /** @see org.geotools.styling.StyleVisitor#visit(org.geotools.styling.Graphic) */
     public void visit(Graphic gr) {
         try {
             Expression grSize = gr.getSize();
@@ -8,71 +6,74 @@
             boolean isSizeNull = isNull(grSize);
             boolean isSizeConstant = false;
 
-            if(!isSizeNull) {
+            if (!isSizeNull) {
                 isSizeConstant = isConstant(grSize);
                 if (isSizeConstant) {
                     imageSize = (int) Math.ceil(grSize.evaluate(null, Double.class));
                 } else {
                     estimateAccurate = false;
                     return;
-                }    
+                }
             }
-            
 
             for (GraphicalSymbol gs : gr.graphicalSymbols()) {
-                if(gs instanceof ExternalGraphic) {
+                if (gs instanceof ExternalGraphic) {
                     ExternalGraphic eg = (ExternalGraphic) gs;
                     Icon icon = null;
-                    if(eg.getInlineContent() != null) {
+                    if (eg.getInlineContent() != null) {
                         icon = eg.getInlineContent();
                     } else {
                         String location = eg.getLocation().toExternalForm();
                         // expand embedded cql expression
                         Expression expanded = ExpressionExtractor.extractCqlExpressions(location);
                         // if not a literal there is an attribute dependency
-                        if(!(expanded instanceof Literal)) {
+                        if (!(expanded instanceof Literal)) {
                             estimateAccurate = false;
                             return;
                         }
-                        
-                        Iterator<ExternalGraphicFactory> it  = DynamicSymbolFactoryFinder.getExternalGraphicFactories();
-                        while(it.hasNext() && icon == null) {
+
+                        Iterator<ExternalGraphicFactory> it =
+                                DynamicSymbolFactoryFinder.getExternalGraphicFactories();
+                        while (it.hasNext() && icon == null) {
                             try {
                                 ExternalGraphicFactory factory = it.next();
                                 icon = factory.getIcon(null, expanded, eg.getFormat(), imageSize);
-                            } catch(Exception e) {
-                                LOGGER.log(Level.FINE, "Error occurred evaluating external graphic", e);
+                            } catch (Exception e) {
+                                LOGGER.log(
+                                        Level.FINE,
+                                        "Error occurred evaluating external graphic",
+                                        e);
                             }
                         }
                     }
                     // evaluate the icon if found, if not SLD asks us to go to the next one
-                    if(icon != null) {
-                        if(icon != null) {
+                    if (icon != null) {
+                        if (icon != null) {
                             int size = Math.max(icon.getIconHeight(), icon.getIconWidth());
-                            if(size > buffer) {
+                            if (size > buffer) {
                                 buffer = size;
                             }
                             return;
                         }
                     }
-                } else if(gs instanceof Mark) {
+                } else if (gs instanceof Mark) {
                     Mark mark = (Mark) gs;
                     int markSize;
-                    if(isSizeConstant) {
+                    if (isSizeConstant) {
                         markSize = imageSize;
                     } else {
                         markSize = SLDStyleFactory.DEFAULT_MARK_SIZE;
                     }
-                    if(mark.getStroke() != null) {
+                    if (mark.getStroke() != null) {
                         int strokeWidth = getPositiveValue(mark.getStroke().getWidth());
-                        if(strokeWidth < 0) {
+                        if (strokeWidth < 0) {
                             estimateAccurate = false;
                         } else {
                             markSize += strokeWidth;
                         }
                     }
-                    
-                    if(markSize > buffer) {
+
+                    if (markSize > buffer) {
                         this.buffer = markSize;
                     }
 
@@ -87,8 +88,11 @@
             LOGGER.info("Could not parse graphic size, " + "it's a literal but not a Number...");
         } catch (Exception e) {
             estimateAccurate = false;
-            LOGGER.log(Level.INFO, "Error occured during the graphic size estimation, " +
-                    "meta buffer estimate cannot be performed", e);
+            LOGGER.log(
+                    Level.INFO,
+                    "Error occured during the graphic size estimation, "
+                            + "meta buffer estimate cannot be performed",
+                    e);
         }
     }
 

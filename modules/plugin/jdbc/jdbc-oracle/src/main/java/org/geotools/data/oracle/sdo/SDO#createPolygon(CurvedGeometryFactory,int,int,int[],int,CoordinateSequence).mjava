@@ -1,59 +1,30 @@
     /**
      * Create Polygon as encoded.
-     * 
-     * <p>
-     * Encoded as a one or more triplets in elemInfo:
-     * </p>
-     * 
+     *
+     * <p>Encoded as a one or more triplets in elemInfo:
+     *
      * <ul>
-     * <li>
-     * Exterior Polygon Ring: first triplet:
-     * 
-     * <ul>
-     * <li>
-     * STARTING_OFFSET: position in ordinal ordinate array
-     * </li>
-     * <li>
-     * ETYPE: 1003 (exterior) or 3 (polygon w/ counter clockwise ordinates)
-     * </li>
-     * <li>
-     * INTERPRETATION: 1 for strait edges, 3 for rectanlge
-     * </li>
+     *   <li>Exterior Polygon Ring: first triplet:
+     *       <ul>
+     *         <li>STARTING_OFFSET: position in ordinal ordinate array
+     *         <li>ETYPE: 1003 (exterior) or 3 (polygon w/ counter clockwise ordinates)
+     *         <li>INTERPRETATION: 1 for strait edges, 3 for rectanlge
+     *       </ul>
+     *   <li>Interior Polygon Ring(s): remaining triplets:
+     *       <ul>
+     *         <li>STARTING_OFFSET: position in ordinal ordinate array
+     *         <li>ETYPE: 2003 (interior) or 3 (polygon w/ clockWise ordinates)
+     *         <li>INTERPRETATION: 1 for strait edges, 3 for rectanlge
+     *       </ul>
      * </ul>
-     * 
-     * </li>
-     * <li>
-     * Interior Polygon Ring(s): remaining triplets:
-     * 
-     * <ul>
-     * <li>
-     * STARTING_OFFSET: position in ordinal ordinate array
-     * </li>
-     * <li>
-     * ETYPE: 2003 (interior) or 3 (polygon w/ clockWise ordinates)
-     * </li>
-     * <li>
-     * INTERPRETATION: 1 for strait edges, 3 for rectanlge
-     * </li>
-     * </ul>
-     * 
-     * </li>
-     * </ul>
-     * 
-     * <p>
-     * The polygon encoding will process subsequent 2003, or 3 triples with
-     * clockwise ordering as interior holes.
-     * </p>
-     * 
-     * <p>
-     * A subsequent triplet of any other type marks the end of the polygon.
-     * </p>
-     * 
-     * <p>
-     * The dimensionality of GTYPE will be used to transalte the
-     * <code>STARTING_OFFSET</code> provided by elemInfo into an index into
-     * <code>coords</code>.
-     * </p>
+     *
+     * <p>The polygon encoding will process subsequent 2003, or 3 triples with clockwise ordering as
+     * interior holes.
+     *
+     * <p>A subsequent triplet of any other type marks the end of the polygon.
+     *
+     * <p>The dimensionality of GTYPE will be used to transalte the <code>STARTING_OFFSET</code>
+     * provided by elemInfo into an index into <code>coords</code>.
      *
      * @param gf Used to construct polygon
      * @param GTYPE Encoding of <b>D</b>imension, <b>L</b>RS and <b>TT</b>ype
@@ -61,49 +32,63 @@
      * @param elemInfo Interpretation of coords
      * @param triplet Triplet in elemInfo to process as a Polygon
      * @param coords Coordinates to interpret using elemInfo
-     *
-     * @return Polygon as encoded by elemInfo, or null when faced with and
-     *         encoding that can not be captured by JTS
+     * @return Polygon as encoded by elemInfo, or null when faced with and encoding that can not be
+     *     captured by JTS
      * @throws IllegalArgumentException When faced with an invalid SDO encoding
      */
-    private static Polygon createPolygon(CurvedGeometryFactory gf, final int GTYPE,
- final int SRID,
-            final int[] elemInfo, int triplet,
-        CoordinateSequence coords) throws IllegalArgumentException  {
+    private static Polygon createPolygon(
+            CurvedGeometryFactory gf,
+            final int GTYPE,
+            final int SRID,
+            final int[] elemInfo,
+            int triplet,
+            CoordinateSequence coords)
+            throws IllegalArgumentException {
         final int STARTING_OFFSET = STARTING_OFFSET(elemInfo, triplet);
         final int eTYPE = ETYPE(elemInfo, triplet);
         final int INTERPRETATION = INTERPRETATION(elemInfo, triplet);
 
-        ensure( "ELEM_INFO STARTING_OFFSET {1} must be in the range {0}..{1} of COORDINATES",
-                1,STARTING_OFFSET, ordinateSize( coords, GTYPE ) );        
-        if( !(1 <= STARTING_OFFSET && STARTING_OFFSET <= ordinateSize( coords, GTYPE ))){
+        ensure(
+                "ELEM_INFO STARTING_OFFSET {1} must be in the range {0}..{1} of COORDINATES",
+                1, STARTING_OFFSET, ordinateSize(coords, GTYPE));
+        if (!(1 <= STARTING_OFFSET && STARTING_OFFSET <= ordinateSize(coords, GTYPE))) {
             throw new IllegalArgumentException(
-                    "ELEM_INFO STARTING_OFFSET "+STARTING_OFFSET+
-                    "inconsistent with COORDINATES length "+ordinateSize( coords, GTYPE ) );
-        } 
-        ensure("ETYPE {0} must be expected POLYGON or POLYGON_EXTERIOR (one of {1})", eTYPE,
-                new int[] { ETYPE.COMPOUND_POLYGON_EXTERIOR, ETYPE.COMPOUND_POLYGON, ETYPE.POLYGON,
-                        ETYPE.POLYGON_EXTERIOR,
-                        ETYPE.FACE_EXTERIOR });
-        if ((eTYPE != ETYPE.COMPOUND_POLYGON_EXTERIOR) && (eTYPE != ETYPE.COMPOUND_POLYGON)
+                    "ELEM_INFO STARTING_OFFSET "
+                            + STARTING_OFFSET
+                            + "inconsistent with COORDINATES length "
+                            + ordinateSize(coords, GTYPE));
+        }
+        ensure(
+                "ETYPE {0} must be expected POLYGON or POLYGON_EXTERIOR (one of {1})",
+                eTYPE,
+                new int[] {
+                    ETYPE.COMPOUND_POLYGON_EXTERIOR,
+                    ETYPE.COMPOUND_POLYGON,
+                    ETYPE.POLYGON,
+                    ETYPE.POLYGON_EXTERIOR,
+                    ETYPE.FACE_EXTERIOR
+                });
+        if ((eTYPE != ETYPE.COMPOUND_POLYGON_EXTERIOR)
+                && (eTYPE != ETYPE.COMPOUND_POLYGON)
                 && ((INTERPRETATION < 1) || (INTERPRETATION > 4))) {
-            LOGGER.warning("Could not create JTS Polygon with INTERPRETATION "
-                    + INTERPRETATION
-                    + " "
- + "- we can only support 1 for straight edges, 2 for circular ones, "
-                    + "3 for rectangle and 4 for circles");
+            LOGGER.warning(
+                    "Could not create JTS Polygon with INTERPRETATION "
+                            + INTERPRETATION
+                            + " "
+                            + "- we can only support 1 for straight edges, 2 for circular ones, "
+                            + "3 for rectangle and 4 for circles");
             return null;
         }
 
-        LinearRing exteriorRing = createLinearRing(gf, GTYPE, SRID, elemInfo,
-                triplet, coords);
+        LinearRing exteriorRing = createLinearRing(gf, GTYPE, SRID, elemInfo, triplet, coords);
         if (eTYPE == ETYPE.COMPOUND_POLYGON_EXTERIOR) {
             triplet = triplet + elemInfo[2];
         }
 
         List rings = new LinkedList();
         int etype;
-        HOLES: for (int i = triplet + 1; (etype = ETYPE(elemInfo, i)) != -1;) {
+        HOLES:
+        for (int i = triplet + 1; (etype = ETYPE(elemInfo, i)) != -1; ) {
             if (etype == ETYPE.POLYGON_INTERIOR) {
                 rings.add(createLinearRing(gf, GTYPE, SRID, elemInfo, i, coords));
                 i++;
@@ -112,9 +97,9 @@
                 rings.add(createLinearRing(gf, GTYPE, SRID, elemInfo, i, coords));
                 i += subelements;
             } else if (etype == ETYPE.POLYGON) { // nead to test Clockwiseness of Ring to see if it
-                                                 // is
-                                                 // interior or not - (use POLYGON_INTERIOR to avoid
-                                                 // pain)
+                // is
+                // interior or not - (use POLYGON_INTERIOR to avoid
+                // pain)
 
                 LinearRing ring = createLinearRing(gf, GTYPE, SRID, elemInfo, i, coords);
 

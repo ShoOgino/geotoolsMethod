@@ -1,39 +1,38 @@
     /**
-     * Returns the primary key object for a particular entry, deriving it from
-     * the underlying database metadata.
-     *
+     * Returns the primary key object for a particular entry, deriving it from the underlying
+     * database metadata.
      */
-    protected PrimaryKey getPrimaryKey(ContentEntry entry)
-        throws IOException {
+    protected PrimaryKey getPrimaryKey(ContentEntry entry) throws IOException {
         JDBCState state = (JDBCState) entry.getState(Transaction.AUTO_COMMIT);
 
         if (state.getPrimaryKey() == null) {
             synchronized (this) {
                 if (state.getPrimaryKey() == null) {
-                    //get metadata from database
+                    // get metadata from database
                     Connection cx = createConnection();
 
                     try {
                         PrimaryKey pkey = null;
                         String tableName = entry.getName().getLocalPart();
-                        if(virtualTables.containsKey(tableName)) {
+                        if (virtualTables.containsKey(tableName)) {
                             VirtualTable vt = virtualTables.get(tableName);
-                            if(vt.getPrimaryKeyColumns().size() == 0) {
-                                pkey = new NullPrimaryKey( tableName );
+                            if (vt.getPrimaryKeyColumns().size() == 0) {
+                                pkey = new NullPrimaryKey(tableName);
                             } else {
-                                List<ColumnMetadata> metas = JDBCFeatureSource.getColumnMetadata(cx, vt, dialect, this);
-                                
+                                List<ColumnMetadata> metas =
+                                        JDBCFeatureSource.getColumnMetadata(cx, vt, dialect, this);
+
                                 List<PrimaryKeyColumn> kcols = new ArrayList<PrimaryKeyColumn>();
                                 for (String pkName : vt.getPrimaryKeyColumns()) {
                                     // look for the pk type
                                     Class binding = null;
-                                    for(ColumnMetadata meta : metas) {
-                                        if(meta.name.equals(pkName)) {
+                                    for (ColumnMetadata meta : metas) {
+                                        if (meta.name.equals(pkName)) {
                                             binding = meta.binding;
                                         }
                                     }
-                                    
-                                    // we build a pk without type, the JDBCFeatureStore will do this 
+
+                                    // we build a pk without type, the JDBCFeatureStore will do this
                                     // for us while building the primary key
                                     kcols.add(new NonIncrementingPrimaryKeyColumn(pkName, binding));
                                 }
@@ -41,20 +40,29 @@
                             }
                         } else {
                             try {
-                                pkey = primaryKeyFinder.getPrimaryKey(this, databaseSchema, tableName, cx);
-                            } catch(SQLException e) {
-                                LOGGER.log(Level.WARNING, "Failure occurred while looking up the primary key with " +
-                                		"finder: " + primaryKeyFinder, e);
+                                pkey =
+                                        primaryKeyFinder.getPrimaryKey(
+                                                this, databaseSchema, tableName, cx);
+                            } catch (SQLException e) {
+                                LOGGER.log(
+                                        Level.WARNING,
+                                        "Failure occurred while looking up the primary key with "
+                                                + "finder: "
+                                                + primaryKeyFinder,
+                                        e);
                             }
-                            
-                            if ( pkey == null ) {
-                                String msg = "No primary key or unique index found for " + tableName + ".";
+
+                            if (pkey == null) {
+                                String msg =
+                                        "No primary key or unique index found for "
+                                                + tableName
+                                                + ".";
                                 LOGGER.info(msg);
-    
-                                pkey = new NullPrimaryKey( tableName );
+
+                                pkey = new NullPrimaryKey(tableName);
                             }
                         }
-                        
+
                         state.setPrimaryKey(pkey);
                     } catch (SQLException e) {
                         String msg = "Error looking up primary key";

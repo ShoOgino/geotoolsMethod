@@ -1,44 +1,54 @@
     /**
-     * Performs recursive slicing of the area to find the optimal number of subdivisions
-     * along the x and y axis.
-     * 
+     * Performs recursive slicing of the area to find the optimal number of subdivisions along the x
+     * and y axis.
+     *
      * @param mt
      * @param minx
      * @param maxx
      * @param miny
      * @param maxy
      */
-    int[] computeOptimalDepths(MathTransform2D mt, double minx, double maxx, double miny,
-            double maxy, int rowDepth, int colDepth) throws TransformException  {
-        if(maxx - minx < 4 || maxy - miny < 4) {
+    int[] computeOptimalDepths(
+            MathTransform2D mt,
+            double minx,
+            double maxx,
+            double miny,
+            double maxy,
+            int rowDepth,
+            int colDepth)
+            throws TransformException {
+        if (maxx - minx < 4 || maxy - miny < 4) {
             throw new ExcessiveDepthException("Warp grid getting as dense as the original data");
         } else if (rowDepth + colDepth > 20) {
             // this would take 2^(20) points, way too much already
-            throw new ExcessiveDepthException("Warp grid getting too large to fit in memory, bailing out");
+            throw new ExcessiveDepthException(
+                    "Warp grid getting too large to fit in memory, bailing out");
         }
-        
+
         // center of this rectangle
         final double midx = (minx + maxx) / 2;
         final double midy = (miny + maxy) / 2;
-        
+
         // test tolerance along the y axis
-        boolean withinTolVertical = isWithinTolerance(mt, minx, miny, minx, midy, minx, maxy) &&
-            isWithinTolerance(mt, maxx, miny, maxx, midy, maxx, maxy);
+        boolean withinTolVertical =
+                isWithinTolerance(mt, minx, miny, minx, midy, minx, maxy)
+                        && isWithinTolerance(mt, maxx, miny, maxx, midy, maxx, maxy);
         // test tolerance along the x axis
-        boolean withinTolHorizontal = isWithinTolerance(mt, minx, miny, midx, miny, maxx, miny) &&
-            isWithinTolerance(mt, minx, maxy, midx, maxy, maxx, maxy);
+        boolean withinTolHorizontal =
+                isWithinTolerance(mt, minx, miny, midx, miny, maxx, miny)
+                        && isWithinTolerance(mt, minx, maxy, midx, maxy, maxx, maxy);
         // if needed, check tolerance along the diagonal as well
-        if(withinTolVertical && withinTolHorizontal) {
-            if(!isWithinTolerance(mt, minx, miny, midx, midy, maxx, maxy) || 
-                    !isWithinTolerance(mt, minx, maxy, midx, midy, maxx, miny)) {
+        if (withinTolVertical && withinTolHorizontal) {
+            if (!isWithinTolerance(mt, minx, miny, midx, midy, maxx, maxy)
+                    || !isWithinTolerance(mt, minx, maxy, midx, midy, maxx, miny)) {
                 withinTolVertical = false;
                 withinTolHorizontal = false;
-            } 
+            }
         }
-        
+
         // check what kind of split are we going to make
         // (and try not to get fooled by symmetrical projections)
-        if((!withinTolHorizontal && !withinTolVertical)) {
+        if ((!withinTolHorizontal && !withinTolVertical)) {
             // quad split
             rowDepth++;
             colDepth++;
@@ -46,22 +56,23 @@
             int[] d2 = computeOptimalDepths(mt, minx, midx, midy, maxy, rowDepth, colDepth);
             int[] d3 = computeOptimalDepths(mt, midx, maxx, miny, midy, rowDepth, colDepth);
             int[] d4 = computeOptimalDepths(mt, midx, maxx, midy, maxy, rowDepth, colDepth);
-            return new int[] {max(max(d1[0], d2[0]), max(d3[0], d4[0])), 
-                    max(max(d1[1], d2[1]), max(d3[1], d4[1]))};
-        } else if(!withinTolHorizontal) {
+            return new int[] {
+                max(max(d1[0], d2[0]), max(d3[0], d4[0])), max(max(d1[1], d2[1]), max(d3[1], d4[1]))
+            };
+        } else if (!withinTolHorizontal) {
             // slice in two at midx (creating two more colums)
             colDepth++;
             int[] d1 = computeOptimalDepths(mt, minx, midx, miny, maxy, rowDepth, colDepth);
             int[] d2 = computeOptimalDepths(mt, midx, maxx, miny, maxy, rowDepth, colDepth);
             return new int[] {max(d1[0], d2[0]), max(d1[1], d2[1])};
-        } else if(!withinTolVertical){
+        } else if (!withinTolVertical) {
             // slice in two at midy (creating two rows)
             rowDepth++;
             int[] d1 = computeOptimalDepths(mt, minx, maxx, miny, midy, rowDepth, colDepth);
             int[] d2 = computeOptimalDepths(mt, minx, maxx, midy, maxy, rowDepth, colDepth);
             return new int[] {max(d1[0], d2[0]), max(d1[1], d2[1])};
         }
-        
+
         return new int[] {rowDepth, colDepth};
     }
 

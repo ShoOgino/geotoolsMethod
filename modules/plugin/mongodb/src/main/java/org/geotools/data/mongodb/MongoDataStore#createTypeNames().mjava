@@ -1,73 +1,97 @@
     @Override
     protected List<Name> createTypeNames() throws IOException {
-        
+
         Set<String> collectionNames = new LinkedHashSet<String>(dataStoreDB.getCollectionNames());
         Set<String> typeNameSet = new LinkedHashSet<String>();
-        
+
         for (String candidateTypeName : getSchemaStore().typeNames()) {
             try {
-                SimpleFeatureType candidateSchema = getSchemaStore().retrieveSchema(name(candidateTypeName));
-                
+                SimpleFeatureType candidateSchema =
+                        getSchemaStore().retrieveSchema(name(candidateTypeName));
+
                 // extract collection that schema maps to either from user data attribute
-                // or, if that's missing, the schema type name. 
+                // or, if that's missing, the schema type name.
                 String candidateCollectionName = collectionNameFromType(candidateSchema);
-                
+
                 // verify collection exists in db and has geometry index
                 if (collectionNames.contains(candidateCollectionName)) {
                     // verify geometry exists and has mapping.
                     String geometryName = candidateSchema.getGeometryDescriptor().getLocalName();
-                    String geometryMapping = (String)candidateSchema.getDescriptor(geometryName).getUserData().get(KEY_mapping);
+                    String geometryMapping =
+                            (String)
+                                    candidateSchema
+                                            .getDescriptor(geometryName)
+                                            .getUserData()
+                                            .get(KEY_mapping);
                     if (geometryMapping != null) {
-                        DBCollection collection = dataStoreDB.getCollection(candidateCollectionName);
-                        Set<String> geometryIndices =  MongoUtil.findIndexedGeometries(
-                                collection);
+                        DBCollection collection =
+                                dataStoreDB.getCollection(candidateCollectionName);
+                        Set<String> geometryIndices = MongoUtil.findIndexedGeometries(collection);
                         // verify geometry mapping is indexed...
                         if (geometryIndices.contains(geometryMapping)) {
                             typeNameSet.add(candidateTypeName);
                         } else {
-                            LOGGER.log(Level.WARNING, "Ignoring type \"{0}\", the geometry attribute, \"{1}\", is mapped to document key \"{2}\" but it is not spatialy indexed in collection {3}",
-                                    new Object[] { name(candidateTypeName), geometryName, geometryMapping, collection.getFullName()});
+                            LOGGER.log(
+                                    Level.WARNING,
+                                    "Ignoring type \"{0}\", the geometry attribute, \"{1}\", is mapped to document key \"{2}\" but it is not spatialy indexed in collection {3}",
+                                    new Object[] {
+                                        name(candidateTypeName),
+                                        geometryName,
+                                        geometryMapping,
+                                        collection.getFullName()
+                                    });
                         }
                     } else {
-                        LOGGER.log(Level.WARNING, "Ignoring type \"{0}\", the geometry attribute \"{1}\" is not mapped to a document key",
-                                new Object[] { name(candidateTypeName), geometryName});
+                        LOGGER.log(
+                                Level.WARNING,
+                                "Ignoring type \"{0}\", the geometry attribute \"{1}\" is not mapped to a document key",
+                                new Object[] {name(candidateTypeName), geometryName});
                     }
                 } else {
-                    LOGGER.log(Level.WARNING, "Ignoring type \"{0}\", the collection it maps \"{1}.{2}\" does not exist",
-                                new Object[] { name(candidateTypeName), dataStoreDB.getName(), candidateCollectionName});
+                    LOGGER.log(
+                            Level.WARNING,
+                            "Ignoring type \"{0}\", the collection it maps \"{1}.{2}\" does not exist",
+                            new Object[] {
+                                name(candidateTypeName),
+                                dataStoreDB.getName(),
+                                candidateCollectionName
+                            });
                 }
             } catch (IOException e) {
-                LOGGER.log(Level.WARNING, "Ignoring type \"{0}\", an exception was thrown while attempting to retrieve the schema: {1}",
-                                new Object[] { name(candidateTypeName), e});
+                LOGGER.log(
+                        Level.WARNING,
+                        "Ignoring type \"{0}\", an exception was thrown while attempting to retrieve the schema: {1}",
+                        new Object[] {name(candidateTypeName), e});
             }
         }
-        
+
         // Create set of collections w/o named schema
         Collection<String> collectionsToCheck = new LinkedList<String>(collectionNames);
         collectionsToCheck.removeAll(typeNameSet);
-        
+
         // Check collection set to see if we can use any of them
-        for(String collectionName : collectionsToCheck) {
+        for (String collectionName : collectionsToCheck) {
             // make sure it's not system collection
             if (!collectionName.startsWith("system.")) {
                 DBCollection collection = dataStoreDB.getCollection(collectionName);
-                Set<String> geometryIndexSet = MongoUtil.findIndexedGeometries(
-                        collection);
+                Set<String> geometryIndexSet = MongoUtil.findIndexedGeometries(collection);
                 // verify collection has an indexed geometry property
-                if(!geometryIndexSet.isEmpty()) {
+                if (!geometryIndexSet.isEmpty()) {
                     typeNameSet.add(collectionName);
                 } else {
-                    LOGGER.log(Level.INFO, "Ignoring collection \"{0}\", unable to find key with spatial index", 
-                            new Object[] { collection.getFullName() });
+                    LOGGER.log(
+                            Level.INFO,
+                            "Ignoring collection \"{0}\", unable to find key with spatial index",
+                            new Object[] {collection.getFullName()});
                 }
             }
         }
-        
+
         List<Name> typeNameList = new ArrayList<Name>();
         for (String name : typeNameSet) {
             typeNameList.add(name(name));
         }
-        
+
         return typeNameList;
     }
 

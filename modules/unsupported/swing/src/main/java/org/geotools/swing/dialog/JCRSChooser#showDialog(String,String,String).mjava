@@ -1,56 +1,54 @@
     /**
-     * Displays a dialog with a list of coordinate reference systems provided by
-     * the given authority (e.g. "EPSG"), and with the specified initial code
-     * highlighted.
-     * <p>
-     * This method can be called safely from any thread.
+     * Displays a dialog with a list of coordinate reference systems provided by the given authority
+     * (e.g. "EPSG"), and with the specified initial code highlighted.
+     *
+     * <p>This method can be called safely from any thread.
      *
      * @param title optional non-default title
      * @param initialCode an optional initial code in appropriate form for the authority
      * @param authority optional non-default authority (defaults to "EPSG")
-     *
-     * @return a {@code CoordinateReferenceSystem} object or {@code null} if the user
-     *         cancelled the dialog
+     * @return a {@code CoordinateReferenceSystem} object or {@code null} if the user cancelled the
+     *     dialog
      */
-    public static CoordinateReferenceSystem showDialog(final String title, 
-            final String initialCode, 
-            final String authority) {
+    public static CoordinateReferenceSystem showDialog(
+            final String title, final String initialCode, final String authority) {
 
         CoordinateReferenceSystem selected = null;
-        
+
         if (SwingUtilities.isEventDispatchThread()) {
             selected = doShow(title, initialCode, authority);
-            
+
         } else {
             final SynchronousQueue<CoordinateReferenceSystem> sq =
                     new SynchronousQueue<CoordinateReferenceSystem>();
-            
+
             final Thread currentThread = Thread.currentThread();
-            
-            SwingUtilities.invokeLater(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        CoordinateReferenceSystem crs = 
-                                doShow(title, initialCode, authority);
-                        if (crs == null) {
-                            currentThread.interrupt();
-                        } else {
-                            sq.put(crs);
+
+            SwingUtilities.invokeLater(
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                CoordinateReferenceSystem crs =
+                                        doShow(title, initialCode, authority);
+                                if (crs == null) {
+                                    currentThread.interrupt();
+                                } else {
+                                    sq.put(crs);
+                                }
+                            } catch (InterruptedException ex) {
+                                throw new RuntimeException(ex);
+                            }
                         }
-                    } catch (InterruptedException ex) {
-                        throw new RuntimeException(ex);
-                    }
-                }
-            });
-            
+                    });
+
             try {
                 selected = sq.take();
             } catch (InterruptedException ex) {
                 // dialog was cancelled
             }
         }
-        
+
         return selected;
     }
 

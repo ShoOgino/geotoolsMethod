@@ -1,74 +1,82 @@
-		/**
-		 * This method is responsible for evaluating possible subsampling factors
-		 * once the best resolution level has been found, in case we have support
-		 * for overviews, or starting from the original coverage in case there are
-		 * no overviews available.
-		 * 
-		 * Anyhow this method should not be called directly but subclasses should
-		 * make use of the setReadParams method instead in order to transparently
-		 * look for overviews.
-		 * 
-		 * @param imageIndex
-		 * @param readParameters
-		 * @param requestedRes
-		 */
-		void performDecimation(
-			final int imageIndex,
-			final ImageReadParam readParameters, 
-			final RasterLayerRequest request) {
-	
-			// the read parameters cannot be null
-			Utilities.ensureNonNull("readParameters", readParameters);
-			Utilities.ensureNonNull("request", request);
-			
-			//get the requested resolution
-			final double[] requestedRes=request.getRequestedResolution();
-			if(requestedRes==null)
-			{
-				// if there is no requested resolution we don't do any subsampling
-				readParameters.setSourceSubsampling(1, 1, 0, 0);
-				return;
-			}
+        /**
+         * This method is responsible for evaluating possible subsampling factors once the best
+         * resolution level has been found, in case we have support for overviews, or starting from
+         * the original coverage in case there are no overviews available.
+         *
+         * <p>Anyhow this method should not be called directly but subclasses should make use of the
+         * setReadParams method instead in order to transparently look for overviews.
+         *
+         * @param imageIndex
+         * @param readParameters
+         * @param requestedRes
+         */
+        void performDecimation(
+                final int imageIndex,
+                final ImageReadParam readParameters,
+                final RasterLayerRequest request) {
 
-			double selectedRes[] = new double[2];
-			final OverviewLevel level=overviewsController.resolutionsLevels.get(imageIndex);
-			selectedRes[0] = level.resolutionX;
-			selectedRes[1] = level.resolutionY;
-			
-			final int rasterWidth, rasterHeight;
-			if (imageIndex == 0) {
-				// highest resolution
-				rasterWidth = spatialDomainManager.coverageRasterArea.width;
-				rasterHeight = spatialDomainManager.coverageRasterArea.height;
-			} else {
-				// work on overviews
-				//TODO this is bad side effect of how the Overviews are managed right now. There are two problems here,
-				// first we are assuming that we are working with LON/LAT, second is that we are getting just an approximation of 
-				// raster dimensions. The solution is to have the rater dimensions on each level and to confront raster dimensions,
-				//which means working
-				rasterWidth = (int) Math.round(spatialDomainManager.coverageBBox.getSpan(0)/ selectedRes[0]);
-				rasterHeight = (int) Math.round(spatialDomainManager.coverageBBox.getSpan(1)/ selectedRes[1]);
-	
-			}
-			// /////////////////////////////////////////////////////////////////////
-			// DECIMATION ON READING
-			// Setting subsampling factors with some checks
-			// 1) the subsampling factors cannot be zero
-			// 2) the subsampling factors cannot be such that the w or h are zero
-			// /////////////////////////////////////////////////////////////////////
-			int subSamplingFactorX = (int) Math.floor(requestedRes[0]/ selectedRes[0]);
-			subSamplingFactorX = subSamplingFactorX == 0 ? 1: subSamplingFactorX;
+            // the read parameters cannot be null
+            Utilities.ensureNonNull("readParameters", readParameters);
+            Utilities.ensureNonNull("request", request);
 
-			while (rasterWidth / subSamplingFactorX <= 0 && subSamplingFactorX >= 0)
-				subSamplingFactorX--;
-			subSamplingFactorX = subSamplingFactorX <= 0 ? 1: subSamplingFactorX;
+            // get the requested resolution
+            final double[] requestedRes = request.getRequestedResolution();
+            if (requestedRes == null) {
+                // if there is no requested resolution we don't do any subsampling
+                readParameters.setSourceSubsampling(1, 1, 0, 0);
+                return;
+            }
 
-			int subSamplingFactorY = (int) Math.floor(requestedRes[1]/ selectedRes[1]);
-			subSamplingFactorY = subSamplingFactorY == 0 ? 1: subSamplingFactorY;
+            double selectedRes[] = new double[2];
+            final OverviewLevel level = overviewsController.resolutionsLevels.get(imageIndex);
+            selectedRes[0] = level.resolutionX;
+            selectedRes[1] = level.resolutionY;
 
-			while (rasterHeight / subSamplingFactorY <= 0 && subSamplingFactorY >= 0)subSamplingFactorY--;
-			subSamplingFactorY = subSamplingFactorY <= 0 ? 1: subSamplingFactorY;
+            final int rasterWidth, rasterHeight;
+            if (imageIndex == 0) {
+                // highest resolution
+                rasterWidth = spatialDomainManager.coverageRasterArea.width;
+                rasterHeight = spatialDomainManager.coverageRasterArea.height;
+            } else {
+                // work on overviews
+                // TODO this is bad side effect of how the Overviews are managed right now. There
+                // are two problems here,
+                // first we are assuming that we are working with LON/LAT, second is that we are
+                // getting just an approximation of
+                // raster dimensions. The solution is to have the rater dimensions on each level and
+                // to confront raster dimensions,
+                // which means working
+                rasterWidth =
+                        (int)
+                                Math.round(
+                                        spatialDomainManager.coverageBBox.getSpan(0)
+                                                / selectedRes[0]);
+                rasterHeight =
+                        (int)
+                                Math.round(
+                                        spatialDomainManager.coverageBBox.getSpan(1)
+                                                / selectedRes[1]);
+            }
+            // /////////////////////////////////////////////////////////////////////
+            // DECIMATION ON READING
+            // Setting subsampling factors with some checks
+            // 1) the subsampling factors cannot be zero
+            // 2) the subsampling factors cannot be such that the w or h are zero
+            // /////////////////////////////////////////////////////////////////////
+            int subSamplingFactorX = (int) Math.floor(requestedRes[0] / selectedRes[0]);
+            subSamplingFactorX = subSamplingFactorX == 0 ? 1 : subSamplingFactorX;
 
-			readParameters.setSourceSubsampling(subSamplingFactorX, subSamplingFactorY, 0, 0);
-		}
+            while (rasterWidth / subSamplingFactorX <= 0 && subSamplingFactorX >= 0)
+                subSamplingFactorX--;
+            subSamplingFactorX = subSamplingFactorX <= 0 ? 1 : subSamplingFactorX;
+
+            int subSamplingFactorY = (int) Math.floor(requestedRes[1] / selectedRes[1]);
+            subSamplingFactorY = subSamplingFactorY == 0 ? 1 : subSamplingFactorY;
+
+            while (rasterHeight / subSamplingFactorY <= 0 && subSamplingFactorY >= 0)
+                subSamplingFactorY--;
+            subSamplingFactorY = subSamplingFactorY <= 0 ? 1 : subSamplingFactorY;
+
+            readParameters.setSourceSubsampling(subSamplingFactorX, subSamplingFactorY, 0, 0);
+        }
 

@@ -1,29 +1,28 @@
     /**
-     * Given a {@link GDALCommonIIOImageMetadata} metadata object, retrieves
-     * several properties to properly set envelope, gridrange and crs.
-     * 
-     * @param metadata
-     *                a {@link GDALCommonIIOImageMetadata} metadata instance
-     *                from where to search needed properties.
+     * Given a {@link GDALCommonIIOImageMetadata} metadata object, retrieves several properties to
+     * properly set envelope, gridrange and crs.
+     *
+     * @param metadata a {@link GDALCommonIIOImageMetadata} metadata instance from where to search
+     *     needed properties.
      */
     private void parseCommonMetadata(final GDALCommonIIOImageMetadata metadata) {
-    	
+
         // ////////////////////////////////////////////////////////////////////
         //
         // setting CRS and Envelope directly from GDAL, if available
         //
         // ////////////////////////////////////////////////////////////////////
         // //
-        // 
+        //
         // 1) CRS
         //
         // //
         final Object tempCRS = this.hints.get(Hints.DEFAULT_COORDINATE_REFERENCE_SYSTEM);
         if (tempCRS != null) {
-            this.crs=(CoordinateReferenceSystem) tempCRS;
-            LOGGER.log(Level.FINE,"Using default coordinate reference system ");
-        } else{
-            
+            this.crs = (CoordinateReferenceSystem) tempCRS;
+            LOGGER.log(Level.FINE, "Using default coordinate reference system ");
+        } else {
+
             // //
             //
             // Default CRS override it all
@@ -31,32 +30,36 @@
             // //
             // //
             //
-            // Let the prj file override the internal representation for the undelrying source of information.
+            // Let the prj file override the internal representation for the undelrying source of
+            // information.
             //
             // //
             parsePRJFile();
-            // if there was not prj or the envelope could not be created easily, let's go with the standard metadata.
+            // if there was not prj or the envelope could not be created easily, let's go with the
+            // standard metadata.
             if (this.crs == null) {
                 final String wkt = metadata.getProjection();
-    
+
                 if ((wkt != null) && !(wkt.equalsIgnoreCase(""))) {
                     try {
-                        this.crs=CRS.parseWKT(wkt);
+                        this.crs = CRS.parseWKT(wkt);
                         final Integer epsgCode = CRS.lookupEpsgCode(this.crs, true);
                         // Force the creation of the CRS directly from the
                         // retrieved EPSG code in order to prevent weird transformation
                         // between "same" CRSs having slight differences.
                         // TODO: cache epsgCode-CRSs
                         if (epsgCode != null) {
-                            this.crs=CRS.decode("EPSG:" + epsgCode);
+                            this.crs = CRS.decode("EPSG:" + epsgCode);
                         }
                     } catch (FactoryException fe) {
                         // unable to get CRS from WKT
                         if (LOGGER.isLoggable(Level.FINE)) {
-                            LOGGER.log(Level.FINE,"Unable to get CRS from WKT contained in metadata. Looking for a PRJ.");
+                            LOGGER.log(
+                                    Level.FINE,
+                                    "Unable to get CRS from WKT contained in metadata. Looking for a PRJ.");
                         }
-                        //reset crs 
-                        this.crs=null;
+                        // reset crs
+                        this.crs = null;
                     }
                 }
             }
@@ -67,11 +70,12 @@
         //
         // //
         if (this.originalGridRange == null)
-            this.originalGridRange=new GridEnvelope2D(new Rectangle(0, 0,
-                    metadata.getWidth(), metadata.getHeight()));
+            this.originalGridRange =
+                    new GridEnvelope2D(
+                            new Rectangle(0, 0, metadata.getWidth(), metadata.getHeight()));
 
         // //
-        // 
+        //
         // 3) Envelope
         //
         // //
@@ -80,34 +84,41 @@
         //
         parseWorldFile();
         if (this.originalEnvelope == null) {
-	        final double[] geoTransform = metadata.getGeoTransformation();
-	        if ((geoTransform != null) && (geoTransform.length == 6)) {
-	            final AffineTransform tempTransform = new AffineTransform(
-	                    geoTransform[1], geoTransform[4], geoTransform[2],
-	                    geoTransform[5], geoTransform[0], geoTransform[3]);
-	            // ATTENTION: Gdal geotransform does not use the pixel is
-	            // centre convention like world files.
-	            if (this.originalEnvelope == null) {
-	                try {
-	                    // Envelope setting
-	                    this.originalEnvelope=CRS.transform(ProjectiveTransform
-	                            .create(tempTransform), new GeneralEnvelope(
-	                                   ((GridEnvelope2D) this.originalGridRange)));
-	                } catch (IllegalStateException e) {
-	                    if (LOGGER.isLoggable(Level.WARNING)) {
-	                        LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
-	                    }
-	                } catch (TransformException e) {
-	                    if (LOGGER.isLoggable(Level.WARNING)) {
-	                        LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
-	                    }
-	                }
-	            }
-	            // Grid2World Transformation
-	            final double tr = -PixelTranslation.getPixelTranslation(PixelInCell.CELL_CORNER);
-	            tempTransform.translate(tr, tr);
-	            this.raster2Model = ProjectiveTransform.create(tempTransform);
-	        }
+            final double[] geoTransform = metadata.getGeoTransformation();
+            if ((geoTransform != null) && (geoTransform.length == 6)) {
+                final AffineTransform tempTransform =
+                        new AffineTransform(
+                                geoTransform[1],
+                                geoTransform[4],
+                                geoTransform[2],
+                                geoTransform[5],
+                                geoTransform[0],
+                                geoTransform[3]);
+                // ATTENTION: Gdal geotransform does not use the pixel is
+                // centre convention like world files.
+                if (this.originalEnvelope == null) {
+                    try {
+                        // Envelope setting
+                        this.originalEnvelope =
+                                CRS.transform(
+                                        ProjectiveTransform.create(tempTransform),
+                                        new GeneralEnvelope(
+                                                ((GridEnvelope2D) this.originalGridRange)));
+                    } catch (IllegalStateException e) {
+                        if (LOGGER.isLoggable(Level.WARNING)) {
+                            LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
+                        }
+                    } catch (TransformException e) {
+                        if (LOGGER.isLoggable(Level.WARNING)) {
+                            LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
+                        }
+                    }
+                }
+                // Grid2World Transformation
+                final double tr = -PixelTranslation.getPixelTranslation(PixelInCell.CELL_CORNER);
+                tempTransform.translate(tr, tr);
+                this.raster2Model = ProjectiveTransform.create(tempTransform);
+            }
         }
     }
 

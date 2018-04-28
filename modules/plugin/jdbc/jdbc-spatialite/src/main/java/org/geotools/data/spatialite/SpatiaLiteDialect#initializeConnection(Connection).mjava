@@ -3,64 +3,64 @@
         Statement st = cx.createStatement();
         try {
             st = cx.createStatement();
-            
-            //determine if the spatial metadata tables need to be created
+
+            // determine if the spatial metadata tables need to be created
             boolean initSpatialMetaData = false;
             try {
-                st.execute( "SELECT count(*) from geometry_columns");
-            }catch( SQLException e ) {
+                st.execute("SELECT count(*) from geometry_columns");
+            } catch (SQLException e) {
                 initSpatialMetaData = true;
             }
-            
-            if ( initSpatialMetaData ) {
-                st.execute( "SELECT InitSpatialMetaData()");
+
+            if (initSpatialMetaData) {
+                st.execute("SELECT InitSpatialMetaData()");
                 st.close();
                 st = cx.createStatement();
             }
-            
-            //determine if the spatial ref sys table needs to be loaded
+
+            // determine if the spatial ref sys table needs to be loaded
             boolean loadSpatialRefSys = false;
-            ResultSet rs = st.executeQuery( "SELECT * FROM spatial_ref_sys");
+            ResultSet rs = st.executeQuery("SELECT * FROM spatial_ref_sys");
             try {
                 loadSpatialRefSys = !rs.next();
+            } finally {
+                dataStore.closeSafe(rs);
             }
-            finally {
-                dataStore.closeSafe( rs );
-            }
-            
-            if ( loadSpatialRefSys ) {
+
+            if (loadSpatialRefSys) {
                 try {
-                    //initializing statements invovles a lot of inserts, optimize by turning off
+                    // initializing statements invovles a lot of inserts, optimize by turning off
                     // auto commit and batching them up
                     st.close();
-                    
+
                     boolean isAutoCommit = cx.getAutoCommit();
                     cx.setAutoCommit(false);
                     st = cx.createStatement();
 
                     try {
-                        BufferedReader in = new BufferedReader( new InputStreamReader( 
-                            getClass().getResourceAsStream( "init_spatialite-2.3.sql") ) );
+                        BufferedReader in =
+                                new BufferedReader(
+                                        new InputStreamReader(
+                                                getClass()
+                                                        .getResourceAsStream(
+                                                                "init_spatialite-2.3.sql")));
                         String line = null;
-                        while( (line = in.readLine() ) != null ) {
-                            st.addBatch( line );
+                        while ((line = in.readLine()) != null) {
+                            st.addBatch(line);
                         }
                         in.close();
                         st.executeBatch();
                         cx.commit();
-                    }
-                    finally {
+                    } finally {
                         cx.setAutoCommit(isAutoCommit);
                     }
 
-                }
-                catch( IOException e ) {
-                    throw new RuntimeException( "Error reading spatial ref sys file", e );
+                } catch (IOException e) {
+                    throw new RuntimeException("Error reading spatial ref sys file", e);
                 }
             }
-        }
-        finally {
-            dataStore.closeSafe( st );
+        } finally {
+            dataStore.closeSafe(st);
         }
     }
 

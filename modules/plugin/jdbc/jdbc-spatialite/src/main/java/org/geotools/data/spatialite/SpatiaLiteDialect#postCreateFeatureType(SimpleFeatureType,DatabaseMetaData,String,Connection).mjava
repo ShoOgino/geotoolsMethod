@@ -1,23 +1,30 @@
     @Override
-    public void postCreateFeatureType(SimpleFeatureType featureType, DatabaseMetaData metadata,
-            String schemaName, Connection cx) throws SQLException {
-        //figure out if the table has a spatial index and mark the feature type as so
+    public void postCreateFeatureType(
+            SimpleFeatureType featureType,
+            DatabaseMetaData metadata,
+            String schemaName,
+            Connection cx)
+            throws SQLException {
+        // figure out if the table has a spatial index and mark the feature type as so
         for (AttributeDescriptor ad : featureType.getAttributeDescriptors()) {
             if (!(ad instanceof GeometryDescriptor)) {
                 continue;
             }
-            
+
             GeometryDescriptor gd = (GeometryDescriptor) ad;
             String idxTableName = "idx_" + featureType.getTypeName() + "_" + gd.getLocalName();
-            
-            ResultSet rs = metadata.getTables(null, dataStore.escapeNamePattern(metadata, schemaName),
-                    dataStore.escapeNamePattern(metadata, idxTableName), new String[]{"TABLE"});
+
+            ResultSet rs =
+                    metadata.getTables(
+                            null,
+                            dataStore.escapeNamePattern(metadata, schemaName),
+                            dataStore.escapeNamePattern(metadata, idxTableName),
+                            new String[] {"TABLE"});
             try {
                 if (rs.next()) {
                     gd.getUserData().put(SPATIALITE_SPATIAL_INDEX, idxTableName);
                 }
-            }
-            finally {
+            } finally {
                 dataStore.closeSafe(rs);
             }
         }

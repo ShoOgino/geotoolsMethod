@@ -1,18 +1,18 @@
     /**
-     * Reformats the {@linkplain ColorModel color model} to a {@linkplain ComponentColorModel component color model} preserving transparency. This is
-     * used especially in order to go from {@link PackedColorModel} to {@link ComponentColorModel}, which seems to be well accepted from
+     * Reformats the {@linkplain ColorModel color model} to a {@linkplain ComponentColorModel
+     * component color model} preserving transparency. This is used especially in order to go from
+     * {@link PackedColorModel} to {@link ComponentColorModel}, which seems to be well accepted from
      * {@code PNGEncoder} and {@code TIFFEncoder}.
-     * <p>
-     * This code is adapted from jai-interests mailing list archive.
-     * 
+     *
+     * <p>This code is adapted from jai-interests mailing list archive.
+     *
      * @param checkTransparent
      * @param optimizeGray
-     * 
      * @return this {@link ImageWorker}.
-     * 
      * @see FormatDescriptor
      */
-    public final ImageWorker forceComponentColorModel(boolean checkTransparent, boolean optimizeGray) {
+    public final ImageWorker forceComponentColorModel(
+            boolean checkTransparent, boolean optimizeGray) {
         final ColorModel cm = image.getColorModel();
         if (cm instanceof ComponentColorModel) {
             // Already an component color model - nothing to do.
@@ -32,77 +32,71 @@
             LookupTable lut = null;
 
             switch (datatype) {
-            case DataBuffer.TYPE_BYTE: {
-                final byte[][] data = new byte[numDestinationBands][256];
-                icm.getReds(data[0]);
-                if (numDestinationBands >= 2)
-                    // remember to optimize for grayscale images
-                    if (!gray)
-                        icm.getGreens(data[1]);
-                    else
-                        icm.getAlphas(data[1]);
-                if (numDestinationBands >= 3)
-                    icm.getBlues(data[2]);
-                if (numDestinationBands == 4) {
-                    icm.getAlphas(data[3]);
-                }
-                if(icm.getMapSize() < 256) {
-                    Color bgColor = getBackgroundColor();
-                    if(bgColor == null) {
-                        bgColor = Color.BLACK;
-                    }
-                    byte r = (byte) (bgColor.getRed() & 0xFF);
-                    byte g = (byte) (bgColor.getRed() & 0xFF);
-                    byte b  = (byte) (bgColor.getBlue() & 0xFF);
-                    byte a = (byte) (bgColor.getAlpha() & 0xFF);
-                    for (int i = icm.getMapSize(); i < 256; i++) {
-                        data[0][i] = r;
-                        if (numDestinationBands >= 2) {
+                case DataBuffer.TYPE_BYTE:
+                    {
+                        final byte[][] data = new byte[numDestinationBands][256];
+                        icm.getReds(data[0]);
+                        if (numDestinationBands >= 2)
                             // remember to optimize for grayscale images
-                            if (!gray) {
-                                data[1][i] = g;
-                            } else {
-                                data[1][i] = a;
+                            if (!gray) icm.getGreens(data[1]);
+                            else icm.getAlphas(data[1]);
+                        if (numDestinationBands >= 3) icm.getBlues(data[2]);
+                        if (numDestinationBands == 4) {
+                            icm.getAlphas(data[3]);
+                        }
+                        if (icm.getMapSize() < 256) {
+                            Color bgColor = getBackgroundColor();
+                            if (bgColor == null) {
+                                bgColor = Color.BLACK;
+                            }
+                            byte r = (byte) (bgColor.getRed() & 0xFF);
+                            byte g = (byte) (bgColor.getRed() & 0xFF);
+                            byte b = (byte) (bgColor.getBlue() & 0xFF);
+                            byte a = (byte) (bgColor.getAlpha() & 0xFF);
+                            for (int i = icm.getMapSize(); i < 256; i++) {
+                                data[0][i] = r;
+                                if (numDestinationBands >= 2) {
+                                    // remember to optimize for grayscale images
+                                    if (!gray) {
+                                        data[1][i] = g;
+                                    } else {
+                                        data[1][i] = a;
+                                    }
+                                }
+                                if (numDestinationBands >= 3) {
+                                    data[2][i] = b;
+                                }
+                                if (numDestinationBands == 4) {
+                                    data[3][i] = a;
+                                }
                             }
                         }
-                        if (numDestinationBands >= 3) {
-                            data[2][i] = b;
-                        }
-                        if (numDestinationBands == 4) {
-                            data[3][i] = a;
-                        }
+                        lut = LookupTableFactory.create(data, datatype);
                     }
-                }
-                lut = LookupTableFactory.create(data, datatype);
+                    break;
 
-            }
-                break;
-
-            case DataBuffer.TYPE_USHORT: {
-                final int mapSize = icm.getMapSize();
-                final short[][] data = new short[numDestinationBands][mapSize];
-                for (int i = 0; i < mapSize; i++) {
-                    data[0][i] = (short) icm.getRed(i);
-                    if (numDestinationBands >= 2)
-                        // remember to optimize for grayscale images
-                        if (!gray)
-                            data[1][i] = (short) icm.getGreen(i);
-                        else
-                            data[1][i] = (short) icm.getAlpha(i);
-                    if (numDestinationBands >= 3)
-                        data[2][i] = (short) icm.getBlue(i);
-                    if (numDestinationBands == 4) {
-                        data[3][i] = (short) icm.getAlpha(i);
+                case DataBuffer.TYPE_USHORT:
+                    {
+                        final int mapSize = icm.getMapSize();
+                        final short[][] data = new short[numDestinationBands][mapSize];
+                        for (int i = 0; i < mapSize; i++) {
+                            data[0][i] = (short) icm.getRed(i);
+                            if (numDestinationBands >= 2)
+                                // remember to optimize for grayscale images
+                                if (!gray) data[1][i] = (short) icm.getGreen(i);
+                                else data[1][i] = (short) icm.getAlpha(i);
+                            if (numDestinationBands >= 3) data[2][i] = (short) icm.getBlue(i);
+                            if (numDestinationBands == 4) {
+                                data[3][i] = (short) icm.getAlpha(i);
+                            }
+                        }
+                        lut = LookupTableFactory.create(data, datatype == DataBuffer.TYPE_USHORT);
                     }
-                }
-                lut = LookupTableFactory.create(data, datatype == DataBuffer.TYPE_USHORT);
+                    break;
 
-            }
-                break;
-
-            default:
-                throw new IllegalArgumentException(Errors.format(ErrorKeys.ILLEGAL_ARGUMENT_$2,
-                        "datatype", datatype));
+                default:
+                    throw new IllegalArgumentException(
+                            Errors.format(ErrorKeys.ILLEGAL_ARGUMENT_$2, "datatype", datatype));
             }
 
             // did we initialized the LUT?
@@ -124,15 +118,20 @@
 
             int[] bits = new int[numDestinationBands];
             // bits per component
-            for (int i = 0; i < numDestinationBands; i++)
-                bits[i] = sm.getSampleSize(i);
-            final ComponentColorModel destinationColorModel = new ComponentColorModel(
-                    numDestinationBands >= 3 ? ColorSpace.getInstance(ColorSpace.CS_sRGB)
-                            : ColorSpace.getInstance(ColorSpace.CS_GRAY), bits, alpha,
-                    cm.isAlphaPremultiplied(), alpha ? Transparency.TRANSLUCENT
-                            : Transparency.OPAQUE, datatype);
-            final SampleModel destinationSampleModel = destinationColorModel
-                    .createCompatibleSampleModel(image.getWidth(), image.getHeight());
+            for (int i = 0; i < numDestinationBands; i++) bits[i] = sm.getSampleSize(i);
+            final ComponentColorModel destinationColorModel =
+                    new ComponentColorModel(
+                            numDestinationBands >= 3
+                                    ? ColorSpace.getInstance(ColorSpace.CS_sRGB)
+                                    : ColorSpace.getInstance(ColorSpace.CS_GRAY),
+                            bits,
+                            alpha,
+                            cm.isAlphaPremultiplied(),
+                            alpha ? Transparency.TRANSLUCENT : Transparency.OPAQUE,
+                            datatype);
+            final SampleModel destinationSampleModel =
+                    destinationColorModel.createCompatibleSampleModel(
+                            image.getWidth(), image.getHeight());
             layout.setColorModel(destinationColorModel);
             layout.setSampleModel(destinationSampleModel);
 
@@ -152,8 +151,10 @@
 
         } else {
             // Most of the code adapted from jai-interests is in 'getRenderingHints(int)'.
-            final int type = (cm instanceof DirectColorModel) ? DataBuffer.TYPE_BYTE : image
-                    .getSampleModel().getTransferType();
+            final int type =
+                    (cm instanceof DirectColorModel)
+                            ? DataBuffer.TYPE_BYTE
+                            : image.getSampleModel().getTransferType();
             final RenderingHints hints = getRenderingHints(type);
             ParameterBlock pb = new ParameterBlock();
             pb.setSource(image, 0); // The source image.

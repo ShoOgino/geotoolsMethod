@@ -1,79 +1,76 @@
-        /**
-         * This method is used to set the tie point and the scale parameters for the
-         * GeoTiff file we are writing or the ModelTransformation in case a more
-         * general {@link AffineTransform} is needed to represent the raster space
-         * to model space transform.
-         * 
-         * <p>
-         * This method works regardles of the nature fo the crs without making any
-         * assumptions on the order or the direction of the axes, but checking them
-         * from the supplied CRS.
-         * 
-         * @see {@link http://lists.maptools.org/pipermail/geotiff/2006-January/000213.html}
-         * @see {@http://lists.maptools.org/pipermail/geotiff/2006-January/000212.html}
-         * @param crs
-         *            The {@link CoordinateReferenceSystem} of the
-         *            {@link GridCoverage2D} to encode.
-         * @param metadata
-         *            where to set the georeferencing information.
-         * @param range
-         *            that describes the raster space for this geotiff.
-         * @param rasterToModel
-         *            describes the {@link AffineTransform} between raster space and
-         *            model space.
-         * @param retainAxesOrder <code>true</code> in case we want to retain the axes order, <code>false</code> otherwise for lon-lat enforcing.
-         * 
-         * @throws IOException in case something bad happens during the write operation.
-         */
-        private static void setGeoReference(final CoordinateReferenceSystem crs,
-                        final GeoTiffIIOMetadataEncoder metadata,
-                        final AffineTransform rasterToModel, GridEnvelope2D range, 
-                        boolean retainAxesOrder)
-                        throws IOException {
+    /**
+     * This method is used to set the tie point and the scale parameters for the GeoTiff file we are
+     * writing or the ModelTransformation in case a more general {@link AffineTransform} is needed
+     * to represent the raster space to model space transform.
+     *
+     * <p>This method works regardles of the nature fo the crs without making any assumptions on the
+     * order or the direction of the axes, but checking them from the supplied CRS.
+     *
+     * @see {@link http://lists.maptools.org/pipermail/geotiff/2006-January/000213.html}
+     * @see {@http://lists.maptools.org/pipermail/geotiff/2006-January/000212.html}
+     * @param crs The {@link CoordinateReferenceSystem} of the {@link GridCoverage2D} to encode.
+     * @param metadata where to set the georeferencing information.
+     * @param range that describes the raster space for this geotiff.
+     * @param rasterToModel describes the {@link AffineTransform} between raster space and model
+     *     space.
+     * @param retainAxesOrder <code>true</code> in case we want to retain the axes order, <code>
+     *     false</code> otherwise for lon-lat enforcing.
+     * @throws IOException in case something bad happens during the write operation.
+     */
+    private static void setGeoReference(
+            final CoordinateReferenceSystem crs,
+            final GeoTiffIIOMetadataEncoder metadata,
+            final AffineTransform rasterToModel,
+            GridEnvelope2D range,
+            boolean retainAxesOrder)
+            throws IOException {
 
-                //
-                // We have to set an affine transformation which is going to be 2D
-                // since we support baseline GeoTiff.
-                //
-                final AffineTransform modifiedRasterToModel = new AffineTransform(rasterToModel);
-                // move the internal grid to world to corner from center
-                modifiedRasterToModel.concatenate(CoverageUtilities.CENTER_TO_CORNER);;
-                int minx = range.getLow(0), miny = range.getLow(1);
-                if (minx != 0 || miny != 0) {
-                        // //
-                        //
-                        // Preconcatenate a transform to have raster space beginning at
-                        // (0,0) as this is not captured by the TIFF spec
-                        //
-                        // //
-                        modifiedRasterToModel.concatenate(AffineTransform.getTranslateInstance(minx, miny));
-                } 
-
-                //
-                // Setting raster type to pixel corner since that is the default for geotiff
-                // and makes most software happy
-                //
-                metadata.addGeoShortParam(GeoTiffConstants.GTRasterTypeGeoKey,GeoTiffConstants.RasterPixelIsArea);
-
-                //
-                // AXES Swap Management
-                //
-                // we need to understand how the axes of this gridcoverage are
-                // specified, trying to understand the direction of the first axis in
-                // order to correctly use transformations.
-                //
-                boolean swapAxes = XAffineTransform.getSwapXY(modifiedRasterToModel) == -1 || CRS.getAxisOrder(crs).equals(AxisOrder.NORTH_EAST);
-                swapAxes&=!retainAxesOrder;
-        
-
-                //
-                // Deciding how to save the georef with respect to the CRS.
-                //            
-                // Notice that if we were asked to retain the axes order we don't swap axes!
-                //
-                if(swapAxes){
-                    modifiedRasterToModel.preConcatenate(CoverageUtilities.AXES_SWAP); 
-                }
-                metadata.setModelTransformation(modifiedRasterToModel);
+        //
+        // We have to set an affine transformation which is going to be 2D
+        // since we support baseline GeoTiff.
+        //
+        final AffineTransform modifiedRasterToModel = new AffineTransform(rasterToModel);
+        // move the internal grid to world to corner from center
+        modifiedRasterToModel.concatenate(CoverageUtilities.CENTER_TO_CORNER);
+        ;
+        int minx = range.getLow(0), miny = range.getLow(1);
+        if (minx != 0 || miny != 0) {
+            // //
+            //
+            // Preconcatenate a transform to have raster space beginning at
+            // (0,0) as this is not captured by the TIFF spec
+            //
+            // //
+            modifiedRasterToModel.concatenate(AffineTransform.getTranslateInstance(minx, miny));
         }
+
+        //
+        // Setting raster type to pixel corner since that is the default for geotiff
+        // and makes most software happy
+        //
+        metadata.addGeoShortParam(
+                GeoTiffConstants.GTRasterTypeGeoKey, GeoTiffConstants.RasterPixelIsArea);
+
+        //
+        // AXES Swap Management
+        //
+        // we need to understand how the axes of this gridcoverage are
+        // specified, trying to understand the direction of the first axis in
+        // order to correctly use transformations.
+        //
+        boolean swapAxes =
+                XAffineTransform.getSwapXY(modifiedRasterToModel) == -1
+                        || CRS.getAxisOrder(crs).equals(AxisOrder.NORTH_EAST);
+        swapAxes &= !retainAxesOrder;
+
+        //
+        // Deciding how to save the georef with respect to the CRS.
+        //
+        // Notice that if we were asked to retain the axes order we don't swap axes!
+        //
+        if (swapAxes) {
+            modifiedRasterToModel.preConcatenate(CoverageUtilities.AXES_SWAP);
+        }
+        metadata.setModelTransformation(modifiedRasterToModel);
+    }
 

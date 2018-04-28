@@ -1,26 +1,17 @@
     /**
      * Create MultiPolygon as encoded by elemInfo.
-     * 
-     * <p>
-     * Encoded as a series polygon triplets in elemInfo:
-     * </p>
-     * 
-     * <ul>
-     * <li>
-     * STARTING_OFFSET: position in ordinal ordinate array
-     * </li>
-     * <li>
-     * ETYPE: 2003 or 3 for Polygon
-     * </li>
-     * <li>
-     * INTERPRETATION: 1 for straight edges, 2 for rectangle
-     * </li>
-     * </ul>
-     * 
-     * <p></p>
      *
-     * TODO: Confirm that createCollection is not getting cut&paste mistakes from polygonCollection
-     * 
+     * <p>Encoded as a series polygon triplets in elemInfo:
+     *
+     * <ul>
+     *   <li>STARTING_OFFSET: position in ordinal ordinate array
+     *   <li>ETYPE: 2003 or 3 for Polygon
+     *   <li>INTERPRETATION: 1 for straight edges, 2 for rectangle
+     * </ul>
+     *
+     * <p>TODO: Confirm that createCollection is not getting cut&paste mistakes from
+     * polygonCollection
+     *
      * @param gf Used to construct MultiLineString
      * @param GTYPE Encoding of <b>D</b>imension, <b>L</b>RS and <b>TT</b>ype
      * @param SRID Spatial Reference System
@@ -28,83 +19,90 @@
      * @param triplet Triplet in elemInfo to process as a Polygon
      * @param coords Coordinates to interpret using elemInfo
      * @param N Number of triplets (or -1 for rest)
-     *
      * @return GeometryCollection
-     *
      * @throws IllegalArgumentException DWhen faced with an encoding error
      */
-    private static GeometryCollection createCollection(CurvedGeometryFactory gf,
-        final int GTYPE, final int SRID, final int[] elemInfo,
-        final int triplet, CoordinateSequence coords, final int N) {
+    private static GeometryCollection createCollection(
+            CurvedGeometryFactory gf,
+            final int GTYPE,
+            final int SRID,
+            final int[] elemInfo,
+            final int triplet,
+            CoordinateSequence coords,
+            final int N) {
         final int STARTING_OFFSET = STARTING_OFFSET(elemInfo, triplet);
 
-        final int LENGTH = coords.size()*D(GTYPE);
-        
+        final int LENGTH = coords.size() * D(GTYPE);
+
         if (!(STARTING_OFFSET >= 1) || !(STARTING_OFFSET <= LENGTH))
-            throw new IllegalArgumentException("ELEM_INFO STARTING_OFFSET "+STARTING_OFFSET+" inconsistent with ORDINATES length "+coords.size());
-        
-        final int endTriplet = (N != -1) ? (triplet + N)
-                                         : ((elemInfo.length / 3) + 1);
+            throw new IllegalArgumentException(
+                    "ELEM_INFO STARTING_OFFSET "
+                            + STARTING_OFFSET
+                            + " inconsistent with ORDINATES length "
+                            + coords.size());
+
+        final int endTriplet = (N != -1) ? (triplet + N) : ((elemInfo.length / 3) + 1);
 
         List list = new LinkedList();
         int etype;
         int interpretation;
         Geometry geom;
 
-GEOMETRYS: 
+        GEOMETRYS:
         for (int i = triplet; i < endTriplet; i++) {
             etype = ETYPE(elemInfo, i);
             interpretation = INTERPRETATION(elemInfo, i);
 
             switch (etype) {
-            case -1:
-                break GEOMETRYS; // We are the of the list - get out of here
+                case -1:
+                    break GEOMETRYS; // We are the of the list - get out of here
 
-            case ETYPE.POINT:
+                case ETYPE.POINT:
+                    if (interpretation == 1) {
+                        geom = createPoint(gf, GTYPE, SRID, elemInfo, i, coords);
+                    } else if (interpretation > 1) {
+                        geom = createMultiPoint(gf, GTYPE, SRID, elemInfo, i, coords);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "ETYPE.POINT requires INTERPRETATION >= 1");
+                    }
 
-                if (interpretation == 1) {
-                    geom = createPoint(gf, GTYPE, SRID, elemInfo, i, coords);
-                } else if (interpretation > 1) {
-                    geom = createMultiPoint(gf, GTYPE, SRID, elemInfo, i, coords);
-                } else {
+                    break;
+
+                case ETYPE.LINE:
+                    geom = createLine(gf, GTYPE, SRID, elemInfo, i, coords, false);
+
+                    break;
+
+                case ETYPE.POLYGON:
+                case ETYPE.POLYGON_EXTERIOR:
+                    geom = createPolygon(gf, GTYPE, SRID, elemInfo, i, coords);
+                    i += ((Polygon) geom).getNumInteriorRing();
+
+                    break;
+
+                case ETYPE.POLYGON_INTERIOR:
                     throw new IllegalArgumentException(
-                        "ETYPE.POINT requires INTERPRETATION >= 1");
-                }
+                            "ETYPE 2003 (Polygon Interior) no expected in a GeometryCollection"
+                                    + "(2003 is used to represent polygon holes, in a 1003 polygon exterior)");
 
-                break;
-
-            case ETYPE.LINE:
-                geom = createLine(gf, GTYPE, SRID, elemInfo, i, coords, false);
-
-                break;
-
-            case ETYPE.POLYGON:
-            case ETYPE.POLYGON_EXTERIOR:
-                geom = createPolygon(gf, GTYPE, SRID, elemInfo, i, coords);
-                i += ((Polygon) geom).getNumInteriorRing();
-
-                break;
-
-            case ETYPE.POLYGON_INTERIOR:
-                throw new IllegalArgumentException(
-                    "ETYPE 2003 (Polygon Interior) no expected in a GeometryCollection"
-                    + "(2003 is used to represent polygon holes, in a 1003 polygon exterior)");
-
-            case ETYPE.CUSTOM:
-            case ETYPE.COMPOUND:
-            case ETYPE.COMPOUND_POLYGON:
-            case ETYPE.COMPOUND_POLYGON_EXTERIOR:
-            case ETYPE.COMPOUND_POLYGON_INTERIOR:default:
-                throw new IllegalArgumentException("ETYPE " + etype
-                    + " not representable as a JTS Geometry."
-                    + "(Custom and Compound Straight and Curved Geometries not supported)");
+                case ETYPE.CUSTOM:
+                case ETYPE.COMPOUND:
+                case ETYPE.COMPOUND_POLYGON:
+                case ETYPE.COMPOUND_POLYGON_EXTERIOR:
+                case ETYPE.COMPOUND_POLYGON_INTERIOR:
+                default:
+                    throw new IllegalArgumentException(
+                            "ETYPE "
+                                    + etype
+                                    + " not representable as a JTS Geometry."
+                                    + "(Custom and Compound Straight and Curved Geometries not supported)");
             }
 
             list.add(geom);
         }
 
-        GeometryCollection geoms = gf.createGeometryCollection(toGeometryArray(
-                    list));
+        GeometryCollection geoms = gf.createGeometryCollection(toGeometryArray(list));
         geoms.setSRID(SRID);
 
         return geoms;

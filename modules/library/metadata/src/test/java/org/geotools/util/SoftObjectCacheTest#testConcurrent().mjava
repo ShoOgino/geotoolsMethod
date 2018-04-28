@@ -1,46 +1,46 @@
-	@Test
-	public void testConcurrent() throws InterruptedException {
-		ObjectCache cache = new SoftObjectCache();
+    @Test
+    public void testConcurrent() throws InterruptedException {
+        ObjectCache cache = new SoftObjectCache();
 
-		// lock the cache as if we were writing
-		cache.writeLock(key1);
+        // lock the cache as if we were writing
+        cache.writeLock(key1);
 
-		// create another thread which starts writing and blocks
-		Runnable thread1 = new WriterThread(cache);
-		Thread t1 = new Thread(thread1);
-		t1.start();
-		Thread.yield();
+        // create another thread which starts writing and blocks
+        Runnable thread1 = new WriterThread(cache);
+        Thread t1 = new Thread(thread1);
+        t1.start();
+        Thread.yield();
 
-		// write
-		cache.put(key1, value2);
+        // write
+        cache.put(key1, value2);
 
-		// check that the write thread was blocked
-		Object[] values = ((WriterThread) thread1).getValue();
-		assertEquals(null, values);
-		assertEquals(value2, cache.peek(key1));
-		assertEquals(1, cache.getKeys().size());
+        // check that the write thread was blocked
+        Object[] values = ((WriterThread) thread1).getValue();
+        assertEquals(null, values);
+        assertEquals(value2, cache.peek(key1));
+        assertEquals(1, cache.getKeys().size());
 
-		// check that a separate write thread can get through
-		cache.writeLock(key2);
-		cache.put(key2, value3);
-		cache.writeUnLock(key2);
-		assertEquals(2, cache.getKeys().size());
+        // check that a separate write thread can get through
+        cache.writeLock(key2);
+        cache.put(key2, value3);
+        cache.writeUnLock(key2);
+        assertEquals(2, cache.getKeys().size());
 
-		// unlock
-		try {
-			cache.writeUnLock(key1);
-		} catch (Exception e) {
-			fail("couldn't unlock");
-		}
+        // unlock
+        try {
+            cache.writeUnLock(key1);
+        } catch (Exception e) {
+            fail("couldn't unlock");
+        }
 
-		// check that the write thread is unblocked
-		t1.join();
-		values = ((WriterThread) thread1).getValue();
-		assertNotNull(values);
-		assertEquals(value1, values[0]);
+        // check that the write thread is unblocked
+        t1.join();
+        values = ((WriterThread) thread1).getValue();
+        assertNotNull(values);
+        assertEquals(value1, values[0]);
 
-		assertEquals(2, cache.getKeys().size());
-		assertTrue(cache.getKeys().contains(key1));
-		assertTrue(cache.getKeys().contains(key2));
-	}
+        assertEquals(2, cache.getKeys().size());
+        assertTrue(cache.getKeys().contains(key1));
+        assertTrue(cache.getKeys().contains(key2));
+    }
 

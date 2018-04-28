@@ -1,20 +1,21 @@
     /**
-     * This method invokes the OpenDataStoreFeatureReader class
-     * This method has been borrowed from
+     * This method invokes the OpenDataStoreFeatureReader class This method has been borrowed from
      * https://svn.osgeo.org/geotools/trunk/modules/library/jdbc/src/main/java/org/geotools/jdbc/JDBCFeatureSource.java
+     *
      * @param fnQuery
      * @return FeatureReader
      * @throws IOException
      */
     @Override
-    protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query fnQuery) throws IOException {
+    protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query fnQuery)
+            throws IOException {
         // simplify the filter
         Filter filter = fnQuery.getFilter();
         SimplifyingFilterVisitor simplifier = new SimplifyingFilterVisitor();
         simplifier.setFeatureType(getSchema());
         filter = (Filter) filter.accept(simplifier, null);
-        
-        // Split the filter into two parts, pre and post 
+
+        // Split the filter into two parts, pre and post
         Filter[] split = splitFilter(filter);
 
         Filter preFilter = split[0];
@@ -31,7 +32,8 @@
         if (fnQuery.getPropertyNames() == Query.ALL_NAMES) {
             returnedSchema = querySchema = getSchema();
         } else {
-            returnedSchema = SimpleFeatureTypeBuilder.retype(getSchema(), fnQuery.getPropertyNames());
+            returnedSchema =
+                    SimpleFeatureTypeBuilder.retype(getSchema(), fnQuery.getPropertyNames());
             FilterAttributeExtractor extractor = new FilterAttributeExtractor(getSchema());
             // we need to let all attribute pass as we're going to make a full filter evaluation
             // in memory
@@ -41,13 +43,15 @@
                 // nothing to do
                 querySchema = returnedSchema;
             } else {
-                List<String> allAttributes = new ArrayList<String>(Arrays.asList(fnQuery.getPropertyNames()));
+                List<String> allAttributes =
+                        new ArrayList<String>(Arrays.asList(fnQuery.getPropertyNames()));
                 for (String extraAttribute : extraAttributes) {
                     if (!allAttributes.contains(extraAttribute)) {
                         allAttributes.add(extraAttribute);
                     }
                 }
-                String[] allAttributeArray = allAttributes.toArray(new String[allAttributes.size()]);
+                String[] allAttributeArray =
+                        allAttributes.toArray(new String[allAttributes.size()]);
                 preQuery.setPropertyNames(allAttributeArray);
                 querySchema = SimpleFeatureTypeBuilder.retype(getSchema(), allAttributeArray);
             }
@@ -56,23 +60,22 @@
         /* Get the reader*/
         FeatureReader<SimpleFeatureType, SimpleFeature> reader;
 
-
         /* Do the pre part first */
         reader = new SFSFeatureReader(getState(), layer, preQuery, querySchema);
 
-        /* 
+        /*
          * Normally we should finish off with post filtering, but reality proves that the
          * remote service sometimes does not implement the protocol filtering spec fully.
          * Don't trust the records sent back and apply the whole filter again on top of them
          */
-        if(filter != null && !Filter.INCLUDE.equals(filter)) {
+        if (filter != null && !Filter.INCLUDE.equals(filter)) {
             reader = new FilteringFeatureReader<SimpleFeatureType, SimpleFeature>(reader, filter);
         }
-        
-        if(querySchema.getAttributeCount() > returnedSchema.getAttributeCount()) {
+
+        if (querySchema.getAttributeCount() > returnedSchema.getAttributeCount()) {
             reader = new ReTypeFeatureReader(reader, returnedSchema);
         }
-        
+
         return reader;
     }
 

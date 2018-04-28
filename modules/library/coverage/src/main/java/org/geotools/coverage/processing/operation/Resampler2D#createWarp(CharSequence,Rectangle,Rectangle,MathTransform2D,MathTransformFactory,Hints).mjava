@@ -1,30 +1,34 @@
     /**
-     * Creates a warp for the given transform. This method performs some empirical adjustment
-     * for working around the {@link ArrayIndexOutOfBoundsException} which occurs sometime in
-     * {@code MlibWarpPolynomialOpImage.computeTile(...)}.
+     * Creates a warp for the given transform. This method performs some empirical adjustment for
+     * working around the {@link ArrayIndexOutOfBoundsException} which occurs sometime in {@code
+     * MlibWarpPolynomialOpImage.computeTile(...)}.
      *
-     * @param  name       The coverage name, for information purpose.
-     * @param  sourceBB   Bounding box of source image, or {@code null}.
-     * @param  targetBB   Bounding box of target image, or {@code null}.
-     * @param  allSteps2D Transform from target to source CRS.
-     * @param  mtFactory  A math transform factory in case new transforms need to be created.
+     * @param name The coverage name, for information purpose.
+     * @param sourceBB Bounding box of source image, or {@code null}.
+     * @param targetBB Bounding box of target image, or {@code null}.
+     * @param allSteps2D Transform from target to source CRS.
+     * @param mtFactory A math transform factory in case new transforms need to be created.
      * @return The warp.
      * @throws FactoryException if the warp can't be created.
      * @throws TransformException if the warp can't be created.
      */
-    private static Warp createWarp(final CharSequence name, final Rectangle sourceBB, final Rectangle targetBB,
-                                   final MathTransform2D allSteps2D, final MathTransformFactory mtFactory, Hints hints)
-            throws FactoryException, TransformException
-    {
+    private static Warp createWarp(
+            final CharSequence name,
+            final Rectangle sourceBB,
+            final Rectangle targetBB,
+            final MathTransform2D allSteps2D,
+            final MathTransformFactory mtFactory,
+            Hints hints)
+            throws FactoryException, TransformException {
         Double tolerance = (Double) hints.get(Hints.RESAMPLE_TOLERANCE);
-        if(tolerance == null) {
+        if (tolerance == null) {
             tolerance = (Double) Hints.getSystemDefault(Hints.RESAMPLE_TOLERANCE);
-        } 
-        if(tolerance == null) {
+        }
+        if (tolerance == null) {
             tolerance = 0.333;
         }
         WarpBuilder wb = new WarpBuilder(tolerance);
-        
+
         MathTransform2D transform = allSteps2D;
         Rectangle actualBB = null;
         int step = 0;
@@ -34,15 +38,23 @@
              * creation that we need to perform some empirical adjustment. The difference between
              * the actual and expected bounding boxes should be only 1 pixel.
              */
-            if (actualBB != null) { 
-                final double scaleX     = 1 - ((double) sourceBB.width  / (double) actualBB.width);
-                final double scaleY     = 1 - ((double) sourceBB.height / (double) actualBB.height);
+            if (actualBB != null) {
+                final double scaleX = 1 - ((double) sourceBB.width / (double) actualBB.width);
+                final double scaleY = 1 - ((double) sourceBB.height / (double) actualBB.height);
                 final double translateX = sourceBB.x - actualBB.x;
                 final double translateY = sourceBB.y - actualBB.y;
                 final double factor = (double) step / (double) EMPIRICAL_ADJUSTMENT_STEPS;
-                final AffineTransform2D adjustment = new AffineTransform2D(
-                        1 - scaleX*factor, 0, 0, 1 - scaleY*factor, translateX*factor, translateY*factor);
-                transform = (MathTransform2D) mtFactory.createConcatenatedTransform(allSteps2D, adjustment);
+                final AffineTransform2D adjustment =
+                        new AffineTransform2D(
+                                1 - scaleX * factor,
+                                0,
+                                0,
+                                1 - scaleY * factor,
+                                translateX * factor,
+                                translateY * factor);
+                transform =
+                        (MathTransform2D)
+                                mtFactory.createConcatenatedTransform(allSteps2D, adjustment);
             }
             /*
              * Creates the warp object, trying to optimize to WarpAffine if possible. The transform
@@ -53,24 +65,26 @@
              * progressive empirical adjustment in order to get the rectangles to fit.
              */
             final Warp warp = wb.buildWarp(transform, targetBB);
-            if(true) {
+            if (true) {
                 return warp;
             }
-            
-//            // remainder is disabled for now since it break Geoserver build.
-//            if (sourceBB == null || targetBB == null) {
-//                return warp;
-//            }
-//            actualBB = warp.mapSourceRect(sourceBB); // May be null
-//            if (actualBB != null && targetBB.contains(sourceBB)) {
-//                return warp;
-//            }
-//            actualBB = warp.mapDestRect(targetBB); // Should never be null.
-//            if (actualBB != null && targetBB.contains(sourceBB)) {
-//                return warp;
-//            }
-//            // The loop below intentionally tries one more iteration than the constant in case we need
-//            // to apply slightly more than the above scale and translation because of rounding errors.
+
+            //            // remainder is disabled for now since it break Geoserver build.
+            //            if (sourceBB == null || targetBB == null) {
+            //                return warp;
+            //            }
+            //            actualBB = warp.mapSourceRect(sourceBB); // May be null
+            //            if (actualBB != null && targetBB.contains(sourceBB)) {
+            //                return warp;
+            //            }
+            //            actualBB = warp.mapDestRect(targetBB); // Should never be null.
+            //            if (actualBB != null && targetBB.contains(sourceBB)) {
+            //                return warp;
+            //            }
+            //            // The loop below intentionally tries one more iteration than the constant
+            // in case we need
+            //            // to apply slightly more than the above scale and translation because of
+            // rounding errors.
         } while (step++ <= EMPIRICAL_ADJUSTMENT_STEPS);
         throw new FactoryException(Errors.format(ErrorKeys.CANT_REPROJECT_$1, name));
     }

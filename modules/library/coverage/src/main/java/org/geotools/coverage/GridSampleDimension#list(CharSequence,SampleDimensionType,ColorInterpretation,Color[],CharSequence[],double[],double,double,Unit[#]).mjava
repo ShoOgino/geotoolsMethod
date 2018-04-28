@@ -1,20 +1,21 @@
     /** Constructs a list of categories. Used by constructors only. */
     @SuppressWarnings("deprecation")
-	private static CategoryList list(CharSequence  description,
-                                     SampleDimensionType  type,
-                                     ColorInterpretation color,
-                               final Color[]           palette,
-                               final CharSequence[] categories,
-                               final double[]           nodata,
-                                     double            minimum,
-                                     double            maximum,
-                               final Unit<?>              unit)
-    {
+    private static CategoryList list(
+            CharSequence description,
+            SampleDimensionType type,
+            ColorInterpretation color,
+            final Color[] palette,
+            final CharSequence[] categories,
+            final double[] nodata,
+            double minimum,
+            double maximum,
+            final Unit<?> unit) {
         if (description == null) {
             description = Vocabulary.formatInternational(VocabularyKeys.UNTITLED);
         }
         if (Double.isInfinite(minimum) || Double.isInfinite(maximum) || !(minimum < maximum)) {
-            throw new IllegalArgumentException(Errors.format(ErrorKeys.BAD_RANGE_$2, minimum, maximum));
+            throw new IllegalArgumentException(
+                    Errors.format(ErrorKeys.BAD_RANGE_$2, minimum, maximum));
         }
         if (type == null) {
             type = TypeMap.getSampleDimensionType(minimum, maximum);
@@ -22,15 +23,15 @@
         if (color == null) {
             color = ColorInterpretation.PALETTE_INDEX;
         }
-        final int  nameCount    = (categories != null) ? categories.length : 0;
-        final int  nodataCount  = (nodata     != null) ?     nodata.length : 0;
+        final int nameCount = (categories != null) ? categories.length : 0;
+        final int nodataCount = (nodata != null) ? nodata.length : 0;
         final List<Category> categoryList = new ArrayList<Category>(nameCount + nodataCount + 2);
         /*
          * STEP 1 - Add a qualitative category for each 'nodata' value.
          *   NAME: Fetched from 'categories' if available, otherwise default to the value.
          *   COLOR: Fetched from 'palette' if available, otherwise use Category default.
          */
-        for (int i=0; i<nodataCount; i++) {
+        for (int i = 0; i < nodataCount; i++) {
             CharSequence name = null;
             final double padValue = nodata[i];
             final int intValue = (int) Math.floor(padValue);
@@ -57,7 +58,7 @@
         if (nameCount != 0) {
             int lower = 0;
             final int length = categories.length;
-            for (int upper=1; upper<=length; upper++) {
+            for (int upper = 1; upper <= length; upper++) {
                 if (upper != length) {
                     final String nameLower = categories[lower].toString().trim();
                     final String nameUpper = categories[upper].toString().trim();
@@ -71,16 +72,16 @@
                     }
                 }
                 final CharSequence name = categories[lower];
-                Number min = TypeMap.wrapSample(lower,   type, false);
-                Number max = TypeMap.wrapSample(upper-1, type, false);
+                Number min = TypeMap.wrapSample(lower, type, false);
+                Number max = TypeMap.wrapSample(upper - 1, type, false);
                 final Class<? extends Number> classe;
                 if (min.equals(max)) {
                     min = max;
                     classe = max.getClass();
                 } else {
                     classe = ClassChanger.getWidestClass(min, max);
-                    min    = ClassChanger.cast(min, classe);
-                    max    = ClassChanger.cast(max, classe);
+                    min = ClassChanger.cast(min, classe);
+                    max = ClassChanger.cast(max, classe);
                 }
                 final NumberRange<?> range = new NumberRange(classe, min, max);
                 final Color[] colors = ColorUtilities.subarray(palette, lower, upper);
@@ -106,12 +107,12 @@
         boolean needQuantitative = false;
         if (nodataCount != 0 || categoryList.size() <= 1) {
             needQuantitative = true;
-            for (int i = categoryList.size(); --i >= 0;) {
+            for (int i = categoryList.size(); --i >= 0; ) {
                 Category category = categoryList.get(i);
                 if (!category.isQuantitative()) {
                     final NumberRange range = category.getRange();
-                    final Comparable  min   = range.getMinValue();
-                    final Comparable  max   = range.getMaxValue();
+                    final Comparable min = range.getMinValue();
+                    final Comparable max = range.getMaxValue();
                     @SuppressWarnings("unchecked")
                     final int c = min.compareTo(max);
                     if (c != 0) {
@@ -141,11 +142,11 @@
         if (needQuantitative) {
             boolean minIncluded = true;
             boolean maxIncluded = true;
-            for (int i = categoryList.size(); --i >= 0;) {
+            for (int i = categoryList.size(); --i >= 0; ) {
                 final NumberRange range = categoryList.get(i).getRange();
                 final double min = range.getMinimum();
                 final double max = range.getMaximum();
-                if (max-minimum < maximum-min) {
+                if (max - minimum < maximum - min) {
                     if (max >= minimum) {
                         // We are loosing some sample values in
                         // the lower range because of nodata values.
@@ -168,10 +169,11 @@
                 final Class<? extends Number> classe = ClassChanger.getWidestClass(min, max);
                 min = ClassChanger.cast(min, classe);
                 max = ClassChanger.cast(max, classe);
-                final NumberRange range = new NumberRange(classe, min, minIncluded,
-                                                                  max, maxIncluded);
-                final Color[] colors = ColorUtilities.subarray(palette,
-                        (int) Math.ceil(minimum), (int) Math.floor(maximum));
+                final NumberRange range =
+                        new NumberRange(classe, min, minIncluded, max, maxIncluded);
+                final Color[] colors =
+                        ColorUtilities.subarray(
+                                palette, (int) Math.ceil(minimum), (int) Math.floor(maximum));
                 categoryList.add(new Category(description, colors, range));
                 needQuantitative = false;
             }
@@ -181,9 +183,8 @@
          *          sample dimension appropriate for the type of palette used.
          */
         final Category[] cl = categoryList.toArray(new Category[categoryList.size()]);
-        if (ColorInterpretation.PALETTE_INDEX.equals(color) ||
-            ColorInterpretation.GRAY_INDEX.equals(color))
-        {
+        if (ColorInterpretation.PALETTE_INDEX.equals(color)
+                || ColorInterpretation.GRAY_INDEX.equals(color)) {
             return list(cl, unit);
         }
         throw new UnsupportedOperationException("Not yet implemented");

@@ -1,48 +1,46 @@
     /**
-     * Writes the SQL for the Like Filter.  Assumes the current java
-     * implemented wildcards for the Like Filter: . for multi and .? for
-     * single. And replaces them with the SQL % and _, respectively.
+     * Writes the SQL for the Like Filter. Assumes the current java implemented wildcards for the
+     * Like Filter: . for multi and .? for single. And replaces them with the SQL % and _,
+     * respectively.
      *
      * @param filter the Like Filter to be visited.
-     *
-     * @task REVISIT: Need to think through the escape char, so it works  right
-     *       when Java uses one, and escapes correctly with an '_'.
+     * @task REVISIT: Need to think through the escape char, so it works right when Java uses one,
+     *     and escapes correctly with an '_'.
      */
-    public Object visit(PropertyIsLike filter, Object extraData)
-	{
-    	char esc = filter.getEscape().charAt(0);
-    	char multi = filter.getWildCard().charAt(0);
-    	char single = filter.getSingleChar().charAt(0);
+    public Object visit(PropertyIsLike filter, Object extraData) {
+        char esc = filter.getEscape().charAt(0);
+        char multi = filter.getWildCard().charAt(0);
+        char single = filter.getSingleChar().charAt(0);
         boolean matchCase = filter.isMatchingCase();
-        
+
         String literal = filter.getLiteral();
         Expression att = filter.getExpression();
-        
-        //JD: hack for date values, we append some additional padding to handle
+
+        // JD: hack for date values, we append some additional padding to handle
         // the matching of time/timezone/etc...
-        AttributeDescriptor ad = (AttributeDescriptor) att.evaluate( featureType );
-        if ( ad != null && Date.class.isAssignableFrom( ad.getType().getBinding() ) ) {
+        AttributeDescriptor ad = (AttributeDescriptor) att.evaluate(featureType);
+        if (ad != null && Date.class.isAssignableFrom(ad.getType().getBinding())) {
             literal += multi;
         }
-        
-    	String pattern = LikeFilterImpl.convertToSQL92(esc, multi, single, matchCase, literal);
-        
+
+        String pattern = LikeFilterImpl.convertToSQL92(esc, multi, single, matchCase, literal);
+
         try {
-            if (!matchCase){
+            if (!matchCase) {
                 out.write(" UPPER(");
             }
 
-	    	att.accept(this, extraData);
+            att.accept(this, extraData);
 
-            if (!matchCase){
+            if (!matchCase) {
                 out.write(") LIKE '");
             } else {
                 out.write(" LIKE '");
             }
 
-	    	out.write(pattern);
-	    	out.write("' ");
-    	} catch (java.io.IOException ioe) {
+            out.write(pattern);
+            out.write("' ");
+        } catch (java.io.IOException ioe) {
             throw new RuntimeException(IO_ERROR, ioe);
         }
         return extraData;

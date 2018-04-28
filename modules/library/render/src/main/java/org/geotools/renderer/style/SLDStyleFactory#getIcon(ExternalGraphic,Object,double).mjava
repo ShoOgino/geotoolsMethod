@@ -1,67 +1,61 @@
     /**
-	 * Tries to parse the provided external graphic into an Icon
-	 * 
-	 * @param eg
-	 * @param feature
-	 * @param size
-	 * @return the image, or null if the external graphics could not be
-	 *         interpreted
-	 */
-	private Icon getIcon(ExternalGraphic eg, Object feature, double size) {
-		if (eg == null)
-			return null;
+     * Tries to parse the provided external graphic into an Icon
+     *
+     * @param eg
+     * @param feature
+     * @param size
+     * @return the image, or null if the external graphics could not be interpreted
+     */
+    private Icon getIcon(ExternalGraphic eg, Object feature, double size) {
+        if (eg == null) return null;
 
         Icon inlineContent = eg.getInlineContent();
         if (inlineContent != null) {
             return inlineContent;
         }
 
-		// extract the url
-		String strLocation;
-		try {
-			strLocation = eg.getLocation().toExternalForm();
-		} catch (MalformedURLException e) {
-			LOGGER.log(Level.INFO, "Malformed URL processing external graphic",
-					e);
-			return null;
-		}
-		// parse the eventual ${cqlExpression} embedded in the URL
-		Expression location;
-		try {
-			location = ExpressionExtractor.extractCqlExpressions(strLocation);
-		} catch (IllegalArgumentException e) {
-			// in the unlikely event that a URL is using one of the chars
-			// reserved for ${cqlExpression}
-			// let's try and use the location as a literal
-			if (LOGGER.isLoggable(Level.FINE))
-				LOGGER
-						.log(Level.FINE,
-								"Could not parse cql expressions out of "
-										+ strLocation, e);
-			location = ff.literal(strLocation);
-		}
+        // extract the url
+        String strLocation;
+        try {
+            strLocation = eg.getLocation().toExternalForm();
+        } catch (MalformedURLException e) {
+            LOGGER.log(Level.INFO, "Malformed URL processing external graphic", e);
+            return null;
+        }
+        // parse the eventual ${cqlExpression} embedded in the URL
+        Expression location;
+        try {
+            location = ExpressionExtractor.extractCqlExpressions(strLocation);
+        } catch (IllegalArgumentException e) {
+            // in the unlikely event that a URL is using one of the chars
+            // reserved for ${cqlExpression}
+            // let's try and use the location as a literal
+            if (LOGGER.isLoggable(Level.FINE))
+                LOGGER.log(Level.FINE, "Could not parse cql expressions out of " + strLocation, e);
+            location = ff.literal(strLocation);
+        }
 
-		// scan the external graphic factories and see which one can be used
-		Iterator<ExternalGraphicFactory> it = DynamicSymbolFactoryFinder
-				.getExternalGraphicFactories(new Hints(renderingHints));
-		while (it.hasNext()) {
-		    ExternalGraphicFactory egf = it.next();
-			try {
-			    String format = null;
-			    if(eg.getFormat() != null) {
-    			    Expression formatExpression = ExpressionExtractor.extractCqlExpressions(eg.getFormat());
-    			    format = formatExpression.evaluate(feature, String.class);
-			    }
+        // scan the external graphic factories and see which one can be used
+        Iterator<ExternalGraphicFactory> it =
+                DynamicSymbolFactoryFinder.getExternalGraphicFactories(new Hints(renderingHints));
+        while (it.hasNext()) {
+            ExternalGraphicFactory egf = it.next();
+            try {
+                String format = null;
+                if (eg.getFormat() != null) {
+                    Expression formatExpression =
+                            ExpressionExtractor.extractCqlExpressions(eg.getFormat());
+                    format = formatExpression.evaluate(feature, String.class);
+                }
                 Icon icon = egf.getIcon((Feature) feature, location, format, toImageSize(size));
-				if (icon != null) {
-					return icon;
-				}
-			} catch (Exception e) {
-				LOGGER.log(Level.FINE,
-						"Error occurred evaluating external graphic", e);
-			}
-		}
+                if (icon != null) {
+                    return icon;
+                }
+            } catch (Exception e) {
+                LOGGER.log(Level.FINE, "Error occurred evaluating external graphic", e);
+            }
+        }
 
-		return null;
-	}
+        return null;
+    }
 

@@ -8,38 +8,40 @@
      * {@link javax.media.jai.PlanarImage} are. This is because the extra dimensions don't need to
      * be compatible for all operations. For example if a source image is a slice in a time series,
      * a second source image could be a slice in the frequency representation of this time series.
-     * <p>
-     * Subclasses should override this method if they want to specify target
-     * {@linkplain GridGeometry2D grid geometry} and
-     * {@linkplain CoordinateReferenceSystem coordinate reference system} different than the
-     * default ones. For example if a subclass wants to force all images to be referenced in a
-     * {@linkplain org.geotools.referencing.crs.DefaultGeographicCRS#WGS84 WGS 84} CRS, then
-     * it may overrides this method as below:
      *
-     * <blockquote><pre>
+     * <p>Subclasses should override this method if they want to specify target {@linkplain
+     * GridGeometry2D grid geometry} and {@linkplain CoordinateReferenceSystem coordinate reference
+     * system} different than the default ones. For example if a subclass wants to force all images
+     * to be referenced in a {@linkplain org.geotools.referencing.crs.DefaultGeographicCRS#WGS84 WGS
+     * 84} CRS, then it may overrides this method as below:
+     *
+     * <blockquote>
+     *
+     * <pre>
      * protected void resampleToCommonGeometry(...) {
      *    crs2D = DefaultGeographicCRS.WGS84;
      *    super.resampleToCommonGeometry(sources, crs2D, gridToCrs2D, hints);
-     * }</pre></blockquote>
+     * }</pre>
      *
-     * @param  sources     The source grid coverages to resample. This array is updated in-place as
-     *                     needed (for example if a grid coverage is replaced by a projected one).
-     * @param  crs2D       The target coordinate reference system to use, or {@code null} for a
-     *                     default one.
-     * @param  gridToCrs2D The target "grid to coordinate reference system" transform, or
-     *                     {@code null} for a default one.
-     * @param  hints       The rendering hints, or {@code null} if none.
+     * </blockquote>
      *
+     * @param sources The source grid coverages to resample. This array is updated in-place as
+     *     needed (for example if a grid coverage is replaced by a projected one).
+     * @param crs2D The target coordinate reference system to use, or {@code null} for a default
+     *     one.
+     * @param gridToCrs2D The target "grid to coordinate reference system" transform, or {@code
+     *     null} for a default one.
+     * @param hints The rendering hints, or {@code null} if none.
      * @throws InvalidGridGeometryException if a source coverage has an unsupported grid geometry.
      * @throws CannotReprojectException if a grid coverage can't be resampled for some other reason.
      */
-    protected void resampleToCommonGeometry(final GridCoverage2D[]  sources,
-                                            CoordinateReferenceSystem crs2D,
-                                            MathTransform2D     gridToCrs2D,
-                                            final Hints               hints)
-            throws InvalidGridGeometryException, CannotReprojectException
-    {
-        if (sources==null || sources.length==0) {
+    protected void resampleToCommonGeometry(
+            final GridCoverage2D[] sources,
+            CoordinateReferenceSystem crs2D,
+            MathTransform2D gridToCrs2D,
+            final Hints hints)
+            throws InvalidGridGeometryException, CannotReprojectException {
+        if (sources == null || sources.length == 0) {
             return; // Nothing to reproject.
         }
         /*
@@ -49,16 +51,17 @@
          */
         final GridCoverage2D primarySource = sources[PRIMARY_SOURCE_INDEX];
         if (crs2D == null) {
-            if (gridToCrs2D==null && sources.length==1) {
+            if (gridToCrs2D == null && sources.length == 1) {
                 return; // No need to reproject.
             }
             crs2D = primarySource.getCoordinateReferenceSystem2D();
-        } else try {
-            crs2D = CRSUtilities.getCRS2D(crs2D);
-        } catch (TransformException exception) {
-            // TODO: localize
-            throw new CannotReprojectException("Unsupported CRS: "+crs2D.getName().getCode());
-        }
+        } else
+            try {
+                crs2D = CRSUtilities.getCRS2D(crs2D);
+            } catch (TransformException exception) {
+                // TODO: localize
+                throw new CannotReprojectException("Unsupported CRS: " + crs2D.getName().getCode());
+            }
         if (gridToCrs2D == null) {
             gridToCrs2D = primarySource.getGridGeometry().getGridToCRS2D();
         }
@@ -69,13 +72,13 @@
          * and "tail" CRS will be preserved before and after 'crs2D'.
          */
         final CoverageProcessor processor = CoverageProcessor.getInstance(hints);
-        for (int i=0; i<sources.length; i++) {
-            if (sources[i] == null) { 
+        for (int i = 0; i < sources.length; i++) {
+            if (sources[i] == null) {
                 continue;
             }
-            final GridCoverage2D            source    = sources[i];
-            final GridGeometry2D            geometry  = source.getGridGeometry();
-            final CoordinateReferenceSystem srcCrs2D  = source.getCoordinateReferenceSystem2D();
+            final GridCoverage2D source = sources[i];
+            final GridGeometry2D geometry = source.getGridGeometry();
+            final CoordinateReferenceSystem srcCrs2D = source.getCoordinateReferenceSystem2D();
             final CoordinateReferenceSystem sourceCRS = source.getCoordinateReferenceSystem();
             final CoordinateReferenceSystem targetCRS;
             if (CRS.equalsIgnoreMetadata(crs2D, srcCrs2D)) {
@@ -87,40 +90,47 @@
                  * depth axis. Current implementation requires that the 2D part appears in two
                  * consecutive dimensions. Those dimensions are (0,1) in the majority of cases.
                  */
-                final int  lowerDim = Math.min(geometry.axisDimensionX, geometry.axisDimensionY);
-                final int  upperDim = Math.max(geometry.axisDimensionX, geometry.axisDimensionY)+1;
+                final int lowerDim = Math.min(geometry.axisDimensionX, geometry.axisDimensionY);
+                final int upperDim = Math.max(geometry.axisDimensionX, geometry.axisDimensionY) + 1;
                 final int sourceDim = sourceCRS.getCoordinateSystem().getDimension();
-                if (upperDim-lowerDim != srcCrs2D.getCoordinateSystem().getDimension()) {
+                if (upperDim - lowerDim != srcCrs2D.getCoordinateSystem().getDimension()) {
                     // TODO: localize
-                    throw new InvalidGridGeometryException("Unsupported CRS: "+sourceCRS.getName().getCode());
+                    throw new InvalidGridGeometryException(
+                            "Unsupported CRS: " + sourceCRS.getName().getCode());
                 }
                 final CoordinateReferenceSystem headCRS = getSubCRS(sourceCRS, 0, lowerDim);
                 final CoordinateReferenceSystem tailCRS = getSubCRS(sourceCRS, upperDim, sourceDim);
-                CoordinateReferenceSystem[]  components = new CoordinateReferenceSystem[3];
+                CoordinateReferenceSystem[] components = new CoordinateReferenceSystem[3];
                 int count = 0;
                 if (headCRS != null) components[count++] = headCRS;
-                                     components[count++] = crs2D;
+                components[count++] = crs2D;
                 if (tailCRS != null) components[count++] = tailCRS;
                 components = XArray.resize(components, count);
                 if (count == 1) {
                     targetCRS = components[0];
-                } else try {
-                    targetCRS = ReferencingFactoryFinder.getCRSFactory(hints).createCompoundCRS(
-                                Collections.singletonMap(IdentifiedObject.NAME_KEY,
-                                crs2D.getName().getCode()), components);
-                } catch (FactoryException exception) {
-                    throw new CannotReprojectException(exception.getLocalizedMessage(), exception);
-                }
+                } else
+                    try {
+                        targetCRS =
+                                ReferencingFactoryFinder.getCRSFactory(hints)
+                                        .createCompoundCRS(
+                                                Collections.singletonMap(
+                                                        IdentifiedObject.NAME_KEY,
+                                                        crs2D.getName().getCode()),
+                                                components);
+                    } catch (FactoryException exception) {
+                        throw new CannotReprojectException(
+                                exception.getLocalizedMessage(), exception);
+                    }
             }
             /*
              * Constructs the 'gridToCRS' transform in the same way than the CRS:
              * leading and trailing dimensions (if any) are preserved.
              */
             final MathTransform toSource2D = geometry.getGridToCRS2D();
-            final MathTransform toSource   = geometry.getGridToCRS();
+            final MathTransform toSource = geometry.getGridToCRS();
             MathTransform toTarget;
             if (CRS.equalsIgnoreMetadata(gridToCrs2D, toSource2D)) {
-                toTarget  = toSource;
+                toTarget = toSource;
             } else {
                 /*
                  * Replaces the 2D part in the source MT, while preserving the leading and
@@ -128,22 +138,23 @@
                  * variables in the CRS case above, except that we operate on "grid" space
                  * rather than "axis" spaces. The index are usually the same, but not always.
                  */
-                final int  lowerDim = Math.min(geometry.gridDimensionX, geometry.gridDimensionY);
-                final int  upperDim = Math.max(geometry.gridDimensionX, geometry.gridDimensionY)+1;
+                final int lowerDim = Math.min(geometry.gridDimensionX, geometry.gridDimensionY);
+                final int upperDim = Math.max(geometry.gridDimensionX, geometry.gridDimensionY) + 1;
                 final int sourceDim = toSource.getSourceDimensions();
-                if (upperDim-lowerDim != toSource2D.getSourceDimensions()) {
+                if (upperDim - lowerDim != toSource2D.getSourceDimensions()) {
                     // TODO: localize
                     throw new InvalidGridGeometryException("Unsupported math transform.");
                 }
-                final MathTransformFactory factory = ReferencingFactoryFinder.getMathTransformFactory(hints);
-                final DimensionFilter       filter = new DimensionFilter(factory);
+                final MathTransformFactory factory =
+                        ReferencingFactoryFinder.getMathTransformFactory(hints);
+                final DimensionFilter filter = new DimensionFilter(factory);
                 toTarget = gridToCrs2D;
                 try {
                     if (lowerDim != 0) {
                         filter.addSourceDimensionRange(0, lowerDim);
                         MathTransform step = filter.separate(toSource);
                         ensureStableDimensions(filter);
-                        step = factory.createPassThroughTransform(0, step, sourceDim-lowerDim);
+                        step = factory.createPassThroughTransform(0, step, sourceDim - lowerDim);
                         toTarget = factory.createConcatenatedTransform(step, toTarget);
                     }
                     if (upperDim != sourceDim) {
@@ -155,14 +166,15 @@
                         toTarget = factory.createConcatenatedTransform(toTarget, step);
                     }
                 } catch (FactoryException exception) {
-                    throw new CannotReprojectException(Errors.format(ErrorKeys.CANT_REPROJECT_$1,
-                                                       source.getName()), exception);
+                    throw new CannotReprojectException(
+                            Errors.format(ErrorKeys.CANT_REPROJECT_$1, source.getName()),
+                            exception);
                 }
             }
             final GridGeometry2D targetGeom = new GridGeometry2D(null, toTarget, targetCRS);
             final ParameterValueGroup param = processor.getOperation("Resample").getParameters();
-            param.parameter("Source")                   .setValue(source);
-            param.parameter("GridGeometry")             .setValue(targetGeom);
+            param.parameter("Source").setValue(source);
+            param.parameter("GridGeometry").setValue(targetGeom);
             param.parameter("CoordinateReferenceSystem").setValue(targetCRS);
             sources[i] = (GridCoverage2D) processor.doOperation(param);
         }

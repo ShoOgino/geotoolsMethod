@@ -1,143 +1,134 @@
     /**
      * Test two transactions one removing feature, and one adding a feature.
-     * 
+     *
      * @throws Exception DOCUMENT ME!
      */
     public void testGetFeatureWriterTransaction() throws Exception {
         Transaction t1 = new DefaultTransaction();
         Transaction t2 = new DefaultTransaction();
 
-    try {
-        FeatureWriter<SimpleFeatureType, SimpleFeature> writer1 = data
-                .getFeatureWriter("road", rd1Filter, t1);
-        FeatureWriter<SimpleFeatureType, SimpleFeature> writer2 = data
-                .getFeatureWriterAppend("road", t2);
+        try {
+            FeatureWriter<SimpleFeatureType, SimpleFeature> writer1 =
+                    data.getFeatureWriter("road", rd1Filter, t1);
+            FeatureWriter<SimpleFeatureType, SimpleFeature> writer2 =
+                    data.getFeatureWriterAppend("road", t2);
 
-        data.getSchema("road");
-        FeatureReader<SimpleFeatureType, SimpleFeature> reader;
-        SimpleFeature feature;
-        SimpleFeature[] ORIGIONAL = roadFeatures;
-        SimpleFeature[] REMOVE = new SimpleFeature[ORIGIONAL.length - 1];
-        SimpleFeature[] ADD = new SimpleFeature[ORIGIONAL.length + 1];
-        SimpleFeature[] FINAL = new SimpleFeature[ORIGIONAL.length];
-        int i;
-        int index;
-        index = 0;
+            data.getSchema("road");
+            FeatureReader<SimpleFeatureType, SimpleFeature> reader;
+            SimpleFeature feature;
+            SimpleFeature[] ORIGIONAL = roadFeatures;
+            SimpleFeature[] REMOVE = new SimpleFeature[ORIGIONAL.length - 1];
+            SimpleFeature[] ADD = new SimpleFeature[ORIGIONAL.length + 1];
+            SimpleFeature[] FINAL = new SimpleFeature[ORIGIONAL.length];
+            int i;
+            int index;
+            index = 0;
 
-        for (i = 0; i < ORIGIONAL.length; i++) {
-            feature = ORIGIONAL[i];
+            for (i = 0; i < ORIGIONAL.length; i++) {
+                feature = ORIGIONAL[i];
 
-            if (!feature.getID().equals("road.rd1")) {
-                REMOVE[index++] = feature;
+                if (!feature.getID().equals("road.rd1")) {
+                    REMOVE[index++] = feature;
+                }
             }
+
+            for (i = 0; i < ORIGIONAL.length; i++) {
+                ADD[i] = ORIGIONAL[i];
+            }
+
+            ADD[i] = newRoad;
+
+            for (i = 0; i < REMOVE.length; i++) {
+                FINAL[i] = REMOVE[i];
+            }
+
+            FINAL[i] = newRoad;
+
+            // start of with ORIGINAL
+            reader = data.getFeatureReader(new Query("road"), Transaction.AUTO_COMMIT);
+            assertTrue(covers(reader, ORIGIONAL));
+
+            // writer 1 removes road.rd1 on t1
+            // -------------------------------
+            // - tests transaction independence from DataStore
+            while (writer1.hasNext()) {
+                feature = (SimpleFeature) writer1.next();
+                assertEquals("road.rd1", feature.getID());
+                writer1.remove();
+            }
+
+            // still have ORIGIONAL and t1 has REMOVE
+            reader = data.getFeatureReader(new Query("road"), Transaction.AUTO_COMMIT);
+            assertTrue(covers(reader, ORIGIONAL));
+            reader = data.getFeatureReader(new Query("road"), t1);
+            assertTrue(covers(reader, REMOVE));
+
+            // close writer1
+            // --------------
+            // ensure that modification is left up to transaction commmit
+            writer1.close();
+
+            // We still have ORIGIONAL and t1 has REMOVE
+            reader = data.getFeatureReader(new Query("road"), Transaction.AUTO_COMMIT);
+            assertTrue(covers(reader, ORIGIONAL));
+            reader = data.getFeatureReader(new Query("road"), t1);
+            assertTrue(covers(reader, REMOVE));
+
+            // writer 2 adds road.rd4 on t2
+            // ----------------------------
+            // - tests transaction independence from each other
+            feature = (SimpleFeature) writer2.next();
+            feature.setAttributes(newRoad.getAttributes());
+            writer2.write();
+
+            // We still have ORIGIONAL and t2 has ADD
+            reader = data.getFeatureReader(new Query("road"), Transaction.AUTO_COMMIT);
+            assertTrue(covers(reader, ORIGIONAL));
+            reader = data.getFeatureReader(new Query("road"), t2);
+            assertTrue(coversLax(reader, ADD));
+
+            // close writer2
+            // -------------
+            // ensure that modification is left up to transaction commmit
+            writer2.close();
+
+            // Still have ORIGIONAL and t2 has ADD
+            reader = data.getFeatureReader(new Query("road"), Transaction.AUTO_COMMIT);
+            assertTrue(covers(reader, ORIGIONAL));
+            reader = data.getFeatureReader(new Query("road"), t2);
+            assertTrue(coversLax(reader, ADD));
+
+            // commit t1
+            // ---------
+            // -ensure that delayed writing of transactions takes place
+            //
+            t1.commit();
+
+            // We now have REMOVE, as does t1 (which has not additional diffs)
+            // t2 will have FINAL
+            reader = data.getFeatureReader(new Query("road"), Transaction.AUTO_COMMIT);
+            assertTrue(covers(reader, REMOVE));
+            reader = data.getFeatureReader(new Query("road"), t1);
+            assertTrue(covers(reader, REMOVE));
+            reader = data.getFeatureReader(new Query("road"), t2);
+            assertTrue(coversLax(reader, FINAL));
+
+            // commit t2
+            // ---------
+            // -ensure that everyone is FINAL at the end of the day
+            t2.commit();
+
+            // We now have Number( remove one and add one)
+            reader = data.getFeatureReader(new Query("road"), Transaction.AUTO_COMMIT);
+            reader = data.getFeatureReader(new Query("road"), Transaction.AUTO_COMMIT);
+            assertTrue(coversLax(reader, FINAL));
+            reader = data.getFeatureReader(new Query("road"), t1);
+            assertTrue(coversLax(reader, FINAL));
+            reader = data.getFeatureReader(new Query("road"), t2);
+            assertTrue(coversLax(reader, FINAL));
+        } finally {
+            t1.close();
+            t2.close();
         }
-
-        for (i = 0; i < ORIGIONAL.length; i++) {
-            ADD[i] = ORIGIONAL[i];
-        }
-
-        ADD[i] = newRoad;
-
-        for (i = 0; i < REMOVE.length; i++) {
-            FINAL[i] = REMOVE[i];
-        }
-
-        FINAL[i] = newRoad;
-
-        // start of with ORIGINAL
-        reader = data.getFeatureReader(new Query("road"),
-                Transaction.AUTO_COMMIT);
-        assertTrue(covers(reader, ORIGIONAL));
-
-        // writer 1 removes road.rd1 on t1
-        // -------------------------------
-        // - tests transaction independence from DataStore
-        while (writer1.hasNext()) {
-            feature = (SimpleFeature) writer1.next();
-            assertEquals("road.rd1", feature.getID());
-            writer1.remove();
-        }
-
-        // still have ORIGIONAL and t1 has REMOVE
-        reader = data.getFeatureReader(new Query("road"),
-                Transaction.AUTO_COMMIT);
-        assertTrue(covers(reader, ORIGIONAL));
-        reader = data.getFeatureReader(new Query("road"), t1);
-        assertTrue(covers(reader, REMOVE));
-
-        // close writer1
-        // --------------
-        // ensure that modification is left up to transaction commmit
-        writer1.close();
-
-        // We still have ORIGIONAL and t1 has REMOVE
-        reader = data.getFeatureReader(new Query("road"),
-                Transaction.AUTO_COMMIT);
-        assertTrue(covers(reader, ORIGIONAL));
-        reader = data.getFeatureReader(new Query("road"), t1);
-        assertTrue(covers(reader, REMOVE));
-
-        // writer 2 adds road.rd4 on t2
-        // ----------------------------
-        // - tests transaction independence from each other
-        feature = (SimpleFeature) writer2.next();
-        feature.setAttributes(newRoad.getAttributes());
-        writer2.write();
-
-        // We still have ORIGIONAL and t2 has ADD
-        reader = data.getFeatureReader(new Query("road"),
-                Transaction.AUTO_COMMIT);
-        assertTrue(covers(reader, ORIGIONAL));
-        reader = data.getFeatureReader(new Query("road"), t2);
-        assertTrue(coversLax(reader, ADD));
-
-        // close writer2
-        // -------------
-        // ensure that modification is left up to transaction commmit
-        writer2.close();
-
-        // Still have ORIGIONAL and t2 has ADD
-        reader = data.getFeatureReader(new Query("road"),
-                Transaction.AUTO_COMMIT);
-        assertTrue(covers(reader, ORIGIONAL));
-        reader = data.getFeatureReader(new Query("road"), t2);
-        assertTrue(coversLax(reader, ADD));
-
-        // commit t1
-        // ---------
-        // -ensure that delayed writing of transactions takes place
-        //
-        t1.commit();
-
-        // We now have REMOVE, as does t1 (which has not additional diffs)
-        // t2 will have FINAL
-        reader = data.getFeatureReader(new Query("road"),
-                Transaction.AUTO_COMMIT);
-        assertTrue(covers(reader, REMOVE));
-        reader = data.getFeatureReader(new Query("road"), t1);
-        assertTrue(covers(reader, REMOVE));
-        reader = data.getFeatureReader(new Query("road"), t2);
-        assertTrue(coversLax(reader, FINAL));
-
-        // commit t2
-        // ---------
-        // -ensure that everyone is FINAL at the end of the day
-        t2.commit();
-
-        // We now have Number( remove one and add one)
-        reader = data.getFeatureReader(new Query("road"),
-                Transaction.AUTO_COMMIT);
-        reader = data.getFeatureReader(new Query("road"),
-                Transaction.AUTO_COMMIT);
-        assertTrue(coversLax(reader, FINAL));
-        reader = data.getFeatureReader(new Query("road"), t1);
-        assertTrue(coversLax(reader, FINAL));
-        reader = data.getFeatureReader(new Query("road"), t2);
-        assertTrue(coversLax(reader, FINAL));
-    } finally {
-        t1.close();
-        t2.close();
     }
-
-}
 

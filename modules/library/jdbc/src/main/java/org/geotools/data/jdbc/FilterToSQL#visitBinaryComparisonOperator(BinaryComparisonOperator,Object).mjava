@@ -1,11 +1,11 @@
     /**
      * Common implementation for BinaryComparisonOperator filters.  This way
      * they're all handled centrally.
-     *  
+     *
      *  DJB: note, postgis overwrites this implementation because of the way
      *       null is handled.  This is for <PropertyIsNull> filters and <PropertyIsEqual> filters
-     *       are handled.  They will come here with "property = null".  
-     *       NOTE: 
+     *       are handled.  They will come here with "property = null".
+     *       NOTE:
      *        SELECT * FROM <table> WHERE <column> isnull;  -- postgresql
      *        SELECT * FROM <table> WHERE isnull(<column>); -- oracle???
      *
@@ -13,110 +13,109 @@
      *
      * @throws RuntimeException for io exception with writer
      */
-    protected void visitBinaryComparisonOperator(BinaryComparisonOperator filter, Object extraData) throws RuntimeException {
+    protected void visitBinaryComparisonOperator(BinaryComparisonOperator filter, Object extraData)
+            throws RuntimeException {
         LOGGER.finer("exporting SQL ComparisonFilter");
 
         Expression left = filter.getExpression1();
         Expression right = filter.getExpression2();
 
-        // shortcut for IN case, to have a more natural encoding for the common/sane case of 
-        // "in(property, v1, v2, ... vn) = true" into "property in (v1, v2, ..., vn) 
+        // shortcut for IN case, to have a more natural encoding for the common/sane case of
+        // "in(property, v1, v2, ... vn) = true" into "property in (v1, v2, ..., vn)
         if (inEncodingEnabled && ("=".equals(extraData) || "!=".equals(extraData))) {
-            if (right instanceof Literal && InFunction.isInFunction(left) && 
-                    right.evaluate(null, Boolean.class) != null) {
+            if (right instanceof Literal
+                    && InFunction.isInFunction(left)
+                    && right.evaluate(null, Boolean.class) != null) {
                 encodeInComparison((Function) left, (Literal) right, extraData);
                 return;
-            } else if (left instanceof Literal && InFunction.isInFunction(right) 
+            } else if (left instanceof Literal
+                    && InFunction.isInFunction(right)
                     && left.evaluate(null, Boolean.class) != null) {
                 encodeInComparison((Function) right, (Literal) left, extraData);
                 return;
             }
         }
-        
+
         Class leftContext = null, rightContext = null;
         if (left instanceof PropertyName) {
             // aha!  It's a propertyname, we should get the class and pass it in
             // as context to the tree walker.
-            AttributeDescriptor attType = (AttributeDescriptor)left.evaluate(featureType);
+            AttributeDescriptor attType = (AttributeDescriptor) left.evaluate(featureType);
             if (attType != null) {
                 rightContext = attType.getType().getBinding();
             }
-        }
-        else if (left instanceof Function) {
-            //check for a function return type
-            Class ret = getFunctionReturnType((Function)left);
+        } else if (left instanceof Function) {
+            // check for a function return type
+            Class ret = getFunctionReturnType((Function) left);
             if (ret != null) {
                 rightContext = ret;
             }
         }
-        
+
         if (right instanceof PropertyName) {
-            AttributeDescriptor attType = (AttributeDescriptor)right.evaluate(featureType);
+            AttributeDescriptor attType = (AttributeDescriptor) right.evaluate(featureType);
             if (attType != null) {
                 leftContext = attType.getType().getBinding();
             }
-        }
-        else if (right instanceof Function){
-            Class ret = getFunctionReturnType((Function)right);
+        } else if (right instanceof Function) {
+            Class ret = getFunctionReturnType((Function) right);
             if (ret != null) {
                 leftContext = ret;
             }
         }
 
-        //case sensitivity
+        // case sensitivity
         boolean matchCase = true;
-        if ( !filter.isMatchingCase() ) {
-            //we only do for = and !=
-            if ( filter instanceof PropertyIsEqualTo || 
-                    filter instanceof PropertyIsNotEqualTo ) {
-                //and only for strings
-                if ( String.class.equals( leftContext ) 
-                        || String.class.equals( rightContext ) ) {
+        if (!filter.isMatchingCase()) {
+            // we only do for = and !=
+            if (filter instanceof PropertyIsEqualTo || filter instanceof PropertyIsNotEqualTo) {
+                // and only for strings
+                if (String.class.equals(leftContext) || String.class.equals(rightContext)) {
                     matchCase = false;
                 }
             }
         }
-        
+
         String type = (String) extraData;
 
         try {
-            if ( matchCase ) {
+            if (matchCase) {
                 if (leftContext != null && isBinaryExpression(left)) {
                     writeBinaryExpression(left, leftContext);
-                }
-                else {
+                } else {
                     left.accept(this, leftContext);
                 }
-                
+
                 out.write(" " + type + " ");
 
                 if (rightContext != null && isBinaryExpression(right)) {
                     writeBinaryExpression(right, rightContext);
-                }
-                else {
+                } else {
                     right.accept(this, rightContext);
                 }
-            }
-            else {
+            } else {
                 // wrap both sides in "lower"
-                FunctionImpl f = new FunctionImpl() {
-                    {
-                        functionName = new FunctionNameImpl("lower",
-                                parameter("lowercase", String.class),
-                                parameter("string", String.class));
-                    }
-                };
+                FunctionImpl f =
+                        new FunctionImpl() {
+                            {
+                                functionName =
+                                        new FunctionNameImpl(
+                                                "lower",
+                                                parameter("lowercase", String.class),
+                                                parameter("string", String.class));
+                            }
+                        };
                 f.setName("lower");
-                
+
                 f.setParameters(Arrays.asList(left));
                 f.accept(this, Arrays.asList(leftContext));
-                
+
                 out.write(" " + type + " ");
-                
+
                 f.setParameters(Arrays.asList(right));
                 f.accept(this, Arrays.asList(rightContext));
             }
-            
+
         } catch (java.io.IOException ioe) {
             throw new RuntimeException(IO_ERROR, ioe);
         }

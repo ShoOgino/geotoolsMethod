@@ -1,13 +1,14 @@
-    private GrowableOrdinateArray cleanupOrdinates(GrowableOrdinateArray ordinates, boolean closed) {
+    private GrowableOrdinateArray cleanupOrdinates(
+            GrowableOrdinateArray ordinates, boolean closed) {
         final int max = ordinates.size();
-        if(max <= 8 && closed || (max < 8 && !closed)) {
+        if (max <= 8 && closed || (max < 8 && !closed)) {
             // not enough points for self intersection anyways
             return ordinates;
         }
-        // raw access to allow the JIT perform array bounds access elimination 
+        // raw access to allow the JIT perform array bounds access elimination
         double[] data = ordinates.getDataRaw();
         // check to let the the JIT know i and j access is safe
-        if(max > data.length) {
+        if (max > data.length) {
             throw new ArrayIndexOutOfBoundsException(max);
         }
         // hope we don't have any issue to fix, avoid a copy
@@ -21,7 +22,7 @@
         c1.x = data[0];
         c1.y = data[1];
         boolean lastCurlEliminated = false;
-        for (int i = 2; i < (max - 3); i+= 2) {
+        for (int i = 2; i < (max - 3); i += 2) {
             c2.x = data[i];
             c2.y = data[i + 1];
             c3.x = data[i + 2];
@@ -29,37 +30,39 @@
             for (int j = i + 4; j < (max - 1); j += 2) {
                 c4.x = data[j];
                 c4.y = data[j + 1];
-                
-                if(squaredDistance(c1, c3) > maxSearchDistanceSquared && squaredDistance(c1, c4) > maxSearchDistanceSquared &&
-                        squaredDistance(c2, c3) > maxSearchDistanceSquared && squaredDistance(c2, c4) > maxSearchDistanceSquared) {
+
+                if (squaredDistance(c1, c3) > maxSearchDistanceSquared
+                        && squaredDistance(c1, c4) > maxSearchDistanceSquared
+                        && squaredDistance(c2, c3) > maxSearchDistanceSquared
+                        && squaredDistance(c2, c4) > maxSearchDistanceSquared) {
                     // we got beyond the search area, bail out
                     break;
                 }
-                
+
                 intersector.computeIntersection(c1, c2, c3, c4);
-                if(intersector.hasIntersection()) {
+                if (intersector.hasIntersection()) {
                     Coordinate intersection = intersector.getIntersection(0);
                     c2.x = intersection.x;
                     c2.y = intersection.y;
                     // we had to cut, prepare the result array by copying the part we already
                     // scrolled over, if any
-                    if(result == ordinates) {
+                    if (result == ordinates) {
                         result = new GrowableOrdinateArray();
-                        if(i > 3) {
+                        if (i > 3) {
                             result.copy(ordinates, 0, i - 3);
                         }
                     }
                     i = j - 2;
                     break;
-                } else if(j == max - 2 && !closed) {
+                } else if (j == max - 2 && !closed) {
                     // check if we have an almost closed curl
                     double distancePointLine = CGAlgorithms.distancePointLine(c4, c1, c2);
-                    if(distancePointLine < abs(offset) / 10) {
+                    if (distancePointLine < abs(offset) / 10) {
                         c2.x = c4.x;
                         c2.y = c4.y;
-                        if(result == ordinates) {
+                        if (result == ordinates) {
                             result = new GrowableOrdinateArray();
-                            if(i > 3) {
+                            if (i > 3) {
                                 result.copy(ordinates, 0, i - 3);
                             }
                         }
@@ -68,32 +71,31 @@
                         break;
                     }
                 }
-                
+
                 // roll over to the next segment
                 c3.x = c4.x;
                 c3.y = c4.y;
             }
-            
+
             // if we are in copy mode already, copy over the current point
-            if(result != ordinates) {
+            if (result != ordinates) {
                 result.add(c1.x, c1.y);
             }
             // roll over to the next ordinate
             c1.x = c2.x;
             c1.y = c2.y;
         }
-        
-        
+
         // copy over the last points if we are in copy mode
-        if(result != ordinates) {
+        if (result != ordinates) {
             result.add(c1.x);
             result.add(c1.y);
-            if(!lastCurlEliminated) {
+            if (!lastCurlEliminated) {
                 result.add(data[max - 2]);
                 result.add(data[max - 1]);
             }
         }
-        
+
         return result;
     }
 

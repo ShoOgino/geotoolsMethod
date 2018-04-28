@@ -1,50 +1,79 @@
     @DescribeResult(name = "result", description = "Point features")
     public SimpleFeatureCollection execute(
             @DescribeParameter(name = "data", description = "Input raster") GridCoverage2D gc2d,
-            @DescribeParameter(name = "targetCRS", description = "CRS in which the points will be displayed", min=0) CoordinateReferenceSystem targetCRS,
-            @DescribeParameter(name = "scale", description = "scale",min=0, defaultValue="1.0f") Float scaleFactor,
-            @DescribeParameter(name = "interpolation", description = "interpolation",min=0, defaultValue="InterpolationNearest") Interpolation interpolation,
-            @DescribeParameter(name = "emisphere", description = "Add Emishpere",min=0, defaultValue="False" ) Boolean emisphere)
+            @DescribeParameter(
+                        name = "targetCRS",
+                        description = "CRS in which the points will be displayed",
+                        min = 0
+                    )
+                    CoordinateReferenceSystem targetCRS,
+            @DescribeParameter(
+                        name = "scale",
+                        description = "scale",
+                        min = 0,
+                        defaultValue = "1.0f"
+                    )
+                    Float scaleFactor,
+            @DescribeParameter(
+                        name = "interpolation",
+                        description = "interpolation",
+                        min = 0,
+                        defaultValue = "InterpolationNearest"
+                    )
+                    Interpolation interpolation,
+            @DescribeParameter(
+                        name = "emisphere",
+                        description = "Add Emishpere",
+                        min = 0,
+                        defaultValue = "False"
+                    )
+                    Boolean emisphere)
             throws ProcessException {
-        if (gc2d ==null) {
+        if (gc2d == null) {
             throw new ProcessException("Invalid input, source grid coverage should be not null");
         }
-        
-        // Get the GridEnvelope associated to the input Raster for selecting its width and height. 
-        // These two values are used for check if the scale is needed 
+
+        // Get the GridEnvelope associated to the input Raster for selecting its width and height.
+        // These two values are used for check if the scale is needed
         GridEnvelope2D gridEnv = gc2d.getGridGeometry().getGridRange2D();
         double coverageWidth = gridEnv.getWidth();
         double coverageHeight = gridEnv.getHeight();
-        
+
         ////
         //
-        // scale if/as needed. Also check if the scale expands the coverage dimension for at least 1 pixel. 
+        // scale if/as needed. Also check if the scale expands the coverage dimension for at least 1
+        // pixel.
         //
         ////
-        if (scaleFactor != null && (Math.abs(coverageWidth*(scaleFactor - 1f)) >=1 || Math.abs(coverageHeight*(scaleFactor - 1f)) >= 1) ) {
+        if (scaleFactor != null
+                && (Math.abs(coverageWidth * (scaleFactor - 1f)) >= 1
+                        || Math.abs(coverageHeight * (scaleFactor - 1f)) >= 1)) {
             // Selection of the interpolation parameter
-            Interpolation interp = interpolation != null ? interpolation : new InterpolationNearest();
-            // Selection of the ScaleFactors in order to check if the final Raster has almost 1 pixel for Height and Width
+            Interpolation interp =
+                    interpolation != null ? interpolation : new InterpolationNearest();
+            // Selection of the ScaleFactors in order to check if the final Raster has almost 1
+            // pixel for Height and Width
             double scaleX = scaleFactor;
             double scaleY = scaleFactor;
             // RenderedImage associated to the coverage
             final RenderedImage imageToBescaled = gc2d.getRenderedImage();
-            
+
             if (imageToBescaled != null) {
                 final SampleModel sampleModel = imageToBescaled.getSampleModel();
                 final int height = sampleModel.getHeight();
                 final int width = sampleModel.getWidth();
                 if (height * scaleFactor < 1) {
-                    scaleY = 1d/height;
+                    scaleY = 1d / height;
                 }
                 if (width * scaleFactor < 1) {
-                   scaleX = 1d/width;
+                    scaleX = 1d / width;
                 }
             }
-            
+
             // Execution of the Affine process
-            gc2d = new AffineProcess().execute(gc2d, scaleX,
-                    scaleY, null, null, null, null, null, interp);
+            gc2d =
+                    new AffineProcess()
+                            .execute(gc2d, scaleX, scaleY, null, null, null, null, null, interp);
         }
 
         // return value

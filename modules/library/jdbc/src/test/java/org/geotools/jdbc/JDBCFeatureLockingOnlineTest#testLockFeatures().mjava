@@ -1,48 +1,49 @@
     public void testLockFeatures() throws Exception {
-        
-        FeatureLock lock = 
-            FeatureLockFactory.generate(tname("ft1"), 60 * 60 * 1000);
-        
-        try(Transaction tx = new DefaultTransaction()) {
-            store.setTransaction( tx );
+
+        FeatureLock lock = FeatureLockFactory.generate(tname("ft1"), 60 * 60 * 1000);
+
+        try (Transaction tx = new DefaultTransaction()) {
+            store.setTransaction(tx);
             store.setFeatureLock(lock);
-            
-            //lock features
+
+            // lock features
             int locked = store.lockFeatures();
-            assertTrue( locked > 0 );
-            
-            //grabbing a reader should be no problem
-            Query query = new Query( tname("ft1") );
-            try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(query,tx)) {
-                
+            assertTrue(locked > 0);
+
+            // grabbing a reader should be no problem
+            Query query = new Query(tname("ft1"));
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    dataStore.getFeatureReader(query, tx)) {
+
                 int count = 0;
-                while( reader.hasNext() ) {
+                while (reader.hasNext()) {
                     count++;
                     reader.next();
                 }
-                assertTrue( count > 0 );
+                assertTrue(count > 0);
             }
-            
-            //grab a writer
-            try(FeatureWriter<SimpleFeatureType, SimpleFeature> writer = dataStore.getFeatureWriter(tname("ft1"), tx )) {
-                assertTrue( writer.hasNext() );
+
+            // grab a writer
+            try (FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
+                    dataStore.getFeatureWriter(tname("ft1"), tx)) {
+                assertTrue(writer.hasNext());
                 SimpleFeature feature = writer.next();
-                
-                feature.setAttribute(aname("intProperty"), new Integer(100) );
+
+                feature.setAttribute(aname("intProperty"), new Integer(100));
                 try {
-                    writer.write();  
-                    fail( "should have thrown feature lock exception" );
-                }
-                catch( FeatureLockException e ) {
-                    //good
+                    writer.write();
+                    fail("should have thrown feature lock exception");
+                } catch (FeatureLockException e) {
+                    // good
                 }
             }
-            
+
             tx.addAuthorization(lock.getAuthorization());
-            try(FeatureWriter<SimpleFeatureType, SimpleFeature> writer = dataStore.getFeatureWriter(tname("ft1"), tx)) {
-                assertTrue( writer.hasNext() );
+            try (FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
+                    dataStore.getFeatureWriter(tname("ft1"), tx)) {
+                assertTrue(writer.hasNext());
                 SimpleFeature feature = writer.next();
-                feature.setAttribute(aname("intProperty"), new Integer(100) );
+                feature.setAttribute(aname("intProperty"), new Integer(100));
                 writer.write();
             }
         }

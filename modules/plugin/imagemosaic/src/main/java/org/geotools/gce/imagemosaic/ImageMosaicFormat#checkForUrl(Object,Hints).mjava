@@ -1,7 +1,8 @@
     @SuppressWarnings("unchecked")
     private boolean checkForUrl(Object source, Hints hints) {
         try {
-            if (hints != null && hints.containsKey(Utils.EXCLUDE_MOSAIC)
+            if (hints != null
+                    && hints.containsKey(Utils.EXCLUDE_MOSAIC)
                     && ((Boolean) hints.get(Utils.EXCLUDE_MOSAIC) == true)) {
                 return false;
             }
@@ -61,8 +62,8 @@
                     // SPI
                     final String SPIClass = properties.getProperty("SPI");
                     // create a datastore as instructed
-                    final DataStoreFactorySpi spi = (DataStoreFactorySpi) Class.forName(SPIClass)
-                            .newInstance();
+                    final DataStoreFactorySpi spi =
+                            (DataStoreFactorySpi) Class.forName(SPIClass).newInstance();
 
                     // get the params
                     final Map<String, Serializable> params = new HashMap<String, Serializable>();
@@ -70,8 +71,11 @@
                     for (Param p : paramsInfo) {
                         // search for this param and set the value if found
                         if (properties.containsKey(p.key))
-                            params.put(p.key, (Serializable) Converters
-                                    .convert(properties.getProperty(p.key), p.type));
+                            params.put(
+                                    p.key,
+                                    (Serializable)
+                                            Converters.convert(
+                                                    properties.getProperty(p.key), p.type));
                         else if (p.required && p.sample == null) {
                             if (LOGGER.isLoggable(Level.FINE))
                                 LOGGER.fine("Required parameter missing: " + p.toString());
@@ -80,13 +84,12 @@
                     }
                     // H2 workadound
                     if (Utils.isH2Store(spi)) {
-                        Utils.fixH2DatabaseLocation(params,
-                                URLs.fileToUrl(sourceF.getParentFile()).toExternalForm());
+                        Utils.fixH2DatabaseLocation(
+                                params, URLs.fileToUrl(sourceF.getParentFile()).toExternalForm());
                     }
 
                     tileIndexStore = spi.createDataStore(params);
-                    if (tileIndexStore == null)
-                        return false;
+                    if (tileIndexStore == null) return false;
 
                 } else {
                     URL testPropertiesUrl = DataUtilities.changeUrlExt(sourceURL, "properties");
@@ -104,8 +107,7 @@
                 // Now look for the properties file and try to parse relevant fields
                 //
                 URL propsUrl = null;
-                if (shapefile)
-                    propsUrl = DataUtilities.changeUrlExt(sourceURL, "properties");
+                if (shapefile) propsUrl = DataUtilities.changeUrlExt(sourceURL, "properties");
                 else {
                     //
                     // do we have a datastore properties file? It will preempt on the shapefile
@@ -113,19 +115,26 @@
                     final File parent = URLs.urlToFile(sourceURL).getParentFile();
 
                     // this can be used to look for properties files that do NOT define a datastore
-                    final File[] properties = parent.listFiles((FilenameFilter) FileFilterUtils.and(
-                            FileFilterUtils.notFileFilter(
-                                    FileFilterUtils.nameFileFilter("indexer.properties")),
-                            FileFilterUtils.and(
-                                    FileFilterUtils.notFileFilter(
-                                            FileFilterUtils.nameFileFilter("datastore.properties")),
-                                    FileFilterUtils.makeFileOnly(
-                                            FileFilterUtils.suffixFileFilter(".properties")))));
+                    final File[] properties =
+                            parent.listFiles(
+                                    (FilenameFilter)
+                                            FileFilterUtils.and(
+                                                    FileFilterUtils.notFileFilter(
+                                                            FileFilterUtils.nameFileFilter(
+                                                                    "indexer.properties")),
+                                                    FileFilterUtils.and(
+                                                            FileFilterUtils.notFileFilter(
+                                                                    FileFilterUtils.nameFileFilter(
+                                                                            "datastore.properties")),
+                                                            FileFilterUtils.makeFileOnly(
+                                                                    FileFilterUtils
+                                                                            .suffixFileFilter(
+                                                                                    ".properties")))));
 
                     // do we have a valid datastore + mosaic properties pair?
                     for (File propFile : properties)
-                        if (Utils.checkFileReadable(propFile) && Utils
-                                .loadMosaicProperties(URLs.fileToUrl(propFile)) != null) {
+                        if (Utils.checkFileReadable(propFile)
+                                && Utils.loadMosaicProperties(URLs.fileToUrl(propFile)) != null) {
                             propsUrl = URLs.fileToUrl(propFile);
                             break;
                         }
@@ -133,8 +142,7 @@
 
                 // get the properties file
                 final MosaicConfigurationBean configuration = Utils.loadMosaicProperties(propsUrl);
-                if (configuration == null)
-                    return false;
+                if (configuration == null) return false;
 
                 CatalogConfigurationBean catalogBean = configuration.getCatalogConfigurationBean();
                 // we need the type name with a DB to pick up the right table
@@ -142,12 +150,10 @@
                 String typeName = catalogBean.getTypeName();
                 if (typeName == null) {
                     final String[] typeNames = tileIndexStore.getTypeNames();
-                    if (typeNames.length <= 0)
-                        return false;
+                    if (typeNames.length <= 0) return false;
                     typeName = typeNames[0];
                 }
-                if (typeName == null)
-                    return false;
+                if (typeName == null) return false;
 
                 // now try to connect to the index
                 SimpleFeatureSource featureSource = null;
@@ -161,13 +167,14 @@
                 }
 
                 final SimpleFeatureType schema = featureSource.getSchema();
-                if (schema == null)
-                    return false;
+                if (schema == null) return false;
 
-                crs = featureSource.getSchema().getGeometryDescriptor()
-                        .getCoordinateReferenceSystem();
-                if (crs == null)
-                    return false;
+                crs =
+                        featureSource
+                                .getSchema()
+                                .getGeometryDescriptor()
+                                .getCoordinateReferenceSystem();
+                if (crs == null) return false;
                 // looking for the location attribute
                 final String locationAttributeName = catalogBean.getLocationAttribute();
                 if (schema.getDescriptor(locationAttributeName) == null
@@ -178,8 +185,7 @@
 
             } finally {
                 try {
-                    if (tileIndexStore != null)
-                        tileIndexStore.dispose();
+                    if (tileIndexStore != null) tileIndexStore.dispose();
                 } catch (Throwable e) {
                     if (LOGGER.isLoggable(Level.FINE))
                         LOGGER.log(Level.FINE, e.getLocalizedMessage(), e);
@@ -187,11 +193,8 @@
             }
 
         } catch (Throwable e) {
-            if (LOGGER.isLoggable(Level.FINE))
-                LOGGER.log(Level.FINE, e.getLocalizedMessage(), e);
+            if (LOGGER.isLoggable(Level.FINE)) LOGGER.log(Level.FINE, e.getLocalizedMessage(), e);
             return false;
-
         }
-
     }
 

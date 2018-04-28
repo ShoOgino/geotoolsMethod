@@ -1,80 +1,94 @@
-		public void produce(){
-			
-			// reusable parameters
-			int granuleIndex=0;
-			inputTransparentColor = request.getInputTransparentColor();
-			doInputTransparency = inputTransparentColor != null;
-			// execute them all
-			boolean firstGranule=true;
-			
-			for (Future<RenderedImage> future :tasks) {
-				final RenderedImage loadedImage;
-				try {
-						//run the loading in this thread
-					final FutureTask<RenderedImage> task=(FutureTask<RenderedImage>) future;
-					task.run();
-					loadedImage=future.get();
-					if(loadedImage==null)
-					{
-						if(LOGGER.isLoggable(Level.FINE))
-							LOGGER.log(Level.FINE,"Unable to load the raster for granule " +granuleIndex+ " with request "+request.toString());
-						continue;
-					}
-					if(firstGranule){
-						//
-						// We check here if the images have an alpha channel or some
-						// other sort of transparency. In case we have transparency
-						// I also save the index of the transparent channel.
-						//
-						final ColorModel cm = loadedImage.getColorModel();
-						alphaIn = cm.hasAlpha();
-						firstGranule=false;
-										
-					}					
-					
-				} catch (InterruptedException e) {
-					if(LOGGER.isLoggable(Level.SEVERE))
-						LOGGER.log(Level.SEVERE,"Unable to load the raster for granule " +granuleIndex,e);
-					continue;
-				} catch (ExecutionException e) {
-					if(LOGGER.isLoggable(Level.SEVERE))
-						LOGGER.log(Level.SEVERE,"Unable to load the raster for granule " +granuleIndex,e);
-					continue;
-				}
+        public void produce() {
 
-				catch (ImagingException e) {
-					if (LOGGER.isLoggable(Level.FINE))
-						LOGGER.fine("Loading image number " + granuleIndex+ " failed, original request was "+request);
-					continue;
-				}
-				catch (javax.media.jai.util.ImagingException e) {
-					if (LOGGER.isLoggable(Level.FINE))
-						LOGGER.fine("Loading image number " + granuleIndex+ " failed, original request was "+request);
-					continue;
-				}
+            // reusable parameters
+            int granuleIndex = 0;
+            inputTransparentColor = request.getInputTransparentColor();
+            doInputTransparency = inputTransparentColor != null;
+            // execute them all
+            boolean firstGranule = true;
 
-				if (LOGGER.isLoggable(Level.FINE))
-					LOGGER.fine("Loading image number " + granuleIndex);
-				
-				final RenderedImage raster = processGranuleRaster(
-						loadedImage,
-						granuleIndex, 
-						alphaIn, 
-						doInputTransparency,
-						inputTransparentColor);
-				
-				theImage = raster;
-				
-				//increment index 
-				granuleIndex++;
-			}
+            for (Future<RenderedImage> future : tasks) {
+                final RenderedImage loadedImage;
+                try {
+                    // run the loading in this thread
+                    final FutureTask<RenderedImage> task = (FutureTask<RenderedImage>) future;
+                    task.run();
+                    loadedImage = future.get();
+                    if (loadedImage == null) {
+                        if (LOGGER.isLoggable(Level.FINE))
+                            LOGGER.log(
+                                    Level.FINE,
+                                    "Unable to load the raster for granule "
+                                            + granuleIndex
+                                            + " with request "
+                                            + request.toString());
+                        continue;
+                    }
+                    if (firstGranule) {
+                        //
+                        // We check here if the images have an alpha channel or some
+                        // other sort of transparency. In case we have transparency
+                        // I also save the index of the transparent channel.
+                        //
+                        final ColorModel cm = loadedImage.getColorModel();
+                        alphaIn = cm.hasAlpha();
+                        firstGranule = false;
+                    }
 
-			granulesNumber=granuleIndex;
-			if(granulesNumber==0)
-			{
-				if(LOGGER.isLoggable(Level.FINE))
-					LOGGER.log(Level.FINE,"Unable to load any data ");
-				return;
-			}
-		}
+                } catch (InterruptedException e) {
+                    if (LOGGER.isLoggable(Level.SEVERE))
+                        LOGGER.log(
+                                Level.SEVERE,
+                                "Unable to load the raster for granule " + granuleIndex,
+                                e);
+                    continue;
+                } catch (ExecutionException e) {
+                    if (LOGGER.isLoggable(Level.SEVERE))
+                        LOGGER.log(
+                                Level.SEVERE,
+                                "Unable to load the raster for granule " + granuleIndex,
+                                e);
+                    continue;
+                } catch (ImagingException e) {
+                    if (LOGGER.isLoggable(Level.FINE))
+                        LOGGER.fine(
+                                "Loading image number "
+                                        + granuleIndex
+                                        + " failed, original request was "
+                                        + request);
+                    continue;
+                } catch (javax.media.jai.util.ImagingException e) {
+                    if (LOGGER.isLoggable(Level.FINE))
+                        LOGGER.fine(
+                                "Loading image number "
+                                        + granuleIndex
+                                        + " failed, original request was "
+                                        + request);
+                    continue;
+                }
+
+                if (LOGGER.isLoggable(Level.FINE))
+                    LOGGER.fine("Loading image number " + granuleIndex);
+
+                final RenderedImage raster =
+                        processGranuleRaster(
+                                loadedImage,
+                                granuleIndex,
+                                alphaIn,
+                                doInputTransparency,
+                                inputTransparentColor);
+
+                theImage = raster;
+
+                // increment index
+                granuleIndex++;
+            }
+
+            granulesNumber = granuleIndex;
+            if (granulesNumber == 0) {
+                if (LOGGER.isLoggable(Level.FINE))
+                    LOGGER.log(Level.FINE, "Unable to load any data ");
+                return;
+            }
+        }
 

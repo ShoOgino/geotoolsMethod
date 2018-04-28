@@ -3,60 +3,59 @@
      *
      * @param writer FeatureWriter requiring access control
      * @param transaction Transaction being used
-     *
      * @return FeatureWriter with lock checking
      */
-    public FeatureWriter<SimpleFeatureType, SimpleFeature> checkedWriter(final FeatureWriter<SimpleFeatureType, SimpleFeature> writer,
-        final Transaction transaction) {
+    public FeatureWriter<SimpleFeatureType, SimpleFeature> checkedWriter(
+            final FeatureWriter<SimpleFeatureType, SimpleFeature> writer,
+            final Transaction transaction) {
         SimpleFeatureType featureType = writer.getFeatureType();
         final String typeName = featureType.getTypeName();
 
         return new DelegatingFeatureWriter<SimpleFeatureType, SimpleFeature>() {
-                SimpleFeature live = null;
+            SimpleFeature live = null;
 
-                public FeatureWriter<SimpleFeatureType, SimpleFeature> getDelegate() {
-                    return writer;
-                }
-                
-                public SimpleFeatureType getFeatureType() {
-                    return writer.getFeatureType();
-                }
+            public FeatureWriter<SimpleFeatureType, SimpleFeature> getDelegate() {
+                return writer;
+            }
 
-                public SimpleFeature next() throws IOException {
-                    live = writer.next();
+            public SimpleFeatureType getFeatureType() {
+                return writer.getFeatureType();
+            }
 
-                    return live;
-                }
+            public SimpleFeature next() throws IOException {
+                live = writer.next();
 
-                public void remove() throws IOException {
-                    if (live != null) {
-                        assertAccess(typeName, live.getID(), transaction);
-                    }
+                return live;
+            }
 
-                    writer.remove();
-                    live = null;
+            public void remove() throws IOException {
+                if (live != null) {
+                    assertAccess(typeName, live.getID(), transaction);
                 }
 
-                public void write() throws IOException {
-                    if (live != null) {
-                        assertAccess(typeName, live.getID(), transaction);
-                    }
+                writer.remove();
+                live = null;
+            }
 
-                    writer.write();
-                    live = null;
+            public void write() throws IOException {
+                if (live != null) {
+                    assertAccess(typeName, live.getID(), transaction);
                 }
 
-                public boolean hasNext() throws IOException {
-                    live = null;
+                writer.write();
+                live = null;
+            }
 
-                    return writer.hasNext();
-                }
+            public boolean hasNext() throws IOException {
+                live = null;
 
-                public void close() throws IOException {
-                    live = null;
-		    if( writer!=null )
-			writer.close();
-                }
-            };
+                return writer.hasNext();
+            }
+
+            public void close() throws IOException {
+                live = null;
+                if (writer != null) writer.close();
+            }
+        };
     }
 

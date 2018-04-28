@@ -3,7 +3,6 @@
          *
          * @param descriptor Property descriptor
          * @param value Value being encoded for this property
-         *
          * @throws RuntimeException Any problems are bundled up in a generic runtime exception
          */
         public void handleAttribute(PropertyDescriptor descriptor, Object value) {
@@ -11,28 +10,26 @@
                 if (value != null) {
                     String name = descriptor.getName().getLocalPart();
 
-                    //HACK: this should be user configurable, along with the
+                    // HACK: this should be user configurable, along with the
 
-                    //other gml substitutions I shall add.
+                    // other gml substitutions I shall add.
 
-                    if (prefixGml //adding this in since the extra boundedBy
-                            //hacking should only need to be done for the weird
-                        //cite tests, and having this check before the string
-                        //equals should get us better performance.  Albeit
-                        //very slightly, but this method gets called millions
-                            && (name.equals("boundedBy")
-                            && value instanceof Geometry)) {
+                    if (prefixGml // adding this in since the extra boundedBy
+                            // hacking should only need to be done for the weird
+                            // cite tests, and having this check before the string
+                            // equals should get us better performance.  Albeit
+                            // very slightly, but this method gets called millions
+                            && (name.equals("boundedBy") && value instanceof Geometry)) {
 
                         Envelope envelopeInternal = ((Geometry) value).getEnvelopeInternal();
                         CoordinateReferenceSystem crs = null;
-                        if( descriptor instanceof GeometryDescriptor ){
+                        if (descriptor instanceof GeometryDescriptor) {
                             GeometryDescriptor geometryDescriptor = (GeometryDescriptor) descriptor;
                             crs = geometryDescriptor.getCoordinateReferenceSystem();
-                        }                     
-                        ReferencedEnvelope
-                            bounds = new ReferencedEnvelope( envelopeInternal, crs );
-                                    
-                        writeBounds( bounds);
+                        }
+                        ReferencedEnvelope bounds = new ReferencedEnvelope(envelopeInternal, crs);
+
+                        writeBounds(bounds);
                     } else {
                         String thisPrefix = currentPrefix;
 
@@ -47,50 +44,48 @@
                         contentHandler.startElement("", "", name, NULL_ATTS);
 
                         if (value instanceof Geometry) {
-                            if( dimension == 0 ){
+                            if (dimension == 0) {
                                 // lets look at the CRS
                                 GeometryDescriptor geometryType = (GeometryDescriptor) descriptor;
-                                CoordinateReferenceSystem crs = geometryType.getCoordinateReferenceSystem();
-                                if( crs == null ){
+                                CoordinateReferenceSystem crs =
+                                        geometryType.getCoordinateReferenceSystem();
+                                if (crs == null) {
                                     // I won't even bother people with a warning
                                     // (until DataStore quality has improved
                                     dimension = 2; // the most sensible default
-                                    
-                                }
-                                else {
+
+                                } else {
                                     dimension = crs.getCoordinateSystem().getDimension();
                                     // note we could check the srsName here!
-                                    if( dimension == 3 ){
-                                        setDimension( dimension );
+                                    if (dimension == 3) {
+                                        setDimension(dimension);
                                     }
                                 }
                             }
                             geometryTranslator.encode((Geometry) value, srsName);
-                        } else if(value instanceof Date) {
+                        } else if (value instanceof Date) {
                             String text = null;
-                            if(value instanceof java.sql.Date)
+                            if (value instanceof java.sql.Date)
                                 text = DateUtil.serializeSqlDate((java.sql.Date) value);
-                            else if(value instanceof java.sql.Time)
+                            else if (value instanceof java.sql.Time)
                                 text = DateUtil.serializeSqlTime((java.sql.Time) value);
-                            else
-                                text = DateUtil.serializeDateTime((Date) value);
-                            contentHandler.characters(text.toCharArray(), 0,
-                                    text.length());
+                            else text = DateUtil.serializeDateTime((Date) value);
+                            contentHandler.characters(text.toCharArray(), 0, text.length());
                         } else {
                             String text = XMLUtils.removeXMLInvalidChars(value.toString());
 
-                            contentHandler.characters(text.toCharArray(), 0,
-                                text.length());
+                            contentHandler.characters(text.toCharArray(), 0, text.length());
                         }
 
                         contentHandler.endElement("", "", name);
                     }
                 }
 
-                //REVISIT: xsi:nillable is the proper xml way to handle nulls,
-                //but OGC people are fine with just leaving it out.       
+                // REVISIT: xsi:nillable is the proper xml way to handle nulls,
+                // but OGC people are fine with just leaving it out.
             } catch (Exception e) {
-                throw new IllegalStateException("Could not transform "+descriptor.getName()+":"+e, e );
+                throw new IllegalStateException(
+                        "Could not transform " + descriptor.getName() + ":" + e, e);
             }
         }
 

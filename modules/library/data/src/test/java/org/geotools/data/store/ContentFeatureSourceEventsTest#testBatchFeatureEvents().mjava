@@ -4,53 +4,53 @@
         SimpleFeatureStore store1 = (SimpleFeatureStore) store.getFeatureSource(TYPENAME);
         SimpleFeatureStore store2 = (SimpleFeatureStore) store.getFeatureSource(TYPENAME);
         store1.setTransaction(defaultTransaction);
-        
+
         Listener listener1 = new Listener("one");
         Listener listener2 = new Listener("two");
         store1.addFeatureListener(listener1);
         store2.addFeatureListener(listener2);
-        
+
         FilterFactory2 ff = CommonFactoryFinder.getFilterFactory2();
-        
+
         final SimpleFeature feature0 = FEATURES.get(0);
         final SimpleFeature feature1 = FEATURES.get(1);
         Filter fidFilter0 = ff.id(feature0.getIdentifier());
         Filter fidFilter1 = ff.id(feature1.getIdentifier());
-        
-        //remove a feature
+
+        // remove a feature
         store1.removeFeatures(fidFilter0);
-        
+
         assertEquals(1, listener1.events.size());
         assertEquals(0, listener2.events.size());
-        
+
         FeatureEvent event = listener1.getEvent(0);
         assertEquals(feature0.getBounds(), event.getBounds());
         assertEquals(FeatureEvent.Type.REMOVED, event.getType());
-        
-        //remove another feature
+
+        // remove another feature
         store1.removeFeatures(fidFilter1);
-        
+
         assertEquals(2, listener1.events.size());
         assertEquals(0, listener2.events.size());
-        
+
         event = listener1.getEvent(1);
         assertEquals(feature1.getBounds(), event.getBounds());
         assertEquals(FeatureEvent.Type.REMOVED, event.getType());
-        
+
         // commit the changes
         store1.getTransaction().commit();
-        
+
         // test that multiple changes are contained within a single batch feature event
         assertEquals(2, listener1.events.size());
         assertEquals(1, listener2.events.size());
-        
+
         event = listener2.getEvent(0);
-        
+
         assertTrue(event instanceof BatchFeatureEvent);
         ReferencedEnvelope bounds = new ReferencedEnvelope();
         bounds.include(feature0.getBounds());
         bounds.include(feature1.getBounds());
-        
+
         assertEquals(bounds, event.getBounds());
         assertEquals(FeatureEvent.Type.COMMIT, event.getType());
     }

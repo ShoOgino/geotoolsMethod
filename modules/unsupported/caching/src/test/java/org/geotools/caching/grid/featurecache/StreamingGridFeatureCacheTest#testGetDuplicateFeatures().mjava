@@ -1,81 +1,97 @@
-	 /*
-	  * This test is setup to test that
-	  * the feature collection doesn't return duplicate
-	  * features when a feature is cached
-	  * but also returned as part of the
-	  * feature source query. 
-	  * 
-	  */
-	 public void testGetDuplicateFeatures() throws FeatureCacheException,
-			IOException {
+    /*
+     * This test is setup to test that
+     * the feature collection doesn't return duplicate
+     * features when a feature is cached
+     * but also returned as part of the
+     * feature source query.
+     *
+     */
+    public void testGetDuplicateFeatures() throws FeatureCacheException, IOException {
 
-		/*
-		 * Create a cache with a grid that looks like this
-		 * 
-		 * 
-		 * x = feature in the cache
-		 * 
-		 * 10+------+-------+ | | | | xxxxxx | 5 +--x---+-------+ | x | | | | |
-		 * 0 +------+-------+ 0 5 10
-		 */
+        /*
+         * Create a cache with a grid that looks like this
+         *
+         *
+         * x = feature in the cache
+         *
+         * 10+------+-------+ | | | | xxxxxx | 5 +--x---+-------+ | x | | | | |
+         * 0 +------+-------+ 0 5 10
+         */
 
-		//
-		// ---- BUILD FEATURE -----
-		//
-		SimpleFeatureTypeBuilder bb = new SimpleFeatureTypeBuilder();
-		bb.add("ID", Integer.class);
-		bb.add("the_geom", Geometry.class, DefaultEngineeringCRS.CARTESIAN_2D);
-		bb.setDefaultGeometry("the_geom");
-		bb.setName("My Feature Type");
+        //
+        // ---- BUILD FEATURE -----
+        //
+        SimpleFeatureTypeBuilder bb = new SimpleFeatureTypeBuilder();
+        bb.add("ID", Integer.class);
+        bb.add("the_geom", Geometry.class, DefaultEngineeringCRS.CARTESIAN_2D);
+        bb.setDefaultGeometry("the_geom");
+        bb.setName("My Feature Type");
 
-		// bb.setSRS(DefaultEngineeringCRS.CARTESIAN_2D.toString());
-		SimpleFeatureType featureType = bb.buildFeatureType();
+        // bb.setSRS(DefaultEngineeringCRS.CARTESIAN_2D.toString());
+        SimpleFeatureType featureType = bb.buildFeatureType();
 
-		SimpleFeatureBuilder fb = new SimpleFeatureBuilder(featureType);
-		GeometryFactory gf = new GeometryFactory();
+        SimpleFeatureBuilder fb = new SimpleFeatureBuilder(featureType);
+        GeometryFactory gf = new GeometryFactory();
 
-		LineString[] geoms = new LineString[2];
+        LineString[] geoms = new LineString[2];
 
-		int feature1[] = new int[] { 2, 4, 2, 8, 8, 8 };
-		int feature2[] = new int[] { 0, 0, 0, 10, 10, 10, 10, 0, 0, 0 }; // bound feature to ensure the tiles are built as shown above
+        int feature1[] = new int[] {2, 4, 2, 8, 8, 8};
+        int feature2[] =
+                new int[] {
+                    0, 0, 0, 10, 10, 10, 10, 0, 0, 0
+                }; // bound feature to ensure the tiles are built as shown above
 
-		Object featurescoords[] = new Object[] { feature1, feature2 };
-		for (int i = 0; i < featurescoords.length; i++) {
-			int[] values = (int[]) featurescoords[i];
-			Coordinate c[] = new Coordinate[values.length / 2];
-			for (int j = 0; j < values.length; j = j + 2) {
-				int x = values[j];
-				int y = values[j + 1];
-				c[j / 2] = new Coordinate(x, y);
-			}
-			geoms[i] = gf.createLineString(c);
-		}
+        Object featurescoords[] = new Object[] {feature1, feature2};
+        for (int i = 0; i < featurescoords.length; i++) {
+            int[] values = (int[]) featurescoords[i];
+            Coordinate c[] = new Coordinate[values.length / 2];
+            for (int j = 0; j < values.length; j = j + 2) {
+                int x = values[j];
+                int y = values[j + 1];
+                c[j / 2] = new Coordinate(x, y);
+            }
+            geoms[i] = gf.createLineString(c);
+        }
 
-		SimpleFeature features[] = new SimpleFeature[geoms.length];
+        SimpleFeature features[] = new SimpleFeature[geoms.length];
 
-		MemoryFeatureCollection mm = new MemoryFeatureCollection(featureType);
-		for (int i = 0; i < geoms.length; i++) {
-			features[i] = fb.buildFeature(i + "", new Object[] {
-					new Integer(i), geoms[i] });
-			mm.add(features[i]);
-		}
+        MemoryFeatureCollection mm = new MemoryFeatureCollection(featureType);
+        for (int i = 0; i < geoms.length; i++) {
+            features[i] = fb.buildFeature(i + "", new Object[] {new Integer(i), geoms[i]});
+            mm.add(features[i]);
+        }
 
-		//
-		// ---- CACHING FEATURE COLLECTION -----
-		//
-		DataStore ds = new MemoryDataStore(mm);
-		SimpleFeatureSource fs = ds.getFeatureSource(featureType.getTypeName());
-		FeatureCache cache = new StreamingGridFeatureCache(fs, 4, 4,MemoryStorage.createInstance());
-		
-		Filter upperLeft = filterFactory.bbox(featureType.getGeometryDescriptor().getLocalName(), 0, 5.1, 4.9, 9.9,featureType.getCoordinateReferenceSystem().toString());
-		SimpleFeatureCollection fc = cache.getFeatures(upperLeft);
-		assertEquals(2, fc.size());
+        //
+        // ---- CACHING FEATURE COLLECTION -----
+        //
+        DataStore ds = new MemoryDataStore(mm);
+        SimpleFeatureSource fs = ds.getFeatureSource(featureType.getTypeName());
+        FeatureCache cache =
+                new StreamingGridFeatureCache(fs, 4, 4, MemoryStorage.createInstance());
 
-		//this should end up getting the same features from the source that are already in the cache
-		//however we only want one copy of those feature returned;
-		Filter upperHalf = filterFactory.bbox(featureType.getGeometryDescriptor().getLocalName(), 0, 5.1, 9.9, 9.9,featureType.getCoordinateReferenceSystem().toString());
-		fc = cache.getFeatures(upperHalf);
-		assertEquals(2, fc.size());
+        Filter upperLeft =
+                filterFactory.bbox(
+                        featureType.getGeometryDescriptor().getLocalName(),
+                        0,
+                        5.1,
+                        4.9,
+                        9.9,
+                        featureType.getCoordinateReferenceSystem().toString());
+        SimpleFeatureCollection fc = cache.getFeatures(upperLeft);
+        assertEquals(2, fc.size());
 
-	}
+        // this should end up getting the same features from the source that are already in the
+        // cache
+        // however we only want one copy of those feature returned;
+        Filter upperHalf =
+                filterFactory.bbox(
+                        featureType.getGeometryDescriptor().getLocalName(),
+                        0,
+                        5.1,
+                        9.9,
+                        9.9,
+                        featureType.getCoordinateReferenceSystem().toString());
+        fc = cache.getFeatures(upperHalf);
+        assertEquals(2, fc.size());
+    }
 

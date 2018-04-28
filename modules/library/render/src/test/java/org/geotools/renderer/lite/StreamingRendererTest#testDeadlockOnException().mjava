@@ -1,57 +1,61 @@
     @Test
     public void testDeadlockOnException() throws Exception {
-        
-        ReferencedEnvelope reWgs = new ReferencedEnvelope(new Envelope(-180,
-                180, -90, 90), DefaultGeographicCRS.WGS84);
-        
+
+        ReferencedEnvelope reWgs =
+                new ReferencedEnvelope(
+                        new Envelope(-180, 180, -90, 90), DefaultGeographicCRS.WGS84);
+
         // create the grid coverage that throws a OOM
         BufferedImage testImage = new BufferedImage(200, 200, BufferedImage.TYPE_4BYTE_ABGR);
         GridCoverage2D testCoverage = new GridCoverageFactory().create("test", testImage, reWgs);
-        GridCoverage2D oomCoverage = new GridCoverage2D("test", testCoverage) {
-          
-            @Override
-            public RenderedImage getRenderedImage() {
-                throw new OutOfMemoryError("Boom!");
-            }
-        };
-        
+        GridCoverage2D oomCoverage =
+                new GridCoverage2D("test", testCoverage) {
+
+                    @Override
+                    public RenderedImage getRenderedImage() {
+                        throw new OutOfMemoryError("Boom!");
+                    }
+                };
+
         // also have a collections of features to create the deadlock once the painter
         // thread is dead
         SimpleFeatureCollection lines = createLineCollection();
 
         Style rasterStyle = createRasterStyle();
         Style lineStyle = createLineStyle();
-        
+
         MapContent mapContent = new MapContent();
         mapContent.addLayer(new GridCoverageLayer(oomCoverage, rasterStyle));
         mapContent.addLayer(new FeatureLayer(lines, lineStyle));
-     
-        final StreamingRenderer sr = new StreamingRenderer() {
-            
-            // makes it easy to reproduce the deadlock, just two features are sufficient
-            protected BlockingQueue<RenderingRequest> getRequestsQueue() {
-                return new RenderingBlockingQueue(1);
-            }  
-        };
+
+        final StreamingRenderer sr =
+                new StreamingRenderer() {
+
+                    // makes it easy to reproduce the deadlock, just two features are sufficient
+                    protected BlockingQueue<RenderingRequest> getRequestsQueue() {
+                        return new RenderingBlockingQueue(1);
+                    }
+                };
         sr.setMapContent(mapContent);
         final List<Exception> exceptions = new ArrayList<Exception>();
-        sr.addRenderListener(new RenderListener() {
-            public void featureRenderer(SimpleFeature feature) {
-                features++;
-            }
-            
-            public void errorOccurred(Exception e) {
-                errors++;
-                exceptions.add(e);
-            }
-        });
+        sr.addRenderListener(
+                new RenderListener() {
+                    public void featureRenderer(SimpleFeature feature) {
+                        features++;
+                    }
+
+                    public void errorOccurred(Exception e) {
+                        errors++;
+                        exceptions.add(e);
+                    }
+                });
         errors = 0;
         features = 0;
-        BufferedImage image = new BufferedImage(200, 200,BufferedImage.TYPE_4BYTE_ABGR);
-        sr.paint((Graphics2D) image.getGraphics(), new Rectangle(200, 200),reWgs);
+        BufferedImage image = new BufferedImage(200, 200, BufferedImage.TYPE_4BYTE_ABGR);
+        sr.paint((Graphics2D) image.getGraphics(), new Rectangle(200, 200), reWgs);
         mapContent.dispose();
-        
-        // all the lines should have been painted, the coverage reports as painted too 
+
+        // all the lines should have been painted, the coverage reports as painted too
         // since the reporting happens in the main thread that does not error, but with
         // the new queue draining on some systems it might not
         assertTrue(features == 4 || features == 3);

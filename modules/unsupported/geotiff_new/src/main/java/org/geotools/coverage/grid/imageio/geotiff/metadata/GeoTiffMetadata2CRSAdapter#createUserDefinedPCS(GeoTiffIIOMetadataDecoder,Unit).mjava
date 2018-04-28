@@ -1,153 +1,151 @@
-	/**
-	 * We have a user defined {@link ProjectedCRS}, let's try to parse it.
-	 * 
-	 * @param linearUnit
-	 *            is the UoM that this {@link ProjectedCRS} will use. It could
-	 *            be null.
-	 * 
-	 * @return a user-defined {@link ProjectedCRS}.
-	 * @throws IOException
-	 * @throws FactoryException
-	 */
-	private ProjectedCRS createUserDefinedPCS(
-			final GeoTiffIIOMetadataDecoder metadata, Unit linearUnit)
-			throws IOException, FactoryException {
+    /**
+     * We have a user defined {@link ProjectedCRS}, let's try to parse it.
+     *
+     * @param linearUnit is the UoM that this {@link ProjectedCRS} will use. It could be null.
+     * @return a user-defined {@link ProjectedCRS}.
+     * @throws IOException
+     * @throws FactoryException
+     */
+    private ProjectedCRS createUserDefinedPCS(
+            final GeoTiffIIOMetadataDecoder metadata, Unit linearUnit)
+            throws IOException, FactoryException {
 
-		// /////////////////////////////////////////////////////////////////
-		// 
-		// At the top level a user-defined PCRS is made by
-		// <ol>
-		// <li>PCSCitationGeoKey (NAME)
-		// <li>ProjectionGeoKey
-		// <li>GeographicTypeGeoKey
-		// </ol>
-		// 
-		// 
-		// /////////////////////////////////////////////////////////////////
-		// //
-		//
-		// NAME of the user defined projected coordinate reference system.
-		//
-		// //
-		String projectedCrsName = metadata
-				.getGeoKey(GeoTiffPCSCodes.PCSCitationGeoKey);
-		if (projectedCrsName == null)
-			projectedCrsName = "unnamed".intern();
-		else
-			projectedCrsName = cleanName(projectedCrsName);
+        // /////////////////////////////////////////////////////////////////
+        //
+        // At the top level a user-defined PCRS is made by
+        // <ol>
+        // <li>PCSCitationGeoKey (NAME)
+        // <li>ProjectionGeoKey
+        // <li>GeographicTypeGeoKey
+        // </ol>
+        //
+        //
+        // /////////////////////////////////////////////////////////////////
+        // //
+        //
+        // NAME of the user defined projected coordinate reference system.
+        //
+        // //
+        String projectedCrsName = metadata.getGeoKey(GeoTiffPCSCodes.PCSCitationGeoKey);
+        if (projectedCrsName == null) projectedCrsName = "unnamed".intern();
+        else projectedCrsName = cleanName(projectedCrsName);
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// PROJECTION geo key for this projected coordinate reference system.
-		// get the projection code for this PCRS to build it from the GCS.
-		//
-		// In case i is user defined it requires:
-		// PCSCitationGeoKey
-		// ProjCoordTransGeoKey
-		// ProjLinearUnitsGeoKey
-		//
-		// /////////////////////////////////////////////////////////////////////
-		final String projCode = metadata
-				.getGeoKey(GeoTiffPCSCodes.ProjectionGeoKey);
-		boolean projUserDefined = false;
-		if (projCode == null
-				|| projCode.equals(GeoTiffConstants.GTUserDefinedGeoKey_String))
-			projUserDefined = true;
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // PROJECTION geo key for this projected coordinate reference system.
+        // get the projection code for this PCRS to build it from the GCS.
+        //
+        // In case i is user defined it requires:
+        // PCSCitationGeoKey
+        // ProjCoordTransGeoKey
+        // ProjLinearUnitsGeoKey
+        //
+        // /////////////////////////////////////////////////////////////////////
+        final String projCode = metadata.getGeoKey(GeoTiffPCSCodes.ProjectionGeoKey);
+        boolean projUserDefined = false;
+        if (projCode == null || projCode.equals(GeoTiffConstants.GTUserDefinedGeoKey_String))
+            projUserDefined = true;
 
-		// is it user defined?
-		Conversion projection = null;
-		final ParameterValueGroup parameters;
-		if (projUserDefined) {
-			// /////////////////////////////////////////////////////////////////
-			// A user defined projection is made up by
-			// <ol>
-			// <li>PCSCitationGeoKey (NAME)
-			// <li>ProjCoordTransGeoKey
-			// <li>ProjLinearUnitsGeoKey
-			// </ol>
-			// /////////////////////////////////////////////////////////////////
-			// NAME of this projection coordinate transformation
-			// getting user defined parameters
-			String projectionName = metadata
-					.getGeoKey(GeoTiffPCSCodes.PCSCitationGeoKey);
-			if (projectionName == null)
-				projectionName = "unnamed";
+        // is it user defined?
+        Conversion projection = null;
+        final ParameterValueGroup parameters;
+        if (projUserDefined) {
+            // /////////////////////////////////////////////////////////////////
+            // A user defined projection is made up by
+            // <ol>
+            // <li>PCSCitationGeoKey (NAME)
+            // <li>ProjCoordTransGeoKey
+            // <li>ProjLinearUnitsGeoKey
+            // </ol>
+            // /////////////////////////////////////////////////////////////////
+            // NAME of this projection coordinate transformation
+            // getting user defined parameters
+            String projectionName = metadata.getGeoKey(GeoTiffPCSCodes.PCSCitationGeoKey);
+            if (projectionName == null) projectionName = "unnamed";
 
-			// //
-			//
-			// getting default parameters for this projection and filling them
-			// with the values found
-			// inside the geokeys list.
-			//
-			// //
-			parameters = createUserDefinedProjectionParameter(projectionName,
-					metadata);
-			if (parameters == null)
-				throw new GeoTiffException(
-						metadata,
-						"GeoTiffMetadata2CRSAdapter::createUserDefinedPCS:Projection is not supported.",
-						null);
+            // //
+            //
+            // getting default parameters for this projection and filling them
+            // with the values found
+            // inside the geokeys list.
+            //
+            // //
+            parameters = createUserDefinedProjectionParameter(projectionName, metadata);
+            if (parameters == null)
+                throw new GeoTiffException(
+                        metadata,
+                        "GeoTiffMetadata2CRSAdapter::createUserDefinedPCS:Projection is not supported.",
+                        null);
 
-		} else {
-			parameters = null;
-			projection = (Conversion) this.allAuthoritiesFactory
-					.createCoordinateOperation(new StringBuffer("EPSG:")
-							.append(projCode).toString());
+        } else {
+            parameters = null;
+            projection =
+                    (Conversion)
+                            this.allAuthoritiesFactory.createCoordinateOperation(
+                                    new StringBuffer("EPSG:").append(projCode).toString());
+        }
 
-		}
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // GEOGRAPHIC CRS
+        //
+        // /////////////////////////////////////////////////////////////////////
+        final GeographicCRS gcs = createGeographicCoordinateSystem(metadata);
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// GEOGRAPHIC CRS
-		//
-		// /////////////////////////////////////////////////////////////////////
-		final GeographicCRS gcs = createGeographicCoordinateSystem(metadata);
+        // was the projection user defined?
+        // in such case we need to set the remaining parameters.
+        if (projUserDefined) {
+            final GeodeticDatum tempDatum = ((GeodeticDatum) gcs.getDatum());
+            final DefaultEllipsoid tempEll = (DefaultEllipsoid) tempDatum.getEllipsoid();
+            double inverseFlattening = tempEll.getInverseFlattening();
+            double semiMajorAxis = tempEll.getSemiMajorAxis();
+            // setting missing parameters
+            parameters
+                    .parameter("semi_minor")
+                    .setValue(semiMajorAxis * (1 - (1 / inverseFlattening)));
+            parameters.parameter("semi_major").setValue(semiMajorAxis);
+        }
 
-		// was the projection user defined?
-		// in such case we need to set the remaining parameters.
-		if (projUserDefined) {
-			final GeodeticDatum tempDatum = ((GeodeticDatum) gcs.getDatum());
-			final DefaultEllipsoid tempEll = (DefaultEllipsoid) tempDatum
-					.getEllipsoid();
-			double inverseFlattening = tempEll.getInverseFlattening();
-			double semiMajorAxis = tempEll.getSemiMajorAxis();
-			// setting missing parameters
-			parameters.parameter("semi_minor").setValue(
-					semiMajorAxis * (1 - (1 / inverseFlattening)));
-			parameters.parameter("semi_major").setValue(semiMajorAxis);
-
-		}
-
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// PROJECTED CRS
-		//
-		// /////////////////////////////////////////////////////////////////////
-		// //
-		//
-		// I am putting particular attention on the management of the unit
-		// of measure since it seems that very often people change the unit
-		// of measure to feet even if the standard UoM for the request
-		// projection is M.
-		//
-		// ///
-		if (projUserDefined) {
-			// user defined projection
-			if (linearUnit != null && linearUnit.equals(SI.METER))
-				return this.factories.createProjectedCRS(Collections
-						.singletonMap("name", projectedCrsName), gcs, null,
-						parameters, DefaultCartesianCS.PROJECTED);
-			return factories.createProjectedCRS(Collections.singletonMap(
-					"name", projectedCrsName), gcs, null, parameters,
-					DefaultCartesianCS.PROJECTED.usingUnit(linearUnit));
-		}
-		// standard projection
-		if (linearUnit != null && !linearUnit.equals(SI.METER))
-			return factories.createProjectedCRS(Collections.singletonMap(
-					"name", projectedCrsName), gcs, projection,
-					DefaultCartesianCS.PROJECTED.usingUnit(linearUnit));
-		return factories.createProjectedCRS(Collections.singletonMap("name",
-				projectedCrsName), gcs, projection,
-				DefaultCartesianCS.PROJECTED);
-	}
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // PROJECTED CRS
+        //
+        // /////////////////////////////////////////////////////////////////////
+        // //
+        //
+        // I am putting particular attention on the management of the unit
+        // of measure since it seems that very often people change the unit
+        // of measure to feet even if the standard UoM for the request
+        // projection is M.
+        //
+        // ///
+        if (projUserDefined) {
+            // user defined projection
+            if (linearUnit != null && linearUnit.equals(SI.METER))
+                return this.factories.createProjectedCRS(
+                        Collections.singletonMap("name", projectedCrsName),
+                        gcs,
+                        null,
+                        parameters,
+                        DefaultCartesianCS.PROJECTED);
+            return factories.createProjectedCRS(
+                    Collections.singletonMap("name", projectedCrsName),
+                    gcs,
+                    null,
+                    parameters,
+                    DefaultCartesianCS.PROJECTED.usingUnit(linearUnit));
+        }
+        // standard projection
+        if (linearUnit != null && !linearUnit.equals(SI.METER))
+            return factories.createProjectedCRS(
+                    Collections.singletonMap("name", projectedCrsName),
+                    gcs,
+                    projection,
+                    DefaultCartesianCS.PROJECTED.usingUnit(linearUnit));
+        return factories.createProjectedCRS(
+                Collections.singletonMap("name", projectedCrsName),
+                gcs,
+                projection,
+                DefaultCartesianCS.PROJECTED);
+    }
 

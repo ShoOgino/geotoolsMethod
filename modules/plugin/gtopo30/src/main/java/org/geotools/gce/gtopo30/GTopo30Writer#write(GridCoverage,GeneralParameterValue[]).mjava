@@ -1,179 +1,193 @@
-	/**
-	 * @see org.opengis.coverage.grid.GridCoverageWriter#write(org.opengis.coverage.grid.GridCoverage,
-	 *      org.opengis.parameter.GeneralParameterValue[])
-	 */
-	public void write(final GridCoverage coverage,
-			final GeneralParameterValue[] params)
-			throws java.lang.IllegalArgumentException, java.io.IOException {
+    /**
+     * @see
+     *     org.opengis.coverage.grid.GridCoverageWriter#write(org.opengis.coverage.grid.GridCoverage,
+     *     org.opengis.parameter.GeneralParameterValue[])
+     */
+    public void write(final GridCoverage coverage, final GeneralParameterValue[] params)
+            throws java.lang.IllegalArgumentException, java.io.IOException {
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// Checking input params
-		//
-		// /////////////////////////////////////////////////////////////////////
-		if (coverage == null)
-			throw new NullPointerException(
-					"The provided source coverage is null");
-		// the source GridCoverage2D
-		GridCoverage2D gc2D = (GridCoverage2D) coverage;
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Checking input params
+        //
+        // /////////////////////////////////////////////////////////////////////
+        if (coverage == null)
+            throw new NullPointerException("The provided source coverage is null");
+        // the source GridCoverage2D
+        GridCoverage2D gc2D = (GridCoverage2D) coverage;
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// Checking writing params
-		//
-		// /////////////////////////////////////////////////////////////////////
-		GeoToolsWriteParams gtParams = null;
-		if (params != null) {
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Checking writing params
+        //
+        // /////////////////////////////////////////////////////////////////////
+        GeoToolsWriteParams gtParams = null;
+        if (params != null) {
 
-			if (params != null) {
-				Parameter<?> param;
-				final int length = params.length;
-				for (int i = 0; i < length; i++) {
-					param = (Parameter<?>) params[i];
-					if (param.getDescriptor().getName().getCode().equals(
-							AbstractGridFormat.GEOTOOLS_WRITE_PARAMS.getName()
-									.toString())) {
-						gtParams = (GeoToolsWriteParams) param.getValue();
-					}
-				}
-			}
-		}
-		if (gtParams == null){
-			gtParams = new GTopo30WriteParams();
-		}
-		// compression
-		final boolean compressed = gtParams.getCompressionMode() == ImageWriteParam.MODE_EXPLICIT;
-		// write band
-		int[] writeBands = gtParams.getSourceBands();
-		int writeBand = CoverageUtilities.getVisibleBand(gc2D
-				.getRenderedImage());
-		if ((writeBands == null || writeBands.length == 0 || writeBands.length > 1)
-				&& (writeBand < 0 || writeBand > gc2D.getNumSampleDimensions()))
-			throw new IllegalArgumentException(
-					"You need to supply a valid index for deciding which band to write.");
-		if (!((writeBands == null || writeBands.length == 0 || writeBands.length > 1)))
-			writeBand = writeBands[0];
+            if (params != null) {
+                Parameter<?> param;
+                final int length = params.length;
+                for (int i = 0; i < length; i++) {
+                    param = (Parameter<?>) params[i];
+                    if (param.getDescriptor()
+                            .getName()
+                            .getCode()
+                            .equals(
+                                    AbstractGridFormat.GEOTOOLS_WRITE_PARAMS
+                                            .getName()
+                                            .toString())) {
+                        gtParams = (GeoToolsWriteParams) param.getValue();
+                    }
+                }
+            }
+        }
+        if (gtParams == null) {
+            gtParams = new GTopo30WriteParams();
+        }
+        // compression
+        final boolean compressed = gtParams.getCompressionMode() == ImageWriteParam.MODE_EXPLICIT;
+        // write band
+        int[] writeBands = gtParams.getSourceBands();
+        int writeBand = CoverageUtilities.getVisibleBand(gc2D.getRenderedImage());
+        if ((writeBands == null || writeBands.length == 0 || writeBands.length > 1)
+                && (writeBand < 0 || writeBand > gc2D.getNumSampleDimensions()))
+            throw new IllegalArgumentException(
+                    "You need to supply a valid index for deciding which band to write.");
+        if (!((writeBands == null || writeBands.length == 0 || writeBands.length > 1)))
+            writeBand = writeBands[0];
 
-		// destination file name
-		String fileName = gc2D.getName().toString();
+        // destination file name
+        String fileName = gc2D.getName().toString();
 
-		// handling compression
-		if (compressed) {
-			
-			if(destination instanceof File){
-				destination = new ZipOutputStream(new BufferedOutputStream(
-						new FileOutputStream(new File((File) destination,
-								new StringBuffer(fileName).append(".zip")
-										.toString()))));
-			}else{
-				if(!(destination instanceof ZipOutputStream)){
-					throw new IllegalArgumentException("Asking compression on a source that does not support it: "
-					    +destination.getClass().getSimpleName());
-				}
-			}
-			
-		}
-		
-		//now it's either a dir or a ZipOutputStream
-		
-		// if the caller has not asked us to compress explicitly it's usually a file ( a directory) or it is already
-		// compressing hence it is a ZipOutputStream
-		if (!compressed && 
-				!(destination instanceof File && ((File)destination).isDirectory())&&!(destination instanceof ZipOutputStream)){
-				throw new IllegalArgumentException("Asking to write, without compression, on a source that does not support it: "
-					    +destination.getClass().getSimpleName());	
-		}else{
-			// if the caller has asked us to compress explicitly then it is a ZipOutputStream
-			if(compressed &&!(destination instanceof ZipOutputStream)){
-				throw new IllegalArgumentException("Asking to write, with compression, on a source that does not support it: "
-					    +destination.getClass().getSimpleName());	
-			}
-		}
+        // handling compression
+        if (compressed) {
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// STEP 1
-		//
-		// We might need to do a band select in order to cope with the GTOPO30
-		// limitation.
-		//
-		// /////////////////////////////////////////////////////////////////////
-		final ParameterValueGroup pvg = PROCESSOR.getOperation("SelectSampleDimension").getParameters();
-		pvg.parameter("Source").setValue(gc2D);
-		pvg.parameter("SampleDimensions").setValue(new int[]{writeBand});
-		pvg.parameter("VisibleSampleDimension").setValue(writeBand);
-		gc2D = (GridCoverage2D) ((SelectSampleDimension)PROCESSOR.getOperation("SelectSampleDimension")).doOperation(pvg, hints);
+            if (destination instanceof File) {
+                destination =
+                        new ZipOutputStream(
+                                new BufferedOutputStream(
+                                        new FileOutputStream(
+                                                new File(
+                                                        (File) destination,
+                                                        new StringBuffer(fileName)
+                                                                .append(".zip")
+                                                                .toString()))));
+            } else {
+                if (!(destination instanceof ZipOutputStream)) {
+                    throw new IllegalArgumentException(
+                            "Asking compression on a source that does not support it: "
+                                    + destination.getClass().getSimpleName());
+                }
+            }
+        }
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// STEP 2
-		//
-		// We might need to reformat the selected band for this coverage in
-		// order to cope with the GTOPO30 limitation.
-		//
-		// /////////////////////////////////////////////////////////////////////
-		final PlanarImage reFormattedData2Short = reFormatCoverageImage(gc2D,
-				DataBuffer.TYPE_SHORT);
+        // now it's either a dir or a ZipOutputStream
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// STEP 2
-		//
-		// Start with writing things out.
-		//
-		// /////////////////////////////////////////////////////////////////////
-		// //
-		//
-		// write DEM
-		//
-		// //
-		this.writeDEM(reFormattedData2Short, fileName, destination);
+        // if the caller has not asked us to compress explicitly it's usually a file ( a directory)
+        // or it is already
+        // compressing hence it is a ZipOutputStream
+        if (!compressed
+                && !(destination instanceof File && ((File) destination).isDirectory())
+                && !(destination instanceof ZipOutputStream)) {
+            throw new IllegalArgumentException(
+                    "Asking to write, without compression, on a source that does not support it: "
+                            + destination.getClass().getSimpleName());
+        } else {
+            // if the caller has asked us to compress explicitly then it is a ZipOutputStream
+            if (compressed && !(destination instanceof ZipOutputStream)) {
+                throw new IllegalArgumentException(
+                        "Asking to write, with compression, on a source that does not support it: "
+                                + destination.getClass().getSimpleName());
+            }
+        }
 
-		// //
-		//
-		// write statistics
-		//
-		// //
-		this.writeStats(reFormattedData2Short, fileName, destination, gc2D);
-		
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // STEP 1
+        //
+        // We might need to do a band select in order to cope with the GTOPO30
+        // limitation.
+        //
+        // /////////////////////////////////////////////////////////////////////
+        final ParameterValueGroup pvg =
+                PROCESSOR.getOperation("SelectSampleDimension").getParameters();
+        pvg.parameter("Source").setValue(gc2D);
+        pvg.parameter("SampleDimensions").setValue(new int[] {writeBand});
+        pvg.parameter("VisibleSampleDimension").setValue(writeBand);
+        gc2D =
+                (GridCoverage2D)
+                        ((SelectSampleDimension) PROCESSOR.getOperation("SelectSampleDimension"))
+                                .doOperation(pvg, hints);
 
-		// //
-		//
-		// write world file
-		//
-		// //
-		this.writeWorldFile(gc2D, fileName, destination);
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // STEP 2
+        //
+        // We might need to reformat the selected band for this coverage in
+        // order to cope with the GTOPO30 limitation.
+        //
+        // /////////////////////////////////////////////////////////////////////
+        final PlanarImage reFormattedData2Short =
+                reFormatCoverageImage(gc2D, DataBuffer.TYPE_SHORT);
 
-		// //
-		//
-		// write projection
-		//
-		// //
-		this.writePRJ(gc2D, fileName, destination);
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // STEP 2
+        //
+        // Start with writing things out.
+        //
+        // /////////////////////////////////////////////////////////////////////
+        // //
+        //
+        // write DEM
+        //
+        // //
+        this.writeDEM(reFormattedData2Short, fileName, destination);
 
-		// //
-		//
-		// write HDR
-		//
-		// //
-		this.writeHDR(gc2D, fileName, destination);
+        // //
+        //
+        // write statistics
+        //
+        // //
+        this.writeStats(reFormattedData2Short, fileName, destination, gc2D);
 
-		// //
-		//
-		// write gif
-		//
-		// //
-		this.writeGIF(gc2D, fileName, destination);
+        // //
+        //
+        // write world file
+        //
+        // //
+        this.writeWorldFile(gc2D, fileName, destination);
 
-		// //
-		//
-		// write src
-		//
-		// //
-		this.writeSRC(gc2D, fileName, destination);
+        // //
+        //
+        // write projection
+        //
+        // //
+        this.writePRJ(gc2D, fileName, destination);
 
-		if (destination instanceof ZipOutputStream) {
-			((ZipOutputStream) destination).close();
-		}
-	}
+        // //
+        //
+        // write HDR
+        //
+        // //
+        this.writeHDR(gc2D, fileName, destination);
+
+        // //
+        //
+        // write gif
+        //
+        // //
+        this.writeGIF(gc2D, fileName, destination);
+
+        // //
+        //
+        // write src
+        //
+        // //
+        this.writeSRC(gc2D, fileName, destination);
+
+        if (destination instanceof ZipOutputStream) {
+            ((ZipOutputStream) destination).close();
+        }
+    }
 

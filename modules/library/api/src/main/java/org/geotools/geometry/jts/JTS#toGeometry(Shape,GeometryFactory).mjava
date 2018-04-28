@@ -1,64 +1,67 @@
     /**
      * Converts an arbitrary Java2D shape into a JTS geometry. The created JTS geometry may be any
      * of {@link LineString}, {@link LinearRing} or {@link MultiLineString}.
-     * 
-     * @param shape
-     *            the input shape
-     * @param factory
-     *            the JTS factory to use to create the geometry
-     * 
+     *
+     * @param shape the input shape
+     * @param factory the JTS factory to use to create the geometry
      * @return A new JTS geometry instance
-     * @throws IllegalArgumentException
-     *             if either {@code shape} or {@code factory} is {@code null}
+     * @throws IllegalArgumentException if either {@code shape} or {@code factory} is {@code null}
      */
     public static Geometry toGeometry(final Shape shape, final GeometryFactory factory) {
         ensureNonNull("shape", shape);
         ensureNonNull("factory", factory);
 
-        final PathIterator iterator = shape
-                .getPathIterator(null, ShapeUtilities.getFlatness(shape));
+        final PathIterator iterator =
+                shape.getPathIterator(null, ShapeUtilities.getFlatness(shape));
         final double[] buffer = new double[6];
         final List<Coordinate> coords = new ArrayList<Coordinate>();
         final List<LineString> lines = new ArrayList<LineString>();
 
         while (!iterator.isDone()) {
             switch (iterator.currentSegment(buffer)) {
-            /*
-             * Close the polygon: the last point is equal to the first point, and a LinearRing is
-             * created.
-             */
-            case PathIterator.SEG_CLOSE: {
-                if (!coords.isEmpty()) {
-                    coords.add(coords.get(0));
-                    lines.add(factory.createLinearRing((Coordinate[]) coords
-                            .toArray(new Coordinate[coords.size()])));
-                    coords.clear();
-                }
-                break;
-            }
+                    /*
+                     * Close the polygon: the last point is equal to the first point, and a LinearRing is
+                     * created.
+                     */
+                case PathIterator.SEG_CLOSE:
+                    {
+                        if (!coords.isEmpty()) {
+                            coords.add(coords.get(0));
+                            lines.add(
+                                    factory.createLinearRing(
+                                            (Coordinate[])
+                                                    coords.toArray(new Coordinate[coords.size()])));
+                            coords.clear();
+                        }
+                        break;
+                    }
 
-                /*
-                 * General case: A LineString is created from previous points, and a new LineString
-                 * begin for next points.
-                 */
-            case PathIterator.SEG_MOVETO: {
-                if (!coords.isEmpty()) {
-                    lines.add(factory.createLineString((Coordinate[]) coords
-                            .toArray(new Coordinate[coords.size()])));
-                    coords.clear();
-                }
+                    /*
+                     * General case: A LineString is created from previous points, and a new LineString
+                     * begin for next points.
+                     */
+                case PathIterator.SEG_MOVETO:
+                    {
+                        if (!coords.isEmpty()) {
+                            lines.add(
+                                    factory.createLineString(
+                                            (Coordinate[])
+                                                    coords.toArray(new Coordinate[coords.size()])));
+                            coords.clear();
+                        }
 
-                // Fall through
-            }
+                        // Fall through
+                    }
 
-            case PathIterator.SEG_LINETO: {
-                coords.add(new Coordinate(buffer[0], buffer[1]));
+                case PathIterator.SEG_LINETO:
+                    {
+                        coords.add(new Coordinate(buffer[0], buffer[1]));
 
-                break;
-            }
+                        break;
+                    }
 
-            default:
-                throw new IllegalPathStateException();
+                default:
+                    throw new IllegalPathStateException();
             }
 
             iterator.next();
@@ -68,19 +71,20 @@
          * End of loops: create the last LineString if any, then create the MultiLineString.
          */
         if (!coords.isEmpty()) {
-            lines.add(factory.createLineString((Coordinate[]) coords.toArray(new Coordinate[coords
-                    .size()])));
+            lines.add(
+                    factory.createLineString(
+                            (Coordinate[]) coords.toArray(new Coordinate[coords.size()])));
         }
 
         switch (lines.size()) {
-        case 0:
-            return null;
+            case 0:
+                return null;
 
-        case 1:
-            return (LineString) lines.get(0);
+            case 1:
+                return (LineString) lines.get(0);
 
-        default:
-            return factory.createMultiLineString(GeometryFactory.toLineStringArray(lines));
+            default:
+                return factory.createMultiLineString(GeometryFactory.toLineStringArray(lines));
         }
     }
 

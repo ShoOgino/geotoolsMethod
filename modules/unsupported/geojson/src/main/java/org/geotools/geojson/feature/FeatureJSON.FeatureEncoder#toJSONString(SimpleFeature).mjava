@@ -1,15 +1,15 @@
         public String toJSONString(SimpleFeature feature) {
             StringBuilder sb = new StringBuilder();
             sb.append("{");
-            
-            //type
+
+            // type
             entry("type", "Feature", sb);
             sb.append(",");
-            
-            //crs
+
+            // crs
             if (encodeFeatureCRS) {
-                CoordinateReferenceSystem crs = 
-                    feature.getFeatureType().getCoordinateReferenceSystem();
+                CoordinateReferenceSystem crs =
+                        feature.getFeatureType().getCoordinateReferenceSystem();
                 if (crs != null) {
                     try {
                         string("crs", sb).append(":");
@@ -19,66 +19,70 @@
                     }
                 }
             }
-            //bounding box
+            // bounding box
             if (encodeFeatureBounds) {
                 BoundingBox bbox = feature.getBounds();
                 string("bbox", sb).append(":");
                 sb.append(gjson.toString(bbox)).append(",");
             }
-            
-            //geometry
+
+            // geometry
             if (feature.getDefaultGeometry() != null) {
-                string("geometry", sb).append(":")
-                .append(gjson.toString((Geometry) feature.getDefaultGeometry()));    
+                string("geometry", sb)
+                        .append(":")
+                        .append(gjson.toString((Geometry) feature.getDefaultGeometry()));
                 sb.append(",");
             }
-            
-            //properties
-            int gindex = featureType.getGeometryDescriptor() != null ? 
-                    featureType.indexOf(featureType.getGeometryDescriptor().getLocalName()) : 
-                    -1;
-            
+
+            // properties
+            int gindex =
+                    featureType.getGeometryDescriptor() != null
+                            ? featureType.indexOf(
+                                    featureType.getGeometryDescriptor().getLocalName())
+                            : -1;
+
             string("properties", sb).append(":").append("{");
             boolean attributesWritten = false;
             for (int i = 0; i < featureType.getAttributeCount(); i++) {
                 AttributeDescriptor ad = featureType.getDescriptor(i);
-                
+
                 // skip the default geometry, it's already encoded
                 if (i == gindex) {
                     continue;
                 }
-                
+
                 Object value = feature.getAttribute(i);
 
                 if (!encodeNullValues && value == null) {
-                    //skip
+                    // skip
                     continue;
                 }
-                
+
                 attributesWritten = true;
-                
+
                 // handle special types separately, everything else as a string or literal
                 if (value instanceof Envelope) {
-                    array(ad.getLocalName(), gjson.toString((Envelope)value), sb);
+                    array(ad.getLocalName(), gjson.toString((Envelope) value), sb);
                 } else if (value instanceof BoundingBox) {
-                    array(ad.getLocalName(), gjson.toString((BoundingBox)value), sb);
+                    array(ad.getLocalName(), gjson.toString((BoundingBox) value), sb);
                 } else if (value instanceof Geometry) {
-                    string(ad.getLocalName(), sb).append(":")
-                    .append(gjson.toString((Geometry) value));
+                    string(ad.getLocalName(), sb)
+                            .append(":")
+                            .append(gjson.toString((Geometry) value));
                 } else {
                     entry(ad.getLocalName(), value, sb);
                 }
                 sb.append(",");
             }
-            
-            if(attributesWritten) {
-                sb.setLength(sb.length()-1);
+
+            if (attributesWritten) {
+                sb.setLength(sb.length() - 1);
             }
             sb.append("},");
-            
-            //id
+
+            // id
             entry("id", feature.getID(), sb);
-            
+
             sb.append("}");
             return sb.toString();
         }

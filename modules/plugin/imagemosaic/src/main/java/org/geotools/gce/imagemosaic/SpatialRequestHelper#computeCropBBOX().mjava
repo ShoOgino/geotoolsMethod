@@ -5,16 +5,21 @@
             //
             // The destination to source transform has been computed (and eventually erased) already
             // by inspectCoordinateSystem()
-            
+
             // now transform the requested envelope to source crs
             if (needsReprojection) {
                 try {
-                    this.computedBBox = Utils.reprojectEnvelope(requestedBBox, coverageProperties.crs2D, coverageProperties.bbox);
-                } catch(FactoryException e) {
+                    this.computedBBox =
+                            Utils.reprojectEnvelope(
+                                    requestedBBox,
+                                    coverageProperties.crs2D,
+                                    coverageProperties.bbox);
+                } catch (FactoryException e) {
                     throw new DataSourceException(e);
                 }
             } else {
-                // we do not need to do anything, but we do this in order to avoid problems with the envelope checks
+                // we do not need to do anything, but we do this in order to avoid problems with the
+                // envelope checks
                 computedBBox = new ReferencedEnvelope(requestedBBox);
             }
 
@@ -23,19 +28,24 @@
             if (!computedBBox.intersects((BoundingBox) coverageProperties.bbox)) {
                 if (LOGGER.isLoggable(Level.FINE)) {
                     LOGGER.fine(
-                            new StringBuilder("The computed CropBoundingBox ").append(computedBBox)
+                            new StringBuilder("The computed CropBoundingBox ")
+                                    .append(computedBBox)
                                     .append(" Doesn't intersect the coverage BoundingBox ")
                                     .append(coverageProperties.bbox)
-                                    .append(" resulting in an empty request").toString());
+                                    .append(" resulting in an empty request")
+                                    .toString());
                 }
                 computedBBox = null;
                 emptyRequest = true;
                 return;
             }
 
-            // TODO XXX Optimize when referenced envelope has intersection method that actually retains the CRS, this is the JTS one
-            computedBBox = new ReferencedEnvelope(
-                    computedBBox.intersection(coverageProperties.bbox), coverageProperties.crs2D);
+            // TODO XXX Optimize when referenced envelope has intersection method that actually
+            // retains the CRS, this is the JTS one
+            computedBBox =
+                    new ReferencedEnvelope(
+                            computedBBox.intersection(coverageProperties.bbox),
+                            coverageProperties.crs2D);
             if (computedBBox.isEmpty()) {
                 // this means that we do not have anything to load at all!
                 emptyRequest = true;
@@ -44,8 +54,7 @@
         } catch (TransformException te) {
             // something bad happened while trying to transform this
             // envelope. let's try with wgs84
-            if (LOGGER.isLoggable(Level.FINE))
-                LOGGER.log(Level.FINE, te.getLocalizedMessage(), te);
+            if (LOGGER.isLoggable(Level.FINE)) LOGGER.log(Level.FINE, te.getLocalizedMessage(), te);
         }
 
         try {
@@ -63,33 +72,36 @@
                 // STEP 1 reproject the requested envelope to the coverage geographic bbox
                 if (!CRS.equalsIgnoreMetadata(coverageProperties.geographicCRS, requestCRS)) {
                     // try to convert the requested bbox to the coverage geocrs
-                    requestedBBOXInCoverageGeographicCRS = CRS.transform(requestedBBox,
+                    requestedBBOXInCoverageGeographicCRS =
+                            CRS.transform(requestedBBox, coverageProperties.geographicCRS);
+                    requestedBBOXInCoverageGeographicCRS.setCoordinateReferenceSystem(
                             coverageProperties.geographicCRS);
-                    requestedBBOXInCoverageGeographicCRS
-                            .setCoordinateReferenceSystem(coverageProperties.geographicCRS);
                 }
                 if (requestedBBOXInCoverageGeographicCRS == null) {
                     requestedBBOXInCoverageGeographicCRS = new GeneralEnvelope(requestCRS);
                 }
 
                 // STEP 2 intersection with the geographic bbox for this coverage
-                if (!requestedBBOXInCoverageGeographicCRS
-                        .intersects(coverageProperties.geographicBBox, true)) {
+                if (!requestedBBOXInCoverageGeographicCRS.intersects(
+                        coverageProperties.geographicBBox, true)) {
                     computedBBox = null;
                     emptyRequest = true;
                     return;
                 }
                 // intersect with the coverage native geographic bbox
-                // note that for the moment we got to use general envelope since there is no intersection otherwise
+                // note that for the moment we got to use general envelope since there is no
+                // intersection otherwise
                 requestedBBOXInCoverageGeographicCRS.intersect(coverageProperties.geographicBBox);
-                requestedBBOXInCoverageGeographicCRS
-                        .setCoordinateReferenceSystem(coverageProperties.geographicCRS);
+                requestedBBOXInCoverageGeographicCRS.setCoordinateReferenceSystem(
+                        coverageProperties.geographicCRS);
 
-                // now go back to the coverage native CRS in order to compute an approximate requested resolution
-                approximateRequestedBBoInNativeCRS = CRS
-                        .transform(requestedBBOXInCoverageGeographicCRS, coverageProperties.crs2D);
-                approximateRequestedBBoInNativeCRS
-                        .setCoordinateReferenceSystem(coverageProperties.crs2D);
+                // now go back to the coverage native CRS in order to compute an approximate
+                // requested resolution
+                approximateRequestedBBoInNativeCRS =
+                        CRS.transform(
+                                requestedBBOXInCoverageGeographicCRS, coverageProperties.crs2D);
+                approximateRequestedBBoInNativeCRS.setCoordinateReferenceSystem(
+                        coverageProperties.crs2D);
                 computedBBox = new ReferencedEnvelope(approximateRequestedBBoInNativeCRS);
                 return;
             }
@@ -97,11 +109,11 @@
         } catch (Exception e) {
             // something bad happened while trying to transform this
             // envelope. let's try with wgs84
-            if (LOGGER.isLoggable(Level.FINE))
-                LOGGER.log(Level.FINE, e.getLocalizedMessage(), e);
+            if (LOGGER.isLoggable(Level.FINE)) LOGGER.log(Level.FINE, e.getLocalizedMessage(), e);
         }
 
-        LOGGER.log(Level.INFO,
+        LOGGER.log(
+                Level.INFO,
                 "We did not manage to crop the requested envelope, we fall back onto loading the whole coverage.");
         computedBBox = null;
     }

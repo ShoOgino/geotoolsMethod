@@ -20,14 +20,18 @@
                             srid = (Integer) gd.getUserData().get(JDBCDataStore.JDBC_NATIVE_SRID);
                         } else if (gd.getCoordinateReferenceSystem() != null) {
                             try {
-                                Integer result = CRS.lookupEpsgCode(
-                                        gd.getCoordinateReferenceSystem(), true);
+                                Integer result =
+                                        CRS.lookupEpsgCode(gd.getCoordinateReferenceSystem(), true);
                                 if (result != null) {
                                     srid = result;
                                 }
                             } catch (Exception e) {
-                                LOGGER.log(Level.FINE, "Error looking up the "
-                                        + "epsg code for metadata " + "insertion, assuming -1", e);
+                                LOGGER.log(
+                                        Level.FINE,
+                                        "Error looking up the "
+                                                + "epsg code for metadata "
+                                                + "insertion, assuming -1",
+                                        e);
                             }
                         }
 
@@ -44,27 +48,46 @@
 
                         // register the geometry type, first remove and eventual
                         // leftover, then write out the real one
-                        sqlBuilder.append("DELETE FROM ").append(geometryMetadataTable)
-                        .append(" WHERE f_table_schema = '").append(schemaName).append("'")
-                        .append(" AND f_table_name = '").append(tableName).append("'")
-                        .append(" AND f_geometry_column = '").append(gd.getLocalName())
-                        .append("'");
+                        sqlBuilder
+                                .append("DELETE FROM ")
+                                .append(geometryMetadataTable)
+                                .append(" WHERE f_table_schema = '")
+                                .append(schemaName)
+                                .append("'")
+                                .append(" AND f_table_name = '")
+                                .append(tableName)
+                                .append("'")
+                                .append(" AND f_geometry_column = '")
+                                .append(gd.getLocalName())
+                                .append("'");
                         LOGGER.fine(sqlBuilder.toString());
                         st.execute(sqlBuilder.toString());
 
                         sqlBuilder = new StringBuilder();
-                        sqlBuilder.append("INSERT INTO ").append(geometryMetadataTable)
-                        .append(" VALUES ('").append(schemaName).append("','")
-                        .append(tableName).append("',").append("'")
-                        .append(gd.getLocalName()).append("',").append(dimensions)
-                        .append(",").append(srid).append(",").append("'").append(geomType)
-                        .append("')");
+                        sqlBuilder
+                                .append("INSERT INTO ")
+                                .append(geometryMetadataTable)
+                                .append(" VALUES ('")
+                                .append(schemaName)
+                                .append("','")
+                                .append(tableName)
+                                .append("',")
+                                .append("'")
+                                .append(gd.getLocalName())
+                                .append("',")
+                                .append(dimensions)
+                                .append(",")
+                                .append(srid)
+                                .append(",")
+                                .append("'")
+                                .append(geomType)
+                                .append("')");
                         LOGGER.fine(sqlBuilder.toString());
                         st.execute(sqlBuilder.toString());
                     }
 
-                    //get the crs, and derive a bounds
-                    //TODO: stop being lame and properly figure out the dimension and bounds, see
+                    // get the crs, and derive a bounds
+                    // TODO: stop being lame and properly figure out the dimension and bounds, see
                     // oracle dialect for the proper way to do it
                     String bbox = null;
                     if (gd.getCoordinateReferenceSystem() != null) {
@@ -74,31 +97,43 @@
                             CoordinateSystemAxis a0 = cs.getAxis(0);
                             CoordinateSystemAxis a1 = cs.getAxis(1);
                             bbox = "(";
-                            bbox += (Double.isInfinite(a0.getMinimumValue()) ?
-                                    DEFAULT_AXIS_MIN : a0.getMinimumValue()) + ", ";
-                            bbox += (Double.isInfinite(a1.getMinimumValue()) ?
-                                    DEFAULT_AXIS_MIN : a1.getMinimumValue()) + ", ";
+                            bbox +=
+                                    (Double.isInfinite(a0.getMinimumValue())
+                                                    ? DEFAULT_AXIS_MIN
+                                                    : a0.getMinimumValue())
+                                            + ", ";
+                            bbox +=
+                                    (Double.isInfinite(a1.getMinimumValue())
+                                                    ? DEFAULT_AXIS_MIN
+                                                    : a1.getMinimumValue())
+                                            + ", ";
 
-                            bbox += (Double.isInfinite(a0.getMaximumValue()) ?
-                                    DEFAULT_AXIS_MAX : a0.getMaximumValue()) + ", ";
-                            bbox += Double.isInfinite(a1.getMaximumValue()) ?
-                                    DEFAULT_AXIS_MAX : a1.getMaximumValue();
+                            bbox +=
+                                    (Double.isInfinite(a0.getMaximumValue())
+                                                    ? DEFAULT_AXIS_MAX
+                                                    : a0.getMaximumValue())
+                                            + ", ";
+                            bbox +=
+                                    Double.isInfinite(a1.getMaximumValue())
+                                            ? DEFAULT_AXIS_MAX
+                                            : a1.getMaximumValue();
                             bbox += ")";
                         }
                     }
 
                     if (bbox == null) {
-                        //no crs or could not figure out bounds
+                        // no crs or could not figure out bounds
                         continue;
                     }
                     StringBuffer sql = new StringBuffer("CREATE SPATIAL INDEX ");
-                    encodeTableName(featureType.getTypeName()+"_"+gd.getLocalName()+"_index", sql);
-                    sql.append( " ON ");
+                    encodeTableName(
+                            featureType.getTypeName() + "_" + gd.getLocalName() + "_index", sql);
+                    sql.append(" ON ");
                     encodeTableName(featureType.getTypeName(), sql);
                     sql.append("(");
                     encodeColumnName(null, gd.getLocalName(), sql);
                     sql.append(")");
-                    sql.append( " WITH ( BOUNDING_BOX = ").append(bbox).append(")");
+                    sql.append(" WITH ( BOUNDING_BOX = ").append(bbox).append(")");
 
                     LOGGER.fine(sql.toString());
                     st.execute(sql.toString());

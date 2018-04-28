@@ -1,7 +1,8 @@
     /**
      * Looks up tessellation info for the schema/table.
-     * <p>
-     * The schema of the tessellation table is:
+     *
+     * <p>The schema of the tessellation table is:
+     *
      * <pre>
      * F_TABLE_SCHEMA VARCHAR(128) CHARACTER SET UNICODE NOT CASESPECIFIC NOT NULL,
      * F_TABLE_NAME VARCHAR(128) CHARACTER SET UNICODE NOT CASESPECIFIC NOT NULL,
@@ -16,46 +17,51 @@
      * SCALE FLOAT,
      * SHIFT INTEGER)
      * </pre>
-     * </p>
      */
-    List<TessellationInfo> lookupTessellationInfos(Connection cx, String schemaName, String tableName, 
-        String columnName) throws SQLException {
+    List<TessellationInfo> lookupTessellationInfos(
+            Connection cx, String schemaName, String tableName, String columnName)
+            throws SQLException {
 
         DatabaseMetaData metadata = cx.getMetaData();
-        ResultSet tables = metadata.getTables(
-                null, dataStore.escapeNamePattern(metadata, "sysspatial"),
-                dataStore.escapeNamePattern(metadata, TESSELLATION), new String[]{"TABLE"});
+        ResultSet tables =
+                metadata.getTables(
+                        null,
+                        dataStore.escapeNamePattern(metadata, "sysspatial"),
+                        dataStore.escapeNamePattern(metadata, TESSELLATION),
+                        new String[] {"TABLE"});
         try {
             if (!tables.next()) {
-                LOGGER.warning("sysspatial." + TESSELLATION + " does not exist. Unable to " +
-                    " perform spatially index queries.");
+                LOGGER.warning(
+                        "sysspatial."
+                                + TESSELLATION
+                                + " does not exist. Unable to "
+                                + " perform spatially index queries.");
                 return Collections.EMPTY_LIST;
             }
-        }
-        finally {
+        } finally {
             dataStore.closeSafe(tables);
         }
-        
+
         List<TessellationInfo> tinfos = new ArrayList();
-        
+
         StringBuffer sql = new StringBuffer();
         sql.append("SELECT * FROM ");
         encodeTableName(SYSSPATIAL, TESSELLATION, sql);
-        
+
         sql.append(" WHERE ");
-        
+
         encodeColumnName("F_TABLE_SCHEMA", sql);
         sql.append(" = ?").append(" AND ");
-        
+
         encodeColumnName("F_TABLE_NAME", sql);
         sql.append(" = ?");
-        
+
         if (columnName != null) {
             sql.append(" AND ");
             encodeColumnName("F_GEOMETRY_COLUMN", sql);
             sql.append(" = ?");
         }
-        
+
         LOGGER.fine(sql.toString());
         PreparedStatement ps = cx.prepareStatement(sql.toString());
         try {
@@ -64,48 +70,52 @@
             if (columnName != null) {
                 ps.setString(3, columnName);
             }
-            
+
             ResultSet rs = ps.executeQuery();
             try {
                 if (rs.next()) {
                     TessellationInfo tinfo = new TessellationInfo();
-                    tinfo.setUBounds(new Envelope(rs.getDouble("U_XMIN"), rs.getDouble("U_XMAX"), 
-                        rs.getDouble("U_YMIN"), rs.getDouble("U_YMAX")));
+                    tinfo.setUBounds(
+                            new Envelope(
+                                    rs.getDouble("U_XMIN"),
+                                    rs.getDouble("U_XMAX"),
+                                    rs.getDouble("U_YMIN"),
+                                    rs.getDouble("U_YMAX")));
                     tinfo.setNx(rs.getInt("G_NX"));
                     tinfo.setNy(rs.getInt("G_NY"));
                     tinfo.setLevels(rs.getInt("LEVELS"));
                     tinfo.setScale(rs.getDouble("SCALE"));
                     tinfo.setShift(rs.getInt("SHIFT"));
                     tinfo.setColumName(rs.getString("F_GEOMETRY_COLUMN"));
-                    
+
                     tinfo.setSchemaName(schemaName);
                     tinfo.setTableName(tableName);
-                    
-                    //look up the spatial index table
-                    tables = metadata.getTables(
-                            null, dataStore.escapeNamePattern(metadata, schemaName),
-                            dataStore.escapeNamePattern(metadata, tableName + "_" + columnName + "_idx")
-                            , new String[]{"TABLE", "VIEW"});
+
+                    // look up the spatial index table
+                    tables =
+                            metadata.getTables(
+                                    null,
+                                    dataStore.escapeNamePattern(metadata, schemaName),
+                                    dataStore.escapeNamePattern(
+                                            metadata, tableName + "_" + columnName + "_idx"),
+                                    new String[] {"TABLE", "VIEW"});
                     try {
                         if (tables.next()) {
                             tinfo.setIndexTableName(tables.getString("TABLE_NAME"));
                         }
-                    }
-                    finally {
+                    } finally {
                         dataStore.closeSafe(tables);
                     }
-                    
+
                     tinfos.add(tinfo);
                 }
-            }
-            finally {
+            } finally {
                 dataStore.closeSafe(rs);
             }
-        }
-        finally {
+        } finally {
             dataStore.closeSafe(ps);
         }
-        
+
         return tinfos;
     }
 

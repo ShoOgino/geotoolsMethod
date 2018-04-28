@@ -1,125 +1,114 @@
-	/**
-	 * Encode the given coverage to the requsted output format.
-	 * 
-	 * @param sourceCoverage
-	 *            the coverage to be encoded.s
-	 * @param outstream
-	 *            OutputStream
-	 * @throws IOException
-	 * 
-	 * @throws IOException
-	 * @throws IllegalArgumentException
-	 *             DOCUMENT ME!
-	 */
-	static private void encode(final GridCoverage2D sourceCoverage,
-			final ImageOutputStream outstream, final String extension) throws IOException {
+    /**
+     * Encode the given coverage to the requsted output format.
+     *
+     * @param sourceCoverage the coverage to be encoded.s
+     * @param outstream OutputStream
+     * @throws IOException
+     * @throws IOException
+     * @throws IllegalArgumentException DOCUMENT ME!
+     */
+    private static void encode(
+            final GridCoverage2D sourceCoverage,
+            final ImageOutputStream outstream,
+            final String extension)
+            throws IOException {
 
-		// do we have a source coverage?
-		if (sourceCoverage == null) {
-			throw new IllegalArgumentException(
-					"A coverage must be provided in order for write to succeed!");
-		}
+        // do we have a source coverage?
+        if (sourceCoverage == null) {
+            throw new IllegalArgumentException(
+                    "A coverage must be provided in order for write to succeed!");
+        }
 
-		RenderedImage image = (sourceCoverage).getRenderedImage();
-		final ImageWorker worker = new ImageWorker(image);
-		// Setting NoData and ROI if present
-		worker.setROI(CoverageUtilities.getROIProperty(sourceCoverage));
-		NoDataContainer noDataProperty = CoverageUtilities.getNoDataProperty(sourceCoverage);
-                worker.setNoData(noDataProperty != null ? noDataProperty.getAsRange() : null);
+        RenderedImage image = (sourceCoverage).getRenderedImage();
+        final ImageWorker worker = new ImageWorker(image);
+        // Setting NoData and ROI if present
+        worker.setROI(CoverageUtilities.getROIProperty(sourceCoverage));
+        NoDataContainer noDataProperty = CoverageUtilities.getNoDataProperty(sourceCoverage);
+        worker.setNoData(noDataProperty != null ? noDataProperty.getAsRange() : null);
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// With index color model we want just the first band
-		//
-		// /////////////////////////////////////////////////////////////////////
-		if (image.getColorModel() instanceof IndexColorModel
-				&& (image.getSampleModel().getNumBands() > 1)) {
-			worker.retainBands(1);
-			image = worker.getRenderedImage();
-		}
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // With index color model we want just the first band
+        //
+        // /////////////////////////////////////////////////////////////////////
+        if (image.getColorModel() instanceof IndexColorModel
+                && (image.getSampleModel().getNumBands() > 1)) {
+            worker.retainBands(1);
+            image = worker.getRenderedImage();
+        }
 
-		/**
-		 * For the moment we do not work with DirectColorModel but instead we
-		 * switch to component color model which is really easier to handle even
-		 * if it much more memory expensive. Once we are in component color
-		 * model is really easy to go to Gif and similar.
-		 */
-		if (image.getColorModel() instanceof DirectColorModel) {
-			worker.forceComponentColorModel();
-			image = worker.getRenderedImage();
-		}
+        /**
+         * For the moment we do not work with DirectColorModel but instead we switch to component
+         * color model which is really easier to handle even if it much more memory expensive. Once
+         * we are in component color model is really easy to go to Gif and similar.
+         */
+        if (image.getColorModel() instanceof DirectColorModel) {
+            worker.forceComponentColorModel();
+            image = worker.getRenderedImage();
+        }
 
-		/**
-		 * ADJUSTMENTS FOR VARIOUS FILE FORMATS
-		 */
+        /** ADJUSTMENTS FOR VARIOUS FILE FORMATS */
 
-		// ------------------------GIF-----------------------------------
-		if (extension.compareToIgnoreCase("gif") == 0) {
+        // ------------------------GIF-----------------------------------
+        if (extension.compareToIgnoreCase("gif") == 0) {
 
-			/**
-			 * IndexColorModel with more than 8 bits for sample might be a
-			 * problem because GIF allows only 8 bits based palette therefore I
-			 * prefere switching to component color model in order to handle
-			 * this properly. NOTE. The only transfert types avalaible for
-			 * IndexColorModel are byte and ushort.
-			 */
-			if (image.getColorModel() instanceof IndexColorModel
-					&& (image.getSampleModel().getTransferType() != DataBuffer.TYPE_BYTE)) {
-				worker.forceComponentColorModel();
-				image = worker.getRenderedImage();
-			}
+            /**
+             * IndexColorModel with more than 8 bits for sample might be a problem because GIF
+             * allows only 8 bits based palette therefore I prefere switching to component color
+             * model in order to handle this properly. NOTE. The only transfert types avalaible for
+             * IndexColorModel are byte and ushort.
+             */
+            if (image.getColorModel() instanceof IndexColorModel
+                    && (image.getSampleModel().getTransferType() != DataBuffer.TYPE_BYTE)) {
+                worker.forceComponentColorModel();
+                image = worker.getRenderedImage();
+            }
 
-			/**
-			 * component color model is not well digested by the gif encoder we
-			 * need to go to indecolor model somehow. This code for the moment
-			 * remove transparency, but I am confident I will find a way to add
-			 * that.
-			 */
-			if (image.getColorModel() instanceof ComponentColorModel) {
-				worker.forceIndexColorModelForGIF(true);
-				image = worker.getRenderedImage();
-			} else
-			/**
-			 * IndexColorModel with full transparency support is not suitable
-			 * for gif images we need to go to bitmask loosing some
-			 * informations. we have only one full transparent color.
-			 */
-			if (image.getColorModel() instanceof IndexColorModel) {
-				worker.forceIndexColorModelForGIF(true);
-				image = worker.getRenderedImage();
-			}
-		}
-		// else
-		// -----------------TIFF--------------------------------------
+            /**
+             * component color model is not well digested by the gif encoder we need to go to
+             * indecolor model somehow. This code for the moment remove transparency, but I am
+             * confident I will find a way to add that.
+             */
+            if (image.getColorModel() instanceof ComponentColorModel) {
+                worker.forceIndexColorModelForGIF(true);
+                image = worker.getRenderedImage();
+            } else
+            /**
+             * IndexColorModel with full transparency support is not suitable for gif images we need
+             * to go to bitmask loosing some informations. we have only one full transparent color.
+             */
+            if (image.getColorModel() instanceof IndexColorModel) {
+                worker.forceIndexColorModelForGIF(true);
+                image = worker.getRenderedImage();
+            }
+        }
+        // else
+        // -----------------TIFF--------------------------------------
 
-		// /**
-		// * TIFF file format. We need just a couple of correction for this
-		// * format. It seems that the encoder does not work fine with
-		// * IndexColorModel therefore in such a case we need the reformat the
-		// * input image to a ComponentColorModel.
-		// */
-		// if (extension.compareToIgnoreCase("tiff") == 0
-		// || extension.compareToIgnoreCase("tif") == 0) {
-		// // Are we dealing with IndexColorModel? If so we need to go back
-		// // to ComponentColorModel
-		// if (image.getColorModel() instanceof IndexColorModel) {
-		// surrogateImage = ImageUtilities
-		// .reformatColorModel2ComponentColorModel(surrogateImage);
-		// }
-		// }
+        // /**
+        // * TIFF file format. We need just a couple of correction for this
+        // * format. It seems that the encoder does not work fine with
+        // * IndexColorModel therefore in such a case we need the reformat the
+        // * input image to a ComponentColorModel.
+        // */
+        // if (extension.compareToIgnoreCase("tiff") == 0
+        // || extension.compareToIgnoreCase("tif") == 0) {
+        // // Are we dealing with IndexColorModel? If so we need to go back
+        // // to ComponentColorModel
+        // if (image.getColorModel() instanceof IndexColorModel) {
+        // surrogateImage = ImageUtilities
+        // .reformatColorModel2ComponentColorModel(surrogateImage);
+        // }
+        // }
 
-		/**
-		 * write using JAI encoders
-		 */
-		final ParameterBlockJAI pbjImageWrite = new ParameterBlockJAI(
-				"ImageWrite");
-		pbjImageWrite.addSource(image);
-		pbjImageWrite.setParameter("Output", outstream);
-		pbjImageWrite.setParameter("VerifyOutput", Boolean.FALSE);
-		pbjImageWrite.setParameter("Format", extension);
-		JAI.create("ImageWrite", pbjImageWrite);
-		outstream.flush();
-		outstream.close();
-
-	}
+        /** write using JAI encoders */
+        final ParameterBlockJAI pbjImageWrite = new ParameterBlockJAI("ImageWrite");
+        pbjImageWrite.addSource(image);
+        pbjImageWrite.setParameter("Output", outstream);
+        pbjImageWrite.setParameter("VerifyOutput", Boolean.FALSE);
+        pbjImageWrite.setParameter("Format", extension);
+        JAI.create("ImageWrite", pbjImageWrite);
+        outstream.flush();
+        outstream.close();
+    }
 

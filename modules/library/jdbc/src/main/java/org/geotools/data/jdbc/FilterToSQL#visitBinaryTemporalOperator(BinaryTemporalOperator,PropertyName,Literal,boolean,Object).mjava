@@ -1,29 +1,36 @@
     /**
      * Handles the common case of a PropertyName,Literal geometry binary temporal operator.
-     * <p>
-     * Subclasses should override if they support more temporal operators than what is handled in 
-     * this base class. 
-     * </p>
+     *
+     * <p>Subclasses should override if they support more temporal operators than what is handled in
+     * this base class.
      */
-    protected Object visitBinaryTemporalOperator(BinaryTemporalOperator filter, 
-        PropertyName property, Literal temporal, boolean swapped, Object extraData) { 
+    protected Object visitBinaryTemporalOperator(
+            BinaryTemporalOperator filter,
+            PropertyName property,
+            Literal temporal,
+            boolean swapped,
+            Object extraData) {
 
         Class typeContext = null;
-        AttributeDescriptor attType = (AttributeDescriptor)property.evaluate(featureType);
+        AttributeDescriptor attType = (AttributeDescriptor) property.evaluate(featureType);
         if (attType != null) {
             typeContext = attType.getType().getBinding();
         }
-        
-        //check for time period
+
+        // check for time period
         Period period = null;
         if (temporal.evaluate(null) instanceof Period) {
             period = (Period) temporal.evaluate(null);
         }
 
-        //verify that those filters that require a time period have one
-        if ((filter instanceof Begins || filter instanceof BegunBy || filter instanceof Ends ||
-            filter instanceof EndedBy || filter instanceof During || filter instanceof TContains) &&
-            period == null) {
+        // verify that those filters that require a time period have one
+        if ((filter instanceof Begins
+                        || filter instanceof BegunBy
+                        || filter instanceof Ends
+                        || filter instanceof EndedBy
+                        || filter instanceof During
+                        || filter instanceof TContains)
+                && period == null) {
             if (period == null) {
                 throw new IllegalArgumentException("Filter requires a time period");
             }
@@ -32,21 +39,21 @@
             throw new IllegalArgumentException("TEquals filter does not accept time period");
         }
 
-        //ensure the time period is the correct argument
-        if ((filter instanceof Begins || filter instanceof Ends || filter instanceof During) && 
-            swapped) {
+        // ensure the time period is the correct argument
+        if ((filter instanceof Begins || filter instanceof Ends || filter instanceof During)
+                && swapped) {
             throw new IllegalArgumentException("Time period must be second argument of Filter");
         }
-        if ((filter instanceof BegunBy || filter instanceof EndedBy || filter instanceof TContains) && 
-            !swapped) {
+        if ((filter instanceof BegunBy || filter instanceof EndedBy || filter instanceof TContains)
+                && !swapped) {
             throw new IllegalArgumentException("Time period must be first argument of Filter");
         }
-        
+
         try {
             if (filter instanceof After || filter instanceof Before) {
                 String op = filter instanceof After ? " > " : " < ";
                 String inv = filter instanceof After ? " < " : " > ";
-                
+
                 if (period != null) {
                     out.write("(");
 
@@ -55,61 +62,55 @@
                     visitBegin(period, extraData);
 
                     out.write(" AND ");
-                    
+
                     property.accept(this, extraData);
                     out.write(swapped ? inv : op);
                     visitEnd(period, extraData);
 
                     out.write(")");
-                }
-                else {
+                } else {
                     if (swapped) {
                         temporal.accept(this, typeContext);
-                    }
-                    else {
+                    } else {
                         property.accept(this, extraData);
                     }
-        
+
                     out.write(op);
-                    
+
                     if (swapped) {
                         property.accept(this, extraData);
-                    }
-                    else {
+                    } else {
                         temporal.accept(this, typeContext);
                     }
                 }
-            }
-            else if (filter instanceof Begins || filter instanceof Ends || 
-                     filter instanceof BegunBy || filter instanceof EndedBy ) {
+            } else if (filter instanceof Begins
+                    || filter instanceof Ends
+                    || filter instanceof BegunBy
+                    || filter instanceof EndedBy) {
                 property.accept(this, extraData);
-                out.write( " = ");
+                out.write(" = ");
 
                 if (filter instanceof Begins || filter instanceof BegunBy) {
                     visitBegin(period, extraData);
-                }
-                else {
+                } else {
                     visitEnd(period, extraData);
                 }
-            }
-            else if (filter instanceof During || filter instanceof TContains){
+            } else if (filter instanceof During || filter instanceof TContains) {
                 property.accept(this, extraData);
-                out.write( " BETWEEN ");
+                out.write(" BETWEEN ");
 
                 visitBegin(period, extraData);
-                out.write( " AND ");
+                out.write(" AND ");
                 visitEnd(period, extraData);
-            }
-            else if (filter instanceof TEquals) {
+            } else if (filter instanceof TEquals) {
                 property.accept(this, extraData);
                 out.write(" = ");
                 temporal.accept(this, typeContext);
             }
-        }
-        catch(IOException e) {
+        } catch (IOException e) {
             throw new RuntimeException("Error encoding temporal filter", e);
         }
-        
+
         return extraData;
     }
 

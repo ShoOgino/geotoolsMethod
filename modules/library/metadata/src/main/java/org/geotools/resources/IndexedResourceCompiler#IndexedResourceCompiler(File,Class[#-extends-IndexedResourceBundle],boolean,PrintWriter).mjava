@@ -1,50 +1,52 @@
     /**
-     * Constructs a new {@code IndexedResourceCompiler}. This method will immediately look for
-     * a {@code FooKeys.class} file. If one is found, integer keys are loaded in order to reuse
-     * the same values.
+     * Constructs a new {@code IndexedResourceCompiler}. This method will immediately look for a
+     * {@code FooKeys.class} file. If one is found, integer keys are loaded in order to reuse the
+     * same values.
      *
-     * @param  sourceDirectory The base directory for {@code "java"} {@code "resources"}
-     *         sub-directories. The directory structure must be consistent with Maven conventions.
-     * @param  bundleClass The resource bundle base class
-     *         (e.g. <code>{@linkplain org.geotools.resources.i18n.Vocabulary}.class}</code>).
-     * @param  renumber {@code true} for renumbering all key values.
-     * @param  out The output stream for printing message.
+     * @param sourceDirectory The base directory for {@code "java"} {@code "resources"}
+     *     sub-directories. The directory structure must be consistent with Maven conventions.
+     * @param bundleClass The resource bundle base class (e.g. <code>
+     *     {@linkplain org.geotools.resources.i18n.Vocabulary}.class}</code>).
+     * @param renumber {@code true} for renumbering all key values.
+     * @param out The output stream for printing message.
      * @throws IOException if an input/output operation failed.
      */
-    private IndexedResourceCompiler(final File sourceDirectory,
-                                    final Class<? extends IndexedResourceBundle> bundleClass,
-                                    final boolean renumber, final PrintWriter out)
-            throws IOException
-    {
+    private IndexedResourceCompiler(
+            final File sourceDirectory,
+            final Class<? extends IndexedResourceBundle> bundleClass,
+            final boolean renumber,
+            final PrintWriter out)
+            throws IOException {
         this.sourceDirectory = sourceDirectory;
         this.out = out;
-        if (!renumber) try {
-            final String classname = toKeyClass(bundleClass.getName());
-            final Field[] fields = Class.forName(classname).getFields();
-            out.print("Loading ");
-            out.println(classname);
-            /*
-             * Copies all fields into {@link #allocatedIDs} map.
-             */
-            Field.setAccessible(fields, true);
-            for (int i=fields.length; --i>=0;) {
-                final Field field = fields[i];
-                final String  key = field.getName();
-                try {
-                    final Object ID = field.get(null);
-                    if (ID instanceof Integer) {
-                        allocatedIDs.put((Integer)ID, key);
+        if (!renumber)
+            try {
+                final String classname = toKeyClass(bundleClass.getName());
+                final Field[] fields = Class.forName(classname).getFields();
+                out.print("Loading ");
+                out.println(classname);
+                /*
+                 * Copies all fields into {@link #allocatedIDs} map.
+                 */
+                Field.setAccessible(fields, true);
+                for (int i = fields.length; --i >= 0; ) {
+                    final Field field = fields[i];
+                    final String key = field.getName();
+                    try {
+                        final Object ID = field.get(null);
+                        if (ID instanceof Integer) {
+                            allocatedIDs.put((Integer) ID, key);
+                        }
+                    } catch (IllegalAccessException exception) {
+                        final File source = new File(classname.replace('.', '/') + ".class");
+                        warning(source, key, "Access denied", exception);
                     }
-                } catch (IllegalAccessException exception) {
-                    final File source = new File(classname.replace('.','/') + ".class");
-                    warning(source, key, "Access denied", exception);
                 }
+            } catch (ClassNotFoundException exception) {
+                /*
+                 * 'VocabularyKeys.class' doesn't exist. This is okay (probably normal).
+                 * We will create 'VocabularyKeys.java' later using automatic key values.
+                 */
             }
-        } catch (ClassNotFoundException exception) {
-            /*
-             * 'VocabularyKeys.class' doesn't exist. This is okay (probably normal).
-             * We will create 'VocabularyKeys.java' later using automatic key values.
-             */
-        }
     }
 

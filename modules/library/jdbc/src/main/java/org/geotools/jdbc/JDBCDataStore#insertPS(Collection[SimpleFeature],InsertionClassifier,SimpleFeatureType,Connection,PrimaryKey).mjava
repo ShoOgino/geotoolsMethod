@@ -1,17 +1,19 @@
-    /**
-     * Specialized insertion for dialects that are using prepared statements.
-     */
-    private void insertPS(Collection<SimpleFeature> features, InsertionClassifier kind,
-                          SimpleFeatureType featureType, Connection cx, PrimaryKey key)
+    /** Specialized insertion for dialects that are using prepared statements. */
+    private void insertPS(
+            Collection<SimpleFeature> features,
+            InsertionClassifier kind,
+            SimpleFeatureType featureType,
+            Connection cx,
+            PrimaryKey key)
             throws IOException, SQLException {
         final PreparedStatementSQLDialect dialect = (PreparedStatementSQLDialect) getSQLDialect();
 
-        final KeysFetcher keysFetcher = KeysFetcher.create(this, cx,kind.useExisting, key);
+        final KeysFetcher keysFetcher = KeysFetcher.create(this, cx, kind.useExisting, key);
 
         final String sql = buildInsertPS(kind, featureType, keysFetcher, dialect);
         LOGGER.log(Level.FINE, "Inserting new features with ps: {0}", sql);
 
-        //create the prepared statement
+        // create the prepared statement
         final PreparedStatement ps;
         if (keysFetcher.isPostInsert()) {
             // ask the DB to return the values of all the keys after the insertion
@@ -21,13 +23,13 @@
         }
         try {
             for (SimpleFeature feature : features) {
-                //set the attribute values
+                // set the attribute values
                 int i = 1;
-                for(AttributeDescriptor att : featureType.getAttributeDescriptors()) {
+                for (AttributeDescriptor att : featureType.getAttributeDescriptors()) {
                     String colName = att.getLocalName();
                     // skip the pk columns in case we have exposed them, we grab the
                     // value from the pk itself
-                    if(keysFetcher.isKey(colName)) {
+                    if (keysFetcher.isKey(colName)) {
                         continue;
                     }
 
@@ -35,8 +37,8 @@
 
                     Object value = feature.getAttribute(colName);
                     if (value == null && !att.isNillable()) {
-                        throw new IOException("Cannot set a NULL value on the not null column " +
-                                colName);
+                        throw new IOException(
+                                "Cannot set a NULL value on the not null column " + colName);
                     }
 
                     if (Geometry.class.isAssignableFrom(binding)) {
@@ -47,8 +49,8 @@
                     } else {
                         dialect.setValue(value, binding, ps, i, cx);
                     }
-                    if ( LOGGER.isLoggable( Level.FINE ) ) {
-                        LOGGER.fine( (i) + " = " + value );
+                    if (LOGGER.isLoggable(Level.FINE)) {
+                        LOGGER.fine((i) + " = " + value);
                     }
                     i++;
                 }

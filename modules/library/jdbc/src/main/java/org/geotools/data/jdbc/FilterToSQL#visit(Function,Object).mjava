@@ -1,12 +1,11 @@
     /**
-     * Writes sql for a function expression. By default it will write the call by using the
-     * same arguments provided to the GeoTools function, subclasses should override on a case
-     * by case basis if this behavior is not the desired one.
+     * Writes sql for a function expression. By default it will write the call by using the same
+     * arguments provided to the GeoTools function, subclasses should override on a case by case
+     * basis if this behavior is not the desired one.
      *
      * @param expression a function expression
-     *
      * @throws RuntimeException If an IO error occurs.
-     * @see #getFunctionName(Function) 
+     * @see #getFunctionName(Function)
      */
     public Object visit(Function function, Object extraData) throws RuntimeException {
         // special case for IN functions
@@ -16,7 +15,7 @@
             try {
                 List<Expression> parameters = function.getParameters();
                 List contexts = null;
-                //check context, if a list which patches parameter size list assume its context
+                // check context, if a list which patches parameter size list assume its context
                 // to pass along to each Expression for encoding
                 if (extraData instanceof List && ((List) extraData).size() == parameters.size()) {
                     contexts = (List) extraData;
@@ -25,41 +24,42 @@
                 // set the encoding function flag to signal we are inside a function
                 encodingFunction = true;
 
-                //write the name
+                // write the name
                 out.write(getFunctionName(function));
 
-                //write the arguments
+                // write the arguments
                 out.write("(");
                 List<Parameter<?>> arguments = function.getFunctionName().getArguments();
-                Parameter<?> lastArgument = arguments.isEmpty() ? null : arguments.get(arguments.size() - 1);
+                Parameter<?> lastArgument =
+                        arguments.isEmpty() ? null : arguments.get(arguments.size() - 1);
                 for (int i = 0; i < parameters.size(); i++) {
                     Expression e = parameters.get(i);
 
                     Object context;
                     // the last argument can be multi-valued
-                    if (arguments.size() <= i 
-                            && (lastArgument.getMaxOccurs() > 0 || lastArgument.getMaxOccurs() == -1)) {
+                    if (arguments.size() <= i
+                            && (lastArgument.getMaxOccurs() > 0
+                                    || lastArgument.getMaxOccurs() == -1)) {
                         context = lastArgument.getType();
                     } else {
                         context = arguments.get(i).getType();
                     }
-                    
+
                     e.accept(this, context);
 
                     if (i < parameters.size() - 1) {
                         out.write(",");
                     }
-
                 }
                 out.write(")");
 
-                //reset the encoding function flag
+                // reset the encoding function flag
                 encodingFunction = false;
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         }
-        
+
         return extraData;
     }
 

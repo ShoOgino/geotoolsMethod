@@ -1,13 +1,13 @@
     private ROI mosaicROIs(Vector sources, ROI... roiArray) {
-        if(roiArray == null) {
+        if (roiArray == null) {
             return null;
         }
-        
+
         // collect all ROIs
         List<ROI> rois = new ArrayList<>(Arrays.asList(roiArray));
         int numSources = sources.size();
-        if(roiArray.length < numSources){
-            for(int i = roiArray.length; i < numSources; i++){
+        if (roiArray.length < numSources) {
+            for (int i = roiArray.length; i < numSources; i++) {
                 RenderedImage img = (RenderedImage) sources.get(i);
                 ROI r = getImageBoundsROI(img);
                 rois.add(r);
@@ -21,22 +21,21 @@
                 ROI r = getImageBoundsROI(img);
                 rois.set(i, r);
             }
-            
         }
-        
+
         // bail out for the simple case without creating new objects
         if (rois.size() == 1) {
             return rois.get(0);
         }
-        
+
         // prepare the vector union, take aside a ROIGeometry if possible
         // as it can add both ROIShape and ROIGeometry
         List<ROI> rasterROIs = new ArrayList<>();
         List<ROI> vectorROIs = new ArrayList<>();
         ROI vectorReference = null;
         for (ROI roi : rois) {
-            if(roi instanceof ROIShape || roi instanceof ROIGeometry) {
-                if(vectorReference == null && roi instanceof ROIGeometry) {
+            if (roi instanceof ROIShape || roi instanceof ROIGeometry) {
+                if (vectorReference == null && roi instanceof ROIGeometry) {
                     vectorReference = (ROIGeometry) roi;
                 } else {
                     vectorROIs.add(roi);
@@ -45,14 +44,14 @@
                 rasterROIs.add(roi);
             }
         }
-        if(vectorReference == null && vectorROIs.size() > 0) {
+        if (vectorReference == null && vectorROIs.size() > 0) {
             vectorReference = vectorROIs.remove(0);
         }
         // accumulate the vector ROIs, if any
         for (ROI roi : vectorROIs) {
             vectorReference = vectorReference.add(roi);
         }
-        
+
         // optimization in case we end up with just one ROI, no need to mosaic
         if (rasterROIs.size() == 0) {
             return vectorReference;
@@ -73,7 +72,9 @@
         pb.add(null); // ROI (null to avoid double bit -> byte expansion of the ROI data
         pb.add(ROI_THRESHOLDS);
         pb.add(ROI_BACKGROUND);
-        pb.add(handleMosaicThresholds(ROI_THRESHOLDS, rasterROIs.size() + (vectorReference != null ? 1 : 0)));
+        pb.add(
+                handleMosaicThresholds(
+                        ROI_THRESHOLDS, rasterROIs.size() + (vectorReference != null ? 1 : 0)));
         RenderedImage roiMosaic = JAI.create("Mosaic", pb, getRenderingHints());
         return new ROI(roiMosaic);
     }

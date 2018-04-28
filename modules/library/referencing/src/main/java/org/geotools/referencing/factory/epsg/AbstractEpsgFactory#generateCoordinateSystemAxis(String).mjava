@@ -1,39 +1,43 @@
     /**
      * Returns a {@linkplain CoordinateSystemAxis coordinate system axis} from a code.
      *
-     * @param  code Value allocated by authority.
+     * @param code Value allocated by authority.
      * @throws NoSuchAuthorityCodeException if the specified {@code code} was not found.
      * @throws FactoryException if the object creation failed for some other reason.
      */
     public synchronized CoordinateSystemAxis generateCoordinateSystemAxis(final String code)
-            throws FactoryException
-    {
+            throws FactoryException {
         ensureNonNull("code", code);
         CoordinateSystemAxis returnValue = null;
         try {
             final String primaryKey = trimAuthority(code);
             final PreparedStatement stmt;
-            stmt = prepareStatement("Axis", "SELECT COORD_AXIS_CODE,"
-                                    +             " COORD_AXIS_NAME_CODE,"
-                                    +             " COORD_AXIS_ORIENTATION,"
-                                    +             " COORD_AXIS_ABBREVIATION,"
-                                    +             " UOM_CODE"
-                                    +       " FROM [Coordinate Axis]"
-                                    +      " WHERE COORD_AXIS_CODE = ?");
+            stmt =
+                    prepareStatement(
+                            "Axis",
+                            "SELECT COORD_AXIS_CODE,"
+                                    + " COORD_AXIS_NAME_CODE,"
+                                    + " COORD_AXIS_ORIENTATION,"
+                                    + " COORD_AXIS_ABBREVIATION,"
+                                    + " UOM_CODE"
+                                    + " FROM [Coordinate Axis]"
+                                    + " WHERE COORD_AXIS_CODE = ?");
             stmt.setString(1, code);
             ResultSet result = stmt.executeQuery();
             while (result.next()) {
-                final String epsg         = getString(result, 1, code);
-                final String nameCode     = getString(result, 2, code);
-                final String orientation  = getString(result, 3, code);
+                final String epsg = getString(result, 1, code);
+                final String nameCode = getString(result, 2, code);
+                final String orientation = getString(result, 3, code);
                 final String abbreviation = getString(result, 4, code);
-                final String unit         = getString(result, 5, code);
+                final String unit = getString(result, 5, code);
                 AxisDirection direction;
                 try {
                     direction = DefaultCoordinateSystemAxis.getDirection(orientation);
                 } catch (NoSuchElementException exception) {
                     if (orientation.equalsIgnoreCase("Geocentre > equator/PM")) {
-                        direction = AxisDirection.OTHER; // TODO: can we choose a more accurate direction?
+                        direction =
+                                AxisDirection
+                                        .OTHER; // TODO: can we choose a more accurate direction?
                     } else if (orientation.equalsIgnoreCase("Geocentre > equator/90dE")) {
                         direction = AxisDirection.EAST;
                     } else if (orientation.equalsIgnoreCase("Geocentre > north pole")) {
@@ -43,10 +47,12 @@
                     }
                 }
                 final AxisName an = getAxisName(nameCode);
-                final Map<String,Object> properties = generateProperties(an.name, epsg, an.description);
+                final Map<String, Object> properties =
+                        generateProperties(an.name, epsg, an.description);
                 final CSFactory factory = factories.getCSFactory();
-                final CoordinateSystemAxis axis = factory.createCoordinateSystemAxis(
-                        properties, abbreviation, direction, createUnit(unit));
+                final CoordinateSystemAxis axis =
+                        factory.createCoordinateSystemAxis(
+                                properties, abbreviation, direction, createUnit(unit));
                 returnValue = ensureSingleton(axis, returnValue, code);
             }
             result.close();

@@ -1,36 +1,45 @@
     protected boolean acceptGranule(GranuleDescriptor granuleDescriptor) {
-        SimpleFeature originator = granuleDescriptor.getOriginator(); 
+        SimpleFeature originator = granuleDescriptor.getOriginator();
         Object imageIndex = originator != null ? originator.getAttribute("imageindex") : null;
 
         if (imageIndex != null && imageIndex instanceof Integer) {
             rasterLayerResponse.setImageChoice((Integer) imageIndex);
         }
 
-        final GranuleLoader loader = new GranuleLoader(rasterLayerResponse.getBaseReadParameters(),
-                rasterLayerResponse.getImageChoice(), rasterLayerResponse.getMosaicBBox(),
-                rasterLayerResponse.getFinalWorldToGridCorner(), granuleDescriptor,
-                rasterLayerResponse.getRequest(), rasterLayerResponse.getHints());
+        final GranuleLoader loader =
+                new GranuleLoader(
+                        rasterLayerResponse.getBaseReadParameters(),
+                        rasterLayerResponse.getImageChoice(),
+                        rasterLayerResponse.getMosaicBBox(),
+                        rasterLayerResponse.getFinalWorldToGridCorner(),
+                        granuleDescriptor,
+                        rasterLayerResponse.getRequest(),
+                        rasterLayerResponse.getHints());
         if (!dryRun) {
             final boolean multiThreadedLoading = isMultithreadedLoadingEnabled();
             if (multiThreadedLoading) {
                 // MULTITHREADED EXECUTION submitting the task
-                final ExecutorService mtLoader = rasterLayerResponse
-                        .getRasterManager().getParentReader().getMultiThreadedLoader();
+                final ExecutorService mtLoader =
+                        rasterLayerResponse
+                                .getRasterManager()
+                                .getParentReader()
+                                .getMultiThreadedLoader();
                 granulesFutures.add(mtLoader.submit(loader));
             } else {
-                // SINGLE THREADED Execution, we defer the execution to when we have done the loading
-                final FutureTask<GranuleDescriptor.GranuleLoadingResult> task = new FutureTask<>(
-                        loader);
+                // SINGLE THREADED Execution, we defer the execution to when we have done the
+                // loading
+                final FutureTask<GranuleDescriptor.GranuleLoadingResult> task =
+                        new FutureTask<>(loader);
                 task.run(); // run in current thread
-                
+
                 // perform excess granule removal, as it makes sense in single threaded mode to
                 // do it while loading, to allow for an early bail out reading granules
                 ROIExcessGranuleRemover remover = rasterLayerResponse.getExcessGranuleRemover();
                 GranuleLoadingResult result;
-                if(remover != null) {
+                if (remover != null) {
                     try {
                         result = task.get();
-                        if(!remover.addGranule(result)) {
+                        if (!remover.addGranule(result)) {
                             return false;
                         }
                     } catch (InterruptedException | ExecutionException e) {

@@ -1,78 +1,84 @@
     /**
      * Used to update an existing style based on the provided input.
-     * 
+     *
      * @param fts
      * @param ruleIndex
      * @param styleExpression
      * @throws IllegalFilterException
      */
     public static void modifyFTS(FeatureTypeStyle fts, int ruleIndex, String styleExpression)
-        throws IllegalFilterException {
+            throws IllegalFilterException {
         Rule[] rule = fts.getRules();
         Rule thisRule = rule[ruleIndex];
         Filter filter = thisRule.getFilter();
 
-        if (filter instanceof And) { //ranged expression
-                                                  //figure out the appropriate values
+        if (filter instanceof And) { // ranged expression
+            // figure out the appropriate values
 
-            String[] newValue = styleExpression.split("\\.\\."); //$NON-NLS-1$
+            String[] newValue = styleExpression.split("\\.\\."); // $NON-NLS-1$
 
             if (newValue.length != 2) {
                 throw new IllegalArgumentException(
-                    "StyleExpression has incorrect syntax; min..max expected.");
+                        "StyleExpression has incorrect syntax; min..max expected.");
             }
 
             List<Filter> children = ((BinaryLogicOperator) filter).getChildren();
-            
+
             if (children.size() > 2) {
                 throw new IllegalArgumentException(
-                    "This method currently only supports logical filters with exactly 2 children.");
+                        "This method currently only supports logical filters with exactly 2 children.");
             }
 
             // we're expecting 2 compare subfilters
-            PropertyIsGreaterThanOrEqualTo filter1 = (PropertyIsGreaterThanOrEqualTo) children.get(0);
+            PropertyIsGreaterThanOrEqualTo filter1 =
+                    (PropertyIsGreaterThanOrEqualTo) children.get(0);
             BinaryComparisonOperator filter2 = (BinaryComparisonOperator) children.get(1);
 
-            //filter1 should be 1 <= x and filter2 should be x <(=) 5
+            // filter1 should be 1 <= x and filter2 should be x <(=) 5
             if (!(filter1.getExpression2().equals(filter2.getExpression1()))) {
                 throw new IllegalArgumentException(
-                    "Subfilters or subExpressions in incorrect order");
+                        "Subfilters or subExpressions in incorrect order");
             }
 
             if (filter1.getExpression1().toString() != newValue[0]) {
-                //lower bound value has changed, update
+                // lower bound value has changed, update
                 filter1 = ff.greaterOrEqual(filter1.getExpression1(), ff.literal(newValue[0]));
             }
 
             if (filter2.getExpression2().toString() != newValue[1]) {
-                //upper bound value has changed, update
-                if(filter2 instanceof PropertyIsLessThan) {
+                // upper bound value has changed, update
+                if (filter2 instanceof PropertyIsLessThan) {
                     filter2 = ff.less(filter1.getExpression1(), ff.literal(newValue[1]));
-                } else if(filter2 instanceof PropertyIsLessThanOrEqualTo) {
+                } else if (filter2 instanceof PropertyIsLessThanOrEqualTo) {
                     filter2 = ff.lessOrEqual(filter1.getExpression1(), ff.literal(newValue[1]));
                 } else {
-                    throw new IllegalArgumentException("Filter 2 in the comparison is not less or less or equal??");
+                    throw new IllegalArgumentException(
+                            "Filter 2 in the comparison is not less or less or equal??");
                 }
             }
 
-            thisRule.setFilter(filter); // style events don't handle filters yet, so fire the change event for filter
+            thisRule.setFilter(
+                    filter); // style events don't handle filters yet, so fire the change event for
+            // filter
 
-            //TODO: adjust the previous and next filters (uses isFirst, isLast)
-        } else if (filter instanceof Or || filter instanceof PropertyIsEqualTo) { 
+            // TODO: adjust the previous and next filters (uses isFirst, isLast)
+        } else if (filter instanceof Or || filter instanceof PropertyIsEqualTo) {
             // explicit expression obtain the expression containing the attribute
 
             Expression attrExpression;
 
             if (filter instanceof Or) {
-                attrExpression = ((BinaryComparisonOperator) ((Or) filter).getChildren().get(0)).getExpression1();
-            } else { //COMPARE_EQUALS (simple explicit expression)
+                attrExpression =
+                        ((BinaryComparisonOperator) ((Or) filter).getChildren().get(0))
+                                .getExpression1();
+            } else { // COMPARE_EQUALS (simple explicit expression)
                 attrExpression = ((PropertyIsEqualTo) filter).getExpression1();
             }
 
-            //recreate the filter with the new values
+            // recreate the filter with the new values
             rule[ruleIndex].setFilter(toExplicitFilter(styleExpression, attrExpression));
 
-            //TODO: remove duplicate values from other filters
+            // TODO: remove duplicate values from other filters
         } else {
             throw new IllegalArgumentException("Unrecognized filter type.");
         }

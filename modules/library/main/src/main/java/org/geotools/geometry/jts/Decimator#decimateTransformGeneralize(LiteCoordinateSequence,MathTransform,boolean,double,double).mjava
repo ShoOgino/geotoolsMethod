@@ -1,48 +1,50 @@
-	/**
-	 * 1. remove any points that are within the spanx,spany. We ALWAYS keep 1st
-	 * and last point 2. transform to screen coordinates 3. remove any points
-	 * that are close (span <1)
-	 * 
-	 * @param seq
-	 * @param tranform
-	 */
-	private final void decimateTransformGeneralize(LiteCoordinateSequence seq,
-            MathTransform transform, boolean ring, double spanx, double spany)
+    /**
+     * 1. remove any points that are within the spanx,spany. We ALWAYS keep 1st and last point 2.
+     * transform to screen coordinates 3. remove any points that are close (span <1)
+     *
+     * @param seq
+     * @param tranform
+     */
+    private final void decimateTransformGeneralize(
+            LiteCoordinateSequence seq,
+            MathTransform transform,
+            boolean ring,
+            double spanx,
+            double spany)
             throws TransformException {
-		// decimates before XFORM
-		int ncoords = seq.size();
-		double coords[] = null;
-		int sourceDimensions = 2;
-        if(transform != null) {
+        // decimates before XFORM
+        int ncoords = seq.size();
+        double coords[] = null;
+        int sourceDimensions = 2;
+        if (transform != null) {
             sourceDimensions = transform.getSourceDimensions();
-		    coords = seq.getOrdinateArray(sourceDimensions);
-		} else {
-		    coords = seq.getXYArray();
-		}
+            coords = seq.getOrdinateArray(sourceDimensions);
+        } else {
+            coords = seq.getXYArray();
+        }
 
-		if (ncoords < 2) {
-			if (ncoords == 1) // 1 coordinate -- just xform it
-			{
-				// double[] newCoordsXformed2 = new double[2];
-			    if(transform != null) {
-			        transform.transform(coords, 0, coords, 0, 1);
-			        if(sourceDimensions > 2) {
-			            double[] flatCoords = new double[seq.size() * 2];
-			            for (int i = 0; i < seq.size(); i ++) {
+        if (ncoords < 2) {
+            if (ncoords == 1) // 1 coordinate -- just xform it
+            {
+                // double[] newCoordsXformed2 = new double[2];
+                if (transform != null) {
+                    transform.transform(coords, 0, coords, 0, 1);
+                    if (sourceDimensions > 2) {
+                        double[] flatCoords = new double[seq.size() * 2];
+                        for (int i = 0; i < seq.size(); i++) {
                             flatCoords[i * 2] = coords[i * sourceDimensions];
                             flatCoords[i * 2 + 1] = coords[i * sourceDimensions + 1];
                         }
-			            seq.setArray(flatCoords, 2);
-			        } else {
-			            seq.setArray(coords, 2);
-			        }
-			    }
-				return;
-			} else
-				return; // ncoords =0
-		}
-		
-		// if spanx/spany is -1, then no generalization should be done and all
+                        seq.setArray(flatCoords, 2);
+                    } else {
+                        seq.setArray(coords, 2);
+                    }
+                }
+                return;
+            } else return; // ncoords =0
+        }
+
+        // if spanx/spany is -1, then no generalization should be done and all
         // coordinates can just be transformed directly
         if (spanx == -1 && spany == -1) {
             // do the xform if needed
@@ -55,46 +57,48 @@
 
         // generalize, use the heavier algorithm for longer lines
         int actualCoords = spanBasedGeneralize(ncoords, coords, spanx, spany);
-        if(DP_THRESHOLD > 0 && actualCoords > DP_THRESHOLD) {
-            actualCoords = dpBasedGeneralize(actualCoords, coords, Math.min(spanx, spany) * Math.min(spanx, spany));
+        if (DP_THRESHOLD > 0 && actualCoords > DP_THRESHOLD) {
+            actualCoords =
+                    dpBasedGeneralize(
+                            actualCoords, coords, Math.min(spanx, spany) * Math.min(spanx, spany));
         }
-		
-		// handle rings
-		if(ring && actualCoords <= 3) {
-		    if(coords.length > 6) {
-		        // normal rings
-    			coords[2] = coords[2];
-    			coords[3] = coords[3];
-    			coords[4] = coords[4];
-    			coords[5] = coords[5];
-    			actualCoords = 3;
-		    } else if(coords.length > 4){
-		        // invalid rings, they do A-B-A, that is, two overlapping lines
-		        coords[2] = coords[2];
+
+        // handle rings
+        if (ring && actualCoords <= 3) {
+            if (coords.length > 6) {
+                // normal rings
+                coords[2] = coords[2];
+                coords[3] = coords[3];
+                coords[4] = coords[4];
+                coords[5] = coords[5];
+                actualCoords = 3;
+            } else if (coords.length > 4) {
+                // invalid rings, they do A-B-A, that is, two overlapping lines
+                coords[2] = coords[2];
                 coords[3] = coords[3];
                 actualCoords = 2;
-		    }
-		}
-		
-		// always have last one
-		coords[actualCoords * 2] = coords[(ncoords - 1) * 2];
-		coords[actualCoords * 2 + 1] = coords[(ncoords - 1) * 2 + 1];
-		actualCoords++;
+            }
+        }
 
-		// DO THE XFORM
-		if ((transform == null) || (transform.isIdentity())) {
-		    // no actual xform
-		} else {
-		    transform.transform(coords, 0, coords, 0, actualCoords);
-		}
+        // always have last one
+        coords[actualCoords * 2] = coords[(ncoords - 1) * 2];
+        coords[actualCoords * 2 + 1] = coords[(ncoords - 1) * 2 + 1];
+        actualCoords++;
 
-		// stick back into the coordinate sequence
-		if(actualCoords * 2 < coords.length) {
-		    double[] seqDouble = new double[2 * actualCoords];
-		    System.arraycopy(coords, 0, seqDouble, 0, actualCoords * 2);
-		    seq.setArray(seqDouble, 2);
-		} else {
-		    seq.setArray(coords, 2);
-		}
-	}
+        // DO THE XFORM
+        if ((transform == null) || (transform.isIdentity())) {
+            // no actual xform
+        } else {
+            transform.transform(coords, 0, coords, 0, actualCoords);
+        }
+
+        // stick back into the coordinate sequence
+        if (actualCoords * 2 < coords.length) {
+            double[] seqDouble = new double[2 * actualCoords];
+            System.arraycopy(coords, 0, seqDouble, 0, actualCoords * 2);
+            seq.setArray(seqDouble, 2);
+        } else {
+            seq.setArray(coords, 2);
+        }
+    }
 

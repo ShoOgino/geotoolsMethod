@@ -1,8 +1,7 @@
     /**
      * Generates the list of type names provided by the database.
-     * <p>
-     * The list is generated from the underlying database metadata.
-     * </p>
+     *
+     * <p>The list is generated from the underlying database metadata.
      */
     protected List createTypeNames() throws IOException {
         Connection cx = createConnection();
@@ -29,34 +28,38 @@
         try {
             DatabaseMetaData metaData = cx.getMetaData();
             Set<String> availableTableTypes = new HashSet<String>();
-            
+
             ResultSet tableTypes = null;
-            try{
+            try {
                 tableTypes = metaData.getTableTypes();
-                while(tableTypes.next()){
+                while (tableTypes.next()) {
                     availableTableTypes.add(tableTypes.getString("TABLE_TYPE"));
                 }
-            }finally{
+            } finally {
                 closeSafe(tableTypes);
             }
             Set<String> queryTypes = new HashSet<String>();
             for (String desiredTableType : dialect.getDesiredTablesType()) {
-                if(availableTableTypes.contains(desiredTableType)){
+                if (availableTableTypes.contains(desiredTableType)) {
                     queryTypes.add(desiredTableType);
                 }
             }
-            ResultSet tables = metaData.getTables(null, escapeNamePattern(metaData, databaseSchema),
-                    "%", queryTypes.toArray(new String[0]));
-            if(fetchSize > 1) {
+            ResultSet tables =
+                    metaData.getTables(
+                            null,
+                            escapeNamePattern(metaData, databaseSchema),
+                            "%",
+                            queryTypes.toArray(new String[0]));
+            if (fetchSize > 1) {
                 tables.setFetchSize(fetchSize);
             }
 
             try {
                 while (tables.next()) {
-                    String schemaName = tables.getString( "TABLE_SCHEM");
+                    String schemaName = tables.getString("TABLE_SCHEM");
                     String tableName = tables.getString("TABLE_NAME");
 
-                    //use the dialect to filter
+                    // use the dialect to filter
                     if (!dialect.includeTable(schemaName, tableName, cx)) {
                         continue;
                     }
@@ -67,13 +70,13 @@
                 closeSafe(tables);
             }
         } catch (SQLException e) {
-            throw (IOException) new IOException("Error occurred getting table name list.").initCause(e);
+            throw (IOException)
+                    new IOException("Error occurred getting table name list.").initCause(e);
         } finally {
             closeSafe(cx);
         }
 
-        
-        for(String virtualTable : virtualTables.keySet()) {
+        for (String virtualTable : virtualTables.keySet()) {
             typeNames.add(new NameImpl(namespaceURI, virtualTable));
         }
         return typeNames;

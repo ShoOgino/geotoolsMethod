@@ -1,65 +1,63 @@
     /**
      * Ensures that that the specified transaction has access to features specified by a filter.
-     * <p>
-     * If any features matching the filter are locked, and the transaction does not have authorization
-     * with respect to the lock, an exception is thrown.
-     * </p>
+     *
+     * <p>If any features matching the filter are locked, and the transaction does not have
+     * authorization with respect to the lock, an exception is thrown.
+     *
      * @param featureType The feature type / table.
      * @param filter The filters.
      * @param tx The transaction.
      * @param cx The database connection.
      */
-    protected void ensureAuthorization(SimpleFeatureType featureType, Filter filter, Transaction tx, Connection cx) 
-        throws IOException, SQLException {
-        
+    protected void ensureAuthorization(
+            SimpleFeatureType featureType, Filter filter, Transaction tx, Connection cx)
+            throws IOException, SQLException {
+
         InProcessLockingManager lm = (InProcessLockingManager) getLockingManager();
-        // verify if we have any lock to check 
+        // verify if we have any lock to check
         Map locks = lm.locks(featureType.getTypeName());
-        if(locks.size() != 0) {
+        if (locks.size() != 0) {
             // limiting query to only extract locked features
-            if(locks.size() <= MAX_IDS_IN_FILTER) {
+            if (locks.size() <= MAX_IDS_IN_FILTER) {
                 Set<FeatureId> ids = getLockedIds(locks);
                 Id lockFilter = getFilterFactory().id(ids);
                 // intersect given filter with ids filter
                 filter = getFilterFactory().and(filter, lockFilter);
             }
             Query query = new DefaultQuery(featureType.getTypeName(), filter, Query.NO_NAMES);
-    
+
             Statement st = null;
             try {
                 ResultSet rs = null;
-                if ( getSQLDialect() instanceof PreparedStatementSQLDialect ) {
+                if (getSQLDialect() instanceof PreparedStatementSQLDialect) {
                     st = selectSQLPS(featureType, query, cx);
-                    
+
                     PreparedStatement ps = (PreparedStatement) st;
-                    ((PreparedStatementSQLDialect)getSQLDialect()).onSelect(ps, cx, featureType);
+                    ((PreparedStatementSQLDialect) getSQLDialect()).onSelect(ps, cx, featureType);
                     rs = ps.executeQuery();
-                }
-                else {
+                } else {
                     String sql = selectSQL(featureType, query);
-                    
+
                     st = cx.createStatement();
                     st.setFetchSize(fetchSize);
-                    ((BasicSQLDialect)getSQLDialect()).onSelect(st, cx, featureType);
-                    
-                    LOGGER.fine( sql );
-                    rs = st.executeQuery( sql );
+                    ((BasicSQLDialect) getSQLDialect()).onSelect(st, cx, featureType);
+
+                    LOGGER.fine(sql);
+                    rs = st.executeQuery(sql);
                 }
-                
+
                 try {
-                    PrimaryKey key = getPrimaryKey( featureType );
-                    
-                    while( rs.next() ) {
-                        String fid = featureType.getTypeName() + "." + encodeFID( key, rs );
-                        lm.assertAccess(featureType.getTypeName(), fid, tx );
+                    PrimaryKey key = getPrimaryKey(featureType);
+
+                    while (rs.next()) {
+                        String fid = featureType.getTypeName() + "." + encodeFID(key, rs);
+                        lm.assertAccess(featureType.getTypeName(), fid, tx);
                     }
+                } finally {
+                    closeSafe(rs);
                 }
-                finally {
-                    closeSafe( rs );
-                }
-            }
-            finally {
-                closeSafe( st );
+            } finally {
+                closeSafe(st);
             }
         }
     }

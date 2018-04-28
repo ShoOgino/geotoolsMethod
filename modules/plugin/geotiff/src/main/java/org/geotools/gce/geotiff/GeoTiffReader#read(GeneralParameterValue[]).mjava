@@ -1,138 +1,155 @@
-	/**
-	 * This method reads in the TIFF image, constructs an appropriate CRS,
-	 * determines the math transform from raster to the CRS model, and
-	 * constructs a GridCoverage.
-	 * 
-	 * @param params
-	 *            currently ignored, potentially may be used for hints.
-	 * 
-	 * @return grid coverage represented by the image
-	 * 
-	 * @throws IOException
-	 *             on any IO related troubles
-	 */
-	public GridCoverage2D read(GeneralParameterValue[] params) throws IOException {
-		GeneralEnvelope requestedEnvelope = null;
-		Rectangle dim = null;
-		Color inputTransparentColor=null;
-		OverviewPolicy overviewPolicy=null;
-		int[] suggestedTileSize=null;
-		if (params != null) {
+    /**
+     * This method reads in the TIFF image, constructs an appropriate CRS, determines the math
+     * transform from raster to the CRS model, and constructs a GridCoverage.
+     *
+     * @param params currently ignored, potentially may be used for hints.
+     * @return grid coverage represented by the image
+     * @throws IOException on any IO related troubles
+     */
+    public GridCoverage2D read(GeneralParameterValue[] params) throws IOException {
+        GeneralEnvelope requestedEnvelope = null;
+        Rectangle dim = null;
+        Color inputTransparentColor = null;
+        OverviewPolicy overviewPolicy = null;
+        int[] suggestedTileSize = null;
+        if (params != null) {
 
-			//
-			// Checking params
-			//
-			if (params != null) {
-				for (int i = 0; i < params.length; i++) {
-					final ParameterValue param = (ParameterValue) params[i];
-					final ReferenceIdentifier name = param.getDescriptor().getName();
-					if (name.equals(AbstractGridFormat.READ_GRIDGEOMETRY2D.getName())) {
-						final GridGeometry2D gg = (GridGeometry2D) param.getValue();
-						requestedEnvelope = new GeneralEnvelope((Envelope) gg.getEnvelope2D());
-						dim = gg.getGridRange2D().getBounds();
-						continue;
-					}
-					if (name.equals(AbstractGridFormat.OVERVIEW_POLICY.getName())) {
-						overviewPolicy=(OverviewPolicy) param.getValue();
-						continue;
-					}	
+            //
+            // Checking params
+            //
+            if (params != null) {
+                for (int i = 0; i < params.length; i++) {
+                    final ParameterValue param = (ParameterValue) params[i];
+                    final ReferenceIdentifier name = param.getDescriptor().getName();
+                    if (name.equals(AbstractGridFormat.READ_GRIDGEOMETRY2D.getName())) {
+                        final GridGeometry2D gg = (GridGeometry2D) param.getValue();
+                        requestedEnvelope = new GeneralEnvelope((Envelope) gg.getEnvelope2D());
+                        dim = gg.getGridRange2D().getBounds();
+                        continue;
+                    }
+                    if (name.equals(AbstractGridFormat.OVERVIEW_POLICY.getName())) {
+                        overviewPolicy = (OverviewPolicy) param.getValue();
+                        continue;
+                    }
                     if (name.equals(AbstractGridFormat.INPUT_TRANSPARENT_COLOR.getName())) {
                         inputTransparentColor = (Color) param.getValue();
                         continue;
-                    }	
+                    }
                     if (name.equals(AbstractGridFormat.SUGGESTED_TILE_SIZE.getName())) {
-                        String suggestedTileSize_= (String) param.getValue();
-                        if(suggestedTileSize_!=null&&suggestedTileSize_.length()>0){
-                            suggestedTileSize_=suggestedTileSize_.trim();
-                            int commaPosition=suggestedTileSize_.indexOf(",");
-                            if(commaPosition<0){
-                                int tileDim=Integer.parseInt(suggestedTileSize_);
-                                suggestedTileSize= new int[]{tileDim,tileDim};
+                        String suggestedTileSize_ = (String) param.getValue();
+                        if (suggestedTileSize_ != null && suggestedTileSize_.length() > 0) {
+                            suggestedTileSize_ = suggestedTileSize_.trim();
+                            int commaPosition = suggestedTileSize_.indexOf(",");
+                            if (commaPosition < 0) {
+                                int tileDim = Integer.parseInt(suggestedTileSize_);
+                                suggestedTileSize = new int[] {tileDim, tileDim};
                             } else {
-                                int tileW=Integer.parseInt(suggestedTileSize_.substring(0,commaPosition));
-                                int tileH=Integer.parseInt(suggestedTileSize_.substring(commaPosition+1));
-                                suggestedTileSize= new int[]{tileW,tileH};
+                                int tileW =
+                                        Integer.parseInt(
+                                                suggestedTileSize_.substring(0, commaPosition));
+                                int tileH =
+                                        Integer.parseInt(
+                                                suggestedTileSize_.substring(commaPosition + 1));
+                                suggestedTileSize = new int[] {tileW, tileH};
                             }
                         }
                         continue;
-                    }                                               
-				}
-			}
-		}
+                    }
+                }
+            }
+        }
 
-		//
-		// set params
-		//
-		Integer imageChoice = new Integer(0);
-		final ImageReadParam readP = new ImageReadParam();
-		try {
-			imageChoice = setReadParams(overviewPolicy, readP,requestedEnvelope, dim);
-		} catch (TransformException e) {
-			new DataSourceException(e);
-		}
+        //
+        // set params
+        //
+        Integer imageChoice = new Integer(0);
+        final ImageReadParam readP = new ImageReadParam();
+        try {
+            imageChoice = setReadParams(overviewPolicy, readP, requestedEnvelope, dim);
+        } catch (TransformException e) {
+            new DataSourceException(e);
+        }
 
-		//
-		// IMAGE READ OPERATION
-		//
+        //
+        // IMAGE READ OPERATION
+        //
         Hints newHints = null;
-		if(suggestedTileSize!=null){
-		    newHints= hints.clone();
+        if (suggestedTileSize != null) {
+            newHints = hints.clone();
             final ImageLayout layout = new ImageLayout();
             layout.setTileGridXOffset(0);
             layout.setTileGridYOffset(0);
             layout.setTileHeight(suggestedTileSize[1]);
             layout.setTileWidth(suggestedTileSize[0]);
             newHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
-		}
-		final ParameterBlock pbjRead = new ParameterBlock();
-            // Image Index used for the Overview management
-            if (maskOvrProvider != null) {
-                if (maskOvrProvider.isExternalOverview(imageChoice)) {
-                    pbjRead.add(maskOvrProvider.getExternalOverviewInputStreamSpi()
-                            .createInputStreamInstance(maskOvrProvider.getOvrURL(),
-                                    ImageIO.getUseCache(), ImageIO.getCacheDirectory()));
-                } else {
-                    pbjRead.add(maskOvrProvider.getInputStreamSpi().createInputStreamInstance(
-                            maskOvrProvider.getFileURL(), ImageIO.getUseCache(),
-                            ImageIO.getCacheDirectory()));
-                }
-                pbjRead.add(maskOvrProvider.getOverviewIndex(imageChoice));
+        }
+        final ParameterBlock pbjRead = new ParameterBlock();
+        // Image Index used for the Overview management
+        if (maskOvrProvider != null) {
+            if (maskOvrProvider.isExternalOverview(imageChoice)) {
+                pbjRead.add(
+                        maskOvrProvider
+                                .getExternalOverviewInputStreamSpi()
+                                .createInputStreamInstance(
+                                        maskOvrProvider.getOvrURL(),
+                                        ImageIO.getUseCache(),
+                                        ImageIO.getCacheDirectory()));
             } else {
-                if (extOvrImgChoice >= 0 && imageChoice >= extOvrImgChoice) {
-                    pbjRead.add(ovrInStreamSPI.createInputStreamInstance(ovrSource,
-                            ImageIO.getUseCache(), ImageIO.getCacheDirectory()));
-                    pbjRead.add(imageChoice - extOvrImgChoice);
-                } else {
-                    if(inStream instanceof ImageInputStream && !closeMe) {
-                        pbjRead.add(inStream);
-                    }
-                    else {
-                        pbjRead.add(inStreamSPI != null ? inStreamSPI.createInputStreamInstance(source,
-                                ImageIO.getUseCache(), ImageIO.getCacheDirectory()) : ImageIO
-                                .createImageInputStream(source));
-                    }
-                    // Setting correct ImageChoice (taking into account overviews and masks)
-                    int overviewImageIndex = dtLayout.getInternalOverviewImageIndex(imageChoice);
-                    int index = overviewImageIndex >= 0 ? overviewImageIndex : 0;
-                    pbjRead.add(index);
-                }
+                pbjRead.add(
+                        maskOvrProvider
+                                .getInputStreamSpi()
+                                .createInputStreamInstance(
+                                        maskOvrProvider.getFileURL(),
+                                        ImageIO.getUseCache(),
+                                        ImageIO.getCacheDirectory()));
             }
-    	pbjRead.add(Boolean.FALSE);
-		pbjRead.add(Boolean.FALSE);
-		pbjRead.add(Boolean.FALSE);
-		pbjRead.add(null);
-		pbjRead.add(null);
-		pbjRead.add(readP);
-		pbjRead.add(READER_SPI.createReaderInstance());
-		RenderedOp coverageRaster=JAI.create("ImageRead", pbjRead,newHints!=null?(RenderingHints) newHints:null);
-	
+            pbjRead.add(maskOvrProvider.getOverviewIndex(imageChoice));
+        } else {
+            if (extOvrImgChoice >= 0 && imageChoice >= extOvrImgChoice) {
+                pbjRead.add(
+                        ovrInStreamSPI.createInputStreamInstance(
+                                ovrSource, ImageIO.getUseCache(), ImageIO.getCacheDirectory()));
+                pbjRead.add(imageChoice - extOvrImgChoice);
+            } else {
+                if (inStream instanceof ImageInputStream && !closeMe) {
+                    pbjRead.add(inStream);
+                } else {
+                    pbjRead.add(
+                            inStreamSPI != null
+                                    ? inStreamSPI.createInputStreamInstance(
+                                            source,
+                                            ImageIO.getUseCache(),
+                                            ImageIO.getCacheDirectory())
+                                    : ImageIO.createImageInputStream(source));
+                }
+                // Setting correct ImageChoice (taking into account overviews and masks)
+                int overviewImageIndex = dtLayout.getInternalOverviewImageIndex(imageChoice);
+                int index = overviewImageIndex >= 0 ? overviewImageIndex : 0;
+                pbjRead.add(index);
+            }
+        }
+        pbjRead.add(Boolean.FALSE);
+        pbjRead.add(Boolean.FALSE);
+        pbjRead.add(Boolean.FALSE);
+        pbjRead.add(null);
+        pbjRead.add(null);
+        pbjRead.add(readP);
+        pbjRead.add(READER_SPI.createReaderInstance());
+        RenderedOp coverageRaster =
+                JAI.create(
+                        "ImageRead", pbjRead, newHints != null ? (RenderingHints) newHints : null);
+
         //
         // MASKING INPUT COLOR as indicated
         //
-		if(inputTransparentColor!=null){
-		    coverageRaster= new ImageWorker(coverageRaster).setRenderingHints(newHints).makeColorTransparent(inputTransparentColor).getRenderedOperation();
-		}
-		
+        if (inputTransparentColor != null) {
+            coverageRaster =
+                    new ImageWorker(coverageRaster)
+                            .setRenderingHints(newHints)
+                            .makeColorTransparent(inputTransparentColor)
+                            .getRenderedOperation();
+        }
+
         //
         // External/Internal Masking
         //
@@ -152,9 +169,13 @@
             MaskInfo info = maskOvrProvider.getMaskInfo(imageChoice, sourceRegion, readP);
             if (info != null) {
                 // Reading Mask
-                RenderedOp roiRaster = readROIRaster(info.streamSpi,
-                        URLs.fileToUrl(info.file), info.index, newHints,
-                        info.readParameters);
+                RenderedOp roiRaster =
+                        readROIRaster(
+                                info.streamSpi,
+                                URLs.fileToUrl(info.file),
+                                info.index,
+                                newHints,
+                                info.readParameters);
                 roi = MaskOverviewProvider.scaleROI(roiRaster, coverageRaster.getBounds());
             }
         }
@@ -175,5 +196,5 @@
             }
             throw new DataSourceException(e);
         }
-	}
+    }
 

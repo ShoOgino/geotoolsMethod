@@ -1,9 +1,9 @@
     /**
-     * Calculates solar position for the current date, time and location.
-     * Results are reported in azimuth and elevation in degrees.
+     * Calculates solar position for the current date, time and location. Results are reported in
+     * azimuth and elevation in degrees.
      */
     private void compute() {
-        double latitude  = this.latitude;
+        double latitude = this.latitude;
         double longitude = this.longitude;
 
         // NOAA convention use positive longitude west, and negative east.
@@ -13,45 +13,46 @@
         // Compute: 1) Julian day (days ellapsed since January 1, 4723 BC at 12:00 GMT).
         //          2) Time as the centuries ellapsed since January 1, 2000 at 12:00 GMT.
         final double julianDay = Calendar.julianDay(this.time);
-        final double time      = (julianDay-2451545)/36525;
+        final double time = (julianDay - 2451545) / 36525;
 
         double solarDec = sunDeclination(time);
-        double eqTime   = equationOfTime(time);
-        this.noonTime   = Math.round(solarNoonTime(longitude, eqTime) * (60*1000)) +
-                          (this.time/DAY_MILLIS)*DAY_MILLIS;
+        double eqTime = equationOfTime(time);
+        this.noonTime =
+                Math.round(solarNoonTime(longitude, eqTime) * (60 * 1000))
+                        + (this.time / DAY_MILLIS) * DAY_MILLIS;
 
         // Formula below use longitude in degrees. Steps are:
         //   1) Extract the time part of the date, in minutes.
         //   2) Apply a correction for longitude and equation of time.
         //   3) Clamp in a 24 hours range (24 hours == 1440 minutes).
-        double trueSolarTime = ((julianDay+0.5) - Math.floor(julianDay+0.5)) * 1440;
-        trueSolarTime += (eqTime - 4.0*longitude); // Correction in minutes.
-        trueSolarTime -= 1440*Math.floor(trueSolarTime/1440);
+        double trueSolarTime = ((julianDay + 0.5) - Math.floor(julianDay + 0.5)) * 1440;
+        trueSolarTime += (eqTime - 4.0 * longitude); // Correction in minutes.
+        trueSolarTime -= 1440 * Math.floor(trueSolarTime / 1440);
 
         // Convert all angles to radians.  From this point until
         // the end of this method, local variables are always in
         // radians. Output variables ('azimuth' and 'elevation')
         // will still computed in degrees.
         longitude = Math.toRadians(longitude);
-        latitude  = Math.toRadians(latitude );
-        solarDec  = Math.toRadians(solarDec );
+        latitude = Math.toRadians(latitude);
+        solarDec = Math.toRadians(solarDec);
 
-        double csz = Math.sin(latitude) *
-                     Math.sin(solarDec) +
-                     Math.cos(latitude) *
-                     Math.cos(solarDec) *
-                     Math.cos(Math.toRadians(trueSolarTime/4 - 180));
+        double csz =
+                Math.sin(latitude) * Math.sin(solarDec)
+                        + Math.cos(latitude)
+                                * Math.cos(solarDec)
+                                * Math.cos(Math.toRadians(trueSolarTime / 4 - 180));
         if (csz > +1) csz = +1;
         if (csz < -1) csz = -1;
 
-        final double zenith  = Math.acos(csz);
+        final double zenith = Math.acos(csz);
         final double azDenom = Math.cos(latitude) * Math.sin(zenith);
 
         //////////////////////////////////////////
         ////    Compute azimuth in degrees    ////
         //////////////////////////////////////////
         if (Math.abs(azDenom) > 0.001) {
-            double azRad = ((Math.sin(latitude)*Math.cos(zenith)) - Math.sin(solarDec)) / azDenom;
+            double azRad = ((Math.sin(latitude) * Math.cos(zenith)) - Math.sin(solarDec)) / azDenom;
             if (azRad > +1) azRad = +1;
             if (azRad < -1) azRad = -1;
 
@@ -60,9 +61,9 @@
                 azimuth = -azimuth;
             }
         } else {
-            azimuth = (latitude>0) ? 180 : 0;
+            azimuth = (latitude > 0) ? 180 : 0;
         }
-        azimuth -= 360*Math.floor(azimuth/360);
+        azimuth -= 360 * Math.floor(azimuth / 360);
 
         ////////////////////////////////////////////
         ////    Compute elevation in degrees    ////
@@ -73,7 +74,7 @@
         elevation = 90 - solarZen;
         if (elevation < twilight) {
             // do not report azimuth & elevation after twilight
-            azimuth   = DARK;
+            azimuth = DARK;
             elevation = DARK;
         }
         updated = true;

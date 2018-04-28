@@ -1,134 +1,128 @@
-	/**
-     * Copies parameter values from the specified {@link ParameterValueGroup} to the
-     * {@link ParameterBlockJAI}
+    /**
+     * Copies parameter values from the specified {@link ParameterValueGroup} to the {@link
+     * ParameterBlockJAI}
      *
-     * @param parameters
-     *            The {@link ParameterValueGroup} to be copied.
+     * @param parameters The {@link ParameterValueGroup} to be copied.
      * @return A copy of the provided {@link ParameterValueGroup} as a JAI block.
-     *
-     * @see org.geotools.coverage.processing.OperationJAI#prepareParameters(org.opengis.parameter.ParameterValueGroup)
-	 */
-	protected ParameterBlockJAI prepareParameters(ParameterValueGroup parameters) {
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// Make a copy of the input parameters.
-		//
-		// ///////////////////////////////////////////////////////////////////
-		final ImagingParameters copy = (ImagingParameters) descriptor
-				.createValue();
-		final ParameterBlockJAI block = (ParameterBlockJAI) copy.parameters;
-		try {
+     * @see
+     *     org.geotools.coverage.processing.OperationJAI#prepareParameters(org.opengis.parameter.ParameterValueGroup)
+     */
+    protected ParameterBlockJAI prepareParameters(ParameterValueGroup parameters) {
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Make a copy of the input parameters.
+        //
+        // ///////////////////////////////////////////////////////////////////
+        final ImagingParameters copy = (ImagingParameters) descriptor.createValue();
+        final ParameterBlockJAI block = (ParameterBlockJAI) copy.parameters;
+        try {
 
-			// /////////////////////////////////////////////////////////////////////
-			//
-			//
-			// Now transcode the parameters as needed by this operation.
-			//
-			//
-			// ///////////////////////////////////////////////////////////////////
-			// XXX make it robust
-			final GridCoverage2D source = (GridCoverage2D) parameters
-					.parameter(operation.getSourceNames()[PRIMARY_SOURCE_INDEX])
-					.getValue();
-			final AffineTransform gridToWorldTransformCorrected = new AffineTransform(
-					(AffineTransform) ((GridGeometry2D) source
-							.getGridGeometry())
-							.getGridToCRS2D(PixelOrientation.UPPER_LEFT));
-			final MathTransform worldToGridTransform;
-			try {
-				worldToGridTransform = ProjectiveTransform
-						.create(gridToWorldTransformCorrected.createInverse());
-			} catch (NoninvertibleTransformException e) {
-				// //
-				//
-				// Something bad happened here, namely the transformation to go
-				// from grid to world was not invertible. Let's wrap and
-				// propagate the error.
-				//
-				// //
-				final CoverageProcessingException ce = new CoverageProcessingException(
-						e);
-				throw ce;
-			}
-			
-			// //
-			//
-			// get the original envelope and the crs
-			//
-			// //
-			final CoordinateReferenceSystem crs = source
-					.getCoordinateReferenceSystem2D();
-			final Envelope2D envelope = source.getEnvelope2D();			
+            // /////////////////////////////////////////////////////////////////////
+            //
+            //
+            // Now transcode the parameters as needed by this operation.
+            //
+            //
+            // ///////////////////////////////////////////////////////////////////
+            // XXX make it robust
+            final GridCoverage2D source =
+                    (GridCoverage2D)
+                            parameters
+                                    .parameter(operation.getSourceNames()[PRIMARY_SOURCE_INDEX])
+                                    .getValue();
+            final AffineTransform gridToWorldTransformCorrected =
+                    new AffineTransform(
+                            (AffineTransform)
+                                    ((GridGeometry2D) source.getGridGeometry())
+                                            .getGridToCRS2D(PixelOrientation.UPPER_LEFT));
+            final MathTransform worldToGridTransform;
+            try {
+                worldToGridTransform =
+                        ProjectiveTransform.create(gridToWorldTransformCorrected.createInverse());
+            } catch (NoninvertibleTransformException e) {
+                // //
+                //
+                // Something bad happened here, namely the transformation to go
+                // from grid to world was not invertible. Let's wrap and
+                // propagate the error.
+                //
+                // //
+                final CoverageProcessingException ce = new CoverageProcessingException(e);
+                throw ce;
+            }
 
-			// /////////////////////////////////////////////////////////////////////
-			//
-			// Transcode the xPeriod and yPeriod parameters by applying the
-			// WorldToGrid transformation for the source coverage.
-			//
-			// I am assuming that the supplied values are in the same CRS as the 
-			// source coverage. We here apply
-			//
-			// /////////////////////////////////////////////////////////////////////
-			final double xPeriod = parameters.parameter("xPeriod")
-					.doubleValue();
-			final double yPeriod = parameters.parameter("yPeriod")
-					.doubleValue();
-			if(!Double.isNaN(xPeriod)&&!Double.isNaN(yPeriod)){
+            // //
+            //
+            // get the original envelope and the crs
+            //
+            // //
+            final CoordinateReferenceSystem crs = source.getCoordinateReferenceSystem2D();
+            final Envelope2D envelope = source.getEnvelope2D();
 
-				// build the new one that spans over the requested area
-				// NOTE:
-				final DirectPosition2D LLC = new DirectPosition2D(crs, envelope.x,
-						envelope.y);
-				LLC.setCoordinateReferenceSystem(crs);
-				final DirectPosition2D URC = new DirectPosition2D(crs, envelope.x
-						+ xPeriod, envelope.y + yPeriod);
-				URC.setCoordinateReferenceSystem(crs);
-				final Envelope2D shrinkedEnvelope = new Envelope2D(LLC, URC);
-	
-				// transform back into raster space
-				final Rectangle2D transformedEnv = CRS.transform(
-						worldToGridTransform, shrinkedEnvelope).toRectangle2D();
-	
-				// block settings
-				block.setParameter("xPeriod", Integer.valueOf((int) transformedEnv
-						.getWidth()));
-				block.setParameter("yPeriod", Integer.valueOf((int) transformedEnv
-						.getHeight()));
-			}
-			// /////////////////////////////////////////////////////////////////////
-			//
-			// Transcode the polygon parameter into a roi.
-			//
-			// I am assuming that the supplied values are in the same
-			// CRS as the source coverage. We here apply
-			//
-			// /////////////////////////////////////////////////////////////////////
-			final Object o = parameters.parameter("roi").getValue();
-			if (o != null && o instanceof Polygon) {
-				final Polygon roiInput = (Polygon) o;
-				if (new ReferencedEnvelope(roiInput.getEnvelopeInternal(),
-						source.getCoordinateReferenceSystem2D())
-						.intersects((Envelope) new ReferencedEnvelope(envelope))) {
-					final java.awt.Polygon shapePolygon = convertPolygon(
-							roiInput, worldToGridTransform);
+            // /////////////////////////////////////////////////////////////////////
+            //
+            // Transcode the xPeriod and yPeriod parameters by applying the
+            // WorldToGrid transformation for the source coverage.
+            //
+            // I am assuming that the supplied values are in the same CRS as the
+            // source coverage. We here apply
+            //
+            // /////////////////////////////////////////////////////////////////////
+            final double xPeriod = parameters.parameter("xPeriod").doubleValue();
+            final double yPeriod = parameters.parameter("yPeriod").doubleValue();
+            if (!Double.isNaN(xPeriod) && !Double.isNaN(yPeriod)) {
 
-					block.setParameter("roi", new ROIShape(shapePolygon));
-				}
-			}
-			
-			// Handle JAI-EXT parameters if needed
-			handleJAIEXTParams(block, parameters);
-			// Returning the parameterBlock
-			return block;
-		} catch (Exception e) {
-			// //
-			//
-			// Something bad happened here Let's wrap and propagate the error.
-			//
-			// //
-			final CoverageProcessingException ce = new CoverageProcessingException(
-					e);
-			throw ce;
-		}
-	}
+                // build the new one that spans over the requested area
+                // NOTE:
+                final DirectPosition2D LLC = new DirectPosition2D(crs, envelope.x, envelope.y);
+                LLC.setCoordinateReferenceSystem(crs);
+                final DirectPosition2D URC =
+                        new DirectPosition2D(crs, envelope.x + xPeriod, envelope.y + yPeriod);
+                URC.setCoordinateReferenceSystem(crs);
+                final Envelope2D shrinkedEnvelope = new Envelope2D(LLC, URC);
+
+                // transform back into raster space
+                final Rectangle2D transformedEnv =
+                        CRS.transform(worldToGridTransform, shrinkedEnvelope).toRectangle2D();
+
+                // block settings
+                block.setParameter("xPeriod", Integer.valueOf((int) transformedEnv.getWidth()));
+                block.setParameter("yPeriod", Integer.valueOf((int) transformedEnv.getHeight()));
+            }
+            // /////////////////////////////////////////////////////////////////////
+            //
+            // Transcode the polygon parameter into a roi.
+            //
+            // I am assuming that the supplied values are in the same
+            // CRS as the source coverage. We here apply
+            //
+            // /////////////////////////////////////////////////////////////////////
+            final Object o = parameters.parameter("roi").getValue();
+            if (o != null && o instanceof Polygon) {
+                final Polygon roiInput = (Polygon) o;
+                if (new ReferencedEnvelope(
+                                roiInput.getEnvelopeInternal(),
+                                source.getCoordinateReferenceSystem2D())
+                        .intersects((Envelope) new ReferencedEnvelope(envelope))) {
+                    final java.awt.Polygon shapePolygon =
+                            convertPolygon(roiInput, worldToGridTransform);
+
+                    block.setParameter("roi", new ROIShape(shapePolygon));
+                }
+            }
+
+            // Handle JAI-EXT parameters if needed
+            handleJAIEXTParams(block, parameters);
+            // Returning the parameterBlock
+            return block;
+        } catch (Exception e) {
+            // //
+            //
+            // Something bad happened here Let's wrap and propagate the error.
+            //
+            // //
+            final CoverageProcessingException ce = new CoverageProcessingException(e);
+            throw ce;
+        }
+    }
 

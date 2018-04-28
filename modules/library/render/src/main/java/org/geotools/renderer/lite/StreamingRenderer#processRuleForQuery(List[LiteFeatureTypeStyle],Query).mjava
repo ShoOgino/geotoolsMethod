@@ -1,25 +1,20 @@
     /**
-     * JE: If there is a single rule "and" its filter together with the query's
-     * filter and send it off to datastore. This will allow as more processing
-     * to be done on the back end... Very useful if DataStore is a database.
-     * Problem is that worst case each filter is ran twice. Next we will modify
-     * it to find a "Common" filter between all rules and send that to the
-     * datastore.
-     * 
-     * DJB: trying to be smarter. If there are no "elseRules" and no rules w/o a
-     * filter, then it makes sense to send them off to the Datastore We limit
-     * the number of Filters sent off to the datastore, just because it could
-     * get a bit rediculous. In general, for a database, if you can limit 10% of
-     * the rows being returned you're probably doing quite well. The main
-     * problem is when your filters really mean you're secretly asking for all
-     * the data in which case sending the filters to the Datastore actually
-     * costs you. But, databases are *much* faster at processing the Filters
-     * than JAVA is and can use statistical analysis to do it.
-     * 
+     * JE: If there is a single rule "and" its filter together with the query's filter and send it
+     * off to datastore. This will allow as more processing to be done on the back end... Very
+     * useful if DataStore is a database. Problem is that worst case each filter is ran twice. Next
+     * we will modify it to find a "Common" filter between all rules and send that to the datastore.
+     *
+     * <p>DJB: trying to be smarter. If there are no "elseRules" and no rules w/o a filter, then it
+     * makes sense to send them off to the Datastore We limit the number of Filters sent off to the
+     * datastore, just because it could get a bit rediculous. In general, for a database, if you can
+     * limit 10% of the rows being returned you're probably doing quite well. The main problem is
+     * when your filters really mean you're secretly asking for all the data in which case sending
+     * the filters to the Datastore actually costs you. But, databases are *much* faster at
+     * processing the Filters than JAVA is and can use statistical analysis to do it.
+     *
      * @param styles
      * @param q
      */
-
     private void processRuleForQuery(List<LiteFeatureTypeStyle> styles, Query q) {
         try {
 
@@ -40,38 +35,36 @@
             final int maxFilters = getMaxFiltersToSendToDatastore();
             final List<Filter> filtersToDS = new ArrayList<Filter>();
             // look at each featuretypestyle
-            for(LiteFeatureTypeStyle style : styles) {
+            for (LiteFeatureTypeStyle style : styles) {
                 if (style.elseRules.length > 0) // uh-oh has elseRule
-                    return;
+                return;
                 // look at each rule in the featuretypestyle
-                for(Rule r : style.ruleList) {
-                    if (r.getFilter() == null)
-                        return; // uh-oh has no filter (want all rows)
+                for (Rule r : style.ruleList) {
+                    if (r.getFilter() == null) return; // uh-oh has no filter (want all rows)
                     filtersToDS.add(r.getFilter());
                 }
             }
 
             // if too many bail out
-            if (filtersToDS.size() > maxFilters)
-                return;
+            if (filtersToDS.size() > maxFilters) return;
 
             // or together all the filters
             org.opengis.filter.Filter ruleFiltersCombined;
             if (filtersToDS.size() == 1) {
                 ruleFiltersCombined = filtersToDS.get(0);
             } else {
-                ruleFiltersCombined = filterFactory.or(filtersToDS); 
+                ruleFiltersCombined = filterFactory.or(filtersToDS);
             }
 
             // combine with the pre-existing filter
-            ruleFiltersCombined = filterFactory.and(
-                    q.getFilter(), ruleFiltersCombined);
+            ruleFiltersCombined = filterFactory.and(q.getFilter(), ruleFiltersCombined);
             q.setFilter(ruleFiltersCombined);
         } catch (Exception e) {
             if (LOGGER.isLoggable(Level.WARNING))
-                LOGGER.log(Level.SEVERE,
-                        "Could not send rules to datastore due to: "
-                        + e.getLocalizedMessage(), e);
+                LOGGER.log(
+                        Level.SEVERE,
+                        "Could not send rules to datastore due to: " + e.getLocalizedMessage(),
+                        e);
         }
     }
 

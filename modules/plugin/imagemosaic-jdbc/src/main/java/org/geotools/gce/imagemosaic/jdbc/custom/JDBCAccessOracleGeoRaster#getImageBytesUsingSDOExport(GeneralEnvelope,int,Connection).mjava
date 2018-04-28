@@ -1,12 +1,13 @@
     /**
      * Gets the blob using Oracle Georaster export facility
-     * 
-     * @param envelope  The window in world coords
-     * @param level     Pyramid level
-     * @param conn      Connection
-     * @return          The BLOB as byte array
+     *
+     * @param envelope The window in world coords
+     * @param level Pyramid level
+     * @param conn Connection
+     * @return The BLOB as byte array
      */
-    private byte[] getImageBytesUsingSDOExport(GeneralEnvelope envelope, int level, Connection conn) {
+    private byte[] getImageBytesUsingSDOExport(
+            GeneralEnvelope envelope, int level, Connection conn) {
         PreparedStatement ps = null;
         CallableStatement cs = null;
         ResultSet r = null;
@@ -30,8 +31,8 @@
                 pixelCoords1 = (BigDecimal[]) r.getArray(1).getArray();
                 pixelCoords2 = (BigDecimal[]) r.getArray(2).getArray();
             } else {
-                throw new RuntimeException("No cell/pixel coordinates for world Envelope "
-                        + envelope);
+                throw new RuntimeException(
+                        "No cell/pixel coordinates for world Envelope " + envelope);
             }
 
             r.close();
@@ -39,26 +40,31 @@
 
             // Export the georaster object, cropped by cell coordinates as a TIFF image into a BLOB
 
-            
             cs = conn.prepareCall(stmtExport);
             cs.setString(1, getConfig().getCoverageName());
-            String params = String.format("pLevel=%d cropArea=(%d,%d,%d,%d)",level, 
-                    pixelCoords1[0].intValue(), pixelCoords1[1].intValue(), pixelCoords2[0].intValue(),pixelCoords2[1].intValue());
+            String params =
+                    String.format(
+                            "pLevel=%d cropArea=(%d,%d,%d,%d)",
+                            level,
+                            pixelCoords1[0].intValue(),
+                            pixelCoords1[1].intValue(),
+                            pixelCoords2[0].intValue(),
+                            pixelCoords2[1].intValue());
 
             cs.setString(2, params);
             cs.registerOutParameter(3, Types.BLOB);
             cs.execute();
             Blob blob = cs.getBlob(3);
             byte[] bytes = blob.getBytes(1, (int) blob.length());
-            if (freeTemporary==null) {
+            if (freeTemporary == null) {
                 try {
                     freeTemporary = blob.getClass().getMethod("freeTemporary");
                 } catch (Exception ex) {
-                    LOGGER.warning("Cannort free TEMP space for BLOB, danger of running out of space");
+                    LOGGER.warning(
+                            "Cannort free TEMP space for BLOB, danger of running out of space");
                 }
-            } 
-            if (freeTemporary!=null)
-                freeTemporary.invoke(blob);
+            }
+            if (freeTemporary != null) freeTemporary.invoke(blob);
             cs.close();
             return bytes;
         } catch (Exception e) {
@@ -68,6 +74,5 @@
             closeStmt(ps);
             closeStmt(cs);
         }
-
     }
 

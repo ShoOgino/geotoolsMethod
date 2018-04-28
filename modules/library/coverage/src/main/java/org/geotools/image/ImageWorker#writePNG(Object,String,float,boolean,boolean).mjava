@@ -1,35 +1,43 @@
     /**
-     * Writes outs the image contained into this {@link ImageWorker} as a PNG using the provided destination, compression and compression rate.
-     * <p>
-     * The destination object can be anything providing that we have an {@link ImageOutputStreamSpi} that recognizes it.
-     * 
+     * Writes outs the image contained into this {@link ImageWorker} as a PNG using the provided
+     * destination, compression and compression rate.
+     *
+     * <p>The destination object can be anything providing that we have an {@link
+     * ImageOutputStreamSpi} that recognizes it.
+     *
      * @param destination where to write the internal {@link #image} as a PNG.
      * @param compression algorithm.
      * @param compressionRate percentage of compression.
      * @param nativeAcc should we use native acceleration.
      * @param paletted should we write the png as 8 bits?
      * @return this {@link ImageWorker}.
-     * @throws IOException In case an error occurs during the search for an {@link ImageOutputStream} or during the eoncding process.
-     * 
-     * @todo Current code doesn't check if the writer already accepts the provided destination. It wraps it in a {@link ImageOutputStream}
-     *       inconditionnaly.
+     * @throws IOException In case an error occurs during the search for an {@link
+     *     ImageOutputStream} or during the eoncding process.
+     * @todo Current code doesn't check if the writer already accepts the provided destination. It
+     *     wraps it in a {@link ImageOutputStream} inconditionnaly.
      */
-    public final void writePNG(final Object destination, final String compression,
-            final float compressionRate, final boolean nativeAcc, final boolean paletted)
+    public final void writePNG(
+            final Object destination,
+            final String compression,
+            final float compressionRate,
+            final boolean nativeAcc,
+            final boolean paletted)
             throws IOException {
         // Reformatting this image for PNG.
         final boolean hasPalette = image.getColorModel() instanceof IndexColorModel;
-        final boolean hasColorModel = hasPalette ? false
-                : image.getColorModel() instanceof ComponentColorModel;
+        final boolean hasColorModel =
+                hasPalette ? false : image.getColorModel() instanceof ComponentColorModel;
         if (paletted && !hasPalette) {
             // we have to reduce colors
             forceIndexColorModelForGIF(true);
         } else {
             if (!hasColorModel && !hasPalette) {
                 if (LOGGER.isLoggable(Level.FINER)) {
-                    LOGGER.fine("Forcing input image to be compatible with PNG: No palette, no component color model");
+                    LOGGER.fine(
+                            "Forcing input image to be compatible with PNG: No palette, no component color model");
                 }
-                // png supports gray, rgb, rgba and paletted 8 bit, but not, for example, double and float values, or 16 bits palettes
+                // png supports gray, rgb, rgba and paletted 8 bit, but not, for example, double and
+                // float values, or 16 bits palettes
                 forceComponentColorModel();
             }
         }
@@ -40,7 +48,8 @@
             // PNG supports palettes with up to 256 colors, beyond that we have to expand to RGB
             if (icm.getMapSize() > 256) {
                 if (LOGGER.isLoggable(Level.FINER)) {
-                    LOGGER.fine("Forcing input image to be compatible with PNG: Palette with > 256 color is not supported.");
+                    LOGGER.fine(
+                            "Forcing input image to be compatible with PNG: Palette with > 256 color is not supported.");
                 }
                 rescaleToBytes();
                 if (paletted) {
@@ -80,8 +89,8 @@
         // move on with the writer quest
         if (!nativeAcc || writer == null) {
 
-            final Iterator<ImageWriter> it = ImageIO.getImageWriters(new ImageTypeSpecifier(image),
-                    "PNG");
+            final Iterator<ImageWriter> it =
+                    ImageIO.getImageWriters(new ImageTypeSpecifier(image), "PNG");
             if (!it.hasNext()) {
                 throw new IllegalStateException(Errors.format(ErrorKeys.NO_IMAGE_WRITER));
             }
@@ -90,8 +99,9 @@
                 originatingProvider = writer.getOriginatingProvider();
                 // check that this is not the native one
                 if (CLIB_PNG_IMAGE_WRITER_SPI != null
-                        && originatingProvider.getClass().equals(
-                                CLIB_PNG_IMAGE_WRITER_SPI.getClass())) {
+                        && originatingProvider
+                                .getClass()
+                                .equals(CLIB_PNG_IMAGE_WRITER_SPI.getClass())) {
                     if (it.hasNext()) {
                         writer = it.next();
                         originatingProvider = writer.getOriginatingProvider();
@@ -100,7 +110,8 @@
                     }
                 }
 
-                // let me check if the native writer can encode this image (paranoiac checks this was already performed by the ImageIO search
+                // let me check if the native writer can encode this image (paranoiac checks this
+                // was already performed by the ImageIO search
                 if (originatingProvider.canEncodeImage(new ImageTypeSpecifier(image))) {
                     break; // leave loop
                 }
@@ -113,8 +124,9 @@
 
         // ok, last resort use the JDK one and reformat the image
         if (writer == null) {
-            List providers = com.sun.media.imageioimpl.common.ImageUtil.getJDKImageReaderWriterSPI(
-                    IIORegistry.getDefaultInstance(), "PNG", false);
+            List providers =
+                    com.sun.media.imageioimpl.common.ImageUtil.getJDKImageReaderWriterSPI(
+                            IIORegistry.getDefaultInstance(), "PNG", false);
             if (providers == null || providers.isEmpty()) {
                 throw new IllegalStateException("Unable to find JDK Png encoder!");
             }
@@ -130,15 +142,16 @@
             }
         }
 
-        LOGGER.fine("Using ImageIO Writer with SPI: "
-                + originatingProvider.getClass().getCanonicalName());
+        LOGGER.fine(
+                "Using ImageIO Writer with SPI: "
+                        + originatingProvider.getClass().getCanonicalName());
 
         // Getting a stream.
         LOGGER.fine("Setting write parameters for this writer");
 
         ImageWriteParam iwp = null;
-        final ImageOutputStream memOutStream = ImageIOExt.createImageOutputStream(image,
-                destination);
+        final ImageOutputStream memOutStream =
+                ImageIOExt.createImageOutputStream(image, destination);
         if (memOutStream == null) {
             throw new IIOException(Errors.format(ErrorKeys.NULL_ARGUMENT_$1, "stream"));
         }
@@ -154,8 +167,8 @@
             // we can control quality here
             iwp.setCompressionQuality(compressionRate);
             // destination image type
-            iwp.setDestinationType(new ImageTypeSpecifier(image.getColorModel(), image
-                    .getSampleModel()));
+            iwp.setDestinationType(
+                    new ImageTypeSpecifier(image.getColorModel(), image.getSampleModel()));
         } else {
             // Compressing with pure Java.
             LOGGER.fine("Writer is NOT native");
@@ -182,7 +195,6 @@
                 if (LOGGER.isLoggable(Level.FINEST))
                     LOGGER.log(Level.FINEST, e.getLocalizedMessage(), e);
             }
-
         }
     }
 

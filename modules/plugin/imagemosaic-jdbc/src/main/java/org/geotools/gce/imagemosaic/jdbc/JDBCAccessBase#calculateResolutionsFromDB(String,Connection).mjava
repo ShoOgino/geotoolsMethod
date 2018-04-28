@@ -1,75 +1,74 @@
-	/**
-	 * 
-	 * Step 3 of the bootstrapping process.
-	 * 
-	 * Calculating the the resolution for each image level (original +
-	 * pyramids). This calculation is only done if the resultion info in the
-	 * master table is SQL NULL. After calculation the meta table is updated
-	 * with the result to avoid this operation in the future.
-	 * 
-	 * @param coverageName
-	 *            The coverage name in the sql meta table
-	 * @param con
-	 *            JDBC Connection
-	 * @throws SQLException
-	 * @throws IOException
-	 */
-	void calculateResolutionsFromDB(String coverageName, Connection con)
-			throws SQLException, IOException {
-		PreparedStatement stmt = null;
+    /**
+     * Step 3 of the bootstrapping process.
+     *
+     * <p>Calculating the the resolution for each image level (original + pyramids). This
+     * calculation is only done if the resultion info in the master table is SQL NULL. After
+     * calculation the meta table is updated with the result to avoid this operation in the future.
+     *
+     * @param coverageName The coverage name in the sql meta table
+     * @param con JDBC Connection
+     * @throws SQLException
+     * @throws IOException
+     */
+    void calculateResolutionsFromDB(String coverageName, Connection con)
+            throws SQLException, IOException {
+        PreparedStatement stmt = null;
 
-		stmt = con.prepareStatement(config.getSqlUpdateResStatement());
+        stmt = con.prepareStatement(config.getSqlUpdateResStatement());
 
-		List<ImageLevelInfo> toBeRemoved = new ArrayList<ImageLevelInfo>();
+        List<ImageLevelInfo> toBeRemoved = new ArrayList<ImageLevelInfo>();
 
-		for (ImageLevelInfo li : levelInfos) {
-			if (li.getCoverageName().equals(coverageName) == false) {
-				continue;
-			}
+        for (ImageLevelInfo li : levelInfos) {
+            if (li.getCoverageName().equals(coverageName) == false) {
+                continue;
+            }
 
-			if (li.calculateResolutionNeeded() == false) {
-				continue;
-			}
+            if (li.calculateResolutionNeeded() == false) {
+                continue;
+            }
 
-			Date start = new Date();
-			if (LOGGER.isLoggable(Level.INFO))
-				LOGGER.info("Calculate resolutions for " + li.toString());
+            Date start = new Date();
+            if (LOGGER.isLoggable(Level.INFO))
+                LOGGER.info("Calculate resolutions for " + li.toString());
 
-			double[] resolutions = getPixelResolution(li, con);
+            double[] resolutions = getPixelResolution(li, con);
 
-			if (resolutions == null) {
-				if (LOGGER.isLoggable(Level.WARNING))
-					LOGGER.log(Level.WARNING, "No image found, removing "
-							+ li.toString());
-				toBeRemoved.add(li);
+            if (resolutions == null) {
+                if (LOGGER.isLoggable(Level.WARNING))
+                    LOGGER.log(Level.WARNING, "No image found, removing " + li.toString());
+                toBeRemoved.add(li);
 
-				continue;
-			}
+                continue;
+            }
 
-			li.setResX(resolutions[0]);
-			li.setResY(resolutions[1]);
-			if (LOGGER.isLoggable(Level.INFO))
-				LOGGER.info("ResX: " + li.getResX() + " ResY: " + li.getResY());
+            li.setResX(resolutions[0]);
+            li.setResY(resolutions[1]);
+            if (LOGGER.isLoggable(Level.INFO))
+                LOGGER.info("ResX: " + li.getResX() + " ResY: " + li.getResY());
 
-			// li.setColorModel(loadedImage.getColorModel());
-			stmt.setDouble(1, li.getResX().doubleValue());
-			stmt.setDouble(2, li.getResY().doubleValue());
-			stmt.setString(3, li.getCoverageName());
-			stmt.setString(4, li.getTileTableName());
-			stmt.setString(5, li.getSpatialTableName());
-			stmt.execute();
+            // li.setColorModel(loadedImage.getColorModel());
+            stmt.setDouble(1, li.getResX().doubleValue());
+            stmt.setDouble(2, li.getResY().doubleValue());
+            stmt.setString(3, li.getCoverageName());
+            stmt.setString(4, li.getTileTableName());
+            stmt.setString(5, li.getSpatialTableName());
+            stmt.execute();
 
-			long msecs = (new Date()).getTime() - start.getTime();
+            long msecs = (new Date()).getTime() - start.getTime();
 
-			if (LOGGER.isLoggable(Level.INFO))
-				LOGGER.info("Calculate resolutions for " + li.toString()
-						+ " finished in " + msecs + " ms ");
-		}
+            if (LOGGER.isLoggable(Level.INFO))
+                LOGGER.info(
+                        "Calculate resolutions for "
+                                + li.toString()
+                                + " finished in "
+                                + msecs
+                                + " ms ");
+        }
 
-		levelInfos.removeAll(toBeRemoved);
+        levelInfos.removeAll(toBeRemoved);
 
-		if (stmt != null) {
-			stmt.close();
-		}
-	}
+        if (stmt != null) {
+            stmt.close();
+        }
+    }
 

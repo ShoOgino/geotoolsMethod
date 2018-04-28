@@ -1,14 +1,14 @@
     /**
      * Check null encoding is working properly
-     * 
+     *
      * @throws IOException
      */
     public void testListenerCalled() throws IOException {
         dataStore.getConnectionLifecycleListeners().add(mockListener);
-        
+
         // read some features, this will force unwrapping in Oracle
-        try(SimpleFeatureIterator fi = featureStore.getFeatures().features()) {
-            while(fi.hasNext()) {
+        try (SimpleFeatureIterator fi = featureStore.getFeatures().features()) {
+            while (fi.hasNext()) {
                 fi.next();
             }
         }
@@ -16,28 +16,28 @@
         assertTrue(mockListener.onReleaseCalled);
         assertFalse(mockListener.onCommitCalled);
         assertFalse(mockListener.onRollbackCalled);
-        
+
         // now write something within a transaction
-        try(Transaction t = new DefaultTransaction()) {
+        try (Transaction t = new DefaultTransaction()) {
             SimpleFeatureBuilder b = new SimpleFeatureBuilder(featureStore.getSchema());
-            DefaultFeatureCollection collection = new DefaultFeatureCollection(null,
-                    featureStore.getSchema());
+            DefaultFeatureCollection collection =
+                    new DefaultFeatureCollection(null, featureStore.getSchema());
             featureStore.setTransaction(t);
             for (int i = 3; i < 6; i++) {
                 b.set(aname("intProperty"), new Integer(i));
                 b.set(aname("geometry"), new GeometryFactory().createPoint(new Coordinate(i, i)));
                 collection.add(b.buildFeature(null));
             }
-            featureStore.addFeatures((SimpleFeatureCollection)collection);
+            featureStore.addFeatures((SimpleFeatureCollection) collection);
             t.commit();
             assertTrue(mockListener.onBorrowCalled);
             assertTrue(mockListener.onReleaseCalled);
             assertTrue(mockListener.onCommitCalled);
             assertFalse(mockListener.onRollbackCalled);
-            
+
             // and now do a rollback
             t.rollback();
             assertTrue(mockListener.onRollbackCalled);
-        }            
+        }
     }
 

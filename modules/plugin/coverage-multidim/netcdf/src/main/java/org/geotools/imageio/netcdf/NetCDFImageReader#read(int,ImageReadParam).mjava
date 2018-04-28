@@ -1,13 +1,11 @@
-    /**
-     * @see javax.imageio.ImageReader#read(int, javax.imageio.ImageReadParam)
-     */
+    /** @see javax.imageio.ImageReader#read(int, javax.imageio.ImageReadParam) */
     @Override
-    public BufferedImage read( int imageIndex, ImageReadParam param ) throws IOException {
+    public BufferedImage read(int imageIndex, ImageReadParam param) throws IOException {
         clearAbortRequest();
-    
+
         final Slice2DIndex slice2DIndex = getSlice2DIndex(imageIndex);
-        final String variableName=slice2DIndex.getVariableName();
-        final VariableAdapter wrapper=getCoverageDescriptor(new NameImpl(variableName));
+        final String variableName = slice2DIndex.getVariableName();
+        final VariableAdapter wrapper = getCoverageDescriptor(new NameImpl(variableName));
 
         // let's see if we have some extra parameters
         int[] bands = null;
@@ -30,7 +28,7 @@
             strideY = 1;
             dstBands = null;
         }
-    
+
         /*
          * Gets the destination image of appropriate size. We create it now
          * since it is a convenient way to get the number of destination bands.
@@ -55,7 +53,7 @@
         int destHeight = destRegion.y + destRegion.height;
 
         /*
-         * build the ranges that need to be read from each 
+         * build the ranges that need to be read from each
          * dimension based on the source region
          */
         final List<Range> ranges = new LinkedList<Range>();
@@ -63,8 +61,8 @@
 
             // Eventual ignored dimensions are at the beginning (lower index)
             // (Based on COARDS convention)
-            if (!wrapper.ignoredDimensions.isEmpty()){
-                for (int i=0; i <wrapper.ignoredDimensions.size(); i++) {
+            if (!wrapper.ignoredDimensions.isEmpty()) {
+                for (int i = 0; i < wrapper.ignoredDimensions.size(); i++) {
                     // Setting up range to specify ignored dimension
                     ranges.add(new Range(0, 0, 1));
                 }
@@ -75,7 +73,7 @@
             // (additional), T, Z
             for (int i = slice2DIndex.getNCount() - 1; i >= 0; i--) {
                 first = slice2DIndex.getNIndex(i);
-                if (first != -1){
+                if (first != -1) {
                     ranges.add(new Range(first, first, 1));
                 }
             }
@@ -95,15 +93,17 @@
 
         /*
          * create the section of multidimensional array indices
-         * that defines the exact data that need to be read 
-         * for this image index and parameters 
+         * that defines the exact data that need to be read
+         * for this image index and parameters
          */
         final Section section = new Section(ranges);
 
-        // computing the number of bands, according to COARDS convention ignored dimension are at the beginning
+        // computing the number of bands, according to COARDS convention ignored dimension are at
+        // the beginning
         int numDstBands = 1;
         String candidateDimension = wrapper.variableDS.getDimensions().get(0).getFullName();
-        MultipleBandsDimensionInfo multipleBands = ancillaryFileManager.getMultipleBandsDimensionInfo(candidateDimension);
+        MultipleBandsDimensionInfo multipleBands =
+                ancillaryFileManager.getMultipleBandsDimensionInfo(candidateDimension);
         if (multipleBands != null) {
             // multiple bands are defined for the ignored dimension
             numDstBands = multipleBands.getNumberOfBands();
@@ -112,7 +112,8 @@
                 // let's do a quick check to see if the bands parameter values make sense
                 int maxSourceBand = Arrays.stream(bands).max().getAsInt();
                 if (maxSourceBand > numDstBands) {
-                    throw new IllegalArgumentException("The provided source bands parameter is invalid.");
+                    throw new IllegalArgumentException(
+                            "The provided source bands parameter is invalid.");
                 }
                 // the source bands parameter seems ok
                 numDstBands = bands.length;
@@ -120,12 +121,16 @@
         }
 
         // Setting SampleModel and ColorModel.
-        SampleModel sampleModel = new BandedSampleModel(wrapper.getSampleModel().getDataType(), destWidth, destHeight, numDstBands);
+        SampleModel sampleModel =
+                new BandedSampleModel(
+                        wrapper.getSampleModel().getDataType(), destWidth, destHeight, numDstBands);
         final ColorModel colorModel = ImageIOUtilities.createColorModel(sampleModel);
 
         final WritableRaster raster = Raster.createWritableRaster(sampleModel, new Point(0, 0));
         Hashtable<String, Object> properties = getNoDataProperties(wrapper);
-        final BufferedImage image = new BufferedImage(colorModel, raster, colorModel.isAlphaPremultiplied(), properties);
+        final BufferedImage image =
+                new BufferedImage(
+                        colorModel, raster, colorModel.isAlphaPremultiplied(), properties);
 
         CoordinateSystem cs = wrapper.variableDS.getCoordinateSystems().get(0);
         CoordinateAxis axis = georeferencing.isLonLat() ? cs.getLatAxis() : cs.getYaxis();
@@ -140,14 +145,15 @@
         final int xmax = destRegion.width + xmin;
         final int ymax = destRegion.height + ymin;
 
-        for( int zi = 0; zi < numDstBands; zi++ ) {
+        for (int zi = 0; zi < numDstBands; zi++) {
             // final int srcBand = (srcBands == null) ? zi : srcBands[zi];
             final int dstBand = (dstBands == null) ? zi : dstBands[zi];
             if (multipleBands != null) {
                 try {
                     // we need to take in account the source bands parameter
                     int sourceBand = bands == null ? zi : bands[zi];
-                    // since the value dimension has multiple bands we need to update the first range
+                    // since the value dimension has multiple bands we need to update the first
+                    // range
                     Range range = new Range(sourceBand, sourceBand, 1);
                     // reading the dimensions values corresponding to the current band
                     section.setRange(0, range);
@@ -161,63 +167,88 @@
                 for (int y = ymax; --y >= ymin; ) {
                     for (int x = xmin; x < xmax; x++) {
                         switch (type) {
-                            case DataBuffer.TYPE_DOUBLE: {
-                                raster.setSample(x, y, dstBand, it.getDoubleNext());
-                                break;
-                            }
-                            case DataBuffer.TYPE_FLOAT: {
-                                raster.setSample(x, y, dstBand, it.getFloatNext());
-                                break;
-                            }
-                            case DataBuffer.TYPE_BYTE: {
-                                byte b = it.getByteNext();
-                                // int myByte = (0x000000FF & ((int) b));
-                                // short anUnsignedByte = (short) myByte;
-                                // raster.setSample(x, y, dstBand, anUnsignedByte);
-                                raster.setSample(x, y, dstBand, b);
-                                break;
-                            }
-                            default: {
-                                raster.setSample(x, y, dstBand, it.getIntNext());
-                                break;
-                            }
+                            case DataBuffer.TYPE_DOUBLE:
+                                {
+                                    raster.setSample(x, y, dstBand, it.getDoubleNext());
+                                    break;
+                                }
+                            case DataBuffer.TYPE_FLOAT:
+                                {
+                                    raster.setSample(x, y, dstBand, it.getFloatNext());
+                                    break;
+                                }
+                            case DataBuffer.TYPE_BYTE:
+                                {
+                                    byte b = it.getByteNext();
+                                    // int myByte = (0x000000FF & ((int) b));
+                                    // short anUnsignedByte = (short) myByte;
+                                    // raster.setSample(x, y, dstBand, anUnsignedByte);
+                                    raster.setSample(x, y, dstBand, b);
+                                    break;
+                                }
+                            default:
+                                {
+                                    raster.setSample(x, y, dstBand, it.getIntNext());
+                                    break;
+                                }
                         }
                     }
                 }
             } else {
                 switch (type) {
-                    case DataBuffer.TYPE_DOUBLE: {
-                        DoubleBuffer doubleBuffer = array.getDataAsByteBuffer().asDoubleBuffer();
-                        double[] samples = new double[destRegion.width * destRegion.height];
-                        doubleBuffer.get(samples);
-                        raster.setSamples(xmin, ymin, destRegion.width, destRegion.height, dstBand, samples);
-                        break;
-                    }
+                    case DataBuffer.TYPE_DOUBLE:
+                        {
+                            DoubleBuffer doubleBuffer =
+                                    array.getDataAsByteBuffer().asDoubleBuffer();
+                            double[] samples = new double[destRegion.width * destRegion.height];
+                            doubleBuffer.get(samples);
+                            raster.setSamples(
+                                    xmin,
+                                    ymin,
+                                    destRegion.width,
+                                    destRegion.height,
+                                    dstBand,
+                                    samples);
+                            break;
+                        }
                     case DataBuffer.TYPE_FLOAT:
                         float[] samples = new float[destRegion.width * destRegion.height];
                         FloatBuffer floatBuffer = array.getDataAsByteBuffer().asFloatBuffer();
                         floatBuffer.get(samples);
-                        raster.setSamples(xmin,ymin,destRegion.width,destRegion.height,dstBand,samples);
+                        raster.setSamples(
+                                xmin, ymin, destRegion.width, destRegion.height, dstBand, samples);
                         break;
                     case DataBuffer.TYPE_BYTE:
-                        //THIS ONLY WORKS FOR ONE BAND!!
-                        raster.setDataElements(xmin,ymin,destRegion.width,destRegion.height,array.getDataAsByteBuffer().array());
+                        // THIS ONLY WORKS FOR ONE BAND!!
+                        raster.setDataElements(
+                                xmin,
+                                ymin,
+                                destRegion.width,
+                                destRegion.height,
+                                array.getDataAsByteBuffer().array());
                         break;
                     case DataBuffer.TYPE_INT:
                         IntBuffer intBuffer = array.getDataAsByteBuffer().asIntBuffer();
                         int[] intSamples = new int[destRegion.width * destRegion.height];
                         intBuffer.get(intSamples);
-                        raster.setSamples(xmin, ymin, destRegion.width, destRegion.height, dstBand, intSamples);
+                        raster.setSamples(
+                                xmin,
+                                ymin,
+                                destRegion.width,
+                                destRegion.height,
+                                dstBand,
+                                intSamples);
                         break;
-                    default: {
-                        final IndexIterator it = array.getIndexIterator();
-                        for (int y = ymin; y < ymax; y++ ) {
-                            for (int x = xmin; x < xmax; x++) {
-                                raster.setSample(x, y, dstBand, it.getIntNext());
+                    default:
+                        {
+                            final IndexIterator it = array.getIndexIterator();
+                            for (int y = ymin; y < ymax; y++) {
+                                for (int x = xmin; x < xmax; x++) {
+                                    raster.setSample(x, y, dstBand, it.getIntNext());
+                                }
                             }
+                            break;
                         }
-                        break;
-                    }
                 }
             }
             /*

@@ -1,37 +1,40 @@
-    protected PreparedStatement selectJoinSQLPS( SimpleFeatureType featureType, JoinInfo join, 
-        Query query, Connection cx ) throws SQLException, IOException {
-        
+    protected PreparedStatement selectJoinSQLPS(
+            SimpleFeatureType featureType, JoinInfo join, Query query, Connection cx)
+            throws SQLException, IOException {
+
         StringBuffer sql = new StringBuffer();
         sql.append("SELECT ");
-    
+
         selectColumns(featureType, join.getPrimaryAlias(), query, sql);
-    
-        //joined columns
+
+        // joined columns
         for (JoinPart part : join.getParts()) {
             selectColumns(part.getQueryFeatureType(), part.getAlias(), query, sql);
         }
 
         sql.setLength(sql.length() - 1);
         dialect.encodePostSelect(featureType, sql);
-        
+
         sql.append(" FROM ");
-        
-        //join clauses
+
+        // join clauses
         encodeTableJoin(featureType, join, query, sql);
 
-        //filtering
+        // filtering
         List<FilterToSQL> toSQLs = encodeWhereJoin(featureType, join, sql);
 
-        //sorting
+        // sorting
         sort(featureType, query.getSortBy(), join.getPrimaryAlias(), sql);
 
         // finally encode limit/offset, if necessary
         applyLimitOffset(sql, query.getStartIndex(), query.getMaxFeatures());
-    
-        LOGGER.fine( sql.toString() );
-        PreparedStatement ps = cx.prepareStatement(sql.toString(), ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
+
+        LOGGER.fine(sql.toString());
+        PreparedStatement ps =
+                cx.prepareStatement(
+                        sql.toString(), ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
         ps.setFetchSize(fetchSize);
-        
+
         setPreparedFilterValues(ps, toSQLs, cx);
 
         return ps;

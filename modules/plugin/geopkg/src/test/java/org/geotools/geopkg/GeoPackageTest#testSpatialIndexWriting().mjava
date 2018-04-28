@@ -1,4 +1,4 @@
-    @Test 
+    @Test
     public void testSpatialIndexWriting() throws Exception {
         ShapefileDataStore shp = new ShapefileDataStore(setUpShapefile());
         SimpleFeatureCollection coll = shp.getFeatureSource().getFeatures();
@@ -6,12 +6,13 @@
         FeatureEntry entry = new FeatureEntry();
         entry.setBounds(coll.getBounds());
         geopkg.create(entry, shp.getSchema());
-        
-        //write some features before and some after
-        try(SimpleFeatureIterator it = coll.features()) {
-        
-            //some features
-            try(Transaction tx = new DefaultTransaction(); SimpleFeatureWriter w = geopkg.writer(entry, true, null, tx)) {
+
+        // write some features before and some after
+        try (SimpleFeatureIterator it = coll.features()) {
+
+            // some features
+            try (Transaction tx = new DefaultTransaction();
+                    SimpleFeatureWriter w = geopkg.writer(entry, true, null, tx)) {
                 for (int i = 0; i < 3; i++) {
                     SimpleFeature f = it.next();
                     SimpleFeature g = w.next();
@@ -24,33 +25,33 @@
                 }
                 tx.commit();
             }
-    
-            //create spatial index
+
+            // create spatial index
             geopkg.createSpatialIndex(entry);
-                    
-    
-            //the rest of features
-            try(Transaction tx = new DefaultTransaction(); SimpleFeatureWriter w = geopkg.writer(entry, true, null, tx)) {        
-                while(it.hasNext()) {
-                    SimpleFeature f = it.next(); 
+
+            // the rest of features
+            try (Transaction tx = new DefaultTransaction();
+                    SimpleFeatureWriter w = geopkg.writer(entry, true, null, tx)) {
+                while (it.hasNext()) {
+                    SimpleFeature f = it.next();
                     SimpleFeature g = w.next();
                     for (PropertyDescriptor pd : coll.getSchema().getDescriptors()) {
                         String name = pd.getName().getLocalPart();
                         g.setAttribute(name, f.getAttribute(name));
                     }
-                                                 
+
                     w.write();
                 }
                 tx.commit();
             }
         }
 
-        
-        //test if the index was properly created
-        try(Connection cx = geopkg.getDataSource().getConnection();  Statement st = cx.createStatement()) {            
+        // test if the index was properly created
+        try (Connection cx = geopkg.getDataSource().getConnection();
+                Statement st = cx.createStatement()) {
             ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM rtree_bugsites_the_geom");
             rs.next();
-            
+
             assertEquals(rs.getInt(1), coll.size());
         }
     }

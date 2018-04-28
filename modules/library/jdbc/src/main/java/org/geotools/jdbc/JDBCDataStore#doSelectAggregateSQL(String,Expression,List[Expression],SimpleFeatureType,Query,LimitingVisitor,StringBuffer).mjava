@@ -1,25 +1,32 @@
     /**
-     * Helper method to factor out some commonalities between selectAggregateSQL, and selectAggregateSQLPS 
+     * Helper method to factor out some commonalities between selectAggregateSQL, and
+     * selectAggregateSQLPS
      */
-    List<FilterToSQL> doSelectAggregateSQL(String function, Expression expr, List<Expression> groupByExpressions,
-            SimpleFeatureType featureType, Query query, LimitingVisitor visitor, StringBuffer sql) throws SQLException, IOException {
-        JoinInfo join = !query.getJoins().isEmpty() 
-            ? JoinInfo.create(query, featureType, this) : null;
+    List<FilterToSQL> doSelectAggregateSQL(
+            String function,
+            Expression expr,
+            List<Expression> groupByExpressions,
+            SimpleFeatureType featureType,
+            Query query,
+            LimitingVisitor visitor,
+            StringBuffer sql)
+            throws SQLException, IOException {
+        JoinInfo join =
+                !query.getJoins().isEmpty() ? JoinInfo.create(query, featureType, this) : null;
 
         List<FilterToSQL> toSQL = new ArrayList();
         boolean queryLimitOffset = checkLimitOffset(query.getStartIndex(), query.getMaxFeatures());
-        boolean visitorLimitOffset = visitor == null ? false : visitor.hasLimits()
-                && dialect.isLimitOffsetSupported();
-        // grouping over expressions is complex, as we need 
+        boolean visitorLimitOffset =
+                visitor == null ? false : visitor.hasLimits() && dialect.isLimitOffsetSupported();
+        // grouping over expressions is complex, as we need
         boolean groupByComplexExpressions = hasComplexExpressions(groupByExpressions);
-        if(queryLimitOffset && !visitorLimitOffset && !groupByComplexExpressions) {
+        if (queryLimitOffset && !visitorLimitOffset && !groupByComplexExpressions) {
             if (join != null) {
-                //don't select * to avoid ambigous result set
+                // don't select * to avoid ambigous result set
                 sql.append("SELECT ");
                 dialect.encodeColumnName(null, join.getPrimaryAlias(), sql);
                 sql.append(".* FROM ");
-            }
-            else {
+            } else {
                 sql.append("SELECT * FROM ");
             }
         } else {
@@ -60,17 +67,15 @@
                 encodeFunction(function, expr, sql, filterToSQL);
             }
             toSQL.add(filterToSQL);
-            sql.append( " FROM ");
+            sql.append(" FROM ");
         }
-        
+
         if (join != null) {
             encodeTableJoin(featureType, join, query, sql);
-        }
-        else {
+        } else {
             encodeTableName(featureType.getTypeName(), sql, query.getHints());
         }
 
-        
         if (join != null) {
             toSQL.addAll(encodeWhereJoin(featureType, join, sql));
         } else {
@@ -88,10 +93,10 @@
         if (visitorLimitOffset) {
             applyLimitOffset(sql, visitor.getStartIndex(), visitor.getMaxFeatures());
         } else if (queryLimitOffset) {
-            applyLimitOffset(sql, query.getStartIndex(), query.getMaxFeatures()); 
+            applyLimitOffset(sql, query.getStartIndex(), query.getMaxFeatures());
         }
 
-        // if the limits were in query or there is a group by with complex expressions 
+        // if the limits were in query or there is a group by with complex expressions
         // we need to roll what was built so far in a sub-query
         if (queryLimitOffset || groupByComplexExpressions) {
             StringBuffer sql2 = new StringBuffer("SELECT ");

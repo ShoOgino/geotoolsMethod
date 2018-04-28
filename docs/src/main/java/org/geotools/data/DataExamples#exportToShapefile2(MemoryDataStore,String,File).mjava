@@ -1,55 +1,55 @@
-// exportToShapefile2 start
-DataStore exportToShapefile2(MemoryDataStore memory, String typeName, File directory)
-        throws IOException {
-    // existing feature source from MemoryDataStore
-    SimpleFeatureSource featureSource = memory.getFeatureSource(typeName);
-    SimpleFeatureType ft = featureSource.getSchema();
-    
-    String fileName = ft.getTypeName();
-    File file = new File(directory, fileName + ".shp");
-    
-    Map<String, java.io.Serializable> creationParams = new HashMap<>();
-    creationParams.put("url", URLs.fileToUrl(file));
-    
-    FileDataStoreFactorySpi factory = FileDataStoreFinder.getDataStoreFactory("shp");
-    DataStore dataStore = factory.createNewDataStore(creationParams);
-    
-    dataStore.createSchema(ft);
-    
-    SimpleFeatureStore featureStore = (SimpleFeatureStore) dataStore.getFeatureSource(typeName);
-    
-    Transaction t = new DefaultTransaction();
-    try {
-        SimpleFeatureCollection collection = featureSource.getFeatures(); // grab all features
-        
-        FeatureWriter<SimpleFeatureType, SimpleFeature> writer = dataStore.getFeatureWriter(
-                typeName, t);
-        
-        SimpleFeatureIterator iterator = collection.features();
-        SimpleFeature feature;
+    // exportToShapefile2 start
+    DataStore exportToShapefile2(MemoryDataStore memory, String typeName, File directory)
+            throws IOException {
+        // existing feature source from MemoryDataStore
+        SimpleFeatureSource featureSource = memory.getFeatureSource(typeName);
+        SimpleFeatureType ft = featureSource.getSchema();
+
+        String fileName = ft.getTypeName();
+        File file = new File(directory, fileName + ".shp");
+
+        Map<String, java.io.Serializable> creationParams = new HashMap<>();
+        creationParams.put("url", URLs.fileToUrl(file));
+
+        FileDataStoreFactorySpi factory = FileDataStoreFinder.getDataStoreFactory("shp");
+        DataStore dataStore = factory.createNewDataStore(creationParams);
+
+        dataStore.createSchema(ft);
+
+        SimpleFeatureStore featureStore = (SimpleFeatureStore) dataStore.getFeatureSource(typeName);
+
+        Transaction t = new DefaultTransaction();
         try {
-            while (iterator.hasNext()) {
-                feature = iterator.next();
-                
-                // Step1: create a new empty feature on each call to next
-                SimpleFeature aNewFeature = (SimpleFeature) writer.next();
-                // Step2: copy the values in
-                aNewFeature.setAttributes(feature.getAttributes());
-                // Step3: write out the feature
-                writer.write();
-            }
-            
-        } catch (IOException eek) {
-            eek.printStackTrace();
+            SimpleFeatureCollection collection = featureSource.getFeatures(); // grab all features
+
+            FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
+                    dataStore.getFeatureWriter(typeName, t);
+
+            SimpleFeatureIterator iterator = collection.features();
+            SimpleFeature feature;
             try {
-                t.rollback();
-            } catch (IOException doubleEeek) {
-                // rollback failed?
+                while (iterator.hasNext()) {
+                    feature = iterator.next();
+
+                    // Step1: create a new empty feature on each call to next
+                    SimpleFeature aNewFeature = (SimpleFeature) writer.next();
+                    // Step2: copy the values in
+                    aNewFeature.setAttributes(feature.getAttributes());
+                    // Step3: write out the feature
+                    writer.write();
+                }
+
+            } catch (IOException eek) {
+                eek.printStackTrace();
+                try {
+                    t.rollback();
+                } catch (IOException doubleEeek) {
+                    // rollback failed?
+                }
             }
+        } finally {
+            t.close();
         }
-    } finally {
-        t.close();
+        return dataStore;
     }
-    return dataStore;
-}
 

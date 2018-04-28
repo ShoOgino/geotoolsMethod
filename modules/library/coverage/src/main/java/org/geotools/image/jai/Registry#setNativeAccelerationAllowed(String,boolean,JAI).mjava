@@ -3,40 +3,38 @@
      * By default, JAI uses hardware accelerated methods when available. For example, it make use of
      * MMX instructions on Intel processors. Unfortunatly, some native method crash the Java Virtual
      * Machine under some circonstances. For example on JAI 1.1.2, the {@code "Affine"} operation on
-     * an image with float data type, bilinear interpolation and an {@link javax.media.jai.ImageLayout}
-     * rendering hint cause an exception in medialib native code. Disabling the native acceleration
-     * (i.e using the pure Java version) is a convenient workaround until Sun fix the bug.
-     * <p>
-     * <strong>Implementation note:</strong> the current implementation assumes that factories for
-     * native implementations are declared in the {@code com.sun.media.jai.mlib} package, while
+     * an image with float data type, bilinear interpolation and an {@link
+     * javax.media.jai.ImageLayout} rendering hint cause an exception in medialib native code.
+     * Disabling the native acceleration (i.e using the pure Java version) is a convenient
+     * workaround until Sun fix the bug.
+     *
+     * <p><strong>Implementation note:</strong> the current implementation assumes that factories
+     * for native implementations are declared in the {@code com.sun.media.jai.mlib} package, while
      * factories for pure java implementations are declared in the {@code com.sun.media.jai.opimage}
      * package. It work for Sun's 1.1.2 implementation, but may change in future versions. If this
      * method doesn't recognize the package, it does nothing.
      *
      * @param operation The operation name (e.g. {@code "Affine"}).
      * @param allowed {@code false} to disallow native acceleration.
-     * @param jai The instance of {@link JAI} we are going to work on. This argument can be
-     *        omitted for the {@linkplain JAI#getDefaultInstance default JAI instance}.
-     *
-     * @see <a href="http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=4906854">JAI bug report 4906854</a>
-     *
+     * @param jai The instance of {@link JAI} we are going to work on. This argument can be omitted
+     *     for the {@linkplain JAI#getDefaultInstance default JAI instance}.
+     * @see <a href="http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=4906854">JAI bug report
+     *     4906854</a>
      * @since 2.5
      */
-    public synchronized static void setNativeAccelerationAllowed(final String operation,
-                                                                 final boolean  allowed,
-                                                                 final JAI jai)
-    {
+    public static synchronized void setNativeAccelerationAllowed(
+            final String operation, final boolean allowed, final JAI jai) {
         final String product = "com.sun.media.jai";
         final OperationRegistry registry = jai.getOperationRegistry();
 
         // TODO: Check if we can remove SuppressWarnings with a future JAI version.
         @SuppressWarnings("unchecked")
-        final List<RenderedImageFactory> factories = registry.getOrderedFactoryList(
-                RenderedRegistryMode.MODE_NAME, operation, product);
+        final List<RenderedImageFactory> factories =
+                registry.getOrderedFactoryList(RenderedRegistryMode.MODE_NAME, operation, product);
         if (factories != null) {
-            RenderedImageFactory   javaFactory = null;
+            RenderedImageFactory javaFactory = null;
             RenderedImageFactory nativeFactory = null;
-            Boolean               currentState = null;
+            Boolean currentState = null;
             for (final RenderedImageFactory factory : factories) {
                 final String pack = factory.getClass().getPackage().getName();
                 if (pack.equals("com.sun.media.jai.mlib")) {
@@ -55,16 +53,25 @@
             if (ImageWorker.isJaiExtEnabled()) {
                 JAIExt.setJAIAcceleration(operation, allowed);
             }
-            if (currentState!=null && currentState.booleanValue()!=allowed) {
-                RIFRegistry.unsetPreference(registry, operation, product,
-                                            allowed ? javaFactory : nativeFactory,
-                                            allowed ? nativeFactory : javaFactory);
-                RIFRegistry.setPreference(registry, operation, product,
-                                          allowed ? nativeFactory : javaFactory,
-                                          allowed ? javaFactory : nativeFactory);
-                final LogRecord record = Loggings.format(Level.CONFIG,
-                                                 LoggingKeys.NATIVE_ACCELERATION_STATE_$2,
-                                                 operation, Integer.valueOf(allowed ? 1 : 0));
+            if (currentState != null && currentState.booleanValue() != allowed) {
+                RIFRegistry.unsetPreference(
+                        registry,
+                        operation,
+                        product,
+                        allowed ? javaFactory : nativeFactory,
+                        allowed ? nativeFactory : javaFactory);
+                RIFRegistry.setPreference(
+                        registry,
+                        operation,
+                        product,
+                        allowed ? nativeFactory : javaFactory,
+                        allowed ? javaFactory : nativeFactory);
+                final LogRecord record =
+                        Loggings.format(
+                                Level.CONFIG,
+                                LoggingKeys.NATIVE_ACCELERATION_STATE_$2,
+                                operation,
+                                Integer.valueOf(allowed ? 1 : 0));
                 log("setNativeAccelerationAllowed", record);
             }
         }

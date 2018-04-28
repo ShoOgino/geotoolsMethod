@@ -1,8 +1,8 @@
     /**
      * Extracts the {@link GridGeometry2D grid geometry} from the unidata variable.
-     * 
+     *
      * @return the {@link GridGeometry2D}.
-     * @throws IOException 
+     * @throws IOException
      */
     protected GridGeometry2D getGridGeometry() throws IOException {
         int[] low = new int[2];
@@ -10,110 +10,119 @@
         double[] origin = new double[2];
         double scaleX = Double.POSITIVE_INFINITY, scaleY = Double.POSITIVE_INFINITY;
 
-        for( CoordinateVariable<?> cv : reader.georeferencing.getCoordinatesVariables(variableDS.getShortName()) ) {
-            if(!cv.isNumeric()){
+        for (CoordinateVariable<?> cv :
+                reader.georeferencing.getCoordinatesVariables(variableDS.getShortName())) {
+            if (!cv.isNumeric()) {
                 continue;
             }
             final AxisType axisType = cv.getAxisType();
             switch (axisType) {
-            case Lon: case GeoX:
-                // raster space
-                low[0] = 0;
-                high[0] = (int) cv.getSize();
+                case Lon:
+                case GeoX:
+                    // raster space
+                    low[0] = 0;
+                    high[0] = (int) cv.getSize();
 
-                // model space
-                if (cv.isRegular()) {
-                    // regular model space
-                    origin[0] = cv.getStart();
-                    scaleX = cv.getIncrement();
-                } else {
-
-                    // model space is not declared to be regular, but we kind of assume it is!!!
-                    @SuppressWarnings("unchecked") 
-                    List<Number> vals = (List<Number>) cv.read();
-                    double min = ((Number)cv.getMinimum()).doubleValue();
-                    double max = ((Number)cv.getMaximum()).doubleValue();
-                    // make sure we skip nodata coords, bah...
-                    if (!Double.isNaN(min) && !Double.isNaN(max)) {
-                        origin[0] = min;
-                        scaleX = (max-min) / vals.size();
+                    // model space
+                    if (cv.isRegular()) {
+                        // regular model space
+                        origin[0] = cv.getStart();
+                        scaleX = cv.getIncrement();
                     } else {
-                        if (LOGGER.isLoggable(Level.FINE)) {
-                            LOGGER.log(Level.FINE, "Axis values contains NaN; finding first valid values");
-                        }
-                        for( int j = 0; j < vals.size(); j++ ) {
-                            double v = ((Number)vals.get(j)).doubleValue();
-                            if (!Double.isNaN(v)) {
-                                for( int k = vals.size(); k > j; k-- ) {
-                                    double vv = ((Number)vals.get(k)).doubleValue();
-                                    if (!Double.isNaN(vv)) {
-                                        origin[0] = v;
-                                        scaleX = (vv - v) / vals.size();
+
+                        // model space is not declared to be regular, but we kind of assume it is!!!
+                        @SuppressWarnings("unchecked")
+                        List<Number> vals = (List<Number>) cv.read();
+                        double min = ((Number) cv.getMinimum()).doubleValue();
+                        double max = ((Number) cv.getMaximum()).doubleValue();
+                        // make sure we skip nodata coords, bah...
+                        if (!Double.isNaN(min) && !Double.isNaN(max)) {
+                            origin[0] = min;
+                            scaleX = (max - min) / vals.size();
+                        } else {
+                            if (LOGGER.isLoggable(Level.FINE)) {
+                                LOGGER.log(
+                                        Level.FINE,
+                                        "Axis values contains NaN; finding first valid values");
+                            }
+                            for (int j = 0; j < vals.size(); j++) {
+                                double v = ((Number) vals.get(j)).doubleValue();
+                                if (!Double.isNaN(v)) {
+                                    for (int k = vals.size(); k > j; k--) {
+                                        double vv = ((Number) vals.get(k)).doubleValue();
+                                        if (!Double.isNaN(vv)) {
+                                            origin[0] = v;
+                                            scaleX = (vv - v) / vals.size();
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
-                break;
-            case Lat: case GeoY:
-                // raster space
-                low[1] = 0;
-                high[1] = (int) cv.getSize();
+                    break;
+                case Lat:
+                case GeoY:
+                    // raster space
+                    low[1] = 0;
+                    high[1] = (int) cv.getSize();
 
-                // model space
-                if (cv.isRegular()) {
+                    // model space
+                    if (cv.isRegular()) {
 
-                    if (cv.getIncrement() > 0) {
-                        // the latitude axis is increasing! This is a special case so we flip it around
-                        scaleY = -cv.getIncrement();
-                        origin[1] = cv.getStart() - scaleY * (high[1] - 1);
-                    } else {
-                        scaleY = cv.getIncrement();
-                        origin[1] = cv.getStart();
-                    }
-                } else {
-                    // model space is not declared to be regular, but we kind of assume it is!!!
-                    @SuppressWarnings("unchecked") 
-                    List<Number> values = (List<Number>) cv.read();
-                    double min = ((Number)cv.getMinimum()).doubleValue();
-                    double max = ((Number)cv.getMaximum()).doubleValue();
-                    // make sure we skip nodata coords, bah...
-                    if (!Double.isNaN(min) && !Double.isNaN(max)) {
-                        scaleY = -(max-min) / values.size();
-                        origin[1] = max;
-                    } else {
-                        if (LOGGER.isLoggable(Level.FINE)) {
-                            LOGGER.log(Level.FINE, "Axis values contains NaN; finding first valid values");
+                        if (cv.getIncrement() > 0) {
+                            // the latitude axis is increasing! This is a special case so we flip it
+                            // around
+                            scaleY = -cv.getIncrement();
+                            origin[1] = cv.getStart() - scaleY * (high[1] - 1);
+                        } else {
+                            scaleY = cv.getIncrement();
+                            origin[1] = cv.getStart();
                         }
-                        for( int j = 0; j < values.size(); j++ ) {
-                            double v = ((Number)values.get(j)).doubleValue();
-                            if (!Double.isNaN(v)) {
-                                for( int k = values.size(); k > j; k-- ) {
-                                    double vv = ((Number)values.get(k)).doubleValue();
-                                    if (!Double.isNaN(vv)) {
-                                        origin[1] = v;
-                                        scaleY = -(vv - v) / values.size();
+                    } else {
+                        // model space is not declared to be regular, but we kind of assume it is!!!
+                        @SuppressWarnings("unchecked")
+                        List<Number> values = (List<Number>) cv.read();
+                        double min = ((Number) cv.getMinimum()).doubleValue();
+                        double max = ((Number) cv.getMaximum()).doubleValue();
+                        // make sure we skip nodata coords, bah...
+                        if (!Double.isNaN(min) && !Double.isNaN(max)) {
+                            scaleY = -(max - min) / values.size();
+                            origin[1] = max;
+                        } else {
+                            if (LOGGER.isLoggable(Level.FINE)) {
+                                LOGGER.log(
+                                        Level.FINE,
+                                        "Axis values contains NaN; finding first valid values");
+                            }
+                            for (int j = 0; j < values.size(); j++) {
+                                double v = ((Number) values.get(j)).doubleValue();
+                                if (!Double.isNaN(v)) {
+                                    for (int k = values.size(); k > j; k--) {
+                                        double vv = ((Number) values.get(k)).doubleValue();
+                                        if (!Double.isNaN(vv)) {
+                                            origin[1] = v;
+                                            scaleY = -(vv - v) / values.size();
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
-                break;
-            default:
-                break;
+                    break;
+                default:
+                    break;
             }
         }
 
         final AffineTransform at = new AffineTransform(scaleX, 0, 0, scaleY, origin[0], origin[1]);
-        final GridEnvelope gridRange = new GridEnvelope2D(
-                low[0], 
-                low[1], 
-                high[0]-low[0], 
-                high[1]-low[1]);
+        final GridEnvelope gridRange =
+                new GridEnvelope2D(low[0], low[1], high[0] - low[0], high[1] - low[1]);
         final MathTransform raster2Model = ProjectiveTransform.create(at);
-        return new GridGeometry2D(gridRange, PixelInCell.CELL_CENTER, raster2Model,
-               coordinateReferenceSystem, GeoTools.getDefaultHints());
+        return new GridGeometry2D(
+                gridRange,
+                PixelInCell.CELL_CENTER,
+                raster2Model,
+                coordinateReferenceSystem,
+                GeoTools.getDefaultHints());
     }
 

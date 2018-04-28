@@ -1,22 +1,22 @@
     /**
-     * @param dimensions 
+     * @param dimensions
      * @return
      * @throws IllegalArgumentException
      * @throws RuntimeException
      * @throws IOException
      * @throws IllegalStateException
      */
-    private void initCRS(List<DimensionDescriptor> dimensions) throws IllegalArgumentException, RuntimeException,
-            IOException, IllegalStateException {
-        // from UnidataVariableAdapter        
+    private void initCRS(List<DimensionDescriptor> dimensions)
+            throws IllegalArgumentException, RuntimeException, IOException, IllegalStateException {
+        // from UnidataVariableAdapter
         this.coordinateSystem = NetCDFCRSUtilities.getCoordinateSystem(variableDS);
-        if (coordinateSystem == null){
+        if (coordinateSystem == null) {
             throw new IllegalArgumentException("Provided CoordinateSystem is null");
         }
         // Wrapper for the CoordinateSystem
         coordinateSystem = new CoordinateSystemAdapter(coordinateSystem);
 
-        //init nDimensionIndex
+        // init nDimensionIndex
         List<Integer> nDimensionIndexList = new ArrayList<Integer>(2);
         nDimensionIndexList.add(-1);
         nDimensionIndexList.add(-1);
@@ -29,44 +29,49 @@
         int index = -1;
         List<CoordinateAxis> axesSorted = new ArrayList<>(coordinateSystem.getCoordinateAxes());
         Collections.sort(axesSorted, AXIS_COMPARATOR);
-        for (CoordinateAxis axis : axesSorted){
+        for (CoordinateAxis axis : axesSorted) {
             index++;
             String fullName = axis.getFullName();
             if (NetCDFUtilities.getIgnoredDimensions().contains(fullName)) {
                 ignoredDimensions.add(fullName);
                 continue;
             }
-            CoordinateVariable<?> cv=reader.georeferencing.getCoordinateVariable(axis.getShortName());
-            if (cv == null) { 
+            CoordinateVariable<?> cv =
+                    reader.georeferencing.getCoordinateVariable(axis.getShortName());
+            if (cv == null) {
                 if (LOGGER.isLoggable(Level.FINE)) {
                     LOGGER.fine("Unable to find a coordinate variable for " + fullName);
                 }
                 index--;
                 continue;
             }
-            switch(cv.getAxisType()){
-            case Time:
-                initTemporalDomain(cv, dimensions);
-                nDimensionIndexList.set(T, index);
-                continue;
-            case GeoZ:case Height:case Pressure:
-                String axisName = cv.getName();
-                if (NetCDFCRSUtilities.VERTICAL_AXIS_NAMES.contains(axisName)) {
-                    initVerticalDomain(cv, dimensions);
-                    nDimensionIndexList.set(Z, index);
-                } else{
+            switch (cv.getAxisType()) {
+                case Time:
+                    initTemporalDomain(cv, dimensions);
+                    nDimensionIndexList.set(T, index);
+                    continue;
+                case GeoZ:
+                case Height:
+                case Pressure:
+                    String axisName = cv.getName();
+                    if (NetCDFCRSUtilities.VERTICAL_AXIS_NAMES.contains(axisName)) {
+                        initVerticalDomain(cv, dimensions);
+                        nDimensionIndexList.set(Z, index);
+                    } else {
+                        initAdditionalDomain(cv, dimensions);
+                        nDimensionIndexList.add(index);
+                    }
+                    continue;
+                case GeoX:
+                case GeoY:
+                case Lat:
+                case Lon:
+                    // do nothing
+                    continue;
+                default:
                     initAdditionalDomain(cv, dimensions);
                     nDimensionIndexList.add(index);
-                }
-                continue;  
-            case GeoX: case GeoY: case Lat: case Lon:
-                // do nothing
-                continue;
-            default:
-                initAdditionalDomain(cv, dimensions);
-                nDimensionIndexList.add(index);
             }
-            
         }
         nDimensionIndex = nDimensionIndexList.stream().mapToInt(i -> i).toArray();
 

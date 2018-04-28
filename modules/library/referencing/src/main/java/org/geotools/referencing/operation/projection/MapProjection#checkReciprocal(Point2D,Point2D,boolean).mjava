@@ -1,57 +1,59 @@
     /**
-     * Check if the transform of {@code point} is close enough to {@code target}.
-     * "Close enough" means that the two points are separated by a distance shorter than
-     * {@link #getToleranceForAssertions}. This method is used for assertions with J2SE 1.4.
+     * Check if the transform of {@code point} is close enough to {@code target}. "Close enough"
+     * means that the two points are separated by a distance shorter than {@link
+     * #getToleranceForAssertions}. This method is used for assertions with J2SE 1.4.
      *
-     * @param point   Point to transform, in decimal degrees if {@code inverse} is {@code false}.
-     * @param target  Point to compare to, in metres if {@code inverse} is {@code false}.
+     * @param point Point to transform, in decimal degrees if {@code inverse} is {@code false}.
+     * @param target Point to compare to, in metres if {@code inverse} is {@code false}.
      * @param inverse {@code true} for an inverse transform instead of a direct one.
      * @return {@code true} if the two points are close enough.
      */
     protected boolean checkReciprocal(Point2D point, final Point2D target, final boolean inverse)
-            throws ProjectionException
-    {
+            throws ProjectionException {
         if (SKIP_SANITY_CHECKS) {
             return true;
         }
 
-        if (!(point instanceof CheckPoint)) try {
-            point = new CheckPoint(point);
-            final double longitude;
-            final double latitude;
-            final double distance;
-            if (inverse) {
-                // Computes orthodromic distance (spherical model) in metres.
-                point = inverse().transform(point, point);
-                distance  = orthodromicDistance(point, target);
-                longitude = point.getX();
-                latitude  = point.getY();
-            } else {
-                // Computes cartesian distance in metres.
-                longitude = point.getX();
-                latitude  = point.getY();
-                point     = transform(point, point);
-                distance  = point.distance(target);
+        if (!(point instanceof CheckPoint))
+            try {
+                point = new CheckPoint(point);
+                final double longitude;
+                final double latitude;
+                final double distance;
+                if (inverse) {
+                    // Computes orthodromic distance (spherical model) in metres.
+                    point = inverse().transform(point, point);
+                    distance = orthodromicDistance(point, target);
+                    longitude = point.getX();
+                    latitude = point.getY();
+                } else {
+                    // Computes cartesian distance in metres.
+                    longitude = point.getX();
+                    latitude = point.getY();
+                    point = transform(point, point);
+                    distance = point.distance(target);
+                }
+                if (distance > getToleranceForAssertions(longitude, latitude)) {
+                    /*
+                     * Do not fail for NaN values. For other cases we must throw a ProjectionException,
+                     * not an AssertionError, because some code like CRS.transform(CoordinateOperation,
+                     * ...) will project points that are know to be suspicious by surrounding them in
+                     * "try ... catch" statements. Failure are normal in their case and we want to let
+                     * them handle the exception the way they are used to.
+                     */
+                    throw new ProjectionException(
+                            Errors.format(
+                                    ErrorKeys.PROJECTION_CHECK_FAILED_$4,
+                                    distance,
+                                    new Longitude(longitude - toDegrees(centralMeridian)),
+                                    new Latitude(latitude - toDegrees(latitudeOfOrigin)),
+                                    getName()));
+                }
+            } catch (ProjectionException exception) {
+                throw exception;
+            } catch (TransformException exception) {
+                throw new ProjectionException(exception);
             }
-            if (distance > getToleranceForAssertions(longitude, latitude)) {
-                /*
-                 * Do not fail for NaN values. For other cases we must throw a ProjectionException,
-                 * not an AssertionError, because some code like CRS.transform(CoordinateOperation,
-                 * ...) will project points that are know to be suspicious by surrounding them in
-                 * "try ... catch" statements. Failure are normal in their case and we want to let
-                 * them handle the exception the way they are used to.
-                 */
-                throw new ProjectionException(Errors.format(ErrorKeys.PROJECTION_CHECK_FAILED_$4,
-                          distance,
-                          new Longitude(longitude - toDegrees(centralMeridian )),
-                          new Latitude (latitude  - toDegrees(latitudeOfOrigin)),
-                          getName()));
-            }
-        } catch (ProjectionException exception) {
-            throw exception;
-        } catch (TransformException exception) {
-            throw new ProjectionException(exception);
-        }
         return true;
     }
 

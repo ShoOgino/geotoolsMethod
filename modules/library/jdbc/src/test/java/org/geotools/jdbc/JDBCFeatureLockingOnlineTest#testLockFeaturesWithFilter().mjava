@@ -1,43 +1,41 @@
     public void testLockFeaturesWithFilter() throws Exception {
-        
-        FeatureLock lock = 
-            FeatureLockFactory.generate(tname("ft1"), 60 * 60 * 1000);
-        
-        try(Transaction tx = new DefaultTransaction()) {
-            store.setTransaction( tx );
+
+        FeatureLock lock = FeatureLockFactory.generate(tname("ft1"), 60 * 60 * 1000);
+
+        try (Transaction tx = new DefaultTransaction()) {
+            store.setTransaction(tx);
             store.setFeatureLock(lock);
-            
-            //lock features
+
+            // lock features
             FilterFactory ff = dataStore.getFilterFactory();
             PropertyIsEqualTo f = ff.equals(ff.property(aname("intProperty")), ff.literal(1));
-            
-            int locked = store.lockFeatures( f );
-            assertEquals( 1, locked );
-            
-            //grabbing a reader should be no problem
+
+            int locked = store.lockFeatures(f);
+            assertEquals(1, locked);
+
+            // grabbing a reader should be no problem
             boolean failure = false;
-            try(FeatureWriter<SimpleFeatureType, SimpleFeature> writer = dataStore.getFeatureWriter(tname("ft1"), tx)) {
-                while( writer.hasNext() ) {
+            try (FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
+                    dataStore.getFeatureWriter(tname("ft1"), tx)) {
+                while (writer.hasNext()) {
                     SimpleFeature feature = (SimpleFeature) writer.next();
                     Number old = (Number) feature.getAttribute(aname("intProperty"));
-                    
+
                     feature.setAttribute(aname("intProperty"), new Integer(100));
-                    if ( new Integer(1).equals( old.intValue() ) ) {
+                    if (new Integer(1).equals(old.intValue())) {
                         try {
                             writer.write();
-                            fail( "writer should have thrown exception for locked feature");
-                        }
-                        catch( FeatureLockException e ) {
+                            fail("writer should have thrown exception for locked feature");
+                        } catch (FeatureLockException e) {
                             failure = true;
-                        } 
-                    }
-                    else {
+                        }
+                    } else {
                         writer.write();
                     }
                 }
             }
-            
-            assertTrue( failure );
+
+            assertTrue(failure);
         }
     }
 

@@ -2,94 +2,85 @@
      * Create a map of <String name, Parameter> outputs for a process based on its describeProcess.
      *
      * @param processDesc
-     * @param map
-     *            add the outputs to the given map (create it if null)
+     * @param map add the outputs to the given map (create it if null)
      * @return map of name,Parameter representing the output results for this process
      */
     public static Map<String, Parameter<?>> createOutputParamMap(
-        ProcessDescriptionType processDesc, Map<String, Parameter<?>> map)
-    {
-        if (map == null)
-        {
+            ProcessDescriptionType processDesc, Map<String, Parameter<?>> map) {
+        if (map == null) {
             map = new TreeMap<String, Parameter<?>>();
         }
 
         // loop through the process desc and setup each output param
         ProcessOutputsType processOutputs = processDesc.getProcessOutputs();
-        if (processOutputs == null)
-        {
+        if (processOutputs == null) {
             return null;
         }
 
         EList outputs = processOutputs.getOutput();
-        if ((outputs == null) || outputs.isEmpty())
-        {
+        if ((outputs == null) || outputs.isEmpty()) {
             return null;
         }
 
         Iterator iterator = outputs.iterator();
-        while (iterator.hasNext())
-        {
+        while (iterator.hasNext()) {
             OutputDescriptionType odt = (OutputDescriptionType) iterator.next();
             // determine if the output is a literal or complex data, and from that
             // find out what type the object should be
             LiteralOutputType literalOutput = odt.getLiteralOutput();
             SupportedComplexDataType complexOutput = odt.getComplexOutput();
             Class type = Object.class;
-            if (literalOutput != null)
-            {
+            if (literalOutput != null) {
                 DomainMetadataType dataType = literalOutput.getDataType();
-                if(dataType != null)
-                {
+                if (dataType != null) {
                     // try and parse the type
                     Class literalType = null;
-                    
-                    if(dataType.getReference() != null) { // reference is 0..1
+
+                    if (dataType.getReference() != null) { // reference is 0..1
                         literalType = guessLiteralType(dataType.getReference());
-                        if(literalType == null) {
+                        if (literalType == null) {
                             LOGGER.warning("Unparsable ows:reference " + dataType.getReference());
                         }
                     }
-                    if(literalType == null) { // no parsable reference
+                    if (literalType == null) { // no parsable reference
                         literalType = guessLiteralType(dataType.getValue()); // value is mandatory
                     }
 
-                    type = literalType != null? literalType : String.class;
-                }
-                else
-                {
+                    type = literalType != null ? literalType : String.class;
+                } else {
                     // datatype is null => character string (OGC 05-007r7, Table 37, DataType)
                     type = String.class;
                 }
 
                 // TODO: handle UOM
-            }
-            else if (complexOutput != null)
-            {
+            } else if (complexOutput != null) {
                 // TODO: get all supported types and determine how to handle that, not just the
                 // default.
                 ComplexDataDescriptionType format = complexOutput.getDefault().getFormat();
                 String encoding = format.getEncoding();
                 String mimetype = format.getMimeType();
                 String schema = format.getSchema();
-                if (encoding == null)
-                {
+                if (encoding == null) {
                     encoding = "";
                 }
-                if (mimetype == null)
-                {
+                if (mimetype == null) {
                     mimetype = "";
                 }
-                if (schema == null)
-                {
+                if (schema == null) {
                     schema = "";
                 }
                 type = getComplexType(encoding, mimetype, schema);
             }
 
             // create the parameter
-            InternationalString description = Text.text(isAbstractNull(odt) ? "" : odt.getAbstract().getValue());
-            Parameter param = new Parameter(odt.getIdentifier().getValue(), type, Text.text(odt.getTitle().getValue()), description);
+            InternationalString description =
+                    Text.text(isAbstractNull(odt) ? "" : odt.getAbstract().getValue());
+            Parameter param =
+                    new Parameter(
+                            odt.getIdentifier().getValue(),
+                            type,
+                            Text.text(odt.getTitle().getValue()),
+                            description);
             map.put(odt.getIdentifier().getValue(), param);
         }
 

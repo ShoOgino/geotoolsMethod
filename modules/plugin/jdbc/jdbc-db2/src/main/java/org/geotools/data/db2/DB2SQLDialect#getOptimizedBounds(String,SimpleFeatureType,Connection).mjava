@@ -1,77 +1,85 @@
     /**
      * Since DB2 V10.
-     * 
-     * Look in the system view "db2gse.st_geometry_columns" and check for min_x,min_y,max_x,max_y
-     * 
-     * If ALL geometry attributes have precalculated extents, return the list of the envelopes.
-     * If only one of them has no precalculated extent, return null 
-     * 
+     *
+     * <p>Look in the system view "db2gse.st_geometry_columns" and check for min_x,min_y,max_x,max_y
+     *
+     * <p>If ALL geometry attributes have precalculated extents, return the list of the envelopes.
+     * If only one of them has no precalculated extent, return null
      */
     @Override
-    public List<ReferencedEnvelope> getOptimizedBounds(String schema, SimpleFeatureType featureType,
-            Connection cx) throws SQLException, IOException {
-        
-        if (getDb2DialectInfo().isSupportingPrecalculatedExtents()==false)
-            return null;
-        
-        if (dataStore.getVirtualTables().get(featureType.getTypeName()) != null)
-            return null;
+    public List<ReferencedEnvelope> getOptimizedBounds(
+            String schema, SimpleFeatureType featureType, Connection cx)
+            throws SQLException, IOException {
 
-        if (schema == null || "".equals(schema))
-            return null; // no db schema 
-        
-         
-        String  tableName = featureType.getTypeName();
-        
+        if (getDb2DialectInfo().isSupportingPrecalculatedExtents() == false) return null;
+
+        if (dataStore.getVirtualTables().get(featureType.getTypeName()) != null) return null;
+
+        if (schema == null || "".equals(schema)) return null; // no db schema
+
+        String tableName = featureType.getTypeName();
+
         Statement st = null;
         ResultSet rs = null;
 
-        List<ReferencedEnvelope> result = new ArrayList<ReferencedEnvelope>();        
+        List<ReferencedEnvelope> result = new ArrayList<ReferencedEnvelope>();
         try {
             st = cx.createStatement();
-                                                  
+
             for (AttributeDescriptor att : featureType.getAttributeDescriptors()) {
                 if (att instanceof GeometryDescriptor) {
 
                     StringBuffer sql = new StringBuffer();
-                    sql.append("select min_x,min_y,max_x,max_y from db2gse.st_geometry_columns where  TABLE_SCHEMA='");
-                    sql.append(schema).append("' AND TABLE_NAME='");                                        
+                    sql.append(
+                            "select min_x,min_y,max_x,max_y from db2gse.st_geometry_columns where  TABLE_SCHEMA='");
+                    sql.append(schema).append("' AND TABLE_NAME='");
                     sql.append(tableName).append("' AND COLUMN_NAME='");
                     sql.append(att.getName().getLocalPart()).append("'");
-                                                            
-                    LOGGER.log(Level.FINE, "Getting the full extent of the table using optimized search: {0}", sql);
+
+                    LOGGER.log(
+                            Level.FINE,
+                            "Getting the full extent of the table using optimized search: {0}",
+                            sql);
                     rs = st.executeQuery(sql.toString());
-        
+
                     if (rs.next()) {
-                        Double min_x=rs.getDouble(1);
-                        if(rs.wasNull()) return null;
-                        Double min_y=rs.getDouble(2);
-                        if(rs.wasNull()) return null;
-                        Double max_x=rs.getDouble(3);
-                        if(rs.wasNull()) return null;
-                        Double max_y=rs.getDouble(4);
-                        if(rs.wasNull()) return null;
-                                        
-                        Geometry geometry = new GeometryFactory().createPolygon(new Coordinate[] {
-                           new Coordinate(min_x,min_y),     
-                           new Coordinate(min_x,max_y),
-                           new Coordinate(max_x,max_y),
-                           new Coordinate(max_x,min_y),
-                           new Coordinate(min_x,min_y)
-                        });
-                        
-                        
-                        // Either a ReferencedEnvelope or ReferencedEnvelope3D will be generated here
-                        ReferencedEnvelope env = JTS.bounds(geometry, ((GeometryDescriptor) att).getCoordinateReferenceSystem() );
-        
+                        Double min_x = rs.getDouble(1);
+                        if (rs.wasNull()) return null;
+                        Double min_y = rs.getDouble(2);
+                        if (rs.wasNull()) return null;
+                        Double max_x = rs.getDouble(3);
+                        if (rs.wasNull()) return null;
+                        Double max_y = rs.getDouble(4);
+                        if (rs.wasNull()) return null;
+
+                        Geometry geometry =
+                                new GeometryFactory()
+                                        .createPolygon(
+                                                new Coordinate[] {
+                                                    new Coordinate(min_x, min_y),
+                                                    new Coordinate(min_x, max_y),
+                                                    new Coordinate(max_x, max_y),
+                                                    new Coordinate(max_x, min_y),
+                                                    new Coordinate(min_x, min_y)
+                                                });
+
+                        // Either a ReferencedEnvelope or ReferencedEnvelope3D will be generated
+                        // here
+                        ReferencedEnvelope env =
+                                JTS.bounds(
+                                        geometry,
+                                        ((GeometryDescriptor) att).getCoordinateReferenceSystem());
+
                         // reproject and merge
-                        if (env != null && !env.isNull()) 
-                            result.add(env);
+                        if (env != null && !env.isNull()) result.add(env);
                     }
-                }                       
+                }
             }
-        } catch(SQLException e) {
-            LOGGER.log(Level.WARNING, "Failed to use extent from DB2GSE.ST_GEOMETRY_COLUMNS, falling back on envelope aggregation", e);
+        } catch (SQLException e) {
+            LOGGER.log(
+                    Level.WARNING,
+                    "Failed to use extent from DB2GSE.ST_GEOMETRY_COLUMNS, falling back on envelope aggregation",
+                    e);
             return null;
         } finally {
             dataStore.closeSafe(rs);

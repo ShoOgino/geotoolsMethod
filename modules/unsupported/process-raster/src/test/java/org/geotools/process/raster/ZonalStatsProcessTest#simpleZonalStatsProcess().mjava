@@ -12,61 +12,82 @@
             store = FileDataStoreFinder.getDataStore(fileshp.toURI().toURL());
             assertNotNull(store);
             assertTrue(store instanceof ShapefileDataStore);
-            FeatureSource<SimpleFeatureType, SimpleFeature> featureSource = store
-                    .getFeatureSource(store.getNames().get(0));
-            SimpleFeatureCollection featureCollection = (SimpleFeatureCollection) featureSource
-                    .getFeatures();
+            FeatureSource<SimpleFeatureType, SimpleFeature> featureSource =
+                    store.getFeatureSource(store.getNames().get(0));
+            SimpleFeatureCollection featureCollection =
+                    (SimpleFeatureCollection) featureSource.getFeatures();
 
             // build the DataFile
             final File tiff = TestData.file(this, "test.tif");
             final File tfw = TestData.file(this, "test.tfw");
-            reader = (it.geosolutions.imageioimpl.plugins.tiff.TIFFImageReader) new TIFFImageReaderSpi()
-                    .createReaderInstance();
+            reader =
+                    (it.geosolutions.imageioimpl.plugins.tiff.TIFFImageReader)
+                            new TIFFImageReaderSpi().createReaderInstance();
             assertNotNull(reader);
             reader.setInput(ImageIO.createImageInputStream(tiff));
             final BufferedImage image = reader.read(0);
 
             final MathTransform transform = new WorldFileReader(tfw).getTransform();
-            coverage2D = CoverageFactoryFinder.getGridCoverageFactory(null).create(
-                    "coverage",
-                    image,
-                    new GridGeometry2D(new GridEnvelope2D(PlanarImage.wrapRenderedImage(image)
-                            .getBounds()), transform, DefaultGeographicCRS.WGS84),
-                    new GridSampleDimension[] { new GridSampleDimension("coverage") }, null, null);
+            coverage2D =
+                    CoverageFactoryFinder.getGridCoverageFactory(null)
+                            .create(
+                                    "coverage",
+                                    image,
+                                    new GridGeometry2D(
+                                            new GridEnvelope2D(
+                                                    PlanarImage.wrapRenderedImage(image)
+                                                            .getBounds()),
+                                            transform,
+                                            DefaultGeographicCRS.WGS84),
+                                    new GridSampleDimension[] {new GridSampleDimension("coverage")},
+                                    null,
+                                    null);
             assertNotNull(coverage2D);
 
             // build the classificator
             // generate the classificator image
-            final BufferedImage imageClassificator = new BufferedImage(120, 80,
-                    BufferedImage.TYPE_BYTE_INDEXED);
+            final BufferedImage imageClassificator =
+                    new BufferedImage(120, 80, BufferedImage.TYPE_BYTE_INDEXED);
             final WritableRaster raster = imageClassificator.getRaster();
-            for (int i = raster.getWidth(); --i >= 0;) {
-                for (int j = raster.getHeight(); --j >= 0;) {
+            for (int i = raster.getWidth(); --i >= 0; ) {
+                for (int j = raster.getHeight(); --j >= 0; ) {
                     // create a simple raster used for classification
                     int sampleValue = (i % 2 == 0) ? 1 : 2;
                     raster.setSample(i, j, 0, sampleValue);
                 }
             }
             // create the coverage for the classification layer
-            covClassificator = CoverageFactoryFinder.getGridCoverageFactory(null).create(
-                    "coverageClassificator",
-                    imageClassificator,
-                    new GridGeometry2D(new GridEnvelope2D(PlanarImage.wrapRenderedImage(
-                            imageClassificator).getBounds()), coverage2D.getEnvelope()),
-                    new GridSampleDimension[] { new GridSampleDimension("coverage") }, null, null);
+            covClassificator =
+                    CoverageFactoryFinder.getGridCoverageFactory(null)
+                            .create(
+                                    "coverageClassificator",
+                                    imageClassificator,
+                                    new GridGeometry2D(
+                                            new GridEnvelope2D(
+                                                    PlanarImage.wrapRenderedImage(
+                                                                    imageClassificator)
+                                                            .getBounds()),
+                                            coverage2D.getEnvelope()),
+                                    new GridSampleDimension[] {new GridSampleDimension("coverage")},
+                                    null,
+                                    null);
             assertNotNull(coverage2D);
 
             // invoke the process
-            SimpleFeatureCollection sfc = process.execute(coverage2D, null, featureCollection,
-                    covClassificator);
+            SimpleFeatureCollection sfc =
+                    process.execute(coverage2D, null, featureCollection, covClassificator);
 
             iterator = sfc.features();
             assertNotNull(iterator);
 
             while (iterator.hasNext()) {
                 SimpleFeature feature = iterator.next();
-                assertTrue((feature.toString()).equals(results.get(feature.getID()
-                        + feature.getAttribute("classification"))));
+                assertTrue(
+                        (feature.toString())
+                                .equals(
+                                        results.get(
+                                                feature.getID()
+                                                        + feature.getAttribute("classification"))));
             }
 
         } finally {
@@ -100,7 +121,6 @@
                 }
             } catch (Exception e) {
             }
-
         }
     }
 

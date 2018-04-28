@@ -1,5 +1,4 @@
     /**
-     * 
      * @param hints
      * @throws IOException
      * @throws FactoryException
@@ -7,8 +6,9 @@
      * @throws MismatchedDimensionException
      * @throws DataSourceException
      */
-    private void getHRInfo(Hints hints) throws IOException, FactoryException, TransformException, 
-        MismatchedDimensionException, DataSourceException {
+    private void getHRInfo(Hints hints)
+            throws IOException, FactoryException, TransformException, MismatchedDimensionException,
+                    DataSourceException {
         // //
         //
         // Get a reader for this format
@@ -24,7 +24,6 @@
             //
             // //
             reader.setInput(inStream);
-            
 
             // //
             //
@@ -39,19 +38,17 @@
             hrLayout = new RasterLayout(0, 0, hrWidth, hrHeight, 0, 0, hrTileW, hrTileH);
             final Rectangle actualDim = new Rectangle(0, 0, hrWidth, hrHeight);
             originalGridRange = new GridEnvelope2D(actualDim);
-            
-    
+
             final IIOMetadata iioMetadata = reader.getImageMetadata(0);
             GeoTiffIIOMetadataDecoder metadata = new GeoTiffIIOMetadataDecoder(iioMetadata);
-            if (metadata.hasNoData())
-                noData = metadata.getNoData();
+            if (metadata.hasNoData()) noData = metadata.getNoData();
             // //
             //
             // get the CRS INFO
             //
             // //
-            // metadata decoder            
-            GeoTiffMetadata2CRSAdapter gtcs=new GeoTiffMetadata2CRSAdapter(hints);
+            // metadata decoder
+            GeoTiffMetadata2CRSAdapter gtcs = new GeoTiffMetadata2CRSAdapter(hints);
             final Object tempCRS = this.hints.get(Hints.DEFAULT_COORDINATE_REFERENCE_SYSTEM);
             if (tempCRS != null) {
                 this.crs = (CoordinateReferenceSystem) tempCRS;
@@ -60,37 +57,41 @@
             } else {
 
                 // check metadata first
-                if (metadata.hasGeoKey()&& gtcs != null)
+                if (metadata.hasGeoKey() && gtcs != null)
                     crs = gtcs.createCoordinateSystem(metadata);
 
-                if (crs == null)
-                    crs = GeoTiffUtils.getCRS(source);
+                if (crs == null) crs = GeoTiffUtils.getCRS(source);
             }
 
-            if (crs == null){
-                if(LOGGER.isLoggable(Level.WARNING)){
+            if (crs == null) {
+                if (LOGGER.isLoggable(Level.WARNING)) {
                     LOGGER.warning("Coordinate Reference System is not available");
                 }
                 crs = AbstractGridFormat.getDefaultCRS();
             }
 
-
-            if (gtcs != null&& metadata!=null&& (metadata.hasModelTrasformation()||(metadata.hasPixelScales()&&metadata.hasTiePoints()))) {
+            if (gtcs != null
+                    && metadata != null
+                    && (metadata.hasModelTrasformation()
+                            || (metadata.hasPixelScales() && metadata.hasTiePoints()))) {
                 this.raster2Model = GeoTiffMetadata2CRSAdapter.getRasterToModel(metadata);
             } else {
                 this.raster2Model = GeoTiffUtils.parseWorldFile(source);
             }
-    
+
             if (this.raster2Model == null) {
                 throw new DataSourceException("Raster to Model Transformation is not available");
             }
-    
-            final AffineTransform tempTransform = new AffineTransform((AffineTransform) raster2Model);
+
+            final AffineTransform tempTransform =
+                    new AffineTransform((AffineTransform) raster2Model);
             tempTransform.translate(-0.5, -0.5);
-            originalEnvelope = CRS.transform(ProjectiveTransform
-                    .create(tempTransform), new GeneralEnvelope(actualDim));
+            originalEnvelope =
+                    CRS.transform(
+                            ProjectiveTransform.create(tempTransform),
+                            new GeneralEnvelope(actualDim));
             originalEnvelope.setCoordinateReferenceSystem(crs);
-    
+
             // ///
             //
             // setting the higher resolution available for this coverage
@@ -99,31 +100,32 @@
             highestRes = new double[2];
             highestRes[0] = XAffineTransform.getScaleX0(tempTransform);
             highestRes[1] = XAffineTransform.getScaleY0(tempTransform);
-    
+
             if (ovrInStreamSPI != null) {
                 ovrReader = GeoTiffUtils.TIFFREADERFACTORY.createReaderInstance();
-                ovrStream = ovrInStreamSPI.createInputStreamInstance(ovrSource,
-                        ImageIO.getUseCache(), ImageIO.getCacheDirectory());
+                ovrStream =
+                        ovrInStreamSPI.createInputStreamInstance(
+                                ovrSource, ImageIO.getUseCache(), ImageIO.getCacheDirectory());
                 ovrReader.setInput(ovrStream);
                 // this includes the real image as this is a image index, we need to add one.
                 extOvrImgChoice = numOverviews + 1;
                 numOverviews = numOverviews + ovrReader.getNumImages(true);
-                if (numOverviews < extOvrImgChoice)
-                    extOvrImgChoice = -1;
+                if (numOverviews < extOvrImgChoice) extOvrImgChoice = -1;
             }
-            
+
             // //
             //
             // get information for the successive images
             //
             // //
-    
+
             if (numOverviews >= 1) {
                 overViewResolutions = new double[numOverviews][2];
                 overViewLayouts = new RasterLayout[numOverviews];
                 // Internal levels start at 1, so lastInternalOverview matches numOverviews if no
                 // external.
-                int firstExternalOverview = extOvrImgChoice == -1 ? numOverviews : extOvrImgChoice - 1;
+                int firstExternalOverview =
+                        extOvrImgChoice == -1 ? numOverviews : extOvrImgChoice - 1;
                 double spanRes0 = highestRes[0] * this.originalGridRange.getSpan(0);
                 double spanRes1 = highestRes[1] * this.originalGridRange.getSpan(1);
                 for (int i = 0; i < firstExternalOverview; i++) {
@@ -131,7 +133,7 @@
                     final int h = reader.getHeight(i + 1);
                     final int tw = reader.getTileWidth(i + 1);
                     final int th = reader.getTileHeight(i + 1);
-                    overViewResolutions[i][0] = spanRes0 / w; 
+                    overViewResolutions[i][0] = spanRes0 / w;
                     overViewResolutions[i][1] = spanRes1 / h;
                     overViewLayouts[i] = new RasterLayout(0, 0, w, h, 0, 0, tw, th);
                 }
@@ -144,11 +146,11 @@
                     overViewResolutions[i][1] = spanRes1 / h;
                     overViewLayouts[i] = new RasterLayout(0, 0, w, h, 0, 0, tw, th);
                 }
-               
+
             } else {
                 overViewResolutions = null;
             }
-    
+
             // get sample image
             final ImageReadParam readParam = reader.getDefaultReadParam();
             readParam.setSourceRegion(new Rectangle(0, 0, 2, 2));
@@ -162,7 +164,7 @@
                     reader.dispose();
                 } catch (Throwable t) {
                 }
-                
+
             if (ovrReader != null)
                 try {
                     ovrReader.dispose();
@@ -180,8 +182,6 @@
                     inStream.reset();
                 } catch (Throwable t) {
                 }
-
         }
-
     }
 

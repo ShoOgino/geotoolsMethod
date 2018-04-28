@@ -1,80 +1,75 @@
-	/**
-	 * Find the scale denominator of the map. Method: 1. find the diagonal
-	 * distance (meters) 2. find the diagonal distance (pixels) 3. find the
-	 * diagonal distance (meters) -- use DPI 4. calculate scale (#1/#2)
-	 * 
-	 * NOTE: return the scale denominator not the actual scale (1/scale =
-	 * denominator)
-	 * 
-	 * TODO: (SLD spec page 28): Since it is common to integrate the output of
-	 * multiple servers into a single displayed result in the web-mapping
-	 * environment, it is important that different map servers have consistent
-	 * behaviour with respect to processing scales, so that all of the
-	 * independent servers will select or deselect rules at the same scales. To
-	 * insure consistent behaviour, scales relative to coordinate spaces must be
-	 * handled consistently between map servers. For geographic coordinate
-	 * systems, which use angular units, the angular coverage of a map should be
-	 * converted to linear units for computation of scale by using the
-	 * circumference of the Earth at the equator and by assuming perfectly
-	 * square linear units. For linear coordinate systems, the size of the
-	 * coordinate space should be used directly without compensating for
-	 * distortions in it with respect to the shape of the real Earth.
-	 * 
-	 * NOTE: we are actually doing a a much more exact calculation, and
-	 * accounting for non-square pixels (which are allowed in WMS) ADDITIONAL
-	 * NOTE from simboss: I added soe minor fixes. See below.
-	 * 
-	 * @param envelope
-	 * @param imageWidth
-	 * @param imageHeight
-	 * @param DPI
-	 *            screen dots per inch (OGC standard is 90)
-	 * 
-	 * 
-	 * TODO should I take into account also the destination CRS? Otherwise I am
-	 * just assuming that the final crs is lon,lat that is it maps lon to x (n
-	 * raster space) and lat to y (in raster space).
-	 * @throws TransformException
-	 * @throws FactoryException
-	 * 
-	 */
-	public static double calculateScale(ReferencedEnvelope envelope,
-			int imageWidth, int imageHeight, double DPI)
-			throws TransformException, FactoryException {
+    /**
+     * Find the scale denominator of the map. Method: 1. find the diagonal distance (meters) 2. find
+     * the diagonal distance (pixels) 3. find the diagonal distance (meters) -- use DPI 4. calculate
+     * scale (#1/#2)
+     *
+     * <p>NOTE: return the scale denominator not the actual scale (1/scale = denominator)
+     *
+     * <p>TODO: (SLD spec page 28): Since it is common to integrate the output of multiple servers
+     * into a single displayed result in the web-mapping environment, it is important that different
+     * map servers have consistent behaviour with respect to processing scales, so that all of the
+     * independent servers will select or deselect rules at the same scales. To insure consistent
+     * behaviour, scales relative to coordinate spaces must be handled consistently between map
+     * servers. For geographic coordinate systems, which use angular units, the angular coverage of
+     * a map should be converted to linear units for computation of scale by using the circumference
+     * of the Earth at the equator and by assuming perfectly square linear units. For linear
+     * coordinate systems, the size of the coordinate space should be used directly without
+     * compensating for distortions in it with respect to the shape of the real Earth.
+     *
+     * <p>NOTE: we are actually doing a a much more exact calculation, and accounting for non-square
+     * pixels (which are allowed in WMS) ADDITIONAL NOTE from simboss: I added soe minor fixes. See
+     * below.
+     *
+     * @param envelope
+     * @param imageWidth
+     * @param imageHeight
+     * @param DPI screen dots per inch (OGC standard is 90)
+     *     <p>TODO should I take into account also the destination CRS? Otherwise I am just assuming
+     *     that the final crs is lon,lat that is it maps lon to x (n raster space) and lat to y (in
+     *     raster space).
+     * @throws TransformException
+     * @throws FactoryException
+     */
+    public static double calculateScale(
+            ReferencedEnvelope envelope, int imageWidth, int imageHeight, double DPI)
+            throws TransformException, FactoryException {
 
-		final double diagonalGroundDistance;
-        if (!(envelope.getCoordinateReferenceSystem() instanceof EngineeringCRS)) { 
+        final double diagonalGroundDistance;
+        if (!(envelope.getCoordinateReferenceSystem() instanceof EngineeringCRS)) {
             // //
             //
             // get CRS2D for this referenced envelope, check that its 2d
             //
             // //
-            final CoordinateReferenceSystem tempCRS = CRS.getHorizontalCRS(envelope
-                    .getCoordinateReferenceSystem());
+            final CoordinateReferenceSystem tempCRS =
+                    CRS.getHorizontalCRS(envelope.getCoordinateReferenceSystem());
             if (tempCRS == null) {
-                throw new TransformException(Errors.format(
-                        ErrorKeys.CANT_REDUCE_TO_TWO_DIMENSIONS_$1,
-                        envelope.getCoordinateReferenceSystem()));
+                throw new TransformException(
+                        Errors.format(
+                                ErrorKeys.CANT_REDUCE_TO_TWO_DIMENSIONS_$1,
+                                envelope.getCoordinateReferenceSystem()));
             }
             ReferencedEnvelope envelopeWGS84 = envelope.transform(DefaultGeographicCRS.WGS84, true);
             diagonalGroundDistance = geodeticDiagonalDistance(envelopeWGS84);
         } else {
             // if it's an engineering crs, compute only the graphical scale, assuming a CAD space
-            diagonalGroundDistance = Math.sqrt(envelope.getWidth() * envelope.getWidth()
-                    + envelope.getHeight() * envelope.getHeight());
+            diagonalGroundDistance =
+                    Math.sqrt(
+                            envelope.getWidth() * envelope.getWidth()
+                                    + envelope.getHeight() * envelope.getHeight());
         }
 
-		// //
-		//
-		// Compute the distances on the requested image using the provided DPI.
-		//
-		// //
-		// pythagorus theorm
-		double diagonalPixelDistancePixels = Math.sqrt(imageWidth * imageWidth
-				+ imageHeight * imageHeight);
-		double diagonalPixelDistanceMeters = diagonalPixelDistancePixels / DPI
-				* 2.54 / 100; // 2.54 = cm/inch, 100= cm/m
-		return diagonalGroundDistance / diagonalPixelDistanceMeters;
-		// remember, this is the denominator, not the actual scale;
-	}
+        // //
+        //
+        // Compute the distances on the requested image using the provided DPI.
+        //
+        // //
+        // pythagorus theorm
+        double diagonalPixelDistancePixels =
+                Math.sqrt(imageWidth * imageWidth + imageHeight * imageHeight);
+        double diagonalPixelDistanceMeters =
+                diagonalPixelDistancePixels / DPI * 2.54 / 100; // 2.54 = cm/inch, 100= cm/m
+        return diagonalGroundDistance / diagonalPixelDistanceMeters;
+        // remember, this is the denominator, not the actual scale;
+    }
 

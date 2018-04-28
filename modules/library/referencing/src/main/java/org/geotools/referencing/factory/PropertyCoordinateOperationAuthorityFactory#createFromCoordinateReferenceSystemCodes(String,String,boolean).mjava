@@ -1,32 +1,31 @@
     /**
-     * Seeks for a WKT definition in the properties file from a CRS pair, parses it,
-     * and creates the corresponding CoordinateOperation. Returns {@code null}
-     * if something went wrong.
-     * <p>
-     * Will log a WARNING message if a parsing error occurred.
-     * 
-     * @param  sourceCRS   Coded value of source coordinate reference system.
-     * @param  targetCRS   Coded value of target coordinate reference system.
-     * @param  inverse     {@code true} to create operation from the inverse definition.
-     * @return The operation from {@code sourceCRS} to {@code targetCRS},
-     *         or {@code null} if not found.
+     * Seeks for a WKT definition in the properties file from a CRS pair, parses it, and creates the
+     * corresponding CoordinateOperation. Returns {@code null} if something went wrong.
+     *
+     * <p>Will log a WARNING message if a parsing error occurred.
+     *
+     * @param sourceCRS Coded value of source coordinate reference system.
+     * @param targetCRS Coded value of target coordinate reference system.
+     * @param inverse {@code true} to create operation from the inverse definition.
+     * @return The operation from {@code sourceCRS} to {@code targetCRS}, or {@code null} if not
+     *     found.
      * @throws NoSuchAuthorityCodeException if a specified code was not found.
      * @throws FactoryException if the object creation failed for some other reason.
      */
     CoordinateOperation createFromCoordinateReferenceSystemCodes(
             String sourceCRS, String targetCRS, boolean inverse)
-                    throws NoSuchAuthorityCodeException, FactoryException {
+            throws NoSuchAuthorityCodeException, FactoryException {
 
         // Get WKT definition from properties
         sourceCRS = trimAuthority(sourceCRS);
         targetCRS = trimAuthority(targetCRS);
-        String id = sourceCRS+","+targetCRS;
-        String WKT = definitions.getProperty(id);        
-        if(WKT == null) {
+        String id = sourceCRS + "," + targetCRS;
+        String WKT = definitions.getProperty(id);
+        if (WKT == null) {
             // No definition found.
             return null;
         }
-       
+
         // Create MathTransform from WKT
         MathTransform mt = null;
         try {
@@ -39,23 +38,33 @@
 
         // Create the CRS definitions
         String s = this.authority.getIdentifiers().iterator().next().getCode();
-        CoordinateReferenceSystem source = CRS.decode(s+":"+sourceCRS);
-        CoordinateReferenceSystem target = CRS.decode(s+":"+targetCRS);
-        
+        CoordinateReferenceSystem source = CRS.decode(s + ":" + sourceCRS);
+        CoordinateReferenceSystem target = CRS.decode(s + ":" + targetCRS);
+
         // Need to create a derived MathTransform that will handle axis order and units
         // as defined in CRS. Had to cast to DefaultMathTransformFactory because
         // createBaseToDerived is not defined in MathTransformFactory interface (GeoAPI).
-        DefaultMathTransformFactory mtf = (DefaultMathTransformFactory)factories.
-                getMathTransformFactory();
+        DefaultMathTransformFactory mtf =
+                (DefaultMathTransformFactory) factories.getMathTransformFactory();
         MathTransform mt2 = mtf.createBaseToDerived(source, mt, target.getCoordinateSystem());
-        
-        // Extract name from the transform, if possible, or use class name. 
+
+        // Extract name from the transform, if possible, or use class name.
         String methodName;
         try {
             if (mt instanceof AbstractMathTransform) {
-                methodName = ((AbstractMathTransform)mt).getParameterValues().getDescriptor().getName().getCode();
+                methodName =
+                        ((AbstractMathTransform) mt)
+                                .getParameterValues()
+                                .getDescriptor()
+                                .getName()
+                                .getCode();
             } else if (mt instanceof AffineTransform2D) {
-                methodName = ((AffineTransform2D)mt).getParameterValues().getDescriptor().getName().getCode();
+                methodName =
+                        ((AffineTransform2D) mt)
+                                .getParameterValues()
+                                .getDescriptor()
+                                .getName()
+                                .getCode();
             } else {
                 methodName = mt.getClass().getSimpleName();
             }
@@ -64,26 +73,34 @@
         }
         Map<String, String> props = new HashMap<String, String>();
         props.put("name", methodName);
-        
+
         // Create the OperationMethod
-        OperationMethod method = new DefaultOperationMethod(props,
-                mt2.getSourceDimensions(), mt2.getTargetDimensions(), null);
-        
+        OperationMethod method =
+                new DefaultOperationMethod(
+                        props, mt2.getSourceDimensions(), mt2.getTargetDimensions(), null);
+
         // Finally create CoordinateOperation
         CoordinateOperation coordop = null;
         if (!inverse) { // Direct operation
             props.put("name", sourceCRS + " \u21E8 " + targetCRS);
-            coordop = DefaultOperation.create(props, source, target,
-                    mt2, method, CoordinateOperation.class);
+            coordop =
+                    DefaultOperation.create(
+                            props, source, target, mt2, method, CoordinateOperation.class);
         } else { // Inverse operation
             try {
                 props.put("name", targetCRS + " \u21E8 " + sourceCRS);
-                coordop = DefaultOperation.create(props, target, source,
-                    mt2.inverse(), method, CoordinateOperation.class);
+                coordop =
+                        DefaultOperation.create(
+                                props,
+                                target,
+                                source,
+                                mt2.inverse(),
+                                method,
+                                CoordinateOperation.class);
             } catch (NoninvertibleTransformException e) {
                 return null;
-            }        
+            }
         }
         return coordop;
-    }    
+    }
 

@@ -1,95 +1,86 @@
     /**
-	 * Requesting an intersecting area at a much smaller resolution.
-	 * 
-	 * 1) The computed resolution should be much coarser.
-	 * 2) The computed BBOX and the Computed raster area should be equal to the requested ones
-	 * 
-	 * @throws Exception
-	 */
+     * Requesting an intersecting area at a much smaller resolution.
+     *
+     * <p>1) The computed resolution should be much coarser. 2) The computed BBOX and the Computed
+     * raster area should be equal to the requested ones
+     *
+     * @throws Exception
+     */
     @Test
     public void testBasic3() throws Exception {
-    	
-    	// using CoverageProperties to build the SpatialRequestHelper
+
+        // using CoverageProperties to build the SpatialRequestHelper
         CoverageProperties coverageProperties = new CoverageProperties();
 
         // source area in project crs
         CoordinateReferenceSystem sourceCRS = DefaultGeographicCRS.WGS84;
-		ReferencedEnvelope sourceBBox = new ReferencedEnvelope(
-        		-180,100,
-        		-20,90, 
-        		sourceCRS);
-		coverageProperties.setBBox(sourceBBox);
+        ReferencedEnvelope sourceBBox = new ReferencedEnvelope(-180, 100, -20, 90, sourceCRS);
+        coverageProperties.setBBox(sourceBBox);
         coverageProperties.setCrs2D(sourceCRS);
-		
-		//raster area
-        Rectangle sourceRasterArea = new Rectangle(0,0,1000,1000);
-		coverageProperties.setRasterArea(sourceRasterArea);
 
-		// creating the g2d
-        final GridToEnvelopeMapper geMapper = new GridToEnvelopeMapper(
-        		new GridEnvelope2D(sourceRasterArea), 
-        		sourceBBox);
+        // raster area
+        Rectangle sourceRasterArea = new Rectangle(0, 0, 1000, 1000);
+        coverageProperties.setRasterArea(sourceRasterArea);
+
+        // creating the g2d
+        final GridToEnvelopeMapper geMapper =
+                new GridToEnvelopeMapper(new GridEnvelope2D(sourceRasterArea), sourceBBox);
         AffineTransform sourceGridToWorldTransform = geMapper.createAffineTransform();
-		coverageProperties.setGridToWorld2D((MathTransform2D) sourceGridToWorldTransform);
-        coverageProperties.setFullResolution(new double[]{
-        		XAffineTransform.getScaleX0(sourceGridToWorldTransform),
-        		XAffineTransform.getScaleY0(sourceGridToWorldTransform)
-        		});
+        coverageProperties.setGridToWorld2D((MathTransform2D) sourceGridToWorldTransform);
+        coverageProperties.setFullResolution(
+                new double[] {
+                    XAffineTransform.getScaleX0(sourceGridToWorldTransform),
+                    XAffineTransform.getScaleY0(sourceGridToWorldTransform)
+                });
         coverageProperties.setGeographicBBox(sourceBBox);
         coverageProperties.setGeographicCRS2D(DefaultGeographicCRS.WGS84);
         SpatialRequestHelper spatialRequestHelper = new SpatialRequestHelper(coverageProperties);
-        
+
         //
         // now the target request
         //
         spatialRequestHelper.setAccurateResolution(false);
-		ReferencedEnvelope requestedBBox = new ReferencedEnvelope(
-        		0,180,
-        		0,90, 
-        		sourceCRS);        
-        GridEnvelope2D requestedRasterArea = new GridEnvelope2D(0,0,250,250);
-		spatialRequestHelper.setRequestedGridGeometry(new GridGeometry2D(
-        		requestedRasterArea, 
-        		new GeneralEnvelope(requestedBBox)));
-        
-        
+        ReferencedEnvelope requestedBBox = new ReferencedEnvelope(0, 180, 0, 90, sourceCRS);
+        GridEnvelope2D requestedRasterArea = new GridEnvelope2D(0, 0, 250, 250);
+        spatialRequestHelper.setRequestedGridGeometry(
+                new GridGeometry2D(requestedRasterArea, new GeneralEnvelope(requestedBBox)));
+
         ///// TEST
         spatialRequestHelper.compute();
         assertFalse(spatialRequestHelper.isEmpty());
         assertFalse(spatialRequestHelper.isNeedsReprojection()); // no reprojection
-        
+
         // computed bbox is equal to requestede bbox
         BoundingBox computedBBox = spatialRequestHelper.getComputedBBox();
         assertFalse(computedBBox.isEmpty());
-        ReferencedEnvelope finalReferencedEnvelope = new ReferencedEnvelope(
-        		0,100,
-        		0,90, 
-        		sourceCRS);
-		assertTrue(computedBBox.equals(finalReferencedEnvelope));
-		
+        ReferencedEnvelope finalReferencedEnvelope =
+                new ReferencedEnvelope(0, 100, 0, 90, sourceCRS);
+        assertTrue(computedBBox.equals(finalReferencedEnvelope));
+
         // computed raster area is equal to requested raster area
         Rectangle computedRasterArea = spatialRequestHelper.getComputedRasterArea();
         assertFalse(computedRasterArea.isEmpty());
-        GridToEnvelopeMapper gridToEnvelopeMapper = new GridToEnvelopeMapper(
-				new GridEnvelope2D(requestedRasterArea), 
-				requestedBBox);
+        GridToEnvelopeMapper gridToEnvelopeMapper =
+                new GridToEnvelopeMapper(new GridEnvelope2D(requestedRasterArea), requestedBBox);
         gridToEnvelopeMapper.setPixelAnchor(PixelInCell.CELL_CORNER);
-		assertEquals(computedRasterArea, CRS.transform(gridToEnvelopeMapper.createTransform().inverse(), computedBBox).toRectangle2D().getBounds());
-        
+        assertEquals(
+                computedRasterArea,
+                CRS.transform(gridToEnvelopeMapper.createTransform().inverse(), computedBBox)
+                        .toRectangle2D()
+                        .getBounds());
 
-        
         // g2w transform
-		// all this intersecting and so on MUST not impact the requested resolutions
+        // all this intersecting and so on MUST not impact the requested resolutions
         AffineTransform computedG2W = spatialRequestHelper.getComputedGridToWorld();
         assertNotNull(computedG2W);
         double[] computedResolution = spatialRequestHelper.getComputedResolution();
-        double[] expectedResolution=new double[]{
-        		XAffineTransform.getScaleX0(gridToEnvelopeMapper.createAffineTransform()),
-        		XAffineTransform.getScaleY0(gridToEnvelopeMapper.createAffineTransform())};
+        double[] expectedResolution =
+                new double[] {
+                    XAffineTransform.getScaleX0(gridToEnvelopeMapper.createAffineTransform()),
+                    XAffineTransform.getScaleY0(gridToEnvelopeMapper.createAffineTransform())
+                };
         assertNotNull(computedResolution);
-        assertEquals(expectedResolution[0],computedResolution[0],1E-6);
-        assertEquals(expectedResolution[1],computedResolution[1],1E-6);
-        
-        
+        assertEquals(expectedResolution[0], computedResolution[0], 1E-6);
+        assertEquals(expectedResolution[1], computedResolution[1], 1E-6);
     }
 

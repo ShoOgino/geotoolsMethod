@@ -1,42 +1,50 @@
         private void stream(SimpleFeature feature, FCBuffer featureCollectionBuffer)
-            throws SAXNotSupportedException, SAXException {
+                throws SAXNotSupportedException, SAXException {
             if (!featureCollectionBuffer.addFeature(feature)) {
                 throw new SAXException("Buffer overflow");
             }
 
             if (featureCollectionBuffer.state <= 0) {
                 switch (featureCollectionBuffer.state) {
-                case FCBuffer.STOP:
-                    throw new StopException(); // alternative to stop()
+                    case FCBuffer.STOP:
+                        throw new StopException(); // alternative to stop()
 
-                case FCBuffer.FINISH:
-                    return;
+                    case FCBuffer.FINISH:
+                        return;
 
-                default:
-                    featureCollectionBuffer.state = (featureCollectionBuffer
-                        .getCapacity() - featureCollectionBuffer.getSize()) / 3;
-                    logger.finest("New State " + featureCollectionBuffer.state
-                        + " " + featureCollectionBuffer.getSize());
+                    default:
+                        featureCollectionBuffer.state =
+                                (featureCollectionBuffer.getCapacity()
+                                                - featureCollectionBuffer.getSize())
+                                        / 3;
+                        logger.finest(
+                                "New State "
+                                        + featureCollectionBuffer.state
+                                        + " "
+                                        + featureCollectionBuffer.getSize());
 
-                    while (featureCollectionBuffer.getSize() > (featureCollectionBuffer
-                            .getCapacity() - 1)) {
-                        logger.finest("waiting for reader");
-                        synchronized (featureCollectionBuffer) {
-                            try {
-                                featureCollectionBuffer.wait(100);
-                            } catch (InterruptedException e) {
-                                throw new StopException();  // alternative to stop()
+                        while (featureCollectionBuffer.getSize()
+                                > (featureCollectionBuffer.getCapacity() - 1)) {
+                            logger.finest("waiting for reader");
+                            synchronized (featureCollectionBuffer) {
+                                try {
+                                    featureCollectionBuffer.wait(100);
+                                } catch (InterruptedException e) {
+                                    throw new StopException(); // alternative to stop()
+                                }
                             }
+                            //                        Thread.yield();
+                            if (featureCollectionBuffer.state == FCBuffer.STOP)
+                                throw new StopException(); // alternative to stop()
                         }
-//                        Thread.yield();
-                        if(featureCollectionBuffer.state == FCBuffer.STOP)
-                        	throw new StopException(); // alternative to stop()
-                    }
                 }
             } else {
                 featureCollectionBuffer.state--;
-                logger.finest("New State " + featureCollectionBuffer.state
-                    + " " + featureCollectionBuffer.getSize());
+                logger.finest(
+                        "New State "
+                                + featureCollectionBuffer.state
+                                + " "
+                                + featureCollectionBuffer.getSize());
             }
         }
 

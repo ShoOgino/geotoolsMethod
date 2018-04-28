@@ -1,14 +1,15 @@
     @Override
-    public long submit(MapContent mapContent, 
+    public long submit(
+            MapContent mapContent,
             List<RenderingOperands> operands,
             RenderingExecutorListener listener) {
-        
+
         long rtnValue = RenderingExecutor.TASK_REJECTED;
-        
+
         if (taskExecutor.isShutdown()) {
             throw new IllegalStateException("Calling submit after the executor has been shutdown");
         }
-        
+
         if (mapContent == null) {
             throw new IllegalArgumentException("mapContent must not be null");
         }
@@ -21,30 +22,31 @@
         if (listener == null) {
             throw new IllegalArgumentException("listener must not be null");
         }
-        
+
         if (tasksLatch.getCount() == 0) {
             tasksLatch = new CountDownLatch(operands.size());
-            
+
             long id = NEXT_ID.getAndIncrement();
             RenderingExecutorEvent event = new RenderingExecutorEvent(this, id);
             listener.onRenderingStarted(event);
-            
+
             // Clone the viewport and mark it as not editable to prevent
             // the temporary MapContents created below from changing it
             MapViewport vp = new MapViewport(mapContent.getViewport());
             vp.setEditable(false);
-            
+
             for (RenderingOperands op : operands) {
                 MapContent mc = new SingleLayerMapContent(op.getLayer());
                 mc.setViewport(vp);
                 op.getRenderer().setMapContent(mc);
-                RenderingTask task = new RenderingTask(mapContent, op.getGraphics(), op.getRenderer());
+                RenderingTask task =
+                        new RenderingTask(mapContent, op.getGraphics(), op.getRenderer());
                 Future<Boolean> future = taskExecutor.submit(task);
-                currentTasks.add( new TaskInfo(id, task, mc, future, listener) );
+                currentTasks.add(new TaskInfo(id, task, mc, future, listener));
             }
             rtnValue = id;
         }
-        
+
         return rtnValue;
     }
 

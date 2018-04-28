@@ -1,12 +1,15 @@
     /**
      * Computes the column metadata by running the virtual table query
+     *
      * @param cx
      * @param vtable
      * @param dialect
      * @return
      * @throws SQLException
      */
-    static List<ColumnMetadata> getColumnMetadata(Connection cx, VirtualTable vtable, SQLDialect dialect, JDBCDataStore store) throws SQLException {
+    static List<ColumnMetadata> getColumnMetadata(
+            Connection cx, VirtualTable vtable, SQLDialect dialect, JDBCDataStore store)
+            throws SQLException {
         List<ColumnMetadata> result = new ArrayList<ColumnMetadata>();
 
         Statement st = null;
@@ -21,17 +24,17 @@
             sb.append(")");
             dialect.encodeTableAlias("vtable", sb);
             // state we don't want rows, we just want to gather the results metadata
-            sb.append( " where 1 = 0");
+            sb.append(" where 1 = 0");
             sql = sb.toString();
-            
+
             st = cx.createStatement();
-            
+
             LOGGER.log(Level.FINE, "Gathering sql view result structure: {0}", sql);
-            
+
             rs = st.executeQuery(sql);
-            
+
             ResultSetMetaData metadata = rs.getMetaData();
-            for(int i = 1; i < metadata.getColumnCount() + 1; i++) {
+            for (int i = 1; i < metadata.getColumnCount() + 1; i++) {
                 ColumnMetadata column = new ColumnMetadata();
                 column.name = metadata.getColumnLabel(i);
                 column.typeName = metadata.getColumnTypeName(i);
@@ -39,12 +42,12 @@
                 column.nullable = metadata.isNullable(i) != ResultSetMetaData.columnNoNulls;
                 column.srid = vtable.getNativeSrid(column.name);
                 column.binding = vtable.getGeometryType(column.name);
-                if(column.binding == null) {
+                if (column.binding == null) {
                     // determine from type mappings
                     column.binding = store.getMapping(column.typeName);
-    
+
                     if (column.binding == null) {
-                        //determine from type name mappings
+                        // determine from type name mappings
                         column.binding = store.getMapping(column.sqlType);
                     }
                 }
@@ -54,7 +57,7 @@
             store.closeSafe(st);
             store.closeSafe(rs);
         }
-        
+
         return result;
     }
 

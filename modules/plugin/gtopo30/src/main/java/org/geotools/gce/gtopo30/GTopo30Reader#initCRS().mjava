@@ -1,88 +1,89 @@
-	/**
-	 * This method is responsible for the creation of the CRS for this GTOPO30.
-	 * The possible options are two, EPSG:4326 and POlar Stereographc. Inc ase
-	 * an error occurs the default CRS is chosen.
-	 * 
-	 * @return CoordinateReferenceSystem a CRS for this coverage.
-	 * @throws IOException
-	 * @throws FactoryException
-	 */
-	private CoordinateReferenceSystem initCRS() {
-		BufferedReader reader = null;
-		try {
-			// getting a reader
-			reader = new BufferedReader(new FileReader(URLs.urlToFile(prjURL)));
+    /**
+     * This method is responsible for the creation of the CRS for this GTOPO30. The possible options
+     * are two, EPSG:4326 and POlar Stereographc. Inc ase an error occurs the default CRS is chosen.
+     *
+     * @return CoordinateReferenceSystem a CRS for this coverage.
+     * @throws IOException
+     * @throws FactoryException
+     */
+    private CoordinateReferenceSystem initCRS() {
+        BufferedReader reader = null;
+        try {
+            // getting a reader
+            reader = new BufferedReader(new FileReader(URLs.urlToFile(prjURL)));
 
-			// reading the first line to see if I need to read it all
-			final StringBuilder buffer = new StringBuilder(reader.readLine());
+            // reading the first line to see if I need to read it all
+            final StringBuilder buffer = new StringBuilder(reader.readLine());
 
-			if (buffer != null) {
-				String line = buffer.toString().trim();
+            if (buffer != null) {
+                String line = buffer.toString().trim();
 
-				if (!line.endsWith("POLAR") && !line.endsWith("GEOGRAPHIC")) {
-					// in case I have a wkt string a need to read it all
-					while ((line = reader.readLine()) != null)
-						buffer.append(line);
-				}
-			}
-			// closing the reader
-			reader.close();
-			// getting the content
-			final String crsDescription = buffer.toString().trim();
-			final DefaultGeographicCRS geoCRS = (DefaultGeographicCRS) CRS
-					.decode("EPSG:4326", true);
-			if (crsDescription != null) {
-				if (crsDescription.endsWith("POLAR")) {
-					// we need to build a polar stereographic crs based on wgs
-					// 84. I am not so sure about the parameters I used. we
-					// should check them again
+                if (!line.endsWith("POLAR") && !line.endsWith("GEOGRAPHIC")) {
+                    // in case I have a wkt string a need to read it all
+                    while ((line = reader.readLine()) != null) buffer.append(line);
+                }
+            }
+            // closing the reader
+            reader.close();
+            // getting the content
+            final String crsDescription = buffer.toString().trim();
+            final DefaultGeographicCRS geoCRS =
+                    (DefaultGeographicCRS) CRS.decode("EPSG:4326", true);
+            if (crsDescription != null) {
+                if (crsDescription.endsWith("POLAR")) {
+                    // we need to build a polar stereographic crs based on wgs
+                    // 84. I am not so sure about the parameters I used. we
+                    // should check them again
 
-					final CartesianCS cartCS = org.geotools.referencing.cs.DefaultCartesianCS.PROJECTED;
-					final MathTransformFactory mtFactory = ReferencingFactoryFinder
-							.getMathTransformFactory(null);
-					final ParameterValueGroup parameters = mtFactory
-							.getDefaultParameters("Polar_Stereographic");
-					parameters.parameter("central_meridian").setValue(0.0);
-					parameters.parameter("latitude_of_origin").setValue(-71.0);
-					parameters.parameter("scale_factor").setValue(1);
-					parameters.parameter("false_easting").setValue(0.0);
-					parameters.parameter("false_northing").setValue(0.0);
-					final ReferencingFactoryContainer factories =
-					    ReferencingFactoryContainer.instance(null);
-					final Map<String,String> properties = Collections.singletonMap("name",
-							"WGS 84 / Antartic Polar Stereographic");
+                    final CartesianCS cartCS =
+                            org.geotools.referencing.cs.DefaultCartesianCS.PROJECTED;
+                    final MathTransformFactory mtFactory =
+                            ReferencingFactoryFinder.getMathTransformFactory(null);
+                    final ParameterValueGroup parameters =
+                            mtFactory.getDefaultParameters("Polar_Stereographic");
+                    parameters.parameter("central_meridian").setValue(0.0);
+                    parameters.parameter("latitude_of_origin").setValue(-71.0);
+                    parameters.parameter("scale_factor").setValue(1);
+                    parameters.parameter("false_easting").setValue(0.0);
+                    parameters.parameter("false_northing").setValue(0.0);
+                    final ReferencingFactoryContainer factories =
+                            ReferencingFactoryContainer.instance(null);
+                    final Map<String, String> properties =
+                            Collections.singletonMap(
+                                    "name", "WGS 84 / Antartic Polar Stereographic");
 
-					return factories.createProjectedCRS(properties, geoCRS,null, parameters, cartCS);
-				}
+                    return factories.createProjectedCRS(
+                            properties, geoCRS, null, parameters, cartCS);
+                }
 
-				if (crsDescription.endsWith("GEOGRAPHIC")) {
-					// in case I do not have a polar stereographic I build my
-					// own CRS using either the supplied wkt
-					// description or, in case none is supplied, a custom
-					// Geographic WGS84 with lon, lat axes.
-					return geoCRS;
-				}
-				return CRS.parseWKT(crsDescription);
-			}
-		} catch (IOException e) {
-			// do nothing and return a default CRS but write down a message
-			LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
+                if (crsDescription.endsWith("GEOGRAPHIC")) {
+                    // in case I do not have a polar stereographic I build my
+                    // own CRS using either the supplied wkt
+                    // description or, in case none is supplied, a custom
+                    // Geographic WGS84 with lon, lat axes.
+                    return geoCRS;
+                }
+                return CRS.parseWKT(crsDescription);
+            }
+        } catch (IOException e) {
+            // do nothing and return a default CRS but write down a message
+            LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
 
-		} catch (FactoryException e) {
-			// do nothing and return a default CRS but write down a message
-			LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
-		} finally {
-			if (reader != null)
-				try {
-					// freeing
-					reader.close();
-				} catch (Exception e1) {
-				    if(LOGGER.isLoggable(Level.FINE))
-				        LOGGER.log(Level.FINE,e1.getLocalizedMessage(),e1);
-				}
-		}
-                final CoordinateReferenceSystem crs = AbstractGridFormat.getDefaultCRS();
-                LOGGER.info("PRJ file not found, proceeding with default crs");
-                return crs;
-	}
+        } catch (FactoryException e) {
+            // do nothing and return a default CRS but write down a message
+            LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
+        } finally {
+            if (reader != null)
+                try {
+                    // freeing
+                    reader.close();
+                } catch (Exception e1) {
+                    if (LOGGER.isLoggable(Level.FINE))
+                        LOGGER.log(Level.FINE, e1.getLocalizedMessage(), e1);
+                }
+        }
+        final CoordinateReferenceSystem crs = AbstractGridFormat.getDefaultCRS();
+        LOGGER.info("PRJ file not found, proceeding with default crs");
+        return crs;
+    }
 

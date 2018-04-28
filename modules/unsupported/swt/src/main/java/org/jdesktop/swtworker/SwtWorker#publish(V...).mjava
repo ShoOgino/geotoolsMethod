@@ -1,58 +1,50 @@
     /**
-     * Sends data chunks to the {@link #process} method. This method is to be
-     * used from inside the {@code doInBackground} method to deliver 
-     * intermediate results
-     * for processing on the <i>Event Dispatch Thread</i> inside the
-     * {@code process} method.
-     * 
-     * <p>
-     * Because the {@code process} method is invoked asynchronously on
-     * the <i>Event Dispatch Thread</i>
-     * multiple invocations to the {@code publish} method
-     * might occur before the {@code process} method is executed. For
-     * performance purposes all these invocations are coalesced into one
-     * invocation with concatenated arguments.
-     * 
-     * <p>
-     * For example:
-     * 
+     * Sends data chunks to the {@link #process} method. This method is to be used from inside the
+     * {@code doInBackground} method to deliver intermediate results for processing on the <i>Event
+     * Dispatch Thread</i> inside the {@code process} method.
+     *
+     * <p>Because the {@code process} method is invoked asynchronously on the <i>Event Dispatch
+     * Thread</i> multiple invocations to the {@code publish} method might occur before the {@code
+     * process} method is executed. For performance purposes all these invocations are coalesced
+     * into one invocation with concatenated arguments.
+     *
+     * <p>For example:
+     *
      * <pre>
      * publish(&quot;1&quot;);
      * publish(&quot;2&quot;, &quot;3&quot;);
      * publish(&quot;4&quot;, &quot;5&quot;, &quot;6&quot;);
      * </pre>
-     * 
+     *
      * might result in:
-     * 
+     *
      * <pre>
      * process(&quot;1&quot;, &quot;2&quot;, &quot;3&quot;, &quot;4&quot;, &quot;5&quot;, &quot;6&quot;)
      * </pre>
      *
-     * <p>
-     * <b>Sample Usage</b>. This code snippet loads some tabular data and
-     * updates {@code DefaultTableModel} with it. Note that it safe to mutate
-     * the tableModel from inside the {@code process} method because it is 
-     * invoked on the <i>Event Dispatch Thread</i>.
-     * 
+     * <p><b>Sample Usage</b>. This code snippet loads some tabular data and updates {@code
+     * DefaultTableModel} with it. Note that it safe to mutate the tableModel from inside the {@code
+     * process} method because it is invoked on the <i>Event Dispatch Thread</i>.
+     *
      * <pre>
-     * class TableSwingWorker extends 
+     * class TableSwingWorker extends
      *         SwingWorker&lt;DefaultTableModel, Object[]&gt; {
      *     private final DefaultTableModel tableModel;
-     * 
+     *
      *     public TableSwingWorker(DefaultTableModel tableModel) {
      *         this.tableModel = tableModel;
      *     }
-     * 
+     *
      *     {@code @Override}
      *     protected DefaultTableModel doInBackground() throws Exception {
-     *         for (Object[] row = loadData(); 
-     *                  ! isCancelled() &amp;&amp; row != null; 
+     *         for (Object[] row = loadData();
+     *                  ! isCancelled() &amp;&amp; row != null;
      *                  row = loadData()) {
      *             publish((Object[]) row);
      *         }
      *         return tableModel;
      *     }
-     * 
+     *
      *     {@code @Override}
      *     protected void process(List&lt;Object[]&gt; chunks) {
      *         for (Object[] row : chunks) {
@@ -61,25 +53,25 @@
      *     }
      * }
      * </pre>
-     * 
+     *
      * @param chunks intermediate results to process
-     * 
      * @see #process
-     * 
      */
-    protected final void publish( V... chunks ) {
+    protected final void publish(V... chunks) {
         synchronized (this) {
             if (doProcess == null) {
-                doProcess = new AccumulativeRunnable<V>(){
-                    @Override
-                    public void run( List<V> args ) {
-                        process(args);
-                    }
-                    @Override
-                    protected void submit() {
-                        doSubmit.add(this);
-                    }
-                };
+                doProcess =
+                        new AccumulativeRunnable<V>() {
+                            @Override
+                            public void run(List<V> args) {
+                                process(args);
+                            }
+
+                            @Override
+                            protected void submit() {
+                                doSubmit.add(this);
+                            }
+                        };
             }
         }
         doProcess.add(chunks);

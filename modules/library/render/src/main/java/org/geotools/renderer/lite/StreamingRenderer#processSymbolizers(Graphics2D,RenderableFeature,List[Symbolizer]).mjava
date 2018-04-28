@@ -1,29 +1,26 @@
     /**
      * Applies each of a set of symbolizers in turn to a given feature.
-     * <p>
-     * This is an internal method and should only be called by processStylers.
-     * </p>
-     * @param currLayer 
-     * 
+     *
+     * <p>This is an internal method and should only be called by processStylers.
+     *
+     * @param currLayer
      * @param graphics
-     * @param drawMe
-     *            The feature to be rendered
-     * @param symbolizers
-     *            An array of symbolizers which actually perform the rendering.
-     *            The scale range we are working on... provided in order to make
-     *            the style factory happy
+     * @param drawMe The feature to be rendered
+     * @param symbolizers An array of symbolizers which actually perform the rendering. The scale
+     *     range we are working on... provided in order to make the style factory happy
      * @param shape
      * @param destinationCrs
-     * @param layerId 
+     * @param layerId
      * @throws TransformException
      * @throws FactoryException
      */
-    private int processSymbolizers(final Graphics2D graphics,
+    private int processSymbolizers(
+            final Graphics2D graphics,
             final RenderableFeature drawMe,
             final List<Symbolizer> symbolizers)
             throws Exception {
         int paintCommands = 0;
-        
+
         for (Symbolizer symbolizer : symbolizers) {
 
             // /////////////////////////////////////////////////////////////////
@@ -35,7 +32,7 @@
                 // grab the grid coverage
                 GridCoverage2D coverage = null;
                 boolean disposeCoverage = false;
-                
+
                 try {
                     // //
                     // It is a grid coverage
@@ -45,24 +42,35 @@
                     ColorMapEntryResolver simplifier = new ColorMapEntryResolver();
                     symbolizer.accept(simplifier);
                     final RasterSymbolizer rs = (RasterSymbolizer) simplifier.getCopy();
-                    
+
                     if (grid instanceof GridCoverage2D) {
                         coverage = (GridCoverage2D) grid;
                         if (coverage != null) {
                             disposeCoverage = grid instanceof DisposableGridCoverage;
-                            requests.put(new RenderRasterRequest(graphics, coverage,
-                                    disposeCoverage, rs, destinationCrs,
-                                    worldToScreenTransform));
+                            requests.put(
+                                    new RenderRasterRequest(
+                                            graphics,
+                                            coverage,
+                                            disposeCoverage,
+                                            rs,
+                                            destinationCrs,
+                                            worldToScreenTransform));
                             paintCommands++;
                         }
                     } else if (grid instanceof GridCoverage2DReader) {
-                        final GeneralParameterValue[] params = (GeneralParameterValue[]) paramsPropertyName
-                                .evaluate(drawMe.feature);
+                        final GeneralParameterValue[] params =
+                                (GeneralParameterValue[])
+                                        paramsPropertyName.evaluate(drawMe.feature);
                         GridCoverage2DReader reader = (GridCoverage2DReader) grid;
-                        requests.put(new RenderCoverageReaderRequest(graphics, reader, params,
-                                rs, destinationCrs,
-                                worldToScreenTransform,
-                                getRenderingInterpolation(drawMe.layer)));
+                        requests.put(
+                                new RenderCoverageReaderRequest(
+                                        graphics,
+                                        reader,
+                                        params,
+                                        rs,
+                                        destinationCrs,
+                                        worldToScreenTransform,
+                                        getRenderingInterpolation(drawMe.layer)));
                     }
                 } catch (IllegalArgumentException e) {
                     LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
@@ -76,50 +84,71 @@
                 //
                 // /////////////////////////////////////////////////////////////////
                 LiteShape2 shape = drawMe.getShape(symbolizer, worldToScreenTransform);
-                if(shape == null) {
+                if (shape == null) {
                     continue;
                 }
-                
+
                 if (symbolizer instanceof TextSymbolizer && drawMe.feature instanceof Feature) {
-                    labelCache.put(drawMe.layerId, (TextSymbolizer) symbolizer, drawMe.feature,
+                    labelCache.put(
+                            drawMe.layerId,
+                            (TextSymbolizer) symbolizer,
+                            drawMe.feature,
                             shape,
                             null);
                     paintCommands++;
                 } else {
                     Style2D style = styleFactory.createStyle(drawMe.feature, symbolizer);
-                    
-                    // clip to the visible area + the size of the symbolizer (with some extra 
+
+                    // clip to the visible area + the size of the symbolizer (with some extra
                     // to make sure we get no artifacts from polygon new borders)
                     double size = RendererUtilities.getStyle2DSize(style);
                     // take into account the meta buffer to try and clip all geometries by the same
                     // amount
                     double clipBuffer = Math.max(size / 2, drawMe.metaBuffer) + 10;
-                    Envelope env = new Envelope(screenSize.getMinX(), screenSize.getMaxX(), screenSize.getMinY(), screenSize.getMaxY());
+                    Envelope env =
+                            new Envelope(
+                                    screenSize.getMinX(),
+                                    screenSize.getMaxX(),
+                                    screenSize.getMinY(),
+                                    screenSize.getMaxY());
                     env.expandBy(clipBuffer);
                     final GeometryClipper clipper = new GeometryClipper(env);
                     Geometry source = shape.getGeometry();
-                    // we need to preserve the topology if we end up applying buffer for perp. offset
-                    boolean preserveTopology = style instanceof LineStyle2D && ((LineStyle2D) style).getPerpendicularOffset() != 0 &&
-                            (source instanceof Polygon || source instanceof MultiPolygon);
-                    
+                    // we need to preserve the topology if we end up applying buffer for perp.
+                    // offset
+                    boolean preserveTopology =
+                            style instanceof LineStyle2D
+                                    && ((LineStyle2D) style).getPerpendicularOffset() != 0
+                                    && (source instanceof Polygon
+                                            || source instanceof MultiPolygon);
+
                     Geometry g = clipper.clipSafe(shape.getGeometry(), preserveTopology, 1);
-                    
+
                     // handle perpendincular offset as needed
-                    if(style instanceof LineStyle2D && ((LineStyle2D) style).getPerpendicularOffset() != 0
-                            && g != null && !g.isEmpty()) {
+                    if (style instanceof LineStyle2D
+                            && ((LineStyle2D) style).getPerpendicularOffset() != 0
+                            && g != null
+                            && !g.isEmpty()) {
                         LineStyle2D ls = (LineStyle2D) style;
                         double offset = ls.getPerpendicularOffset();
                         // people applying an offset on a polygon really expect a buffer instead,
-                        // do so... however buffering is damn expensive, so let's apply some heuristics
+                        // do so... however buffering is damn expensive, so let's apply some
+                        // heuristics
                         // to still run the offset curve builder for the simplest cases
-                        if((source instanceof Polygon || source instanceof MultiPolygon) && abs(offset) > 3) {
-                            // buffering is expensive, we can be a bit off with the 
-                            // result, do simplify the geometry first 
-                            Geometry simplified = TopologyPreservingSimplifier.simplify(source, Math.max(abs(offset) / 10, 1));
+                        if ((source instanceof Polygon || source instanceof MultiPolygon)
+                                && abs(offset) > 3) {
+                            // buffering is expensive, we can be a bit off with the
+                            // result, do simplify the geometry first
+                            Geometry simplified =
+                                    TopologyPreservingSimplifier.simplify(
+                                            source, Math.max(abs(offset) / 10, 1));
                             try {
                                 g = simplified.buffer(offset);
-                            } catch(Exception e) {
-                                LOGGER.log(Level.FINE, "Failed to apply JTS buffer to the geometry, falling back on the offset curve builder", e);
+                            } catch (Exception e) {
+                                LOGGER.log(
+                                        Level.FINE,
+                                        "Failed to apply JTS buffer to the geometry, falling back on the offset curve builder",
+                                        e);
                                 OffsetCurveBuilder offseter = new OffsetCurveBuilder(offset);
                                 g = offseter.offset(g);
                             }
@@ -128,24 +157,23 @@
                             g = offseter.offset(g);
                         }
                     }
-                    if(g == null) {
+                    if (g == null) {
                         continue;
                     } else {
                         shape = new LiteShape2(g, null, null, false);
                     }
-                    
-                    PaintShapeRequest paintShapeRequest = 
-                        new PaintShapeRequest(graphics, shape, style, scaleDenominator);
+
+                    PaintShapeRequest paintShapeRequest =
+                            new PaintShapeRequest(graphics, shape, style, scaleDenominator);
                     if (symbolizer.hasOption("labelObstacle")) {
                         paintShapeRequest.setLabelObstacle(true);
                     }
                     requests.put(paintShapeRequest);
                     paintCommands++;
                 }
-
             }
         }
-        
+
         return paintCommands;
     }
 

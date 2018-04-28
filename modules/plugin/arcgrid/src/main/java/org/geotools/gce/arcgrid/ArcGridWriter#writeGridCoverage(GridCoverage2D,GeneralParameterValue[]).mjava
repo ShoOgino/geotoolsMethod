@@ -1,157 +1,160 @@
-	/**
-	 * This method was copied from ArcGridData source
-	 * 
-	 * @param gc
-	 *            the grid coverage that will be written to the destination
-	 * @param parameters
-	 *            to control this writing process
-	 * @param grass
-	 *            tells me whether to write this coverage in the grass format.
-	 * 
-	 * @throws DataSourceException
-	 *             indicates an unexpected exception
-	 */
-	private void writeGridCoverage(GridCoverage2D gc,
-			GeneralParameterValue[] parameters) throws DataSourceException {
-		try {
-			// /////////////////////////////////////////////////////////////////////
-			//
-			// Checking writing params
-			//
-			// /////////////////////////////////////////////////////////////////////
-			GeoToolsWriteParams gtParams = null;
-			boolean grass = false;
-			boolean forceCellSize = false;
-			final String grassParam = ArcGridFormat.GRASS.getName().getCode().toString();
-			final String cellSizeParam = ArcGridFormat.FORCE_CELLSIZE
-					.getName().getCode().toString();
-			if (parameters != null) {
-				for (int i = 0; i < parameters.length; i++) {
-					Parameter param = (Parameter) parameters[i];
-					String name = param.getDescriptor().getName().toString();
-					if (param.getDescriptor().getName().getCode().equals(
-							AbstractGridFormat.GEOTOOLS_WRITE_PARAMS.getName()
-									.toString())) {
-						gtParams = (GeoToolsWriteParams) param.getValue();
-					}
-					if (name.equalsIgnoreCase(grassParam))
-						grass = param.booleanValue();
-					if (name.equalsIgnoreCase(cellSizeParam))
-						forceCellSize = param.booleanValue();
-				}
-			}
-			if (gtParams == null)
-				gtParams = new ArcGridWriteParams();
-			// write band
-			int[] writeBands = gtParams.getSourceBands();
-			writeBand = CoverageUtilities.getVisibleBand(gc.getRenderedImage());
-			if ((writeBands == null || writeBands.length == 0 || writeBands.length > 1)
-					&& (writeBand < 0 || writeBand > gc
-							.getNumSampleDimensions()))
-				throw new IllegalArgumentException(
-						"You need to supply a valid index for deciding which band to write.");
-			if (!((writeBands == null || writeBands.length == 0 || writeBands.length > 1)))
-				writeBand = writeBands[0];
+    /**
+     * This method was copied from ArcGridData source
+     *
+     * @param gc the grid coverage that will be written to the destination
+     * @param parameters to control this writing process
+     * @param grass tells me whether to write this coverage in the grass format.
+     * @throws DataSourceException indicates an unexpected exception
+     */
+    private void writeGridCoverage(GridCoverage2D gc, GeneralParameterValue[] parameters)
+            throws DataSourceException {
+        try {
+            // /////////////////////////////////////////////////////////////////////
+            //
+            // Checking writing params
+            //
+            // /////////////////////////////////////////////////////////////////////
+            GeoToolsWriteParams gtParams = null;
+            boolean grass = false;
+            boolean forceCellSize = false;
+            final String grassParam = ArcGridFormat.GRASS.getName().getCode().toString();
+            final String cellSizeParam =
+                    ArcGridFormat.FORCE_CELLSIZE.getName().getCode().toString();
+            if (parameters != null) {
+                for (int i = 0; i < parameters.length; i++) {
+                    Parameter param = (Parameter) parameters[i];
+                    String name = param.getDescriptor().getName().toString();
+                    if (param.getDescriptor()
+                            .getName()
+                            .getCode()
+                            .equals(
+                                    AbstractGridFormat.GEOTOOLS_WRITE_PARAMS
+                                            .getName()
+                                            .toString())) {
+                        gtParams = (GeoToolsWriteParams) param.getValue();
+                    }
+                    if (name.equalsIgnoreCase(grassParam)) grass = param.booleanValue();
+                    if (name.equalsIgnoreCase(cellSizeParam)) forceCellSize = param.booleanValue();
+                }
+            }
+            if (gtParams == null) gtParams = new ArcGridWriteParams();
+            // write band
+            int[] writeBands = gtParams.getSourceBands();
+            writeBand = CoverageUtilities.getVisibleBand(gc.getRenderedImage());
+            if ((writeBands == null || writeBands.length == 0 || writeBands.length > 1)
+                    && (writeBand < 0 || writeBand > gc.getNumSampleDimensions()))
+                throw new IllegalArgumentException(
+                        "You need to supply a valid index for deciding which band to write.");
+            if (!((writeBands == null || writeBands.length == 0 || writeBands.length > 1)))
+                writeBand = writeBands[0];
 
-			// /////////////////////////////////////////////////////////////////
-			//
-			// Getting CRS and envelope information
-			//
-			// /////////////////////////////////////////////////////////////////
-			final CoordinateReferenceSystem crs = gc.getCoordinateReferenceSystem2D();
+            // /////////////////////////////////////////////////////////////////
+            //
+            // Getting CRS and envelope information
+            //
+            // /////////////////////////////////////////////////////////////////
+            final CoordinateReferenceSystem crs = gc.getCoordinateReferenceSystem2D();
 
-			// /////////////////////////////////////////////////////////////////
-			//
-			// getting visible band, if needed
-			// /////////////////////////////////////////////////////////////////
-			final int numBands = gc.getNumSampleDimensions();
-			if (numBands > 1) {
-				final int visibleBand;
-				if (writeBand > 0 && writeBand < numBands)
-					visibleBand = writeBand;
-				else
-					visibleBand = CoverageUtilities.getVisibleBand(gc);
+            // /////////////////////////////////////////////////////////////////
+            //
+            // getting visible band, if needed
+            // /////////////////////////////////////////////////////////////////
+            final int numBands = gc.getNumSampleDimensions();
+            if (numBands > 1) {
+                final int visibleBand;
+                if (writeBand > 0 && writeBand < numBands) visibleBand = writeBand;
+                else visibleBand = CoverageUtilities.getVisibleBand(gc);
 
-				final ParameterValueGroup param = (ParameterValueGroup)processor.getOperation(
-						"SelectSampleDimension").getParameters()
-						.clone();
-				param.parameter("source").setValue(gc);
-				param.parameter("SampleDimensions").setValue(
-						new int[] { visibleBand });
-				gc = (GridCoverage2D) ((SelectSampleDimension)processor.getOperation(
-						"SelectSampleDimension"))
-						.doOperation(param, null);
-			}
-			// /////////////////////////////////////////////////////////////////
-			//
-			// checking if the coverage needs to be resampled in order to have
-			// square pixels for the esri format
-			//
-			// /////////////////////////////////////////////////////////////////
-			if (!grass && forceCellSize)
-				gc = reShapeData(gc,hints);
+                final ParameterValueGroup param =
+                        (ParameterValueGroup)
+                                processor
+                                        .getOperation("SelectSampleDimension")
+                                        .getParameters()
+                                        .clone();
+                param.parameter("source").setValue(gc);
+                param.parameter("SampleDimensions").setValue(new int[] {visibleBand});
+                gc =
+                        (GridCoverage2D)
+                                ((SelectSampleDimension)
+                                                processor.getOperation("SelectSampleDimension"))
+                                        .doOperation(param, null);
+            }
+            // /////////////////////////////////////////////////////////////////
+            //
+            // checking if the coverage needs to be resampled in order to have
+            // square pixels for the esri format
+            //
+            // /////////////////////////////////////////////////////////////////
+            if (!grass && forceCellSize) gc = reShapeData(gc, hints);
 
-			// /////////////////////////////////////////////////////////////////
-			//
-			// Preparing to write header information
-			//
-			// /////////////////////////////////////////////////////////////////
-			// getting the new envelope after the reshaping
-			final Envelope newEnv = gc.getEnvelope2D();
+            // /////////////////////////////////////////////////////////////////
+            //
+            // Preparing to write header information
+            //
+            // /////////////////////////////////////////////////////////////////
+            // getting the new envelope after the reshaping
+            final Envelope newEnv = gc.getEnvelope2D();
 
-			// trying to prepare the header
-			final AffineTransform gridToWorld = (AffineTransform) ((GridGeometry2D) gc
-					.getGridGeometry()).getGridToCRS2D();
-			final double xl = newEnv.getLowerCorner().getOrdinate(0);
-			final double yl = newEnv.getLowerCorner().getOrdinate(1);
-			final double cellsizeX = Math.abs(gridToWorld.getScaleX());
-			final double cellsizeY = Math.abs(gridToWorld.getScaleY());
+            // trying to prepare the header
+            final AffineTransform gridToWorld =
+                    (AffineTransform) ((GridGeometry2D) gc.getGridGeometry()).getGridToCRS2D();
+            final double xl = newEnv.getLowerCorner().getOrdinate(0);
+            final double yl = newEnv.getLowerCorner().getOrdinate(1);
+            final double cellsizeX = Math.abs(gridToWorld.getScaleX());
+            final double cellsizeY = Math.abs(gridToWorld.getScaleY());
 
-			// /////////////////////////////////////////////////////////////////
-			//	
-			// Preparing source image and metadata
-			//
-			// /////////////////////////////////////////////////////////////////
-			final RenderedImage source = gc.getRenderedImage();
-			final int cols = source.getWidth();
-			final int rows = source.getHeight();
+            // /////////////////////////////////////////////////////////////////
+            //
+            // Preparing source image and metadata
+            //
+            // /////////////////////////////////////////////////////////////////
+            final RenderedImage source = gc.getRenderedImage();
+            final int cols = source.getWidth();
+            final int rows = source.getHeight();
 
-			// Preparing main parameters for JAI imageWrite Operation
-			// //
-			// Setting Output
-			// //
-			//mWriter.reset();
-			mWriter.setOutput(outStream);
+            // Preparing main parameters for JAI imageWrite Operation
+            // //
+            // Setting Output
+            // //
+            // mWriter.reset();
+            mWriter.setOutput(outStream);
 
-			// //
-			// no data management
-			// //
-			double inNoData = getCandidateNoData(gc);
+            // //
+            // no data management
+            // //
+            double inNoData = getCandidateNoData(gc);
 
-			// //
-			// Construct a proper asciiGridRaster which supports metadata
-			// setting
-			// //
+            // //
+            // Construct a proper asciiGridRaster which supports metadata
+            // setting
+            // //
 
-			// Setting the source for the image write operation
-			mWriter.write(null, new IIOImage(source, null,
-					new AsciiGridsImageMetadata(cols, rows, cellsizeX,cellsizeY, xl, yl,  true,grass, inNoData)), null);
+            // Setting the source for the image write operation
+            mWriter.write(
+                    null,
+                    new IIOImage(
+                            source,
+                            null,
+                            new AsciiGridsImageMetadata(
+                                    cols, rows, cellsizeX, cellsizeY, xl, yl, true, grass,
+                                    inNoData)),
+                    null);
 
-			// writing crs info
-			writeCRSInfo(crs);
+            // writing crs info
+            writeCRSInfo(crs);
 
-			// /////////////////////////////////////////////////////////////////
-			//
-			// Creating the imageWrite Operation
-			//
-			// /////////////////////////////////////////////////////////////////
-		} catch (IOException e) {
-			if (LOGGER.isLoggable(Level.SEVERE))
-				LOGGER.log(Level.SEVERE, e.getLocalizedMessage(), e);
-			throw new DataSourceException(e);
-		}finally{
+            // /////////////////////////////////////////////////////////////////
+            //
+            // Creating the imageWrite Operation
+            //
+            // /////////////////////////////////////////////////////////////////
+        } catch (IOException e) {
+            if (LOGGER.isLoggable(Level.SEVERE))
+                LOGGER.log(Level.SEVERE, e.getLocalizedMessage(), e);
+            throw new DataSourceException(e);
+        } finally {
 
-			mWriter.dispose();
-		}
-	}
+            mWriter.dispose();
+        }
+    }
 

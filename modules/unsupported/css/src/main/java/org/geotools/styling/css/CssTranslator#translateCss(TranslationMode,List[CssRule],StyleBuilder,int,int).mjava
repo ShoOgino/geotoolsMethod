@@ -1,5 +1,9 @@
-    private int translateCss(TranslationMode mode, List<CssRule> allRules,
-            StyleBuilder styleBuilder, int maxCombinations, int autoThreshold) {
+    private int translateCss(
+            TranslationMode mode,
+            List<CssRule> allRules,
+            StyleBuilder styleBuilder,
+            int maxCombinations,
+            int autoThreshold) {
         // split rules by index and typename, then build the power set for each group and
         // generate the rules and symbolizers
         Map<Integer, List<CssRule>> zIndexRules = organizeByZIndex(allRules);
@@ -16,19 +20,21 @@
             for (Map.Entry<String, List<CssRule>> entry : typenameRules.entrySet()) {
                 String featureTypeName = entry.getKey();
                 List<CssRule> localRules = entry.getValue();
-                final FeatureType targetFeatureType = getTargetFeatureType(featureTypeName,
-                        localRules);
+                final FeatureType targetFeatureType =
+                        getTargetFeatureType(featureTypeName, localRules);
                 if (targetFeatureType != null) {
                     // attach the target feature type to all Data selectors to allow range based
                     // simplification
                     for (CssRule rule : localRules) {
-                        rule.getSelector().accept(new AbstractSelectorVisitor() {
-                            @Override
-                            public Object visit(Data data) {
-                                data.featureType = targetFeatureType;
-                                return super.visit(data);
-                            }
-                        });
+                        rule.getSelector()
+                                .accept(
+                                        new AbstractSelectorVisitor() {
+                                            @Override
+                                            public Object visit(Data data) {
+                                                data.featureType = targetFeatureType;
+                                                return super.visit(data);
+                                            }
+                                        });
                     }
                 }
                 // at this point we can have rules with selectors having two scale ranges
@@ -39,26 +45,30 @@
                 // be quite complicated to un-tangle)
                 List<CssRule> flattenedRules = flattenScaleRanges(localRules);
                 if (LOGGER.isLoggable(Level.FINE)) {
-                    LOGGER.fine("Preparing power set expansion with " + flattenedRules.size()
-                            + "  rules for feature type: " + featureTypeName);
+                    LOGGER.fine(
+                            "Preparing power set expansion with "
+                                    + flattenedRules.size()
+                                    + "  rules for feature type: "
+                                    + featureTypeName);
                 }
                 // The simplifying visitor that will cache the results to avoid re-computing
                 // over and over the same simplifications
-                CachedSimplifyingFilterVisitor cachedSimplifier = new CachedSimplifyingFilterVisitor(
-                        targetFeatureType);
-                RulePowerSetBuilder builder = new RulePowerSetBuilder(flattenedRules,
-                        cachedSimplifier, maxCombinations) {
-                    @Override
-                    protected java.util.List<CssRule> buildResult(java.util.List<CssRule> rules) {
-                        if (zIndex != null && zIndex > 0) {
-                            TreeSet<Integer> zIndexes = getZIndexesForRules(rules);
-                            if (!zIndexes.contains(zIndex)) {
-                                return null;
+                CachedSimplifyingFilterVisitor cachedSimplifier =
+                        new CachedSimplifyingFilterVisitor(targetFeatureType);
+                RulePowerSetBuilder builder =
+                        new RulePowerSetBuilder(flattenedRules, cachedSimplifier, maxCombinations) {
+                            @Override
+                            protected java.util.List<CssRule> buildResult(
+                                    java.util.List<CssRule> rules) {
+                                if (zIndex != null && zIndex > 0) {
+                                    TreeSet<Integer> zIndexes = getZIndexesForRules(rules);
+                                    if (!zIndexes.contains(zIndex)) {
+                                        return null;
+                                    }
+                                }
+                                return super.buildResult(rules);
                             }
-                        }
-                        return super.buildResult(rules);
-                    }
-                };
+                        };
                 List<CssRule> combinedRules = builder.buildPowerSet();
                 if (combinedRules.isEmpty()) {
                     continue;
@@ -68,7 +78,8 @@
                 // regardless of the translation mode, the first rule matching is
                 // the only one that we want to be applied (in exclusive mode it will be
                 // the only one matching, the simple mode we want the evaluation to stop there)
-                ftsBuilder.option(FeatureTypeStyle.KEY_EVALUATION_MODE,
+                ftsBuilder.option(
+                        FeatureTypeStyle.KEY_EVALUATION_MODE,
                         FeatureTypeStyle.VALUE_EVALUATION_MODE_FIRST);
 
                 if (featureTypeName != null) {
@@ -78,8 +89,10 @@
                 Collections.sort(combinedRules, CssRuleComparator.DESCENDING);
                 int rulesCount = combinedRules.size();
                 if (LOGGER.isLoggable(Level.FINE)) {
-                    LOGGER.fine("Generated " + rulesCount
-                            + " combined rules after filtered power set expansion");
+                    LOGGER.fine(
+                            "Generated "
+                                    + rulesCount
+                                    + " combined rules after filtered power set expansion");
                 }
                 String composite = null;
                 Boolean compositeBase = null;
@@ -95,13 +108,19 @@
                     coverage.exclusiveRulesEnabled = true;
                 } else if (mode == TranslationMode.Auto) {
                     if (rulesCount < autoThreshold) {
-                        LOGGER.fine("Sticking to Exclusive translation mode, rules number is "
-                                + rulesCount + " with a threshold of " + autoThreshold);
+                        LOGGER.fine(
+                                "Sticking to Exclusive translation mode, rules number is "
+                                        + rulesCount
+                                        + " with a threshold of "
+                                        + autoThreshold);
                         coverage.exclusiveRulesEnabled = true;
                         coverage.complexityThreshold = autoThreshold;
                     } else {
-                        LOGGER.info("Switching to Simple translation mode, rules number is "
-                                + rulesCount + " with a threshold of " + autoThreshold);
+                        LOGGER.info(
+                                "Switching to Simple translation mode, rules number is "
+                                        + rulesCount
+                                        + " with a threshold of "
+                                        + autoThreshold);
                         coverage.exclusiveRulesEnabled = false;
                         // switch the translation mode permanently from this point on
                         mode = TranslationMode.Simple;
@@ -126,14 +145,18 @@
                     }
                     List<CssRule> derivedRules = coverage.addRule(cssRule);
                     if (LOGGER.isLoggable(Level.FINE)) {
-                        LOGGER.fine("Derived rules not yet covered in domain coverage: "
-                                + derivedRules.size() + "\n" + derivedRules);
+                        LOGGER.fine(
+                                "Derived rules not yet covered in domain coverage: "
+                                        + derivedRules.size()
+                                        + "\n"
+                                        + derivedRules);
                     }
                     for (CssRule derived : derivedRules) {
                         buildSldRule(derived, ftsBuilder, targetFeatureType);
                         translatedRuleCount++;
 
-                        // Reminder about why this is done the way it's done. These are all rule properties
+                        // Reminder about why this is done the way it's done. These are all rule
+                        // properties
                         // in CSS and are subject to override. In SLD they contribute to containing
                         // FeatureTypeStyle, so the first one found wins and controls this z-level
 
@@ -141,16 +164,17 @@
                         // the first rule providing the information (the one with the highest
                         // priority)
                         if (composite == null) {
-                            List<Value> values = derived
-                                    .getPropertyValues(PseudoClass.ROOT, COMPOSITE).get(COMPOSITE);
+                            List<Value> values =
+                                    derived.getPropertyValues(PseudoClass.ROOT, COMPOSITE)
+                                            .get(COMPOSITE);
                             if (values != null && !values.isEmpty()) {
                                 composite = values.get(0).toLiteral();
                             }
                         }
                         if (compositeBase == null) {
-                            List<Value> values = derived
-                                    .getPropertyValues(PseudoClass.ROOT, COMPOSITE_BASE)
-                                    .get(COMPOSITE_BASE);
+                            List<Value> values =
+                                    derived.getPropertyValues(PseudoClass.ROOT, COMPOSITE_BASE)
+                                            .get(COMPOSITE_BASE);
                             if (values != null && !values.isEmpty()) {
                                 compositeBase = Boolean.valueOf(values.get(0).toLiteral());
                             }
@@ -158,8 +182,9 @@
 
                         // check if we have any sort-by
                         if (sortBy == null) {
-                            List<Value> values = derived
-                                    .getPropertyValues(PseudoClass.ROOT, SORT_BY).get(SORT_BY);
+                            List<Value> values =
+                                    derived.getPropertyValues(PseudoClass.ROOT, SORT_BY)
+                                            .get(SORT_BY);
                             if (values != null && !values.isEmpty()) {
                                 sortBy = values.get(0).toLiteral();
                             }
@@ -167,9 +192,9 @@
 
                         // check if we have any sort-by-group
                         if (sortByGroup == null) {
-                            List<Value> values = derived
-                                    .getPropertyValues(PseudoClass.ROOT, SORT_BY_GROUP)
-                                    .get(SORT_BY_GROUP);
+                            List<Value> values =
+                                    derived.getPropertyValues(PseudoClass.ROOT, SORT_BY_GROUP)
+                                            .get(SORT_BY_GROUP);
                             if (values != null && !values.isEmpty()) {
                                 sortByGroup = values.get(0).toLiteral();
                             }
@@ -177,13 +202,13 @@
 
                         // check if we have a transform, apply it
                         if (transform == null) {
-                            List<Value> values = derived
-                                    .getPropertyValues(PseudoClass.ROOT, TRANSFORM).get(TRANSFORM);
+                            List<Value> values =
+                                    derived.getPropertyValues(PseudoClass.ROOT, TRANSFORM)
+                                            .get(TRANSFORM);
                             if (values != null && !values.isEmpty()) {
                                 transform = values.get(0).toExpression();
                             }
                         }
-
                     }
 
                     if (composite != null) {

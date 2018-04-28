@@ -1,21 +1,23 @@
-    FeatureId addFeature(final SimpleFeature feature, FeatureWriter<SimpleFeatureType,
-            SimpleFeature> writer) throws IOException {
+    FeatureId addFeature(
+            final SimpleFeature feature, FeatureWriter<SimpleFeatureType, SimpleFeature> writer)
+            throws IOException {
         // grab next feature and populate it
-        // JD: worth a note on how we do this... we take a "pull" approach 
-        // because the raw schema we are inserting into may not match the 
+        // JD: worth a note on how we do this... we take a "pull" approach
+        // because the raw schema we are inserting into may not match the
         // schema of the features we are inserting
         final SimpleFeature toWrite = writer.next();
-        for ( int i = 0; i < toWrite.getType().getAttributeCount(); i++ ) {
+        for (int i = 0; i < toWrite.getType().getAttributeCount(); i++) {
             String name = toWrite.getType().getDescriptor(i).getLocalName();
-            toWrite.setAttribute( name, feature.getAttribute(name));
+            toWrite.setAttribute(name, feature.getAttribute(name));
         }
-        
+
         // copy over the user data
         toWrite.getUserData().putAll(feature.getUserData());
 
         // pass through the fid if the user asked so
-        boolean useExisting = Boolean.TRUE.equals(feature.getUserData().get(Hints.USE_PROVIDED_FID));
-        if(getQueryCapabilities().isUseProvidedFIDSupported() && useExisting) {
+        boolean useExisting =
+                Boolean.TRUE.equals(feature.getUserData().get(Hints.USE_PROVIDED_FID));
+        if (getQueryCapabilities().isUseProvidedFIDSupported() && useExisting) {
             ((FeatureIdImpl) toWrite.getIdentifier()).setID(feature.getID());
         }
 
@@ -23,12 +25,12 @@
         // is actuall saved (see JDBCInsertFeatureWriter)
         toWrite.getUserData().put(ORIGINAL_FEATURE_KEY, feature);
 
-        //perform the write
+        // perform the write
         writer.write();
 
         // copy any metadata from the feature that was actually written (not always effective, see
         // JDBCInsertFeatureWriter)
-        feature.getUserData().putAll( toWrite.getUserData() );
+        feature.getUserData().putAll(toWrite.getUserData());
         feature.getUserData().remove(ORIGINAL_FEATURE_KEY);
 
         return toWrite.getIdentifier();

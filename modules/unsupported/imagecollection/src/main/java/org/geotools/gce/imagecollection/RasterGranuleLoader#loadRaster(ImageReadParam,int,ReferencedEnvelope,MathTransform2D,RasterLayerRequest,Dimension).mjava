@@ -1,18 +1,20 @@
-    public RenderedImage loadRaster(final ImageReadParam readParameters,
-            final int imageIndex, final ReferencedEnvelope cropBBox,
+    public RenderedImage loadRaster(
+            final ImageReadParam readParameters,
+            final int imageIndex,
+            final ReferencedEnvelope cropBBox,
             final MathTransform2D worldToGrid,
-            final RasterLayerRequest request, final Dimension tileDimension)
+            final RasterLayerRequest request,
+            final Dimension tileDimension)
             throws IOException {
 
         if (LOGGER.isLoggable(java.util.logging.Level.FINE))
-            LOGGER.fine("Loading raster data for rasterGranuleLoader "
-                    + this.toString());
+            LOGGER.fine("Loading raster data for rasterGranuleLoader " + this.toString());
 
         final ReferencedEnvelope bbox = new ReferencedEnvelope(granuleBBOX);
         // intersection of this tile bound with the current crop bbox
-        final ReferencedEnvelope intersection = new ReferencedEnvelope(
-                bbox.intersection(cropBBox),
-                cropBBox.getCoordinateReferenceSystem());
+        final ReferencedEnvelope intersection =
+                new ReferencedEnvelope(
+                        bbox.intersection(cropBBox), cropBBox.getCoordinateReferenceSystem());
 
         ImageInputStream inStream = null;
         ImageReader reader = null;
@@ -23,17 +25,17 @@
 
             // get a stream
             inStream = Utils.getInputStream(granuleFile);
-            if (inStream == null)
-                return null;
+            if (inStream == null) return null;
 
             // get a reader
             reader = Utils.getReader(inStream);
             if (reader == null) {
                 if (LOGGER.isLoggable(java.util.logging.Level.WARNING))
-                    LOGGER.warning("Unable to get reader for rasterGranuleLoader "
-                            + this.toString()
-                            + " with request "
-                            + request.toString());
+                    LOGGER.warning(
+                            "Unable to get reader for rasterGranuleLoader "
+                                    + this.toString()
+                                    + " with request "
+                                    + request.toString());
                 return null;
             }
 
@@ -44,8 +46,9 @@
             // which source area we need to crop in the selected level taking
             // into account the scale factors imposed by the selection of this
             // level together with the base level grid to world transformation
-            final MathTransform2D cropGridToWorldCorner = (MathTransform2D) ProjectiveTransform
-                    .create(selectedlevel.gridToWorldTransform);
+            final MathTransform2D cropGridToWorldCorner =
+                    (MathTransform2D)
+                            ProjectiveTransform.create(selectedlevel.gridToWorldTransform);
             final MathTransform2D cropWorldToGrid = cropGridToWorldCorner.inverse();
 
             // computing the crop source area which leaves straight into the
@@ -53,42 +56,56 @@
             // take into account the fact that we might also decimate therefore
             // we cannot just use the crop grid to world but we need to correct
             // it.
-            final Rectangle sourceArea = CRS
-                    .transform(cropWorldToGrid,
-                            new GeneralEnvelope(intersection)).toRectangle2D()
-                    .getBounds();
-            XRectangle2D.intersect(sourceArea, selectedlevel.rasterDimensions,
-                    sourceArea);// make sure roundings don't bother us
+            final Rectangle sourceArea =
+                    CRS.transform(cropWorldToGrid, new GeneralEnvelope(intersection))
+                            .toRectangle2D()
+                            .getBounds();
+            XRectangle2D.intersect(
+                    sourceArea,
+                    selectedlevel.rasterDimensions,
+                    sourceArea); // make sure roundings don't bother us
 
             // is it empty??
             if (sourceArea.isEmpty()) {
                 if (LOGGER.isLoggable(java.util.logging.Level.WARNING))
-                    LOGGER.warning("Got empty area for rasterGranuleLoader "
-                            + this.toString() + " with request "
-                            + request.toString());
+                    LOGGER.warning(
+                            "Got empty area for rasterGranuleLoader "
+                                    + this.toString()
+                                    + " with request "
+                                    + request.toString());
                 return null;
 
             } else if (LOGGER.isLoggable(java.util.logging.Level.FINE))
-                LOGGER.fine((new StringBuffer("Loading level ")
-                        .append(imageIndex).append(" with source region ")
-                        .append(sourceArea).toString()));
+                LOGGER.fine(
+                        (new StringBuffer("Loading level ")
+                                .append(imageIndex)
+                                .append(" with source region ")
+                                .append(sourceArea)
+                                .toString()));
             // set the source region
             readParameters.setSourceRegion(sourceArea);
 
             // read
-            RenderedImage raster = request.getReadType().read(readParameters,
-                    imageIndex, granuleFile, selectedlevel.rasterDimensions,
-                    tileDimension);
-            if (raster == null)
-                return null;
+            RenderedImage raster =
+                    request.getReadType()
+                            .read(
+                                    readParameters,
+                                    imageIndex,
+                                    granuleFile,
+                                    selectedlevel.rasterDimensions,
+                                    tileDimension);
+            if (raster == null) return null;
             try {
                 raster.getWidth();
             } catch (Throwable e) {
                 if (LOGGER.isLoggable(java.util.logging.Level.FINE))
-                    LOGGER.log(java.util.logging.Level.FINE,
+                    LOGGER.log(
+                            java.util.logging.Level.FINE,
                             "Unable to load raster for rasterGranuleLoader "
-                                    + this.toString() + " with request "
-                                    + request.toString(), e);
+                                    + this.toString()
+                                    + " with request "
+                                    + request.toString(),
+                            e);
                 return null;
             }
 
@@ -107,16 +124,17 @@
             //
             double decimationScaleX = ((1.0 * sourceArea.width) / raster.getWidth());
             double decimationScaleY = ((1.0 * sourceArea.height) / raster.getHeight());
-            final AffineTransform decimationScaleTranform = XAffineTransform
-                    .getScaleInstance(decimationScaleX, decimationScaleY);
+            final AffineTransform decimationScaleTranform =
+                    XAffineTransform.getScaleInstance(decimationScaleX, decimationScaleY);
 
             // keep into account translation to work into the selected level
             // raster space
-            final AffineTransform afterDecimationTranslateTranform = XAffineTransform
-                    .getTranslateInstance(sourceArea.x, sourceArea.y);
+            final AffineTransform afterDecimationTranslateTranform =
+                    XAffineTransform.getTranslateInstance(sourceArea.x, sourceArea.y);
 
             // now we need to go back to the base level raster space
-            final AffineTransform backToBaseLevelScaleTransform = selectedlevel.levelToBaseTransform;
+            final AffineTransform backToBaseLevelScaleTransform =
+                    selectedlevel.levelToBaseTransform;
 
             // now create the overall transform
             final AffineTransform tempRaster2Model = new AffineTransform(baseGridToWorld);
@@ -135,23 +153,27 @@
             final InterpolationNearest nearest = new InterpolationNearest();
             // paranoiac check to avoid that JAI freaks out when computing its
             // internal layouT on images that are too small
-            Rectangle2D finalLayout = ImageUtilities.layoutHelper(raster,
-                    (float) translationTransform.getScaleX(),
-                    (float) translationTransform.getScaleY(),
-                    (float) translationTransform.getTranslateX(),
-                    (float) translationTransform.getTranslateY(), nearest);
+            Rectangle2D finalLayout =
+                    ImageUtilities.layoutHelper(
+                            raster,
+                            (float) translationTransform.getScaleX(),
+                            (float) translationTransform.getScaleY(),
+                            (float) translationTransform.getTranslateX(),
+                            (float) translationTransform.getTranslateY(),
+                            nearest);
             if (finalLayout.isEmpty()) {
                 if (LOGGER.isLoggable(java.util.logging.Level.FINE))
-                    LOGGER.fine("Unable to create a rasterGranuleLoader "
-                            + this.toString() + " due to jai scale bug");
+                    LOGGER.fine(
+                            "Unable to create a rasterGranuleLoader "
+                                    + this.toString()
+                                    + " due to jai scale bug");
                 return null;
             }
 
             // apply the affine transform conserving indexed color model
-            final RenderingHints localHints = new RenderingHints(
-                    JAI.KEY_REPLACE_INDEX_COLOR_MODEL, Boolean.FALSE);
-            if (XAffineTransform.isIdentity(translationTransform, 10E-6))
-                return raster;
+            final RenderingHints localHints =
+                    new RenderingHints(JAI.KEY_REPLACE_INDEX_COLOR_MODEL, Boolean.FALSE);
+            if (XAffineTransform.isIdentity(translationTransform, 10E-6)) return raster;
             else {
                 //
                 // In case we are asked to use certain tile dimensions we tile
@@ -163,15 +185,18 @@
                 if (tileDimensions != null && request.getReadType().equals(ReadType.DIRECT_READ)) {
                     final ImageLayout layout = new ImageLayout();
                     layout.setTileHeight(tileDimensions.width).setTileWidth(tileDimensions.height);
-                    localHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT,layout));
+                    localHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
                 }
                 // border extender
                 // return WarpDescriptor.create(raster, new
                 // WarpAffine(translationTransform.createInverse()),new
                 // InterpolationNearest(),
                 // request.getBackgroundValues(),localHints);
-                return AffineDescriptor.create(raster, translationTransform,
-                        nearest, /* request.getBackgroundValues() */null,
+                return AffineDescriptor.create(
+                        raster,
+                        translationTransform,
+                        nearest, /* request.getBackgroundValues() */
+                        null,
                         localHints);
             }
 
@@ -180,34 +205,37 @@
                 LOGGER.log(
                         java.util.logging.Level.WARNING,
                         "Unable to load raster for rasterGranuleLoader "
-                                + this.toString() + " with request "
-                                + request.toString(), e);
+                                + this.toString()
+                                + " with request "
+                                + request.toString(),
+                        e);
             return null;
         } catch (org.opengis.referencing.operation.NoninvertibleTransformException e) {
             if (LOGGER.isLoggable(java.util.logging.Level.WARNING))
                 LOGGER.log(
                         java.util.logging.Level.WARNING,
                         "Unable to load raster for rasterGranuleLoader "
-                                + this.toString() + " with request "
-                                + request.toString(), e);
+                                + this.toString()
+                                + " with request "
+                                + request.toString(),
+                        e);
             return null;
         } catch (TransformException e) {
             if (LOGGER.isLoggable(java.util.logging.Level.WARNING))
                 LOGGER.log(
                         java.util.logging.Level.WARNING,
                         "Unable to load raster for rasterGranuleLoader "
-                                + this.toString() + " with request "
-                                + request.toString(), e);
+                                + this.toString()
+                                + " with request "
+                                + request.toString(),
+                        e);
             return null;
         } finally {
             try {
-                if (inStream != null)
-                    inStream.close();
+                if (inStream != null) inStream.close();
             } finally {
-                if (reader != null)
-                    reader.dispose();
+                if (reader != null) reader.dispose();
             }
         }
-
     }
 

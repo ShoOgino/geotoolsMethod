@@ -1,22 +1,17 @@
     /**
      * Release locks held by the authorization <code>authID</code>.
-     * 
-     * <p>
-     * (remember that the lock may have expired)
-     * </p>
+     *
+     * <p>(remember that the lock may have expired)
      *
      * @param authID Authorization identifing Lock to release
      * @param transaction Transaction with authorization for lockID
-     *
      * @return <code>true</code> if lock was found and released
-     *
      * @throws IOException If transaction not authorized to release authID
      * @throws IllegalArgumentException If authID or transaction not provided
      */
-    public boolean release(String authID, Transaction transaction)
-        throws IOException {
-        //LOGGER.info("release called on lock: " + authID + ", trans: "
-	//  + transaction);
+    public boolean release(String authID, Transaction transaction) throws IOException {
+        // LOGGER.info("release called on lock: " + authID + ", trans: "
+        //  + transaction);
 
         if (authID == null) {
             throw new IllegalArgumentException("lockID required");
@@ -24,49 +19,48 @@
 
         if ((transaction == null) || (transaction == Transaction.AUTO_COMMIT)) {
             throw new IllegalArgumentException(
-                "Tansaction required (with authorization for " + authID + ")");
+                    "Tansaction required (with authorization for " + authID + ")");
         }
 
         Lock lock;
         boolean release = false;
 
-        //This could be done more efficiently, and perhaps cleaner,
-        //but these maps within a map are just nasty.  The previous way of
-        //calling iterator.remove() didn't actually remove anything, as it
-        //was only iterating through the values of a map, which I believe
-        //java just copies, so it's immutable.  Or perhaps we just moved
-        //through too many iterator layers...
-        for (Iterator i = lockTables.values().iterator(); i.hasNext();) {
+        // This could be done more efficiently, and perhaps cleaner,
+        // but these maps within a map are just nasty.  The previous way of
+        // calling iterator.remove() didn't actually remove anything, as it
+        // was only iterating through the values of a map, which I believe
+        // java just copies, so it's immutable.  Or perhaps we just moved
+        // through too many iterator layers...
+        for (Iterator i = lockTables.values().iterator(); i.hasNext(); ) {
             Map fidMap = (Map) i.next();
             Set unLockedFids = new HashSet();
 
-            for (Iterator j = fidMap.keySet().iterator(); j.hasNext();) {
+            for (Iterator j = fidMap.keySet().iterator(); j.hasNext(); ) {
                 String fid = (String) j.next();
                 lock = (Lock) fidMap.get(fid);
-                //LOGGER.info("checking lock " + lock + ", is match "
+                // LOGGER.info("checking lock " + lock + ", is match "
                 //    + lock.isMatch(authID));
 
                 if (lock.isExpired()) {
                     unLockedFids.add(fid);
 
-                    //fidMap.remove(fid); concurrent modification error.
+                    // fidMap.remove(fid); concurrent modification error.
                 } else if (lock.isMatch(authID)) {
-                    //LOGGER.info("matches, is authorized: "
+                    // LOGGER.info("matches, is authorized: "
                     //    + lock.isAuthorized(transaction));
 
                     if (lock.isAuthorized(transaction)) {
                         unLockedFids.add(fid);
 
-                        //fidMap.remove(fid);
+                        // fidMap.remove(fid);
                         release = true;
                     } else {
-                        throw new IOException("Not authorized to release "
-                            + lock);
+                        throw new IOException("Not authorized to release " + lock);
                     }
                 }
             }
 
-            for (Iterator k = unLockedFids.iterator(); k.hasNext();) {
+            for (Iterator k = unLockedFids.iterator(); k.hasNext(); ) {
                 fidMap.remove(k.next());
             }
         }

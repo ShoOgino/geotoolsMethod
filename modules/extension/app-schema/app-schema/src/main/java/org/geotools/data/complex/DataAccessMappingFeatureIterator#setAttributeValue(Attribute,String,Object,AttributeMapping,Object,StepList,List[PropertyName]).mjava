@@ -5,11 +5,17 @@
      * @param source
      * @param attMapping
      * @param values
-     *
      * @return Feature. Target feature sets with simple attributes
      */
-    protected Attribute setAttributeValue(Attribute target, String id, final Object source,
-            final AttributeMapping attMapping, Object values, StepList inputXpath, List<PropertyName> selectedProperties) throws IOException {
+    protected Attribute setAttributeValue(
+            Attribute target,
+            String id,
+            final Object source,
+            final AttributeMapping attMapping,
+            Object values,
+            StepList inputXpath,
+            List<PropertyName> selectedProperties)
+            throws IOException {
 
         final Expression sourceExpression = attMapping.getSourceExpression();
         final AttributeType targetNodeType = attMapping.getTargetNodeInstance();
@@ -17,7 +23,7 @@
 
         Map<Name, Expression> clientPropsMappings = attMapping.getClientProperties();
         boolean isNestedFeature = attMapping.isNestedAttribute();
-        
+
         if (id == null && Expression.NIL != attMapping.getIdentifierExpression()) {
             id = extractIdForAttribute(attMapping.getIdentifierExpression(), source);
         }
@@ -27,32 +33,42 @@
             if (mappingName != null) {
                 if (nestedMapping.isSameSource() && mappingName instanceof Name) {
                     // data type polymorphism mapping
-                    return setPolymorphicValues((Name) mappingName, target, id, nestedMapping, source,
-                            xpath, clientPropsMappings);
-				} else if (mappingName instanceof String) {
-					// referential polymorphism mapping
-					if (attMapping instanceof JoiningNestedAttributeMapping) {
-						// GEOT-4417: update skipped ids when skipping with
-						// toXlinkHref
-						if (values == null && source != null) {
-							values = getValues(attMapping.isMultiValued(),
-									sourceExpression, source);
-						}
-						if (values != null) {
-							List<Object> idValues = getIdValues(source);
-							if (values instanceof Collection) {
-								for (Object singleVal : (Collection) values) {
-									((JoiningNestedAttributeMapping) attMapping)
-											.skip(this, singleVal, idValues);
-								}
-							} else {
-								((JoiningNestedAttributeMapping) attMapping)
-										.skip(this, values, idValues);
-							}
-						}
-					}
-					return setPolymorphicReference((String) mappingName,
-							clientPropsMappings, target, xpath, targetNodeType);
+                    return setPolymorphicValues(
+                            (Name) mappingName,
+                            target,
+                            id,
+                            nestedMapping,
+                            source,
+                            xpath,
+                            clientPropsMappings);
+                } else if (mappingName instanceof String) {
+                    // referential polymorphism mapping
+                    if (attMapping instanceof JoiningNestedAttributeMapping) {
+                        // GEOT-4417: update skipped ids when skipping with
+                        // toXlinkHref
+                        if (values == null && source != null) {
+                            values =
+                                    getValues(attMapping.isMultiValued(), sourceExpression, source);
+                        }
+                        if (values != null) {
+                            List<Object> idValues = getIdValues(source);
+                            if (values instanceof Collection) {
+                                for (Object singleVal : (Collection) values) {
+                                    ((JoiningNestedAttributeMapping) attMapping)
+                                            .skip(this, singleVal, idValues);
+                                }
+                            } else {
+                                ((JoiningNestedAttributeMapping) attMapping)
+                                        .skip(this, values, idValues);
+                            }
+                        }
+                    }
+                    return setPolymorphicReference(
+                            (String) mappingName,
+                            clientPropsMappings,
+                            target,
+                            xpath,
+                            targetNodeType);
                 }
             } else {
                 // polymorphism could result in null, to skip the attribute
@@ -64,22 +80,22 @@
         }
         boolean isHRefLink = isByReference(clientPropsMappings, isNestedFeature);
         int newResolveDepth = resolveDepth;
-        //if resolving, no xlink:href for chained feature
+        // if resolving, no xlink:href for chained feature
         boolean ignoreXlinkHref = false;
         if (isHRefLink && newResolveDepth > 0) {
-        	isHRefLink = false;
-        	newResolveDepth--;
-        	ignoreXlinkHref = true;                
+            isHRefLink = false;
+            newResolveDepth--;
+            ignoreXlinkHref = true;
         }
         if (isNestedFeature) {
-        	if (values == null) {
+            if (values == null) {
                 // polymorphism use case, if the value doesn't match anything, don't encode
                 return null;
             }
             // get built feature based on link value
             if (values instanceof Collection) {
-                ArrayList<Attribute> nestedFeatures = new ArrayList<Attribute>(((Collection) values)
-                        .size());
+                ArrayList<Attribute> nestedFeatures =
+                        new ArrayList<Attribute>(((Collection) values).size());
                 for (Object val : (Collection) values) {
                     if (val instanceof Attribute) {
                         val = ((Attribute) val).getValue();
@@ -95,11 +111,29 @@
                         // feature type also have a reference back to this type
                         // eg. gsml:GeologicUnit/gsml:occurence/gsml:MappedFeature
                         // and gsml:MappedFeature/gsml:specification/gsml:GeologicUnit
-                        nestedFeatures.addAll(((NestedAttributeMapping) attMapping)
-                                .getInputFeatures(this, val, getIdValues(source), source, reprojection, selectedProperties, includeMandatory));
+                        nestedFeatures.addAll(
+                                ((NestedAttributeMapping) attMapping)
+                                        .getInputFeatures(
+                                                this,
+                                                val,
+                                                getIdValues(source),
+                                                source,
+                                                reprojection,
+                                                selectedProperties,
+                                                includeMandatory));
                     } else {
-                        nestedFeatures.addAll(((NestedAttributeMapping) attMapping).getFeatures(
-                                this, val, getIdValues(source), reprojection, source, selectedProperties, includeMandatory, newResolveDepth, resolveTimeOut));
+                        nestedFeatures.addAll(
+                                ((NestedAttributeMapping) attMapping)
+                                        .getFeatures(
+                                                this,
+                                                val,
+                                                getIdValues(source),
+                                                reprojection,
+                                                source,
+                                                selectedProperties,
+                                                includeMandatory,
+                                                newResolveDepth,
+                                                resolveTimeOut));
                     }
                 }
                 values = nestedFeatures;
@@ -108,14 +142,33 @@
                 // feature type also have a reference back to this type
                 // eg. gsml:GeologicUnit/gsml:occurence/gsml:MappedFeature
                 // and gsml:MappedFeature/gsml:specification/gsml:GeologicUnit
-                values = ((NestedAttributeMapping) attMapping).getInputFeatures(this, values, getIdValues(source), source, reprojection, selectedProperties, includeMandatory);
+                values =
+                        ((NestedAttributeMapping) attMapping)
+                                .getInputFeatures(
+                                        this,
+                                        values,
+                                        getIdValues(source),
+                                        source,
+                                        reprojection,
+                                        selectedProperties,
+                                        includeMandatory);
             } else {
-                values = ((NestedAttributeMapping) attMapping).getFeatures(this, values, getIdValues(source), reprojection,
-                        source, selectedProperties, includeMandatory, newResolveDepth, resolveTimeOut);
+                values =
+                        ((NestedAttributeMapping) attMapping)
+                                .getFeatures(
+                                        this,
+                                        values,
+                                        getIdValues(source),
+                                        reprojection,
+                                        source,
+                                        selectedProperties,
+                                        includeMandatory,
+                                        newResolveDepth,
+                                        resolveTimeOut);
             }
             if (isHRefLink) {
                 // only need to set the href link value, not the nested feature properties
-            	setXlinkReference(target, clientPropsMappings, values, xpath, targetNodeType);
+                setXlinkReference(target, clientPropsMappings, values, xpath, targetNodeType);
                 return null;
             }
         }
@@ -130,7 +183,8 @@
                 if (singleVal instanceof Attribute) {
                     // copy client properties from input features if they're complex features
                     // wrapped in app-schema data access
-                    Map<Name, Expression> valueProperties = getClientProperties((Attribute) singleVal);
+                    Map<Name, Expression> valueProperties =
+                            getClientProperties((Attribute) singleVal);
                     if (!valueProperties.isEmpty()) {
                         clientPropsMappings.putAll(valueProperties);
                     }
@@ -147,7 +201,18 @@
                 } else {
                     valueList.add(singleVal);
                 }
-                instance = setAttributeContent(target, xpath, valueList, id, targetNodeType, false, sourceExpression, source, clientPropsMappings, ignoreXlinkHref);
+                instance =
+                        setAttributeContent(
+                                target,
+                                xpath,
+                                valueList,
+                                id,
+                                targetNodeType,
+                                false,
+                                sourceExpression,
+                                source,
+                                clientPropsMappings,
+                                ignoreXlinkHref);
             }
         } else {
             if (values instanceof Attribute) {
@@ -160,9 +225,19 @@
                 }
                 values = ((Attribute) values).getValue();
             }
-            instance = setAttributeContent(target, xpath, values, id, targetNodeType, false, sourceExpression, source, clientPropsMappings, ignoreXlinkHref);
-
-        } 
+            instance =
+                    setAttributeContent(
+                            target,
+                            xpath,
+                            values,
+                            id,
+                            targetNodeType,
+                            false,
+                            sourceExpression,
+                            source,
+                            clientPropsMappings,
+                            ignoreXlinkHref);
+        }
         if (instance != null && attMapping.encodeIfEmpty()) {
             instance.getDescriptor().getUserData().put("encodeIfEmpty", attMapping.encodeIfEmpty());
         }

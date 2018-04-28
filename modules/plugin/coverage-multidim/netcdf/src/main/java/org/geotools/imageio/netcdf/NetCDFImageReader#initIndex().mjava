@@ -1,17 +1,19 @@
     /**
      * Index Initialization. store indexing information.
-     * 
+     *
      * @return
      * @throws InvalidRangeException
      * @throws IOException
      */
     protected int initIndex() throws InvalidRangeException, IOException {
-        DefaultTransaction transaction = new DefaultTransaction("indexTransaction" + System.nanoTime());
+        DefaultTransaction transaction =
+                new DefaultTransaction("indexTransaction" + System.nanoTime());
         int numImages = 0;
         try {
 
             // init slice catalog
-            DataStoreConfiguration datastoreConfig = ancillaryFileManager.getDatastoreConfiguration();
+            DataStoreConfiguration datastoreConfig =
+                    ancillaryFileManager.getDatastoreConfiguration();
             boolean isShared = datastoreConfig.isShared();
             initCatalog(datastoreConfig);
             final List<Variable> variables = dataset.getVariables();
@@ -20,8 +22,8 @@
                 // cycle on all variables to get parse them
                 for (final Variable var_ : variables) {
                     if (var_ != null && var_ instanceof VariableDS) {
-                        final VariableDS variable= (VariableDS) var_;
-                        
+                        final VariableDS variable = (VariableDS) var_;
+
                         // get the name
                         // check if it is filtered or not
                         String varName = variable.getFullName();
@@ -37,13 +39,16 @@
                         // COVERAGE NAME
                         // Add the accepted variable to the list of coverages name
                         final Name coverageName = getCoverageName(varName);
-                        final CoordinateSystem cs = NetCDFCRSUtilities.getCoordinateSystem(variable);
-                        final SimpleFeatureType indexSchema = getIndexSchema(coverageName, cs, isShared);
+                        final CoordinateSystem cs =
+                                NetCDFCRSUtilities.getCoordinateSystem(variable);
+                        final SimpleFeatureType indexSchema =
+                                getIndexSchema(coverageName, cs, isShared);
                         // get variable adapter which maps to a coverage in the end
                         final VariableAdapter vaAdapter = getCoverageDescriptor(coverageName);
 
                         if (indexSchema == null) {
-                            throw new IllegalStateException("Unable to created index schema for coverage:"+coverageName);
+                            throw new IllegalStateException(
+                                    "Unable to created index schema for coverage:" + coverageName);
                         }
                         if (LOGGER.isLoggable(Level.FINEST)) {
                             LOGGER.finest("Collecting slices for: " + coverageName);
@@ -55,26 +60,31 @@
 
                         int startPagingIndex = 0;
                         final int limit = INTERNAL_INDEX_CREATION_PAGE_SIZE;
-                        final ListFeatureCollection collection = new ListFeatureCollection(indexSchema);
+                        final ListFeatureCollection collection =
+                                new ListFeatureCollection(indexSchema);
 
-                        //features may be < slices, since some slices do not really exist
-                        //but we do count them as processed
-                        int processedSlices = 0; 
+                        // features may be < slices, since some slices do not really exist
+                        // but we do count them as processed
+                        int processedSlices = 0;
                         while (processedSlices < numberOfSlices) {
-                            // Get a bunch of features 
-                            processedSlices += vaAdapter.getFeatures(startPagingIndex, limit, collection);
+                            // Get a bunch of features
+                            processedSlices +=
+                                    vaAdapter.getFeatures(startPagingIndex, limit, collection);
                             if (variableImageStartIndex != 0 || isShared) {
-                                // Need to updated the imageIndex of the features since all indexes 
-                                // are zero based inside each variable but we need to index them inside
-                                // the whole NetCDF dataset. 
+                                // Need to updated the imageIndex of the features since all indexes
+                                // are zero based inside each variable but we need to index them
+                                // inside
+                                // the whole NetCDF dataset.
                                 updateFeaturesIndex(collection, variableImageStartIndex, isShared);
                             }
                             final int features = collection.size();
                             if (features > 0) {
-                                // adding granules to the catalog and updating the number of written features
+                                // adding granules to the catalog and updating the number of written
+                                // features
                                 CoverageSlicesCatalog catalog = getCatalog();
                                 if (catalog != null) {
-                                    catalog.addGranules(indexSchema.getTypeName(), collection, transaction);
+                                    catalog.addGranules(
+                                            indexSchema.getTypeName(), collection, transaction);
                                 }
                                 collection.clear();
                                 startPagingIndex += features;

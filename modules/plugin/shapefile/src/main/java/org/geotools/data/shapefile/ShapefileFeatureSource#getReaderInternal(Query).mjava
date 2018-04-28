@@ -9,7 +9,7 @@
         Envelope bbox = new ReferencedEnvelope();
         if (q.getFilter() != null) {
             bbox = (Envelope) q.getFilter().accept(ExtractBoundsFilterVisitor.BOUNDS_VISITOR, bbox);
-            if(bbox == null) {
+            if (bbox == null) {
                 bbox = new ReferencedEnvelope();
             }
         }
@@ -18,16 +18,21 @@
         Filter filter = q != null ? q.getFilter() : null;
         IndexManager indexManager = getDataStore().indexManager;
         CloseableIterator<Data> goodRecs = null;
-        if (getDataStore().isFidIndexed() && filter instanceof Id && indexManager.hasFidIndex(false)) {
+        if (getDataStore().isFidIndexed()
+                && filter instanceof Id
+                && indexManager.hasFidIndex(false)) {
             Id fidFilter = (Id) filter;
             List<Data> records = indexManager.queryFidIndex(fidFilter);
             if (records != null) {
                 goodRecs = new CloseableIteratorWrapper<Data>(records.iterator());
             }
-        } else if (getDataStore().isIndexed() && !bbox.isNull() 
-                && !Double.isInfinite(bbox.getWidth()) && !Double.isInfinite(bbox.getHeight())) {
+        } else if (getDataStore().isIndexed()
+                && !bbox.isNull()
+                && !Double.isInfinite(bbox.getWidth())
+                && !Double.isInfinite(bbox.getHeight())) {
             try {
-                if(indexManager.isSpatialIndexAvailable() || getDataStore().isIndexCreationEnabled()) {
+                if (indexManager.isSpatialIndexAvailable()
+                        || getDataStore().isIndexCreationEnabled()) {
                     goodRecs = indexManager.querySpatialIndex(bbox);
                 }
             } catch (TreeException e) {
@@ -36,15 +41,20 @@
         }
         // do we have anything to read at all? If not don't bother opening all the files
         if (goodRecs != null && !goodRecs.hasNext()) {
-            LOGGER.log(Level.FINE, "Empty results for " + resultSchema.getName().getLocalPart()
-                    + ", skipping read");
+            LOGGER.log(
+                    Level.FINE,
+                    "Empty results for "
+                            + resultSchema.getName().getLocalPart()
+                            + ", skipping read");
             goodRecs.close();
             return new EmptyFeatureReader<SimpleFeatureType, SimpleFeature>(resultSchema);
         }
-        
+
         // get the .fix file reader, if we have a .fix file
         IndexedFidReader fidReader = null;
-        if (getDataStore().isFidIndexed() && filter instanceof Id && indexManager.hasFidIndex(false)) {
+        if (getDataStore().isFidIndexed()
+                && filter instanceof Id
+                && indexManager.hasFidIndex(false)) {
             fidReader = new IndexedFidReader(shpFiles);
         }
 
@@ -61,8 +71,9 @@
         }
         ShapefileFeatureReader reader;
         if (goodRecs != null) {
-            reader = new IndexedShapefileFeatureReader(readSchema, shapeReader, dbfReader, fidReader, 
-                    goodRecs);
+            reader =
+                    new IndexedShapefileFeatureReader(
+                            readSchema, shapeReader, dbfReader, fidReader, goodRecs);
         } else {
             reader = new ShapefileFeatureReader(readSchema, shapeReader, dbfReader, fidReader);
         }
@@ -88,12 +99,11 @@
                     shapeReader.setFlatGeometry(true);
                 }
             }
-
         }
 
         // do the retyping
-        if(!FeatureTypes.equals(readSchema, resultSchema)) {
-           return new ReTypeFeatureReader(reader, resultSchema);
+        if (!FeatureTypes.equals(readSchema, resultSchema)) {
+            return new ReTypeFeatureReader(reader, resultSchema);
         } else {
             return reader;
         }

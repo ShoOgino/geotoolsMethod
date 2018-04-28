@@ -1,8 +1,11 @@
-    /**
-     * Updates an existing feature(s) in the database for a particular feature type / table.
-     */
-    protected void update(SimpleFeatureType featureType, AttributeDescriptor[] attributes,
-        Object[] values, Filter filter, Connection cx) throws IOException, SQLException {
+    /** Updates an existing feature(s) in the database for a particular feature type / table. */
+    protected void update(
+            SimpleFeatureType featureType,
+            AttributeDescriptor[] attributes,
+            Object[] values,
+            Filter filter,
+            Connection cx)
+            throws IOException, SQLException {
         if ((attributes == null) || (attributes.length == 0)) {
             LOGGER.warning("Update called with no attributes, doing nothing.");
 
@@ -14,11 +17,11 @@
         try {
             key = getPrimaryKey(featureType);
         } catch (IOException e) {
-            throw new RuntimeException( e );
+            throw new RuntimeException(e);
         }
         Set<String> pkColumnNames = getColumnNames(key);
 
-        //do a check to ensure that the update includes at least one non primary key column
+        // do a check to ensure that the update includes at least one non primary key column
         boolean nonPkeyColumn = false;
         for (AttributeDescriptor att : attributes) {
             if (!pkColumnNames.contains(att.getLocalName())) {
@@ -26,37 +29,35 @@
             }
         }
         if (!nonPkeyColumn) {
-            throw new IllegalArgumentException("Illegal update, must include at least one non primary key column, " +
-                    "all primary key columns are ignored.");
+            throw new IllegalArgumentException(
+                    "Illegal update, must include at least one non primary key column, "
+                            + "all primary key columns are ignored.");
         }
-        if ( dialect instanceof PreparedStatementSQLDialect ) {
+        if (dialect instanceof PreparedStatementSQLDialect) {
             try {
-                PreparedStatement ps = updateSQLPS(featureType, attributes, values, filter, pkColumnNames, cx);
+                PreparedStatement ps =
+                        updateSQLPS(featureType, attributes, values, filter, pkColumnNames, cx);
                 try {
-                    ((PreparedStatementSQLDialect)dialect).onUpdate(ps, cx, featureType);
+                    ((PreparedStatementSQLDialect) dialect).onUpdate(ps, cx, featureType);
                     ps.execute();
+                } finally {
+                    closeSafe(ps);
                 }
-                finally {
-                    closeSafe( ps );
-                }
-            } 
-            catch (SQLException e) {
-                throw new RuntimeException( e );
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
             }
-        }
-        else {
+        } else {
             String sql = updateSQL(featureType, attributes, values, filter, pkColumnNames);
 
             try {
                 Statement st = cx.createStatement();
 
                 try {
-                    ((BasicSQLDialect)dialect).onUpdate(st, cx, featureType);
-                    
+                    ((BasicSQLDialect) dialect).onUpdate(st, cx, featureType);
+
                     LOGGER.log(Level.FINE, "Updating feature: {0}", sql);
                     st.execute(sql);
-                }
-                finally {
+                } finally {
                     closeSafe(st);
                 }
             } catch (SQLException e) {

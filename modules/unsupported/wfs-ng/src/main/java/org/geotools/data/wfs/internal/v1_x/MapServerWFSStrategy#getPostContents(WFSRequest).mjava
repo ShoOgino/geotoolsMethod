@@ -1,24 +1,28 @@
     @Override
     public InputStream getPostContents(WFSRequest request) throws IOException {
         InputStream in = super.getPostContents(request);
-        
-        if (request.getOperation().compareTo(WFSOperationType.GET_FEATURE) == 0 && 
-            getVersion().compareTo("1.0.0") == 0 &&
-            mapServerVersion != null) {
+
+        if (request.getOperation().compareTo(WFSOperationType.GET_FEATURE) == 0
+                && getVersion().compareTo("1.0.0") == 0
+                && mapServerVersion != null) {
             try {
-                // Pre-5.6.7 versions of MapServer do not support the following gml:Box coordinate format:
-                // <gml:coord><gml:X>-59.0</gml:X><gml:Y>-35.0</gml:Y></gml:coord><gml:coord>< gml:X>-58.0</gml:X><gml:Y>-34.0</gml:Y></gml:coord>
+                // Pre-5.6.7 versions of MapServer do not support the following gml:Box coordinate
+                // format:
+                // <gml:coord><gml:X>-59.0</gml:X><gml:Y>-35.0</gml:Y></gml:coord><gml:coord><
+                // gml:X>-58.0</gml:X><gml:Y>-34.0</gml:Y></gml:coord>
                 // Rewrite the coordinates in the following format:
                 // <gml:coordinates cs="," decimal="." ts=" ">-59,-35 -58,-34</gml:coordinates>
-                String [] tokens = mapServerVersion.split("\\.");
+                String[] tokens = mapServerVersion.split("\\.");
                 if (tokens.length == 3 && versionCompare(mapServerVersion, "5.6.7") < 0) {
                     StringWriter writer = new StringWriter();
                     IOUtils.copy(in, writer, "UTF-8");
                     String pc = writer.toString();
 
                     boolean reformatted = false;
-                    if (pc.contains("gml:Box") && pc.contains("gml:coord") && 
-                        pc.contains("gml:X") && pc.contains("gml:Y")) {
+                    if (pc.contains("gml:Box")
+                            && pc.contains("gml:coord")
+                            && pc.contains("gml:X")
+                            && pc.contains("gml:Y")) {
 
                         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
                         factory.setNamespaceAware(true);
@@ -27,17 +31,28 @@
 
                         NodeList boxes = doc.getElementsByTagName("gml:Box");
                         for (int b = 0; b < boxes.getLength(); b++) {
-                            Element box = (Element)boxes.item(b);
+                            Element box = (Element) boxes.item(b);
                             NodeList coords = box.getElementsByTagName("gml:coord");
                             if (coords != null && coords.getLength() == 2) {
-                                Element coord1 = (Element)coords.item(0);
-                                Element coord2 = (Element)coords.item(1);
+                                Element coord1 = (Element) coords.item(0);
+                                Element coord2 = (Element) coords.item(1);
                                 if (coord1 != null && coord2 != null) {
-                                    Element coordX1 = (Element)(coord1.getElementsByTagName("gml:X").item(0));
-                                    Element coordY1 = (Element)(coord1.getElementsByTagName("gml:Y").item(0));
-                                    Element coordX2 = (Element)(coord2.getElementsByTagName("gml:X").item(0));
-                                    Element coordY2 = (Element)(coord2.getElementsByTagName("gml:Y").item(0));
-                                    if (coordX1 != null && coordY1 != null && coordX2 != null && coordY2 != null) {
+                                    Element coordX1 =
+                                            (Element)
+                                                    (coord1.getElementsByTagName("gml:X").item(0));
+                                    Element coordY1 =
+                                            (Element)
+                                                    (coord1.getElementsByTagName("gml:Y").item(0));
+                                    Element coordX2 =
+                                            (Element)
+                                                    (coord2.getElementsByTagName("gml:X").item(0));
+                                    Element coordY2 =
+                                            (Element)
+                                                    (coord2.getElementsByTagName("gml:Y").item(0));
+                                    if (coordX1 != null
+                                            && coordY1 != null
+                                            && coordX2 != null
+                                            && coordY2 != null) {
                                         reformatted = true;
                                         String x1 = coordX1.getTextContent();
                                         String y1 = coordY1.getTextContent();
@@ -51,7 +66,9 @@
                                         coordinates.setAttribute("cs", ",");
                                         coordinates.setAttribute("decimal", ".");
                                         coordinates.setAttribute("ts", " ");
-                                        coordinates.appendChild(doc.createTextNode(x1 + "," + y1 + " " +  x2 + "," + y2));
+                                        coordinates.appendChild(
+                                                doc.createTextNode(
+                                                        x1 + "," + y1 + " " + x2 + "," + y2));
                                         box.appendChild(coordinates);
                                     }
                                 }
@@ -73,12 +90,17 @@
                     }
                     in = new ByteArrayInputStream(pc.getBytes());
                 }
-            }
-            catch(SAXException | ParserConfigurationException | TransformerException | IOException ex) {
-                LOGGER.log(Level.FINE, "Unexpected exception while rewriting 1.0.0 GETFEATURE request with BBOX filter", ex.getMessage());
+            } catch (SAXException
+                    | ParserConfigurationException
+                    | TransformerException
+                    | IOException ex) {
+                LOGGER.log(
+                        Level.FINE,
+                        "Unexpected exception while rewriting 1.0.0 GETFEATURE request with BBOX filter",
+                        ex.getMessage());
             }
         }
-        
+
         return in;
     }
 

@@ -1,12 +1,9 @@
     /**
      * Write the header data to the DBF file.
-     * 
-     * @param out
-     *                A channel to write to. If you have an OutputStream you can
-     *                obtain the correct channel by using
-     *                java.nio.Channels.newChannel(OutputStream out).
-     * @throws IOException
-     *                 If errors occur.
+     *
+     * @param out A channel to write to. If you have an OutputStream you can obtain the correct
+     *     channel by using java.nio.Channels.newChannel(OutputStream out).
+     * @throws IOException If errors occur.
      */
     public void writeHeader(WritableByteChannel out) throws IOException {
         // take care of the annoying case where no records have been added...
@@ -16,34 +13,34 @@
         ByteBuffer buffer = NIOUtilities.allocate(headerLength);
         try {
             buffer.order(ByteOrder.LITTLE_ENDIAN);
-    
+
             // write the output file type.
             buffer.put((byte) MAGIC);
-    
+
             // write the date stuff
             Calendar c = Calendar.getInstance();
             c.setTime(new Date());
             buffer.put((byte) (c.get(Calendar.YEAR) % 100));
             buffer.put((byte) (c.get(Calendar.MONTH) + 1));
             buffer.put((byte) (c.get(Calendar.DAY_OF_MONTH)));
-    
+
             // write the number of records in the datafile.
             buffer.putInt(recordCnt);
-    
+
             // write the length of the header structure.
             buffer.putShort((short) headerLength);
-    
+
             // write the length of a record
             buffer.putShort((short) recordLength);
-    
+
             // // write the reserved bytes in the header
             // for (int i=0; i<20; i++) out.writeByteLE(0);
             buffer.position(buffer.position() + 20);
-    
+
             // write all of the header records
             int tempOffset = 0;
             for (int i = 0; i < fields.length; i++) {
-    
+
                 // write the field name
                 for (int j = 0; j < 11; j++) {
                     if (fields[i].fieldName.length() > j) {
@@ -52,33 +49,32 @@
                         buffer.put((byte) 0);
                     }
                 }
-    
+
                 // write the field type
                 buffer.put((byte) fields[i].fieldType);
                 // // write the field data address, offset from the start of the
                 // record.
                 buffer.putInt(tempOffset);
                 tempOffset += fields[i].fieldLength;
-    
+
                 // write the length of the field.
                 buffer.put((byte) fields[i].fieldLength);
-    
+
                 // write the decimal count.
                 buffer.put((byte) fields[i].decimalCount);
-    
+
                 // write the reserved bytes.
                 // for (in j=0; jj<14; j++) out.writeByteLE(0);
                 buffer.position(buffer.position() + 14);
             }
-    
+
             // write the end of the field definitions marker
             buffer.put((byte) 0x0D);
-    
+
             buffer.position(0);
-    
+
             int r = buffer.remaining();
-            while ((r -= out.write(buffer)) > 0) {
-                ; // do nothing
+            while ((r -= out.write(buffer)) > 0) {; // do nothing
             }
         } finally {
             NIOUtilities.clean(buffer, false);

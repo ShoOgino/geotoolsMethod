@@ -1,6 +1,7 @@
     /**
-     * Return a crop region from a specified envelope, leveraging on the grid to world transformation.
-     * 
+     * Return a crop region from a specified envelope, leveraging on the grid to world
+     * transformation.
+     *
      * @param refinedRequestedBBox the crop envelope
      * @return a {@code Rectangle} representing the crop region.
      * @throws TransformException in case a problem occurs when going back to raster space.
@@ -15,26 +16,39 @@
         }
 
         //
-        // We need to invert the requested gridToWorld and then adjust the requested raster area are accordingly
+        // We need to invert the requested gridToWorld and then adjust the requested raster area are
+        // accordingly
         //
 
-        // invert the requested grid to world keeping into account the fact that it is related to cell center
+        // invert the requested grid to world keeping into account the fact that it is related to
+        // cell center
         // while the raster is related to cell corner
         MathTransform2D requestedWorldToGrid;
         try {
-            requestedWorldToGrid = (MathTransform2D) PixelTranslation.translate(
-                    ProjectiveTransform.create(requestedGridToWorld), PixelInCell.CELL_CENTER,
-                    PixelInCell.CELL_CORNER).inverse();
+            requestedWorldToGrid =
+                    (MathTransform2D)
+                            PixelTranslation.translate(
+                                            ProjectiveTransform.create(requestedGridToWorld),
+                                            PixelInCell.CELL_CENTER,
+                                            PixelInCell.CELL_CORNER)
+                                    .inverse();
         } catch (NoninvertibleTransformException e) {
             throw new DataSourceException(e);
         }
 
         if (destinationToSourceTransform == null || destinationToSourceTransform.isIdentity()) {
 
-            // now get the requested bbox which have been already adjusted and project it back to raster space
+            // now get the requested bbox which have been already adjusted and project it back to
+            // raster space
             try {
-                destinationRasterArea = new GeneralGridEnvelope(CRS.transform(requestedWorldToGrid,
-                        new GeneralEnvelope(cropBBox)), PixelInCell.CELL_CORNER, false).toRectangle();
+                destinationRasterArea =
+                        new GeneralGridEnvelope(
+                                        CRS.transform(
+                                                requestedWorldToGrid,
+                                                new GeneralEnvelope(cropBBox)),
+                                        PixelInCell.CELL_CORNER,
+                                        false)
+                                .toRectangle();
             } catch (IllegalStateException e) {
                 throw new DataSourceException(e);
             } catch (TransformException e) {
@@ -45,17 +59,24 @@
             // reproject the crop bbox back and then crop, notice that we are imposing
             //
             try {
-                final GeneralEnvelope cropBBOXInRequestCRS = CRS.transform(cropBBox,
+                final GeneralEnvelope cropBBOXInRequestCRS =
+                        CRS.transform(cropBBox, requestedBBox.getCoordinateReferenceSystem());
+                cropBBOXInRequestCRS.setCoordinateReferenceSystem(
                         requestedBBox.getCoordinateReferenceSystem());
-                cropBBOXInRequestCRS.setCoordinateReferenceSystem(requestedBBox.getCoordinateReferenceSystem());
                 // make sure it falls within the requested envelope
                 cropBBOXInRequestCRS.intersect(requestedBBox);
 
                 // now go back to raster space
-                destinationRasterArea = new GeneralGridEnvelope(CRS.transform(requestedWorldToGrid,
-                        cropBBOXInRequestCRS), PixelInCell.CELL_CORNER, false).toRectangle();
-                // intersect with the original requested raster space to be sure that we stay within the requested raster area
-                XRectangle2D.intersect(destinationRasterArea, requestedRasterArea, destinationRasterArea);
+                destinationRasterArea =
+                        new GeneralGridEnvelope(
+                                        CRS.transform(requestedWorldToGrid, cropBBOXInRequestCRS),
+                                        PixelInCell.CELL_CORNER,
+                                        false)
+                                .toRectangle();
+                // intersect with the original requested raster space to be sure that we stay within
+                // the requested raster area
+                XRectangle2D.intersect(
+                        destinationRasterArea, requestedRasterArea, destinationRasterArea);
             } catch (NoninvertibleTransformException e) {
                 throw new DataSourceException(e);
             } catch (TransformException e) {
@@ -65,7 +86,8 @@
         // is it empty??
         if (destinationRasterArea.isEmpty()) {
             if (LOGGER.isLoggable(Level.FINE))
-                LOGGER.log(Level.FINE,
+                LOGGER.log(
+                        Level.FINE,
                         "Requested envelope too small resulting in empty cropped raster region. cropBbox:"
                                 + cropBBox);
             // TODO: Future versions may define a 1x1 rectangle starting
@@ -73,6 +95,5 @@
             empty = true;
             return;
         }
-
     }
 

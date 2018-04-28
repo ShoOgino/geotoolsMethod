@@ -1,4 +1,5 @@
-    private void computeRectInt(PlanarImage src, RasterAccessor dst, RandomIter roiIter, boolean roiContainsTile) {
+    private void computeRectInt(
+            PlanarImage src, RasterAccessor dst, RandomIter roiIter, boolean roiContainsTile) {
         int lpad, rpad, tpad, bpad;
         if (interp != null) {
             lpad = interp.getLeftPadding();
@@ -25,50 +26,54 @@
                 maxY = src.getMaxY() - bpad;
                 iter = getRandomIterator(src);
             }
-    
+
             int kwidth = interp.getWidth();
             int kheight = interp.getHeight();
-    
+
             int dstWidth = dst.getWidth();
             int dstHeight = dst.getHeight();
             int dstBands = dst.getNumBands();
-    
+
             int lineStride = dst.getScanlineStride();
             int pixelStride = dst.getPixelStride();
             int[] bandOffsets = dst.getBandOffsets();
             int[][] data = dst.getIntDataArrays();
-    
+
             int precH = 1 << interp.getSubsampleBitsH();
             int precV = 1 << interp.getSubsampleBitsV();
-    
+
             float[] warpData = new float[2 * dstWidth];
-    
+
             int[][] samples = new int[kheight][kwidth];
-    
+
             int lineOffset = 0;
-    
+
             int[] backgroundInt = new int[dstBands];
             for (int i = 0; i < dstBands; i++) {
                 backgroundInt[i] = (int) backgroundValues[i];
             }
-    
+
             for (int h = 0; h < dstHeight; h++) {
                 int pixelOffset = lineOffset;
                 lineOffset += lineStride;
-    
+
                 warpRect(dst.getX(), dst.getY() + h, dstWidth, 1, warpData);
-    
+
                 int count = 0;
                 for (int w = 0; w < dstWidth; w++) {
                     float sx = warpData[count++];
                     float sy = warpData[count++];
-    
+
                     int xint = floor(sx);
                     int yint = floor(sy);
                     int xfrac = (int) ((sx - xint) * precH);
                     int yfrac = (int) ((sy - yint) * precV);
-    
-                    if (xint < minX || xint >= maxX || yint < minY || yint >= maxY || !inROI(xint, yint, roiIter, roiContainsTile)) {
+
+                    if (xint < minX
+                            || xint >= maxX
+                            || yint < minY
+                            || yint >= maxY
+                            || !inROI(xint, yint, roiIter, roiContainsTile)) {
                         /* Fill with a background color. */
                         if (setBackground) {
                             for (int b = 0; b < dstBands; b++) {
@@ -78,24 +83,24 @@
                     } else {
                         xint -= lpad;
                         yint -= tpad;
-    
+
                         for (int b = 0; b < dstBands; b++) {
                             for (int j = 0; j < kheight; j++) {
                                 for (int i = 0; i < kwidth; i++) {
                                     samples[j][i] = iter.getSample(xint + i, yint + j, b);
                                 }
                             }
-    
-                            data[b][pixelOffset + bandOffsets[b]] = interp.interpolate(samples, xfrac,
-                                    yfrac);
+
+                            data[b][pixelOffset + bandOffsets[b]] =
+                                    interp.interpolate(samples, xfrac, yfrac);
                         }
                     }
-    
+
                     pixelOffset += pixelStride;
                 }
             }
         } finally {
-            if(iter != null) {
+            if (iter != null) {
                 iter.done();
             }
         }

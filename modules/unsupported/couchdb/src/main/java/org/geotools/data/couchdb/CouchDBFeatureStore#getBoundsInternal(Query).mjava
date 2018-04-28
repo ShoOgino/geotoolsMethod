@@ -1,27 +1,32 @@
     @Override
     protected ReferencedEnvelope getBoundsInternal(Query query) throws IOException {
-        // there appears to be no way to obtain the bbox from couch documents 
+        // there appears to be no way to obtain the bbox from couch documents
         // (aka features) without getting all the geometry as well.
         // one approach might be to write a view that only returns bbox?
         CouchDBSpatialView spatialView = getDataStore().getConnection().spatialView(viewName);
         Envelope e = getBBox(query);
         JSONObject results;
         try {
-            results = spatialView.get(e.getMinX(),e.getMinY(),e.getMaxX(),e.getMaxY());
+            results = spatialView.get(e.getMinX(), e.getMinY(), e.getMaxX(), e.getMaxY());
         } catch (CouchDBException ex) {
             throw ex.wrap();
         }
-        Envelope env  = null;
+        Envelope env = null;
         JSONArray rows = (JSONArray) results.get("rows");
         for (int i = 0; i < rows.size(); i++) {
             JSONArray bbox = (JSONArray) ((JSONObject) rows.get(i)).get("bbox");
             if (env == null) {
-                env = new Envelope((Double)bbox.get(0),(Double)bbox.get(1),(Double)bbox.get(2),(Double)bbox.get(3));
+                env =
+                        new Envelope(
+                                (Double) bbox.get(0),
+                                (Double) bbox.get(1),
+                                (Double) bbox.get(2),
+                                (Double) bbox.get(3));
             } else {
-                env.expandToInclude((Double)bbox.get(0),(Double)bbox.get(1));
-                env.expandToInclude((Double)bbox.get(2),(Double)bbox.get(3));
+                env.expandToInclude((Double) bbox.get(0), (Double) bbox.get(1));
+                env.expandToInclude((Double) bbox.get(2), (Double) bbox.get(3));
             }
         }
-        return new ReferencedEnvelope(env,null);
+        return new ReferencedEnvelope(env, null);
     }
 
