@@ -1,7 +1,7 @@
-    void selectColumns(SimpleFeatureType featureType, String prefix, Query query, StringBuffer sql) 
-        throws IOException {
-        
-        //primary key
+    void selectColumns(SimpleFeatureType featureType, String prefix, Query query, StringBuffer sql)
+            throws IOException {
+
+        // primary key
         PrimaryKey key = null;
         try {
             key = getPrimaryKey(featureType);
@@ -9,36 +9,35 @@
             throw new RuntimeException(e);
         }
         Set<String> pkColumnNames = getColumnNames(key);
-        
+
         // we need to add the primary key columns only if they are not already exposed
-        for ( PrimaryKeyColumn col : key.getColumns() ) {
+        for (PrimaryKeyColumn col : key.getColumns()) {
             dialect.encodeColumnName(prefix, col.getName(), sql);
             if (prefix != null) {
-                //if a prefix is specified means we are joining so use a prefix to avoid clashing
+                // if a prefix is specified means we are joining so use a prefix to avoid clashing
                 // with primary key columsn with the same name from other tables in the join
-                dialect.encodeColumnAlias(prefix+"_"+col.getName(), sql);
+                dialect.encodeColumnAlias(prefix + "_" + col.getName(), sql);
             }
             sql.append(",");
         }
-        
-        //other columns
+
+        // other columns
         for (AttributeDescriptor att : featureType.getAttributeDescriptors()) {
             String columnName = att.getLocalName();
             // skip the eventually exposed pk column values
-            if(pkColumnNames.contains(columnName))
-                continue;
+            if (pkColumnNames.contains(columnName)) continue;
 
             String alias = null;
             if (att.getUserData().containsKey(JDBC_COLUMN_ALIAS)) {
-                alias = (String)att.getUserData().get(JDBC_COLUMN_ALIAS);
+                alias = (String) att.getUserData().get(JDBC_COLUMN_ALIAS);
             }
 
             if (att instanceof GeometryDescriptor) {
-                //encode as geometry
+                // encode as geometry
                 encodeGeometryColumn((GeometryDescriptor) att, prefix, sql, query.getHints());
-                
+
                 if (alias == null) {
-                    //alias it to be the name of the original geometry
+                    // alias it to be the name of the original geometry
                     alias = columnName;
                 }
             } else {

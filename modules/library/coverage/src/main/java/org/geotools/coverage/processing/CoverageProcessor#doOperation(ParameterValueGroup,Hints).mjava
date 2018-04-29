@@ -1,74 +1,75 @@
-	/**
-	 * Applies a process operation to a coverage. The default implementation checks if source
-	 * coverages use an interpolation, and then invokes {@link AbstractOperation#doOperation}.
-	 * If all source coverages used the same interpolation, then this interpolation is applied
-	 * to the resulting coverage (except if the resulting coverage has already an interpolation).
-	 *
-	 * @param  parameters Parameters required for the operation. The easiest way to construct them
-	 *         is to invoke <code>operation.{@link Operation#getParameters getParameters}()</code>
-	 *         and to modify the returned group.
-	 * @return The result as a coverage.
-	 * @throws OperationNotFoundException if there is no operation for the parameter group name.
-	 */
-	@SuppressWarnings("unchecked")
-	public Coverage doOperation(final ParameterValueGroup parameters, final Hints hints){
-		Coverage source = getPrimarySource(parameters);
-	    final String operationName = getOperationName(parameters);
-	    final Operation  operation = getOperation(operationName);
-	    /*
-	     * Detects the interpolation type for the source grid coverage.
-	     * The same interpolation will be applied on the result.
-	     */
-	    Interpolation[] interpolations = null;
-	    if (!operationName.equalsIgnoreCase("Interpolate")) {
-	        for (final GeneralParameterValue param : parameters.values()) {
-	            if (param instanceof ParameterValue) {
-	                final Object value = ((ParameterValue) param).getValue();
-	                if (value instanceof Interpolator2D) {
-	                    // If all sources use the same interpolation, preserves the
-	                    // interpolation for the resulting coverage. Otherwise, uses
-	                    // the default interpolation (nearest neighbor).
-	                    final Interpolation[] interp = ((Interpolator2D) value).getInterpolations();
-	                    if (interpolations == null) {
-	                        interpolations = interp;
-	                    } else if (!Arrays.equals(interpolations, interp)) {
-	                        // Set to no interpolation.
-	                        interpolations = null;
-	                        break;
-	                    }
-	                }
-	            }
-	        }
-	    }
-	    /*
-	     * Applies the operation, applies the same interpolation and log a message.
-	     * Note: we don't use "if (operation instanceof AbstractOperation)" below
-	     *       because if it is not, we want the ClassCastException as the cause
-	     *       for the failure.
-	     */
-	    final AbstractOperation op;
-	    try {
-	        op = (AbstractOperation) operation;
-	    } catch (ClassCastException cause) {
-	        final OperationNotFoundException exception = new OperationNotFoundException(
-	                    Errors.getResources(getLocale()).getString(
-	                    ErrorKeys.OPERATION_NOT_FOUND_$1, operationName));
-	        exception.initCause(cause);
-	        throw exception;
-	    }
-	    
-	    //set up hints
-	    final Hints localMergeHints=this.hints.clone();
-	    if(hints!=null)
-	    	localMergeHints.add(hints);
-	    
-	    // processwith local hints
-	    Coverage coverage = op.doOperation(parameters, localMergeHints);
-	    if (interpolations != null && (coverage instanceof GridCoverage2D) &&
-	                                 !(coverage instanceof Interpolator2D)){
-	        coverage = Interpolator2D.create((GridCoverage2D) coverage, interpolations);
-	    }
-	    log(source, coverage, operationName, false);
-	    return coverage;
-	}
+    /**
+     * Applies a process operation to a coverage. The default implementation checks if source
+     * coverages use an interpolation, and then invokes {@link AbstractOperation#doOperation}. If
+     * all source coverages used the same interpolation, then this interpolation is applied to the
+     * resulting coverage (except if the resulting coverage has already an interpolation).
+     *
+     * @param parameters Parameters required for the operation. The easiest way to construct them is
+     *     to invoke <code>operation.{@link Operation#getParameters getParameters}()</code> and to
+     *     modify the returned group.
+     * @return The result as a coverage.
+     * @throws OperationNotFoundException if there is no operation for the parameter group name.
+     */
+    @SuppressWarnings("unchecked")
+    public Coverage doOperation(final ParameterValueGroup parameters, final Hints hints) {
+        Coverage source = getPrimarySource(parameters);
+        final String operationName = getOperationName(parameters);
+        final Operation operation = getOperation(operationName);
+        /*
+         * Detects the interpolation type for the source grid coverage.
+         * The same interpolation will be applied on the result.
+         */
+        Interpolation[] interpolations = null;
+        if (!operationName.equalsIgnoreCase("Interpolate")) {
+            for (final GeneralParameterValue param : parameters.values()) {
+                if (param instanceof ParameterValue) {
+                    final Object value = ((ParameterValue) param).getValue();
+                    if (value instanceof Interpolator2D) {
+                        // If all sources use the same interpolation, preserves the
+                        // interpolation for the resulting coverage. Otherwise, uses
+                        // the default interpolation (nearest neighbor).
+                        final Interpolation[] interp = ((Interpolator2D) value).getInterpolations();
+                        if (interpolations == null) {
+                            interpolations = interp;
+                        } else if (!Arrays.equals(interpolations, interp)) {
+                            // Set to no interpolation.
+                            interpolations = null;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        /*
+         * Applies the operation, applies the same interpolation and log a message.
+         * Note: we don't use "if (operation instanceof AbstractOperation)" below
+         *       because if it is not, we want the ClassCastException as the cause
+         *       for the failure.
+         */
+        final AbstractOperation op;
+        try {
+            op = (AbstractOperation) operation;
+        } catch (ClassCastException cause) {
+            final OperationNotFoundException exception =
+                    new OperationNotFoundException(
+                            Errors.getResources(getLocale())
+                                    .getString(ErrorKeys.OPERATION_NOT_FOUND_$1, operationName));
+            exception.initCause(cause);
+            throw exception;
+        }
+
+        // set up hints
+        final Hints localMergeHints = this.hints.clone();
+        if (hints != null) localMergeHints.add(hints);
+
+        // processwith local hints
+        Coverage coverage = op.doOperation(parameters, localMergeHints);
+        if (interpolations != null
+                && (coverage instanceof GridCoverage2D)
+                && !(coverage instanceof Interpolator2D)) {
+            coverage = Interpolator2D.create((GridCoverage2D) coverage, interpolations);
+        }
+        log(source, coverage, operationName, false);
+        return coverage;
+    }
 

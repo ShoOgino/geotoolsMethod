@@ -1,119 +1,117 @@
-	Style2D createTextStyle(Object feature, TextSymbolizer symbolizer,
-			Range scaleRange) {
-		TextStyle2D ts2d = new TextStyle2D();
-		setScaleRange(ts2d, scaleRange);
+    Style2D createTextStyle(Object feature, TextSymbolizer symbolizer, Range scaleRange) {
+        TextStyle2D ts2d = new TextStyle2D();
+        setScaleRange(ts2d, scaleRange);
 
-		if (LOGGER.isLoggable(Level.FINER)) {
-			LOGGER.finer("creating text style");
-		}
+        if (LOGGER.isLoggable(Level.FINER)) {
+            LOGGER.finer("creating text style");
+        }
 
-		String geomName = symbolizer.getGeometryPropertyName();
+        String geomName = symbolizer.getGeometryPropertyName();
 
-		if (LOGGER.isLoggable(Level.FINER)) {
-			LOGGER.finer("geomName = " + geomName);
-		}
+        if (LOGGER.isLoggable(Level.FINER)) {
+            LOGGER.finer("geomName = " + geomName);
+        }
 
-		// extract label (from ows5 extensions, we could have the label element
-		// empty)
-		String label = evalToString(symbolizer.getLabel(), feature, "");
+        // extract label (from ows5 extensions, we could have the label element
+        // empty)
+        String label = evalToString(symbolizer.getLabel(), feature, "");
 
-		if (LOGGER.isLoggable(Level.FINER)) {
-			LOGGER.finer("label is " + label);
-		}
+        if (LOGGER.isLoggable(Level.FINER)) {
+            LOGGER.finer("label is " + label);
+        }
 
-		ts2d.setLabel(label);
+        ts2d.setLabel(label);
 
-		// get the sequence of fonts to be used and set the first one available
-		List<Font> fonts = symbolizer.fonts();
-		java.awt.Font[] javaFonts = getFonts(feature, fonts, symbolizer);
-	        ts2d.setFonts(javaFonts);
+        // get the sequence of fonts to be used and set the first one available
+        List<Font> fonts = symbolizer.fonts();
+        java.awt.Font[] javaFonts = getFonts(feature, fonts, symbolizer);
+        ts2d.setFonts(javaFonts);
 
-		// compute label position, anchor, rotation and displacement
-		LabelPlacement placement = symbolizer.getLabelPlacement();
-		double anchorX = PointPlacement.DEFAULT_ANCHOR_POINT.getAnchorPointX().evaluate(null, Double.class);
-		double anchorY = PointPlacement.DEFAULT_ANCHOR_POINT.getAnchorPointY().evaluate(null, Double.class);
-		double rotation = 0;
-		double dispX = 0;
-		double dispY = 0;
+        // compute label position, anchor, rotation and displacement
+        LabelPlacement placement = symbolizer.getLabelPlacement();
+        double anchorX =
+                PointPlacement.DEFAULT_ANCHOR_POINT.getAnchorPointX().evaluate(null, Double.class);
+        double anchorY =
+                PointPlacement.DEFAULT_ANCHOR_POINT.getAnchorPointY().evaluate(null, Double.class);
+        double rotation = 0;
+        double dispX = 0;
+        double dispY = 0;
 
-    // Set the defaults to legacy values if the Java System property is set to true.
-    if (Boolean.getBoolean(USE_LEGACY_ANCHOR_POINT_KEY)) {
-      anchorX = 0;
-      anchorY = 0;
+        // Set the defaults to legacy values if the Java System property is set to true.
+        if (Boolean.getBoolean(USE_LEGACY_ANCHOR_POINT_KEY)) {
+            anchorX = 0;
+            anchorY = 0;
+        }
+
+        if (placement instanceof PointPlacement) {
+            if (LOGGER.isLoggable(Level.FINER)) {
+                LOGGER.finer("setting pointPlacement");
+            }
+
+            // compute anchor point and displacement
+            PointPlacement p = (PointPlacement) placement;
+            if (p.getAnchorPoint() != null) {
+                anchorX = evalToDouble(p.getAnchorPoint().getAnchorPointX(), feature, anchorX);
+                anchorY = evalToDouble(p.getAnchorPoint().getAnchorPointY(), feature, anchorY);
+            }
+
+            if (p.getDisplacement() != null) {
+                dispX = evalToDouble(p.getDisplacement().getDisplacementX(), feature, 0);
+                dispY = evalToDouble(p.getDisplacement().getDisplacementY(), feature, 0);
+                ;
+            }
+
+            // rotation
+            if ((symbolizer instanceof TextSymbolizer2)
+                    && (((TextSymbolizer2) symbolizer).getGraphic() != null)) {
+                // don't rotate labels that are being placed on shields.
+                rotation = 0.0;
+            } else {
+                rotation = Math.toRadians(evalToDouble(p.getRotation(), feature, 0));
+            }
+
+            ts2d.setPointPlacement(true);
+        } else if (placement instanceof LinePlacement) {
+            // this code used to really really really really suck, so I removed
+            // it!
+            if (LOGGER.isLoggable(Level.FINER)) {
+                LOGGER.finer("setting pointPlacement");
+            }
+            ts2d.setPointPlacement(false);
+            LinePlacement p = (LinePlacement) placement;
+            int displace = evalToInt(p.getPerpendicularOffset(), feature, 0);
+            ts2d.setPerpendicularOffset(displace);
+        }
+
+        ts2d.setAnchorX(anchorX);
+        ts2d.setAnchorY(anchorY);
+        ts2d.setRotation((float) rotation);
+        ts2d.setDisplacementX(dispX);
+        ts2d.setDisplacementY(dispY);
+
+        // setup fill and composite
+        ts2d.setFill(getPaint(symbolizer.getFill(), feature, symbolizer));
+        ts2d.setComposite(getComposite(symbolizer.getFill(), feature));
+
+        // compute halo parameters
+        Halo halo = symbolizer.getHalo();
+
+        if (halo != null) {
+            ts2d.setHaloFill(getPaint(halo.getFill(), feature, symbolizer));
+            ts2d.setHaloComposite(getComposite(halo.getFill(), feature));
+            ts2d.setHaloRadius(evalToFloat(halo.getRadius(), feature, 1));
+        }
+
+        Graphic graphicShield = null;
+        if (symbolizer instanceof TextSymbolizer2) {
+            graphicShield = ((TextSymbolizer2) symbolizer).getGraphic();
+            if (graphicShield != null) {
+                Style2D shieldStyle =
+                        createPointStyle(feature, symbolizer, graphicShield, scaleRange, true);
+                ts2d.setGraphic(shieldStyle);
+            }
+        }
+
+        return ts2d;
     }
-
-		if (placement instanceof PointPlacement) {
-			if (LOGGER.isLoggable(Level.FINER)) {
-				LOGGER.finer("setting pointPlacement");
-			}
-
-			// compute anchor point and displacement
-			PointPlacement p = (PointPlacement) placement;
-			if (p.getAnchorPoint() != null) {
-				anchorX = evalToDouble(p.getAnchorPoint().getAnchorPointX(),
-						feature, anchorX);
-				anchorY = evalToDouble(p.getAnchorPoint().getAnchorPointY(),
-						feature, anchorY);
-			}
-
-			if (p.getDisplacement() != null) {
-				dispX = evalToDouble(p.getDisplacement().getDisplacementX(),
-						feature, 0);
-				dispY = evalToDouble(p.getDisplacement().getDisplacementY(),
-						feature, 0);
-				;
-			}
-
-			// rotation
-			if ((symbolizer instanceof TextSymbolizer2)
-					&& (((TextSymbolizer2) symbolizer).getGraphic() != null)) {
-				// don't rotate labels that are being placed on shields.
-				rotation = 0.0;
-			} else {
-				rotation = Math.toRadians( evalToDouble(p.getRotation(), feature, 0));
-			}
-
-			ts2d.setPointPlacement(true);
-		} else if (placement instanceof LinePlacement) {
-			// this code used to really really really really suck, so I removed
-			// it!
-			if (LOGGER.isLoggable(Level.FINER)) {
-				LOGGER.finer("setting pointPlacement");
-			}
-			ts2d.setPointPlacement(false);
-			LinePlacement p = (LinePlacement) placement;
-			int displace = evalToInt(p.getPerpendicularOffset(), feature, 0);
-			ts2d.setPerpendicularOffset(displace);
-		}
-
-		ts2d.setAnchorX(anchorX);
-		ts2d.setAnchorY(anchorY);
-		ts2d.setRotation((float) rotation);
-		ts2d.setDisplacementX(dispX);
-		ts2d.setDisplacementY(dispY);
-
-		// setup fill and composite
-		ts2d.setFill(getPaint(symbolizer.getFill(), feature, symbolizer));
-		ts2d.setComposite(getComposite(symbolizer.getFill(), feature));
-
-		// compute halo parameters
-		Halo halo = symbolizer.getHalo();
-
-		if (halo != null) {
-			ts2d.setHaloFill(getPaint(halo.getFill(), feature, symbolizer));
-			ts2d.setHaloComposite(getComposite(halo.getFill(), feature));
-			ts2d.setHaloRadius(evalToFloat(halo.getRadius(), feature, 1));
-		}
-
-		Graphic graphicShield = null;
-		if (symbolizer instanceof TextSymbolizer2) {
-			graphicShield = ((TextSymbolizer2) symbolizer).getGraphic();
-			if (graphicShield != null) {
-				Style2D shieldStyle = createPointStyle(feature, symbolizer, graphicShield, scaleRange, true);
-				ts2d.setGraphic(shieldStyle);
-			}
-		}
-
-		return ts2d;
-	}
 

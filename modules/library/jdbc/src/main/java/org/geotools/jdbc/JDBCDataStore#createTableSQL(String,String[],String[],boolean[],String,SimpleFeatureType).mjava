@@ -1,56 +1,60 @@
-    /**
-     * Helper method for building a 'CREATE TABLE' sql statement.
-     */
-    private String createTableSQL(String tableName, String[] columnNames, String[] sqlTypeNames,
-        boolean[] nillable, String pkeyColumn, SimpleFeatureType featureType ) throws SQLException {
-        //build the create table sql
+    /** Helper method for building a 'CREATE TABLE' sql statement. */
+    private String createTableSQL(
+            String tableName,
+            String[] columnNames,
+            String[] sqlTypeNames,
+            boolean[] nillable,
+            String pkeyColumn,
+            SimpleFeatureType featureType)
+            throws SQLException {
+        // build the create table sql
         StringBuffer sql = new StringBuffer();
         dialect.encodeCreateTable(sql);
 
         encodeTableName(tableName, sql, null);
         sql.append(" ( ");
 
-        //primary key column
+        // primary key column
         if (pkeyColumn != null) {
             dialect.encodePrimaryKey(pkeyColumn, sql);
             sql.append(", ");
         }
 
-        //normal attributes
+        // normal attributes
         for (int i = 0; i < columnNames.length; i++) {
-            //the column name
+            // the column name
             dialect.encodeColumnName(columnNames[i], sql);
             sql.append(" ");
 
-            //some sql dialects require varchars to have an
+            // some sql dialects require varchars to have an
             // associated size with them
             int length = -1;
-            if ( sqlTypeNames[i].toUpperCase().startsWith( "VARCHAR" ) ) {
-                if ( featureType != null ) {
+            if (sqlTypeNames[i].toUpperCase().startsWith("VARCHAR")) {
+                if (featureType != null) {
                     AttributeDescriptor att = featureType.getDescriptor(columnNames[i]);
-                    length = findVarcharColumnLength( att );
+                    length = findVarcharColumnLength(att);
                 }
             }
-            
-            //only apply a length if one exists (i.e. to applicable varchars)
-            if ( length == -1 ) {
-                dialect.encodeColumnType(sqlTypeNames[i], sql);  
-            } else {  
-                dialect.encodeColumnType(sqlTypeNames[i] + "("+ length + ")", sql);
+
+            // only apply a length if one exists (i.e. to applicable varchars)
+            if (length == -1) {
+                dialect.encodeColumnType(sqlTypeNames[i], sql);
+            } else {
+                dialect.encodeColumnType(sqlTypeNames[i] + "(" + length + ")", sql);
             }
 
-            //nullable
-            if ( nillable != null && !nillable[i] ) {
-                sql.append( " NOT NULL ");
+            // nullable
+            if (nillable != null && !nillable[i]) {
+                sql.append(" NOT NULL ");
             }
 
-            //delegate to dialect to encode column postamble
+            // delegate to dialect to encode column postamble
             if (featureType != null) {
                 AttributeDescriptor att = featureType.getDescriptor(columnNames[i]);
                 dialect.encodePostColumnCreateTable(att, sql);
             }
-            
-            //sql.append(sqlTypeNames[i]);
+
+            // sql.append(sqlTypeNames[i]);
             if (i < (sqlTypeNames.length - 1)) {
                 sql.append(", ");
             }
@@ -58,7 +62,7 @@
 
         sql.append(" ) ");
 
-        //encode anything post create table
+        // encode anything post create table
         dialect.encodePostCreateTable(tableName, sql);
 
         return sql.toString();

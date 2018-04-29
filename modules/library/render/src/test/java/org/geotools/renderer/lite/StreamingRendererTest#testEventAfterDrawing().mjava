@@ -5,45 +5,50 @@
         mc.addLayer(new FeatureLayer(createLineCollection(), createLineStyle()));
 
         // build projected envelope to work with (small one around the area of
-        // validity of utm zone 1, which being a Gauss projection is a vertical 
+        // validity of utm zone 1, which being a Gauss projection is a vertical
         // slice parallel to the central meridian, -177°)
-        ReferencedEnvelope reWgs = new ReferencedEnvelope(new Envelope(-180,
-                -170, 20, 40), DefaultGeographicCRS.WGS84);
+        ReferencedEnvelope reWgs =
+                new ReferencedEnvelope(
+                        new Envelope(-180, -170, 20, 40), DefaultGeographicCRS.WGS84);
         CoordinateReferenceSystem utm1N = CRS.decode("EPSG:32601");
         ReferencedEnvelope reUtm = reWgs.transform(utm1N, true);
 
-        BufferedImage image = new BufferedImage(200, 200,BufferedImage.TYPE_4BYTE_ABGR);
+        BufferedImage image = new BufferedImage(200, 200, BufferedImage.TYPE_4BYTE_ABGR);
 
         // setup the renderer and listen for errors
         final AtomicInteger commandsCount = new AtomicInteger(0);
-        final BlockingQueue<RenderingRequest> queue = new ArrayBlockingQueue<RenderingRequest>(10) {
-            @Override
-            public void put(RenderingRequest e) throws InterruptedException {
-                commandsCount.incrementAndGet();
-                super.put(e);
-            }
-        };
-        StreamingRenderer sr = new StreamingRenderer() {
-         @Override
-        protected BlockingQueue<RenderingRequest> getRequestsQueue() {
-            return queue;
-        }  
-        };
+        final BlockingQueue<RenderingRequest> queue =
+                new ArrayBlockingQueue<RenderingRequest>(10) {
+                    @Override
+                    public void put(RenderingRequest e) throws InterruptedException {
+                        commandsCount.incrementAndGet();
+                        super.put(e);
+                    }
+                };
+        StreamingRenderer sr =
+                new StreamingRenderer() {
+                    @Override
+                    protected BlockingQueue<RenderingRequest> getRequestsQueue() {
+                        return queue;
+                    }
+                };
         sr.setMapContent(mc);
-        sr.addRenderListener(new RenderListener() {
-            public void featureRenderer(SimpleFeature feature) {
-                assertTrue(commandsCount.get() > 0);
-                features++;
-            }
-            public void errorOccurred(Exception e) {
-                errors++;
-            }
-        });
+        sr.addRenderListener(
+                new RenderListener() {
+                    public void featureRenderer(SimpleFeature feature) {
+                        assertTrue(commandsCount.get() > 0);
+                        features++;
+                    }
+
+                    public void errorOccurred(Exception e) {
+                        errors++;
+                    }
+                });
         errors = 0;
         features = 0;
-        sr.paint((Graphics2D) image.getGraphics(), new Rectangle(200, 200),reUtm);
+        sr.paint((Graphics2D) image.getGraphics(), new Rectangle(200, 200), reUtm);
         mc.dispose();
-        
+
         // we should get errors since there are two features that cannot be
         // projected but the renderer itself should not throw exceptions
         assertTrue(errors > 0);

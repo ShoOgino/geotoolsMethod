@@ -5,97 +5,96 @@
         SimpleFeatureStore store2 = (SimpleFeatureStore) store.getFeatureSource(TYPENAME);
         store1.setTransaction(defaultTransaction);
         store2.setTransaction(anotherTransaction);
-        
+
         Listener listener1 = new Listener("one");
         Listener listener2 = new Listener("two");
         store1.addFeatureListener(listener1);
         store2.addFeatureListener(listener2);
-        
+
         FilterFactory2 ff = CommonFactoryFinder.getFilterFactory2();
-        
+
         final SimpleFeature feature = FEATURES.get(0);
         Filter fidFilter = ff.id(feature.getIdentifier());
-        
+
         // test change
-        GeometryFactory geometryFactory = JTSFactoryFinder.getGeometryFactory( null );
-        WKTReader reader = new WKTReader( geometryFactory );
+        GeometryFactory geometryFactory = JTSFactoryFinder.getGeometryFactory(null);
+        WKTReader reader = new WKTReader(geometryFactory);
         Polygon geom = (Polygon) reader.read("POLYGON ((0 2, 1 0, 1 1, 0 1, 0 2))");
-        
+
         ReferencedEnvelope bounds = new ReferencedEnvelope();
         bounds.include(feature.getBounds());
         bounds.expandToInclude(geom.getEnvelopeInternal());
-        
-        store1.modifyFeatures(new Name[]{new NameImpl("geom")}, 
-                new Object[]{geom}, fidFilter);
-        
+
+        store1.modifyFeatures(new Name[] {new NameImpl("geom")}, new Object[] {geom}, fidFilter);
+
         // test that only the listener listening with the current transaction gets the event.
         assertEquals(1, listener1.events.size());
         assertEquals(0, listener2.events.size());
-        
+
         FeatureEvent event = listener1.getEvent(0);
         assertEquals(bounds, event.getBounds());
         assertEquals(FeatureEvent.Type.CHANGED, event.getType());
-        
+
         listener1.events.clear();
         listener2.events.clear();
-        
+
         // test that rollback sends events to
         // only the listener listening with the current transaction.
         store1.getTransaction().rollback();
-        
+
         assertEquals(1, listener1.events.size());
         assertEquals(0, listener2.events.size());
-        
+
         event = listener1.getEvent(0);
         assertEquals(bounds, event.getBounds());
         assertEquals(FeatureEvent.Type.ROLLBACK, event.getType());
-        
+
         listener1.events.clear();
         listener2.events.clear();
-        
-        //test remove
+
+        // test remove
         store1.removeFeatures(fidFilter);
-        
+
         assertEquals(1, listener1.events.size());
         assertEquals(0, listener2.events.size());
-        
+
         event = listener1.getEvent(0);
         assertEquals(feature.getBounds(), event.getBounds());
         assertEquals(FeatureEvent.Type.REMOVED, event.getType());
-        
+
         listener1.events.clear();
         listener2.events.clear();
-        
+
         // test that commit sends events to all listeners
         // except the listener listening with the current transaction.
         store1.getTransaction().commit();
-        
+
         assertEquals(0, listener1.events.size());
         assertEquals(1, listener2.events.size());
-        
+
         event = listener2.getEvent(0);
         assertEquals(feature.getBounds(), event.getBounds());
         assertEquals(FeatureEvent.Type.COMMIT, event.getType());
-        
+
         listener1.events.clear();
         listener2.events.clear();
-        
+
         // test add
         store1.addFeatures(DataUtilities.collection(feature));
-        
+
         assertEquals(1, listener1.events.size());
         event = listener1.getEvent(0);
         assertEquals(feature.getBounds(), event.getBounds());
         assertEquals(FeatureEvent.Type.ADDED, event.getType());
         assertEquals(0, listener2.events.size());
-        
+
         listener1.events.clear();
         listener2.events.clear();
-        
+
         // test that rollback sends events to
         // only the listener listening with the current transaction.
         store1.getTransaction().rollback();
-        
+
         assertEquals(1, listener1.events.size());
         assertEquals(0, listener2.events.size());
         event = listener1.getEvent(0);

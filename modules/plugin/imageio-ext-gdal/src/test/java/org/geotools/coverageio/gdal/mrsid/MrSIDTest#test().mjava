@@ -1,6 +1,6 @@
     /**
      * Test for reading a grid coverage from a MrSID source
-     * 
+     *
      * @throws Exception
      */
     @org.junit.Test
@@ -10,19 +10,19 @@
         }
         // read in the grid coverage
         if (fileName.equalsIgnoreCase("")) {
-            LOGGER
-                    .info("==================================================================\n"
+            LOGGER.info(
+                    "==================================================================\n"
                             + " Warning! No valid test File has been specified.\n"
                             + " Please provide a valid sample in the source code and repeat this test!\n"
                             + "========================================================================");
 
             return;
         }
-        
-        File file =null;
+
+        File file = null;
         try {
             file = TestData.file(this, fileName);
-        }catch (FileNotFoundException fnfe){
+        } catch (FileNotFoundException fnfe) {
             LOGGER.warning("test-data not found: " + fileName + "\nTests are skipped");
             return;
         } catch (IOException ioe) {
@@ -32,7 +32,7 @@
 
         // get a reader
         final MrSIDReader reader = new MrSIDReader(file);
-        
+
         // /////////////////////////////////////////////////////////////////////
         //
         // read once
@@ -41,7 +41,6 @@
         GridCoverage2D gc = (GridCoverage2D) reader.read(null);
         forceDataLoading(gc);
 
-
         // /////////////////////////////////////////////////////////////////////
         //
         // read again with subsampling and crop
@@ -49,31 +48,47 @@
         // /////////////////////////////////////////////////////////////////////
         final int originalW = gc.getRenderedImage().getWidth();
         final int originalH = gc.getRenderedImage().getHeight();
-        final Rectangle range = ((GridEnvelope2D)reader.getOriginalGridRange());
+        final Rectangle range = ((GridEnvelope2D) reader.getOriginalGridRange());
         final GeneralEnvelope originalEnvelope = reader.getOriginalEnvelope();
-        final GeneralEnvelope reducedEnvelope = new GeneralEnvelope(new double[] {
-                originalEnvelope.getLowerCorner().getOrdinate(0),
-                originalEnvelope.getLowerCorner().getOrdinate(1)},
-                new double[] { originalEnvelope.getMedian().getOrdinate(0),
-                        originalEnvelope.getMedian().getOrdinate(1)});
+        final GeneralEnvelope reducedEnvelope =
+                new GeneralEnvelope(
+                        new double[] {
+                            originalEnvelope.getLowerCorner().getOrdinate(0),
+                            originalEnvelope.getLowerCorner().getOrdinate(1)
+                        },
+                        new double[] {
+                            originalEnvelope.getMedian().getOrdinate(0),
+                            originalEnvelope.getMedian().getOrdinate(1)
+                        });
         reducedEnvelope.setCoordinateReferenceSystem(reader.getCrs());
 
-        final ParameterValue gg = (ParameterValue) ((AbstractGridFormat) reader
-                .getFormat()).READ_GRIDGEOMETRY2D.createValue();
-        gg.setValue(new GridGeometry2D(new GridEnvelope2D(new Rectangle(0, 0,
-                (int) (range.width / 2.0),
-                (int) (range.height / 2.0))), reducedEnvelope));
-        gc = (GridCoverage2D) reader.read(new GeneralParameterValue[] { gg });
+        final ParameterValue gg =
+                (ParameterValue)
+                        ((AbstractGridFormat) reader.getFormat()).READ_GRIDGEOMETRY2D.createValue();
+        gg.setValue(
+                new GridGeometry2D(
+                        new GridEnvelope2D(
+                                new Rectangle(
+                                        0,
+                                        0,
+                                        (int) (range.width / 2.0),
+                                        (int) (range.height / 2.0))),
+                        reducedEnvelope));
+        gc = (GridCoverage2D) reader.read(new GeneralParameterValue[] {gg});
         Assert.assertNotNull(gc);
         // NOTE: in some cases might be too restrictive
-        Assert.assertTrue(reducedEnvelope.equals(gc.getEnvelope(), XAffineTransform
-                .getScale(((AffineTransform) ((GridGeometry2D) gc
-                        .getGridGeometry()).getGridToCRS2D())) / 2, true));
+        Assert.assertTrue(
+                reducedEnvelope.equals(
+                        gc.getEnvelope(),
+                        XAffineTransform.getScale(
+                                        ((AffineTransform)
+                                                ((GridGeometry2D) gc.getGridGeometry())
+                                                        .getGridToCRS2D()))
+                                / 2,
+                        true));
         // this should be fine since we give 1 pixel tolerance
-        Assert.assertEquals(originalW / 2.0 , gc.getRenderedImage()
-                .getWidth(), 1);
-        Assert.assertEquals(originalH / 2.0 , gc.getRenderedImage()
-                .getHeight(), 1);
+        Assert.assertEquals(originalW / 2.0, gc.getRenderedImage().getWidth(), 1);
+        Assert.assertEquals(originalH / 2.0, gc.getRenderedImage().getHeight(), 1);
 
         forceDataLoading(gc);
 
@@ -83,36 +98,46 @@
         // and customized tilesize
         //
         // /////////////////////////////////////////////////////////////////////
-        final ParameterValue policy = (ParameterValue) ((AbstractGridFormat) reader
-                .getFormat()).OVERVIEW_POLICY.createValue();
+        final ParameterValue policy =
+                (ParameterValue)
+                        ((AbstractGridFormat) reader.getFormat()).OVERVIEW_POLICY.createValue();
         policy.setValue(OverviewPolicy.IGNORE);
-        
+
         // //
         //
         // Customizing Tile Size
         //
         // //
-        final ParameterValue tilesize = (ParameterValue) ((BaseGDALGridFormat) reader
-                .getFormat()).SUGGESTED_TILE_SIZE.createValue();
+        final ParameterValue tilesize =
+                (ParameterValue)
+                        ((BaseGDALGridFormat) reader.getFormat()).SUGGESTED_TILE_SIZE.createValue();
         tilesize.setValue("512,512");
-        
+
         // //
         //
-        // Setting read type: use JAI ImageRead 
+        // Setting read type: use JAI ImageRead
         //
         // //
-        final ParameterValue useJaiRead = (ParameterValue) ((BaseGDALGridFormat) reader
-                .getFormat()).USE_JAI_IMAGEREAD.createValue();
+        final ParameterValue useJaiRead =
+                (ParameterValue)
+                        ((BaseGDALGridFormat) reader.getFormat()).USE_JAI_IMAGEREAD.createValue();
         useJaiRead.setValue(true);
 
-        gc = (GridCoverage2D) reader.read(new GeneralParameterValue[] { gg,
-                policy, tilesize, useJaiRead });
-        
+        gc =
+                (GridCoverage2D)
+                        reader.read(new GeneralParameterValue[] {gg, policy, tilesize, useJaiRead});
+
         Assert.assertNotNull(gc);
         // NOTE: in some cases might be too restrictive
-        Assert.assertTrue(reducedEnvelope.equals(gc.getEnvelope(), XAffineTransform
-                .getScale(((AffineTransform) ((GridGeometry2D) gc
-                        .getGridGeometry()).getGridToCRS2D())) / 2, true));
+        Assert.assertTrue(
+                reducedEnvelope.equals(
+                        gc.getEnvelope(),
+                        XAffineTransform.getScale(
+                                        ((AffineTransform)
+                                                ((GridGeometry2D) gc.getGridGeometry())
+                                                        .getGridToCRS2D()))
+                                / 2,
+                        true));
         // this should be fine since we give 1 pixel tolerance
         Assert.assertEquals(originalW / 2, gc.getRenderedImage().getWidth(), 1);
         Assert.assertEquals(originalH / 2, gc.getRenderedImage().getHeight(), 1);

@@ -1,7 +1,7 @@
     /**
-     * Creates the polygon schema, inserts a 3D geometry into the datastore,
-     * and retrieves it back to make sure 3d data is preserved.
-     * 
+     * Creates the polygon schema, inserts a 3D geometry into the datastore, and retrieves it back
+     * to make sure 3d data is preserved.
+     *
      * @throws Exception
      */
     private void checkCreateSchemaAndInsert(Geometry poly) throws Exception {
@@ -10,12 +10,14 @@
         assertFeatureTypesEqual(poly3DType, actualSchema);
         assertEquals(
                 getNativeSRID(),
-                actualSchema.getGeometryDescriptor().getUserData()
+                actualSchema
+                        .getGeometryDescriptor()
+                        .getUserData()
                         .get(JDBCDataStore.JDBC_NATIVE_SRID));
 
         // insert the feature
-        try(FeatureWriter<SimpleFeatureType, SimpleFeature> fw = dataStore.getFeatureWriterAppend(
-                tname(getPoly3d()), Transaction.AUTO_COMMIT)) {
+        try (FeatureWriter<SimpleFeatureType, SimpleFeature> fw =
+                dataStore.getFeatureWriterAppend(tname(getPoly3d()), Transaction.AUTO_COMMIT)) {
             SimpleFeature f = fw.next();
             f.setAttribute(aname(ID), 0);
             f.setAttribute(aname(GEOM), poly);
@@ -24,24 +26,23 @@
         }
 
         // read feature back
-        
+
         /**
-         * Use a LiteCoordinateSequence, since this mimics GeoServer behaviour better,
-         * and it exposes bugs in CoordinateSequence handling.
+         * Use a LiteCoordinateSequence, since this mimics GeoServer behaviour better, and it
+         * exposes bugs in CoordinateSequence handling.
          */
         final Hints hints = new Hints();
         hints.put(Hints.JTS_COORDINATE_SEQUENCE_FACTORY, new LiteCoordinateSequenceFactory());
         Query query = new Query(tname(getPoly3d()));
         query.setHints(hints);
-        
-        try(FeatureReader<SimpleFeatureType, SimpleFeature> fr = dataStore.getFeatureReader(
-                query, Transaction.AUTO_COMMIT)) {
+
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> fr =
+                dataStore.getFeatureReader(query, Transaction.AUTO_COMMIT)) {
             assertTrue(fr.hasNext());
             SimpleFeature f = fr.next();
-    
+
             /**
-             * Check the geometries are topologically equal.
-             * Check that the Z values are preserved
+             * Check the geometries are topologically equal. Check that the Z values are preserved
              */
             Geometry fgeom = (Geometry) f.getDefaultGeometry();
             assertTrue("2D topology does not match", poly.equalsTopo(fgeom));

@@ -1,23 +1,22 @@
     @Override
-    public Class<?> getMapping(ResultSet columnMetaData, Connection cx)
-            throws SQLException {
-        
+    public Class<?> getMapping(ResultSet columnMetaData, Connection cx) throws SQLException {
+
         String typeName = columnMetaData.getString("TYPE_NAME");
-        if("UUID".equalsIgnoreCase(typeName)) {
+        if ("UUID".equalsIgnoreCase(typeName)) {
             return UUID.class;
         } else if ("BLOB".equalsIgnoreCase(typeName) || "VARBINARY".equalsIgnoreCase(typeName)) {
             String schemaName = columnMetaData.getString("TABLE_SCHEM");
             String tableName = columnMetaData.getString("TABLE_NAME");
             String columnName = columnMetaData.getString("COLUMN_NAME");
-            
-            //look up in geometry columns table
+
+            // look up in geometry columns table
             StringBuffer sql = new StringBuffer("SELECT type FROM geometry_columns WHERE ");
             if (schemaName != null) {
                 sql.append("f_table_schema = '").append(schemaName).append("'").append(" AND ");
             }
             sql.append("f_table_name = '").append(tableName).append("' AND ");
             sql.append("f_geometry_column = '").append(columnName).append("'");
-            
+
             Statement st = cx.createStatement();
             try {
                 LOGGER.fine(sql.toString());
@@ -31,29 +30,27 @@
                         }
                         LOGGER.warning("Geometry type " + type + " not supported.");
                     }
-                }
-                finally {
+                } finally {
                     dataStore.closeSafe(rs);
                 }
-            }
-            finally {
+            } finally {
                 dataStore.closeSafe(st);
             }
-            
-            //not a geometry blob, return byte[].class
+
+            // not a geometry blob, return byte[].class
             return byte[].class;
         }
-        
-        //do a check for a column remark which marks this as a geometry
+
+        // do a check for a column remark which marks this as a geometry
         // do this mostly for backwards compatability
-        String remark = columnMetaData.getString( "REMARKS" );
-        if ( remark != null ) {
+        String remark = columnMetaData.getString("REMARKS");
+        if (remark != null) {
             Geometries g = Geometries.getForName(remark);
             if (g != null) {
                 return g.getBinding();
             }
         }
-        
+
         return null;
     }
 

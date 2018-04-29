@@ -1,20 +1,16 @@
-	/**
-	 * Writing a gif file as an overview for this GTopo30.
-	 * 
-	 * @param gc
-	 *            The GridCoverage to write
-	 * @param file
-	 *            The destination object (can be a File or ZipOutputStream)
-	 * @param dest
-	 * 
-	 * @throws IOException
-	 *             If the file could not be written
-	 */
-	private void writeGIF(final GridCoverage2D gc, final String name,
-			Object dest) throws IOException {
-		ImageOutputStream out = null;
+    /**
+     * Writing a gif file as an overview for this GTopo30.
+     *
+     * @param gc The GridCoverage to write
+     * @param file The destination object (can be a File or ZipOutputStream)
+     * @param dest
+     * @throws IOException If the file could not be written
+     */
+    private void writeGIF(final GridCoverage2D gc, final String name, Object dest)
+            throws IOException {
+        ImageOutputStream out = null;
 
-	      // rescaling to a smaller resolution in order to save space on storage
+        // rescaling to a smaller resolution in order to save space on storage
         final GridCoverage2D gc1 = rescaleCoverage(gc);
 
         // get the non-geophysiscs view
@@ -22,25 +18,29 @@
 
         // get the underlying image
         RenderedImage image = gc2.getRenderedImage();
-        
+
         ColorModel cm = image.getColorModel();
         SampleModel sm = image.getSampleModel();
 
         // Taking this code from previous rendering utilities on ViewsManager
         if (!(cm instanceof IndexColorModel)) {
             ImageLayout layout = ImageUtilities.getImageLayout(image);
-            cm = ColorUtilities.getIndexColorModel(new int[]{0});
+            cm = ColorUtilities.getIndexColorModel(new int[] {0});
             int sourceType = sm.getDataType();
-            sm = cm.createCompatibleSampleModel(layout.getTileWidth(image), layout.getTileHeight(image));
+            sm =
+                    cm.createCompatibleSampleModel(
+                            layout.getTileWidth(image), layout.getTileHeight(image));
             int targetType = sm.getDataType();
             MathTransform1D transform = LinearTransform1D.create(1, 9999);
             layout.setColorModel(cm).setSampleModel(sm);
-            //ParameterBlock param = new ParameterBlock().addSource(image);
+            // ParameterBlock param = new ParameterBlock().addSource(image);
             RenderingHints hints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout);
             hints.put(JAI.KEY_REPLACE_INDEX_COLOR_MODEL, Boolean.FALSE);
-            hints.put(JAI.KEY_TRANSFORM_ON_COLORMAP,     Boolean.FALSE);
+            hints.put(JAI.KEY_TRANSFORM_ON_COLORMAP, Boolean.FALSE);
             try {
-                LookupTableJAI table = LookupTableFactory.create(sourceType, targetType, new MathTransform1D[]{transform});
+                LookupTableJAI table =
+                        LookupTableFactory.create(
+                                sourceType, targetType, new MathTransform1D[] {transform});
                 LookupTable lut = it.geosolutions.jaiext.lookup.LookupTableFactory.create(table);
                 ImageWorker worker = new ImageWorker(image);
                 worker.setRenderingHints(hints);
@@ -49,37 +49,35 @@
             } catch (TransformException e) {
                 LOGGER.severe(e.getLocalizedMessage());
             }
-            
         }
 
         // get the image out stream
-		if (dest instanceof File) {
-			// writing gif image
-			final File file = new File((File) dest,
-					new StringBuffer(name).append(".GIF").toString());
+        if (dest instanceof File) {
+            // writing gif image
+            final File file =
+                    new File((File) dest, new StringBuffer(name).append(".GIF").toString());
             out = ImageIOExt.createImageOutputStream(image, file);
-		} else {
-			final ZipOutputStream outZ = (ZipOutputStream) dest;
-			final ZipEntry e = new ZipEntry(gc.getName().toString() + ".GIF");
-			outZ.putNextEntry(e);
+        } else {
+            final ZipOutputStream outZ = (ZipOutputStream) dest;
+            final ZipEntry e = new ZipEntry(gc.getName().toString() + ".GIF");
+            outZ.putNextEntry(e);
 
-			out = ImageIOExt.createImageOutputStream(image, outZ);
-		}
+            out = ImageIOExt.createImageOutputStream(image, outZ);
+        }
 
-		// write it down as a gif
-		final ParameterBlockJAI pbj = new ParameterBlockJAI("ImageWrite");
-		pbj.addSource(image);
-		pbj.setParameter("Output", out);
-		pbj.setParameter("Format", "gif");
-		JAI.create("ImageWrite", pbj, new RenderingHints(JAI.KEY_TILE_CACHE,
-				null));
+        // write it down as a gif
+        final ParameterBlockJAI pbj = new ParameterBlockJAI("ImageWrite");
+        pbj.addSource(image);
+        pbj.setParameter("Output", out);
+        pbj.setParameter("Format", "gif");
+        JAI.create("ImageWrite", pbj, new RenderingHints(JAI.KEY_TILE_CACHE, null));
 
-		out.close();
-		if (dest instanceof ZipOutputStream) {
-			((ZipOutputStream) dest).closeEntry();
-		}
+        out.close();
+        if (dest instanceof ZipOutputStream) {
+            ((ZipOutputStream) dest).closeEntry();
+        }
 
-		// disposing the old unused coverages
-		gc1.dispose(false);
-	}
+        // disposing the old unused coverages
+        gc1.dispose(false);
+    }
 

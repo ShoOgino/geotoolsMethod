@@ -1,7 +1,8 @@
     /**
-     * Performs an affine transform on the image, applying optimization such as affine removal in case the affine is an identity, affine merging if
-     * the affine is applied on top of another affine, and using optimized operations for integer translates
-     * 
+     * Performs an affine transform on the image, applying optimization such as affine removal in
+     * case the affine is an identity, affine merging if the affine is applied on top of another
+     * affine, and using optimized operations for integer translates
+     *
      * @param tx
      * @param interpolation
      * @param bgValues
@@ -17,13 +18,19 @@
         boolean hasShearY = Math.abs(tx.getShearY()) * size > RS_EPS;
         boolean hasTranslateX = Math.abs(tx.getTranslateX()) > RS_EPS;
         boolean hasTranslateY = Math.abs(tx.getTranslateY()) > RS_EPS;
-        if (!hasScaleX && !hasScaleY && !hasShearX && !hasShearY && !hasTranslateX
+        if (!hasScaleX
+                && !hasScaleY
+                && !hasShearX
+                && !hasShearY
+                && !hasTranslateX
                 && !hasTranslateY) {
             return this;
         }
 
         // apply defaults to allow for comparisong
-        ParameterListDescriptor pld = getOperationDescriptor("affine").getParameterListDescriptor(RenderedRegistryMode.MODE_NAME);
+        ParameterListDescriptor pld =
+                getOperationDescriptor("affine")
+                        .getParameterListDescriptor(RenderedRegistryMode.MODE_NAME);
         if (interpolation == null) {
             interpolation = (Interpolation) pld.getParamDefaultValue("interpolation");
         }
@@ -48,19 +55,23 @@
 
             // check if we can do a warp-affine reduction
             final ParameterBlock sourceParamBlock = op.getParameterBlock();
-            if (WARP_REDUCTION_ENABLED && "Warp".equals(opName)
+            if (WARP_REDUCTION_ENABLED
+                    && "Warp".equals(opName)
                     && mtProperty instanceof MathTransform2D
                     && sourceBoundsProperty instanceof Rectangle) {
                 try {
                     // we can merge the affine into the warp
                     MathTransform2D originalTransform = (MathTransform2D) mtProperty;
-                    MathTransformFactory factory = ReferencingFactoryFinder
-                            .getMathTransformFactory(null);
-                    MathTransform affineMT = factory
-                            .createAffineTransform(new org.geotools.referencing.operation.matrix.AffineTransform2D(
-                                    tx));
-                    MathTransform2D chained = (MathTransform2D) factory
-                            .createConcatenatedTransform(affineMT.inverse(), originalTransform);
+                    MathTransformFactory factory =
+                            ReferencingFactoryFinder.getMathTransformFactory(null);
+                    MathTransform affineMT =
+                            factory.createAffineTransform(
+                                    new org.geotools.referencing.operation.matrix.AffineTransform2D(
+                                            tx));
+                    MathTransform2D chained =
+                            (MathTransform2D)
+                                    factory.createConcatenatedTransform(
+                                            affineMT.inverse(), originalTransform);
 
                     // setup the warp builder
                     Double tolerance = (Double) getRenderingHint(Hints.RESAMPLE_TOLERANCE);
@@ -75,7 +86,8 @@
                     WarpBuilder wb = new WarpBuilder(tolerance);
                     wb.setMaxPositions(4 * 1024 * 1024);
 
-                    // compute the target bbox the same way the affine would have to have a 1-1 match
+                    // compute the target bbox the same way the affine would have to have a 1-1
+                    // match
                     ParameterBlock pb = new ParameterBlock();
                     pb.setSource(source, 0);
                     pb.set(tx, 0);
@@ -110,17 +122,29 @@
                     Warp sourceWarp = (Warp) sourceParamBlock.getObjectParameter(0);
                     if (warp instanceof WarpGrid
                             || warp instanceof WarpAffine
-                            || !(sourceWarp instanceof WarpGrid || sourceWarp instanceof WarpAffine)) {
+                            || !(sourceWarp instanceof WarpGrid
+                                    || sourceWarp instanceof WarpAffine)) {
                         // and then the JAI Operation
                         PlanarImage sourceImage = op.getSourceImage(0);
                         final ParameterBlock paramBlk = new ParameterBlock().addSource(sourceImage);
                         Object property = sourceImage.getProperty("ROI");
-                        // Boolean indicating if optional ROI may be reprojected back to the initial image
+                        // Boolean indicating if optional ROI may be reprojected back to the initial
+                        // image
                         boolean canProcessROI = true;
-                        // Boolean indicating if NoData are the same as for the source operation or are not present
-                        Range oldNoData = (Range) (sourceParamBlock.getNumParameters() > 3 ? sourceParamBlock.getObjectParameter(4) : null);
-                        boolean hasSameNodata = (oldNoData == null && nodata == null) || (oldNoData != null && nodata != null && oldNoData.equals(nodata));
-                        if (((property == null) || property.equals(java.awt.Image.UndefinedProperty)
+                        // Boolean indicating if NoData are the same as for the source operation or
+                        // are not present
+                        Range oldNoData =
+                                (Range)
+                                        (sourceParamBlock.getNumParameters() > 3
+                                                ? sourceParamBlock.getObjectParameter(4)
+                                                : null);
+                        boolean hasSameNodata =
+                                (oldNoData == null && nodata == null)
+                                        || (oldNoData != null
+                                                && nodata != null
+                                                && oldNoData.equals(nodata));
+                        if (((property == null)
+                                || property.equals(java.awt.Image.UndefinedProperty)
                                 || !(property instanceof ROI))) {
                             paramBlk.add(warp).add(interpolation).add(bgValues);
                             if (oldNoData != null) {
@@ -184,7 +208,7 @@
                                 paramBlk.set(oldNoData, 4);
                             }
                         }
-                        
+
                         // handle background values
                         if (bgValues == null && sourceParamBlock.getNumParameters() > 2) {
                             bgValues = (double[]) sourceParamBlock.getObjectParameter(2);
@@ -194,7 +218,7 @@
                         }
 
                         // Checks if ROI can be processed
-                        if (canProcessROI && hasSameNodata){
+                        if (canProcessROI && hasSameNodata) {
                             // force in the image layout, this way we get exactly the same
                             // as the affine we're eliminating
                             Hints localHints = new Hints(getRenderingHints());
@@ -216,7 +240,7 @@
                             image = result;
                             // getting the new ROI property
                             Object prop = result.getProperty("roi");
-                            if (prop != null && prop instanceof ROI){
+                            if (prop != null && prop instanceof ROI) {
                                 setROI((ROI) prop);
                             } else {
                                 setROI(null);
@@ -241,16 +265,16 @@
                 AffineTransform sTx = (AffineTransform) paramBlock.getObjectParameter(0);
                 Interpolation sInterp = (Interpolation) paramBlock.getObjectParameter(1);
                 double[] sBgValues = (double[]) paramBlock.getObjectParameter(2);
-                
+
                 Range nodata = null;
                 ROI r = null;
                 boolean similarROI = true;
                 boolean hasSameNodata = true;
                 // Minor checks on ROI and NoData
-                if(paramBlock.getNumParameters() > 3){
+                if (paramBlock.getNumParameters() > 3) {
                     nodata = (Range) paramBlock.getObjectParameter(6);
-                    r = (ROI)paramBlock.getObjectParameter(3);
-                    if(r != null){
+                    r = (ROI) paramBlock.getObjectParameter(3);
+                    if (r != null) {
                         try {
                             AffineTransform inverse = sTx.createInverse();
                             ROI newROI = this.roi != null ? this.roi.transform(inverse) : null;
@@ -258,9 +282,13 @@
                         } catch (NoninvertibleTransformException e) {
                             LOGGER.log(Level.SEVERE, e.getMessage(), e);
                         }
-                        hasSameNodata = nodata == null
-                                || (sBgValues != null && this.nodata != null && sBgValues.length > 0 && sBgValues[0] == this.nodata
-                                        .getMin().doubleValue());
+                        hasSameNodata =
+                                nodata == null
+                                        || (sBgValues != null
+                                                && this.nodata != null
+                                                && sBgValues.length > 0
+                                                && sBgValues[0]
+                                                        == this.nodata.getMin().doubleValue());
                     }
                 }
 
@@ -271,7 +299,7 @@
                     concat.concatenate(sTx);
                     tx = concat;
                     source = sSource;
-                    if(similarROI && r != null){
+                    if (similarROI && r != null) {
                         try {
                             AffineTransform inverse = sTx.createInverse();
                             ROI newROI = this.roi != null ? this.roi.transform(inverse) : null;
@@ -284,25 +312,26 @@
                         setNoData(nodata);
                     }
                 }
-            } else if (SCALE_NAME.equals(opName)||SCALE2_NAME.equals(opName)) {
+            } else if (SCALE_NAME.equals(opName) || SCALE2_NAME.equals(opName)) {
                 boolean isScale2 = SCALE2_NAME.equals(opName);
                 ParameterBlock paramBlock = sourceParamBlock;
                 RenderedImage sSource = paramBlock.getRenderedSource(0);
 
-                double[] scalingParams =  getScalingParams(paramBlock, isScale2);
+                double[] scalingParams = getScalingParams(paramBlock, isScale2);
                 Interpolation sInterp = (Interpolation) paramBlock.getObjectParameter(4);
 
                 Range nodata = null;
                 ROI r = null;
                 boolean similarROI = true;
-                boolean hasSameNodata =true;
+                boolean hasSameNodata = true;
                 // Minor checks on ROI and NoData
                 final int numParameters = paramBlock.getNumParameters();
-                if (numParameters > 5){
+                if (numParameters > 5) {
                     r = (ROI) paramBlock.getObjectParameter(5);
                     nodata = numParameters > 7 ? (Range) paramBlock.getObjectParameter(7) : null;
                     // The background may haven't been set
-                    double[] sBgValues = numParameters > 8 ? (double[]) paramBlock.getObjectParameter(8) : null;
+                    double[] sBgValues =
+                            numParameters > 8 ? (double[]) paramBlock.getObjectParameter(8) : null;
                     if (r != null) {
                         try {
                             ROI newROI = computeScaledROI(scalingParams);
@@ -311,19 +340,29 @@
                             LOGGER.log(Level.SEVERE, e.getMessage(), e);
                         }
                     }
-                    hasSameNodata  = nodata == null
-                            || (sBgValues != null && this.nodata != null && sBgValues.length > 0 && sBgValues[0] == this.nodata
-                                    .getMin().doubleValue());
+                    hasSameNodata =
+                            nodata == null
+                                    || (sBgValues != null
+                                            && this.nodata != null
+                                            && sBgValues.length > 0
+                                            && sBgValues[0] == this.nodata.getMin().doubleValue());
                 }
 
-                if (sInterp == interpolation && ((nodata == null || hasSameNodata) && (r == null || similarROI))) {
+                if (sInterp == interpolation
+                        && ((nodata == null || hasSameNodata) && (r == null || similarROI))) {
                     // we can replace it
                     AffineTransform concat = new AffineTransform(tx);
-                    concat.concatenate(new AffineTransform(scalingParams[0], 0, 0, scalingParams[1], 
-                            scalingParams[2], scalingParams[3]));
+                    concat.concatenate(
+                            new AffineTransform(
+                                    scalingParams[0],
+                                    0,
+                                    0,
+                                    scalingParams[1],
+                                    scalingParams[2],
+                                    scalingParams[3]));
                     tx = concat;
                     source = sSource;
-                    if(similarROI && r != null){
+                    if (similarROI && r != null) {
                         try {
                             ROI newROI = computeScaledROI(scalingParams);
                             this.roi = newROI.intersect(r);
@@ -345,13 +384,19 @@
         hasShearY = Math.abs(tx.getShearY()) * size > RS_EPS;
         hasTranslateX = Math.abs(tx.getTranslateX()) > RS_EPS;
         hasTranslateY = Math.abs(tx.getTranslateY()) > RS_EPS;
-        boolean intTranslateX = Math.abs((tx.getTranslateX() - Math.round(tx.getTranslateX()))) < RS_EPS;
-        boolean intTranslateY = Math.abs((tx.getTranslateY() - Math.round(tx.getTranslateY()))) < RS_EPS;
+        boolean intTranslateX =
+                Math.abs((tx.getTranslateX() - Math.round(tx.getTranslateX()))) < RS_EPS;
+        boolean intTranslateY =
+                Math.abs((tx.getTranslateY() - Math.round(tx.getTranslateY()))) < RS_EPS;
         boolean nonNegativeScaleX = tx.getScaleX() >= 0;
         boolean nonNegativeScaleY = tx.getScaleY() >= 0;
 
         // did it become a identity after the combination?
-        if (!hasScaleX && !hasScaleY && !hasShearX && !hasShearY && !hasTranslateX
+        if (!hasScaleX
+                && !hasScaleY
+                && !hasShearX
+                && !hasShearY
+                && !hasTranslateX
                 && !hasTranslateY) {
             this.image = source;
             return this;
@@ -364,15 +409,19 @@
                 // layout
                 Hints localHints = new Hints(getRenderingHints());
                 localHints.remove(JAI.KEY_IMAGE_LAYOUT);
-                double [] scalingParams = new double [] {
-                        1.0, 1.0, Math.round(tx.getTranslateX()), Math.round(tx.getTranslateY())};
+                double[] scalingParams =
+                        new double[] {
+                            1.0, 1.0, Math.round(tx.getTranslateX()), Math.round(tx.getTranslateY())
+                        };
                 scale(pb, scalingParams, interpolation, localHints);
                 updateNoData(background, image);
                 updateROI(false, SCALE_OP_NAME);
             } else {
                 // generic scale
-                double [] scalingParams = new double [] {
-                        tx.getScaleX(), tx.getScaleY(), tx.getTranslateX(), tx.getTranslateY()};
+                double[] scalingParams =
+                        new double[] {
+                            tx.getScaleX(), tx.getScaleY(), tx.getTranslateX(), tx.getTranslateY()
+                        };
                 scale(pb, scalingParams, interpolation, getRenderingHints());
                 updateNoData(background, image);
                 updateROI(false, SCALE_OP_NAME);

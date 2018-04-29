@@ -1,46 +1,47 @@
     /**
-     * Creates a new {@code Polygon} whose exterior shell is a smoothed
-     * version of the input {@code Polygon}.
-     * <p>
-     * Note: this method presently ignores holes.
-     * 
+     * Creates a new {@code Polygon} whose exterior shell is a smoothed version of the input {@code
+     * Polygon}.
+     *
+     * <p>Note: this method presently ignores holes.
+     *
      * @param p the input {@code Polygon}
-     * 
-     * @param alpha a value between 0 and 1 (inclusive) specifying the tightness
-     *        of fit of the smoothed boundary (0 is loose)
-     * 
+     * @param alpha a value between 0 and 1 (inclusive) specifying the tightness of fit of the
+     *     smoothed boundary (0 is loose)
      * @return the smoothed {@code Polygon}
      */
     public Polygon smooth(Polygon p, double alpha) {
         Coordinate[] coords = p.getExteriorRing().getCoordinates();
-        final int N = coords.length - 1;  // first coord == last coord
-        
+        final int N = coords.length - 1; // first coord == last coord
+
         Coordinate[][] controlPoints = getPolygonControlPoints(coords, N, alpha);
-        
+
         List<Coordinate> smoothCoords = new ArrayList<Coordinate>();
         double dist;
         for (int i = 0; i < N; i++) {
             int next = (i + 1) % N;
-            
+
             dist = coords[i].distance(coords[next]);
             if (dist < control.getMinLength()) {
                 // segment too short - just copy input coordinate
                 smoothCoords.add(new Coordinate(coords[i]));
-                
+
             } else {
                 int smoothN = control.getNumVertices(dist);
-                Coordinate[] segment = cubicBezier(
-                        coords[i], coords[next],
-                        controlPoints[i][1], controlPoints[next][0],
-                        smoothN);
-            
+                Coordinate[] segment =
+                        cubicBezier(
+                                coords[i],
+                                coords[next],
+                                controlPoints[i][1],
+                                controlPoints[next][0],
+                                smoothN);
+
                 int copyN = i < N - 1 ? segment.length - 1 : segment.length;
                 for (int k = 0; k < copyN; k++) {
                     smoothCoords.add(segment[k]);
                 }
             }
         }
-        
+
         LinearRing shell = geomFactory.createLinearRing(smoothCoords.toArray(new Coordinate[0]));
         return geomFactory.createPolygon(shell, null);
     }

@@ -1,58 +1,63 @@
     public void visit(Binding binding) {
-        //TODO: the check for InstanceBinding is a temporary measure to allow 
-        // for bindings that are not registered by class, but by instance. 
-        // in the long term we intend to ditch pico container b/c our inection 
+        // TODO: the check for InstanceBinding is a temporary measure to allow
+        // for bindings that are not registered by class, but by instance.
+        // in the long term we intend to ditch pico container b/c our inection
         // needs are quite trivial and can be handled by some simple reflection
-        if ( !( binding instanceof InstanceBinding ) ) {
-            //reload out of context, we do this so that the binding can pick up any new dependencies
+        if (!(binding instanceof InstanceBinding)) {
+            // reload out of context, we do this so that the binding can pick up any new
+            // dependencies
             // providedb by this particular context
             Class bindingClass = binding.getClass();
             QName bindingTarget = binding.getTarget();
-            
+
             binding = (Binding) context.getComponentInstanceOfType(binding.getClass());
             if (binding == null) {
-                
-                binding = parser.getBindingLoader().loadBinding(bindingTarget, context);
-                if ( binding == null ) {
-                    binding = parser.getBindingLoader().loadBinding(bindingTarget,bindingClass,context);
-                }
-                if ( binding.getClass() != bindingClass ) {
-                    throw new IllegalStateException(
-                            "Reloaded binding resulted in different type, from " + bindingClass
-                                    + " to " + binding.getClass());
-                }
-            }    
-        }
-        
 
-        //execute the binding
+                binding = parser.getBindingLoader().loadBinding(bindingTarget, context);
+                if (binding == null) {
+                    binding =
+                            parser.getBindingLoader()
+                                    .loadBinding(bindingTarget, bindingClass, context);
+                }
+                if (binding.getClass() != bindingClass) {
+                    throw new IllegalStateException(
+                            "Reloaded binding resulted in different type, from "
+                                    + bindingClass
+                                    + " to "
+                                    + binding.getClass());
+                }
+            }
+        }
+
+        // execute the binding
         try {
             if (result == null) {
-                //no result has been produced yet, should we pass the facet 
+                // no result has been produced yet, should we pass the facet
                 // parsed text in? only for simple types or complex types with
                 // mixed content
                 XSDTypeDefinition type = null;
 
                 if (Schemas.nameMatches(instance.getDeclaration(), binding.getTarget())) {
-                    //instance binding
+                    // instance binding
                     type = instance.getTypeDefinition();
                 } else {
-                    //type binding
-                    type = Schemas.getBaseTypeDefinition(instance.getTypeDefinition(),
-                            binding.getTarget());
+                    // type binding
+                    type =
+                            Schemas.getBaseTypeDefinition(
+                                    instance.getTypeDefinition(), binding.getTarget());
                 }
 
                 if (value == null) {
-                    //have not preprocessed raw string yet
-                    //value = parseFacets( instance );
+                    // have not preprocessed raw string yet
+                    // value = parseFacets( instance );
                     value = preParse(instance);
 
-                    //if the type is simple or complex and mixed, use the 
-                    // text as is, other wise trim it, turning to null if the 
+                    // if the type is simple or complex and mixed, use the
+                    // text as is, other wise trim it, turning to null if the
                     // result is empty
                     if ((type != null)
                             && (type instanceof XSDSimpleTypeDefinition
-                            || ((XSDComplexTypeDefinition) type).isMixed())) {
+                                    || ((XSDComplexTypeDefinition) type).isMixed())) {
                         result = value;
                     } else if ((value != null) && value instanceof String) {
                         value = ((String) value);
@@ -61,8 +66,7 @@
                         } else {
                             result = value;
                         }
-                    }
-                    else {
+                    } else {
                         result = value;
                     }
                 }
@@ -74,7 +78,7 @@
                 result = ((ComplexBinding) binding).parse((ElementInstance) instance, node, result);
             }
 
-            //only pass the value along if it was non-null
+            // only pass the value along if it was non-null
             if (result != null) {
                 value = result;
             }

@@ -1,68 +1,68 @@
     /**
-	 * Constructs a new interpolator for the specified interpolation.
-	 *
-	 * @param  coverage The coverage to interpolate.
-	 * @param  interpolations The interpolations to use and its fallback
-	 *         (if any). This array must have at least 1 element.
-	 * @param  index The index of interpolation to use in the {@code interpolations} array.
-	 * @param  be the {@link BorderExtender} instance to use for this operation.
-	 */
-	private Interpolator2D(final GridCoverage2D  coverage,
-	                       final Interpolation[] interpolations,
-	                       final int             index,
-	                             BorderExtender  be)
-	{
-	    super(null, coverage);
-	    this.source = coverage;
-	    this.interpolation = interpolations[index];
-	    //border extender
-	    if(be== null){
-	    	this.borderExtender= BorderExtender.createInstance(DEFAULT_BORDER_EXTENDER_TYPE);
-	    }
-	    else
-	    	this.borderExtender=be;
-	    if (index+1 < interpolations.length) {
-	        if (interpolations[index+1] instanceof InterpolationNearest) {
-	            // By convention, 'fallback==this' is for 'super.evaluate(...)'
-	            // (i.e. "NearestNeighbor").
-	            this.fallback = this;
-	        } else {
-	            this.fallback = new Interpolator2D(coverage, interpolations, index+1,be);
-	        }
-	    } else {
-	        this.fallback = null;
-	    }
-	    /*
-	     * Computes the affine transform from "real world" coordinates  to grid coordinates.
-	     * This transform maps coordinates to pixel <em>centers</em>. If this transform has
-	     * already be created during fallback construction, reuse the fallback's instance
-	     * instead of creating a new identical one.
-	     */
-	    if (fallback!=null && fallback!=this) {
-	        this.toGrid = fallback.toGrid;
-	    } else try {
-	        final MathTransform2D transform = gridGeometry.getGridToCRS2D(PixelOrientation.UPPER_LEFT);
-	        toGrid = transform.inverse();
-	    } catch (NoninvertibleTransformException exception) {
-	        throw new IllegalArgumentException(exception);
-	    }
-	
-	    final int left   = interpolation.getLeftPadding();
-	    final int top    = interpolation.getTopPadding();
-	
-	    this.top  = top;
-	    this.left = left;
-	
-	    final int x = image.getMinX();
-	    final int y = image.getMinY();
-	
-	    this.xmin = x + left;
-	    this.ymin = y + top;
-	    this.xmax = x + image.getWidth();
-	    this.ymax = y + image.getHeight();
-	
-	    bounds = new Rectangle(0, 0, interpolation.getWidth(), interpolation.getHeight());
-	    
+     * Constructs a new interpolator for the specified interpolation.
+     *
+     * @param coverage The coverage to interpolate.
+     * @param interpolations The interpolations to use and its fallback (if any). This array must
+     *     have at least 1 element.
+     * @param index The index of interpolation to use in the {@code interpolations} array.
+     * @param be the {@link BorderExtender} instance to use for this operation.
+     */
+    private Interpolator2D(
+            final GridCoverage2D coverage,
+            final Interpolation[] interpolations,
+            final int index,
+            BorderExtender be) {
+        super(null, coverage);
+        this.source = coverage;
+        this.interpolation = interpolations[index];
+        // border extender
+        if (be == null) {
+            this.borderExtender = BorderExtender.createInstance(DEFAULT_BORDER_EXTENDER_TYPE);
+        } else this.borderExtender = be;
+        if (index + 1 < interpolations.length) {
+            if (interpolations[index + 1] instanceof InterpolationNearest) {
+                // By convention, 'fallback==this' is for 'super.evaluate(...)'
+                // (i.e. "NearestNeighbor").
+                this.fallback = this;
+            } else {
+                this.fallback = new Interpolator2D(coverage, interpolations, index + 1, be);
+            }
+        } else {
+            this.fallback = null;
+        }
+        /*
+         * Computes the affine transform from "real world" coordinates  to grid coordinates.
+         * This transform maps coordinates to pixel <em>centers</em>. If this transform has
+         * already be created during fallback construction, reuse the fallback's instance
+         * instead of creating a new identical one.
+         */
+        if (fallback != null && fallback != this) {
+            this.toGrid = fallback.toGrid;
+        } else
+            try {
+                final MathTransform2D transform =
+                        gridGeometry.getGridToCRS2D(PixelOrientation.UPPER_LEFT);
+                toGrid = transform.inverse();
+            } catch (NoninvertibleTransformException exception) {
+                throw new IllegalArgumentException(exception);
+            }
+
+        final int left = interpolation.getLeftPadding();
+        final int top = interpolation.getTopPadding();
+
+        this.top = top;
+        this.left = left;
+
+        final int x = image.getMinX();
+        final int y = image.getMinY();
+
+        this.xmin = x + left;
+        this.ymin = y + top;
+        this.xmax = x + image.getWidth();
+        this.ymax = y + image.getHeight();
+
+        bounds = new Rectangle(0, 0, interpolation.getWidth(), interpolation.getHeight());
+
         // Check ROI and NoData
         ROI roiProp = CoverageUtilities.getROIProperty(coverage);
         hasROI = roiProp != null;

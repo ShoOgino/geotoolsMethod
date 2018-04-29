@@ -1,11 +1,9 @@
-    /**
-     * Get all features within a given envelope as a in memory feature collection.
-     */
+    /** Get all features within a given envelope as a in memory feature collection. */
     public SimpleFeatureCollection get(Envelope e) throws IOException {
-    	SimpleFeatureCollection fromCache;
+        SimpleFeatureCollection fromCache;
         SimpleFeatureCollection fromSource;
         List<Envelope> notcached = null;
-        
+
         String geometryname = getSchema().getGeometryDescriptor().getLocalName();
         String srs = getSchema().getGeometryDescriptor().getCoordinateReferenceSystem().toString();
 
@@ -25,64 +23,81 @@
         // got a miss from cache, need to get more data
         lock.writeLock().lock();
         try {
-            notcached = match(e); // check again because another thread may have inserted data in between
+            notcached = match(e); // check again because another thread may have inserted data in
+            // between
             if (notcached.isEmpty()) {
                 fromCache = peek(e);
                 return fromCache;
             }
-            
-            //get items from cache
+
+            // get items from cache
             fromCache = peek(e);
-             
+
             // get what data we are missing from the cache based on the not cached array.
             Filter filter = null;
-            if (notcached.size() == 1){
+            if (notcached.size() == 1) {
                 Envelope env = notcached.get(0);
-                filter = ff.bbox(geometryname, env.getMinX(), env.getMinY(), env.getMaxX(), env.getMaxY(), srs);
-            }else{
-                //or the envelopes together into a single or filter
+                filter =
+                        ff.bbox(
+                                geometryname,
+                                env.getMinX(),
+                                env.getMinY(),
+                                env.getMaxX(),
+                                env.getMaxY(),
+                                srs);
+            } else {
+                // or the envelopes together into a single or filter
                 ArrayList<Filter> filters = new ArrayList<Filter>(notcached.size());
-                for (Iterator<Envelope> it = notcached.iterator(); it.hasNext();) {
+                for (Iterator<Envelope> it = notcached.iterator(); it.hasNext(); ) {
                     Envelope next = (Envelope) it.next();
-                    Filter bbox = ff.bbox(geometryname, next.getMinX(), next.getMinY(), next.getMaxX(), next.getMaxY(), srs);
+                    Filter bbox =
+                            ff.bbox(
+                                    geometryname,
+                                    next.getMinX(),
+                                    next.getMinY(),
+                                    next.getMaxX(),
+                                    next.getMaxY(),
+                                    srs);
                     filters.add(bbox);
                 }
                 filter = ff.or(filters);
             }
-            
-            //get the data from the source
-            try{
-                //cache these features in a local feature collection while we deal with them
+
+            // get the data from the source
+            try {
+                // cache these features in a local feature collection while we deal with them
                 SimpleFeatureCollection localSource = new MemoryFeatureCollection(getSchema());
                 fromSource = this.fs.getFeatures(filter);
                 localSource.addAll(fromSource);
                 fromSource = localSource;
-            }catch (Exception ex){
-                //something happened getting data from source
-                //return what we have from the cache
-                logger.log(Level.INFO, "Error getting data for cache from source feature store.", ex);
+            } catch (Exception ex) {
+                // something happened getting data from source
+                // return what we have from the cache
+                logger.log(
+                        Level.INFO, "Error getting data for cache from source feature store.", ex);
                 return fromCache;
             }
-            
-            //update stats
+
+            // update stats
             source_hits++;
             source_feature_reads += fromSource.size();
 
             fromCache.addAll(fromSource);
-            
-            //add it to the cache; 
+
+            // add it to the cache;
             try {
                 isOversized(fromSource);
-                try{
+                try {
                     register(filter); // get notice we discovered some new part of the universe
                     // add new data to cache - will raise an exception if cache is over sized
-                    //here we are adding the everything (include the stuff that's already in the cache
-                    //which is done to prevent multiple wfs calls 
-                    put(fromCache);  
-                    
-                }catch (Exception ex){
-                    //something happened here so we better unregister this area
-                    //so if we try again next time we'll try getting data again
+                    // here we are adding the everything (include the stuff that's already in the
+                    // cache
+                    // which is done to prevent multiple wfs calls
+                    put(fromCache);
+
+                } catch (Exception ex) {
+                    // something happened here so we better unregister this area
+                    // so if we try again next time we'll try getting data again
                     unregister(filter);
                 }
             } catch (CacheOversizedException e1) {
@@ -92,7 +107,7 @@
         } finally {
             lock.writeLock().unlock();
         }
-        
+
         return fromCache;
     }
 

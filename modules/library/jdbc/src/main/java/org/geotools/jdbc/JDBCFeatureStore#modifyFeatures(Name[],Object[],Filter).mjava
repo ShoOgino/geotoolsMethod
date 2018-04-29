@@ -1,22 +1,21 @@
     @Override
-    public void modifyFeatures(Name[] names, Object[] values, Filter filter)
-            throws IOException {
-        
+    public void modifyFeatures(Name[] names, Object[] values, Filter filter) throws IOException {
+
         // we cannot trust attribute definitions coming from outside, they might not
         // have the same metadata the inner ones have. Let's remap them
         AttributeDescriptor[] innerTypes = new AttributeDescriptor[names.length];
         for (int i = 0; i < names.length; i++) {
             innerTypes[i] = getSchema().getDescriptor(names[i].getLocalPart());
-            if(innerTypes[i] == null)
+            if (innerTypes[i] == null)
                 throw new IllegalArgumentException("Unknon attribute " + names[i].getLocalPart());
         }
-        
+
         // split the filter
         Filter[] splitted = delegate.splitFilter(filter);
         Filter preFilter = splitted[0];
         Filter postFilter = splitted[1];
-        
-        if(postFilter != null && !Filter.INCLUDE.equals(postFilter)) {
+
+        if (postFilter != null && !Filter.INCLUDE.equals(postFilter)) {
             // we don't have a fast way to perform this update, let's do it the
             // feature by feature way then
             super.modifyFeatures(innerTypes, values, filter);
@@ -26,44 +25,46 @@
             Transaction tx = getState().getTransaction();
             try {
                 cx = getDataStore().getConnection(tx);
-            
+
                 // we want to support a "batch" update, but we need to be weary of locks
                 SimpleFeatureType featureType = getSchema();
                 try {
-                    getDataStore().ensureAuthorization(featureType, preFilter, getTransaction(), cx);
-                }
-                catch (SQLException e) {
-                    throw (IOException) new IOException().initCause( e );
+                    getDataStore()
+                            .ensureAuthorization(featureType, preFilter, getTransaction(), cx);
+                } catch (SQLException e) {
+                    throw (IOException) new IOException().initCause(e);
                 }
                 ContentState state = getEntry().getState(transaction);
-                ReferencedEnvelope bounds = ReferencedEnvelope.create(getSchema().getCoordinateReferenceSystem());
-                if( state.hasListener() ){
+                ReferencedEnvelope bounds =
+                        ReferencedEnvelope.create(getSchema().getCoordinateReferenceSystem());
+                if (state.hasListener()) {
                     // gather bounds before modification
-                    ReferencedEnvelope before = getBounds( new Query( getSchema().getTypeName(), preFilter ) );                
-                    if( before != null && !before.isEmpty() ){
+                    ReferencedEnvelope before =
+                            getBounds(new Query(getSchema().getTypeName(), preFilter));
+                    if (before != null && !before.isEmpty()) {
                         bounds = before;
                     }
                 }
                 try {
                     getDataStore().update(getSchema(), innerTypes, values, preFilter, cx);
-                } catch(SQLException e) {
+                } catch (SQLException e) {
                     throw (IOException) (new IOException(e.getMessage()).initCause(e));
                 }
-                
-                if( state.hasListener() ){
+
+                if (state.hasListener()) {
                     // gather any updated bounds due to a geometry modification
-                    for( Object value : values ){
-                        if( value instanceof Geometry ){
+                    for (Object value : values) {
+                        if (value instanceof Geometry) {
                             Geometry geometry = (Geometry) value;
-                            bounds.expandToInclude( geometry.getEnvelopeInternal() );
+                            bounds.expandToInclude(geometry.getEnvelopeInternal());
                         }
                     }
                     // issue notificaiton
-                    FeatureEvent event = new FeatureEvent(this, Type.CHANGED, bounds, preFilter );
-                    state.fireFeatureEvent( event );
+                    FeatureEvent event = new FeatureEvent(this, Type.CHANGED, bounds, preFilter);
+                    state.fireFeatureEvent(event);
                 }
             } finally {
-                if(tx == null || tx == Transaction.AUTO_COMMIT) {
+                if (tx == null || tx == Transaction.AUTO_COMMIT) {
                     getDataStore().closeSafe(cx);
                 }
             }

@@ -1,34 +1,38 @@
     /**
      * Generates a 'INSERT INFO' sql statement.
-     * @throws IOException 
+     *
+     * @throws IOException
      */
-    protected String insertSQL(SimpleFeatureType featureType, SimpleFeature feature, 
-            KeysFetcher keysFetcher, Connection cx) throws SQLException, IOException {
+    protected String insertSQL(
+            SimpleFeatureType featureType,
+            SimpleFeature feature,
+            KeysFetcher keysFetcher,
+            Connection cx)
+            throws SQLException, IOException {
         BasicSQLDialect dialect = (BasicSQLDialect) getSQLDialect();
-        
 
         StringBuffer sql = new StringBuffer();
         sql.append("INSERT INTO ");
         encodeTableName(featureType.getTypeName(), sql, null);
 
-        //column names
+        // column names
         sql.append(" ( ");
 
         for (int i = 0; i < featureType.getAttributeCount(); i++) {
             String colName = featureType.getDescriptor(i).getLocalName();
             // skip the pk columns in case we have exposed them
-            if(keysFetcher.isKey(colName)) {
+            if (keysFetcher.isKey(colName)) {
                 continue;
             }
             dialect.encodeColumnName(null, colName, sql);
             sql.append(",");
         }
 
-        //primary key values
+        // primary key values
         keysFetcher.addKeyColumns(sql);
         sql.setLength(sql.length() - 1);
 
-        //values
+        // values
         sql.append(" ) VALUES ( ");
 
         for (int i = 0; i < featureType.getAttributeCount(); i++) {
@@ -36,18 +40,18 @@
             String colName = att.getLocalName();
             // skip the pk columns in case we have exposed them, we grab the
             // value from the pk itself
-            if(keysFetcher.isKey(colName)) {
+            if (keysFetcher.isKey(colName)) {
                 continue;
             }
-            
+
             Class binding = att.getType().getBinding();
 
             Object value = feature.getAttribute(colName);
 
             if (value == null) {
                 if (!att.isNillable()) {
-                    throw new IOException("Cannot set a NULL value on the not null column " +
-                            colName);
+                    throw new IOException(
+                            "Cannot set a NULL value on the not null column " + colName);
                 }
 
                 sql.append("null");
@@ -70,7 +74,7 @@
         }
         // handle the primary key
         keysFetcher.setKeyValues(this, cx, featureType, feature, sql);
-        sql.setLength(sql.length() - 1);  //remove last comma
+        sql.setLength(sql.length() - 1); // remove last comma
 
         sql.append(")");
 

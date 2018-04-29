@@ -1,19 +1,19 @@
     /**
      * Here we try to refresh the contents of the feature type cache.
-     * <p>
-     * Basically we want to:
+     *
+     * <p>Basically we want to:
+     *
      * <ul>
-     * <li>remove all data stores associated to files that have been removed</li>
-     * <li>add all data stores associated to new files</li>
-     * <li>remove all feature types that are no more there, and add all feature
-     * types that are new
-     * <li>
+     *   <li>remove all data stores associated to files that have been removed
+     *   <li>add all data stores associated to new files
+     *   <li>remove all feature types that are no more there, and add all feature types that are new
+     *   <li>
      * </ul>
-     * All of this should be done trying to avoid re-creating all of the
-     * datastores already loaded. We assume a properly written datastore will be
-     * able to detect changes in its own feature type list and feature type
-     * schemas on its own.
-     * 
+     *
+     * All of this should be done trying to avoid re-creating all of the datastores already loaded.
+     * We assume a properly written datastore will be able to detect changes in its own feature type
+     * list and feature type schemas on its own.
+     *
      * @throws IOException
      */
     void refreshCacheContents() throws IOException {
@@ -25,40 +25,40 @@
         for (FileEntry entry : ftCache.values()) {
             fileCache.put(entry.file, entry);
         }
-        
+
         // grab all the candidate files
         for (File file : directory.listFiles()) {
             // skip over directories, we don't recurse
-            if(file.isDirectory()) {
+            if (file.isDirectory()) {
                 continue;
             }
-            
+
             // do we have the same datastore in the current cache? If so keep it, we don't
             // want to rebuild over and over the same stores
             FileEntry entry = fileCache.get(file);
-            
+
             // if missing build a new one
-            if(entry == null) {
+            if (entry == null) {
                 DataStore store = factory.getDataStore(file);
-                if(store != null) {
+                if (store != null) {
                     entry = new FileEntry(file, store);
                 }
             }
-            
+
             // if we managed to build an entry collect its feature types
-            if(entry != null) {
+            if (entry != null) {
                 for (String typeName : entry.getStore(true).getTypeNames()) {
                     // don't override existing entries
-                    if (!result.containsKey(typeName))
-                        result.put(typeName, entry);
+                    if (!result.containsKey(typeName)) result.put(typeName, entry);
                     else {
-                        LOGGER.log(Level.WARNING, "Type name " + typeName
-                                + " is available from multiple datastores");
+                        LOGGER.log(
+                                Level.WARNING,
+                                "Type name " + typeName + " is available from multiple datastores");
                     }
                 }
             }
         }
-        
+
         // update the cache. We need to remove the missing elements, disposing
         // the data stores that are not referenced anymore, and add the new ones
         // we are going to update the ftCache as we go, this is thread safe
@@ -68,12 +68,12 @@
         // remove should be not working anyways)
         Set<String> removedFTs = new HashSet<String>(ftCache.keySet());
         removedFTs.removeAll(result.keySet());
-        
-        // collect all data stores that are referred by a feature type that we 
+
+        // collect all data stores that are referred by a feature type that we
         // are going to remove, but are not referred by any feature type we're
         // going to keep. Clean the ftCache from removed feature types at the same
         // time.
-        Set<FileEntry> disposable = new HashSet<FileEntry>(); 
+        Set<FileEntry> disposable = new HashSet<FileEntry>();
         for (String removedFT : removedFTs) {
             disposable.add(ftCache.remove(removedFT));
         }
@@ -83,7 +83,7 @@
         for (FileEntry entry : disposable) {
             entry.dispose();
         }
-        
+
         // now let's add all the new ones
         Set<String> added = new HashSet<String>(result.keySet());
         added.removeAll(ftCache.keySet());

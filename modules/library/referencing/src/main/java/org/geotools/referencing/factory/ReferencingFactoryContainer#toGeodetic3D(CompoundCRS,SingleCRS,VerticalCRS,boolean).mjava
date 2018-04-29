@@ -3,19 +3,21 @@
      * vertical parts have been identified. This method may invokes itself recursively if the
      * horizontal CRS is a derived one.
      *
-     * @param  crs        The compound CRS to converts in a 3D geographic CRS, or {@code null}.
-     *                    Used only in order to infer the name properties of objects to create.
-     * @param  horizontal The horizontal component of {@code crs}.
-     * @param  vertical   The vertical   component of {@code crs}.
-     * @param  xyFirst    {@code true} if the horizontal component appears before the vertical
-     *                    component, or {@code false} for the converse.
+     * @param crs The compound CRS to converts in a 3D geographic CRS, or {@code null}. Used only in
+     *     order to infer the name properties of objects to create.
+     * @param horizontal The horizontal component of {@code crs}.
+     * @param vertical The vertical component of {@code crs}.
+     * @param xyFirst {@code true} if the horizontal component appears before the vertical
+     *     component, or {@code false} for the converse.
      * @return The 3D geographic or projected CRS.
      * @throws FactoryException if the object creation failed.
      */
-    private SingleCRS toGeodetic3D(final CompoundCRS crs, final SingleCRS horizontal,
-                                   final VerticalCRS vertical, final boolean xyFirst)
-            throws FactoryException
-    {
+    private SingleCRS toGeodetic3D(
+            final CompoundCRS crs,
+            final SingleCRS horizontal,
+            final VerticalCRS vertical,
+            final boolean xyFirst)
+            throws FactoryException {
         /*
          * Creates the set of axis in an order which depends of the xyFirst argument.
          * Then creates the property maps to be given to the object to be created.
@@ -26,15 +28,15 @@
         axis[xyFirst ? 0 : 1] = cs.getAxis(0);
         axis[xyFirst ? 1 : 2] = cs.getAxis(1);
         axis[xyFirst ? 2 : 0] = vertical.getCoordinateSystem().getAxis(0);
-        final Map<String,?> csName, crsName;
+        final Map<String, ?> csName, crsName;
         if (crs != null) {
-            csName  = AbstractIdentifiedObject.getProperties(crs.getCoordinateSystem());
+            csName = AbstractIdentifiedObject.getProperties(crs.getCoordinateSystem());
             crsName = AbstractIdentifiedObject.getProperties(crs);
         } else {
-            csName  = getTemporaryName(cs);
+            csName = getTemporaryName(cs);
             crsName = getTemporaryName(horizontal);
         }
-        final  CSFactory  csFactory = getCSFactory();
+        final CSFactory csFactory = getCSFactory();
         final CRSFactory crsFactory = getCRSFactory();
         if (horizontal instanceof GeographicCRS) {
             /*
@@ -42,7 +44,8 @@
              * part - we just give the 3 axis all together to a new GeographicCRS.
              */
             final GeographicCRS sourceCRS = (GeographicCRS) horizontal;
-            final EllipsoidalCS targetCS  = csFactory.createEllipsoidalCS(csName, axis[0], axis[1], axis[2]);
+            final EllipsoidalCS targetCS =
+                    csFactory.createEllipsoidalCS(csName, axis[0], axis[1], axis[2]);
             return crsFactory.createGeographicCRS(crsName, sourceCRS.getDatum(), targetCS);
         }
         if (horizontal instanceof ProjectedCRS) {
@@ -54,22 +57,26 @@
              * but not in the same place (they will be performed sooner than they would be
              * otherwise).
              */
-            final ProjectedCRS  sourceCRS = (ProjectedCRS) horizontal;
-            final CartesianCS   targetCS  = csFactory.createCartesianCS(csName, axis[0], axis[1], axis[2]);
-            final GeographicCRS base2D    = sourceCRS.getBaseCRS();
-            final GeographicCRS base3D    = (GeographicCRS) toGeodetic3D(null, base2D, vertical, xyFirst);
-            final Matrix        prepend   = toStandard(base2D, false);
-            final Matrix        append    = toStandard(sourceCRS, true);
+            final ProjectedCRS sourceCRS = (ProjectedCRS) horizontal;
+            final CartesianCS targetCS =
+                    csFactory.createCartesianCS(csName, axis[0], axis[1], axis[2]);
+            final GeographicCRS base2D = sourceCRS.getBaseCRS();
+            final GeographicCRS base3D =
+                    (GeographicCRS) toGeodetic3D(null, base2D, vertical, xyFirst);
+            final Matrix prepend = toStandard(base2D, false);
+            final Matrix append = toStandard(sourceCRS, true);
             Conversion projection = sourceCRS.getConversionFromBase();
             if (!prepend.isIdentity() || !append.isIdentity()) {
                 final MathTransformFactory mtFactory = getMathTransformFactory();
                 MathTransform mt = projection.getMathTransform();
-                mt = mtFactory.createConcatenatedTransform(
-                     mtFactory.createConcatenatedTransform(
-                     mtFactory.createAffineTransform(prepend), mt),
-                     mtFactory.createAffineTransform(append));
-                projection = new DefiningConversion(AbstractCS.getProperties(projection),
-                                                    projection.getMethod(), mt);
+                mt =
+                        mtFactory.createConcatenatedTransform(
+                                mtFactory.createConcatenatedTransform(
+                                        mtFactory.createAffineTransform(prepend), mt),
+                                mtFactory.createAffineTransform(append));
+                projection =
+                        new DefiningConversion(
+                                AbstractCS.getProperties(projection), projection.getMethod(), mt);
             }
             return crsFactory.createProjectedCRS(crsName, base3D, projection, targetCS);
         }

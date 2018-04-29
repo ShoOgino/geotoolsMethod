@@ -2,20 +2,57 @@
     public SimpleFeatureCollection execute(
 
             // process data
-            @DescribeParameter(name = "data", description = "Input feature collection") SimpleFeatureCollection data,
+            @DescribeParameter(name = "data", description = "Input feature collection")
+                    SimpleFeatureCollection data,
 
             // process parameters
-            @DescribeParameter(name = "cellSize", description = "Grid cell size to aggregate to, in pixels") Integer cellSize,
-            @DescribeParameter(name = "weightClusterPosition", description = "Weight cluster position based on points added", defaultValue = "false") Boolean argWeightClusterPosition,
-            @DescribeParameter(name = "normalize", description = "Indicates whether to add fields normalized to the range 0-1.", defaultValue = "false") Boolean argNormalize,
-            @DescribeParameter(name = "preserveLocation", description = "Indicates wheter to preserve the original location of points for single/superimposed points", defaultValue = "Never", min = 0) PreserveLocation preserveLocation,
+            @DescribeParameter(
+                        name = "cellSize",
+                        description = "Grid cell size to aggregate to, in pixels"
+                    )
+                    Integer cellSize,
+            @DescribeParameter(
+                        name = "weightClusterPosition",
+                        description = "Weight cluster position based on points added",
+                        defaultValue = "false"
+                    )
+                    Boolean argWeightClusterPosition,
+            @DescribeParameter(
+                        name = "normalize",
+                        description =
+                                "Indicates whether to add fields normalized to the range 0-1.",
+                        defaultValue = "false"
+                    )
+                    Boolean argNormalize,
+            @DescribeParameter(
+                        name = "preserveLocation",
+                        description =
+                                "Indicates wheter to preserve the original location of points for single/superimposed points",
+                        defaultValue = "Never",
+                        min = 0
+                    )
+                    PreserveLocation preserveLocation,
 
             // output image parameters
-            @DescribeParameter(name = "outputBBOX", description = "Bounding box for target image extent") ReferencedEnvelope outputEnv,
-            @DescribeParameter(name = "outputWidth", description = "Target image width in pixels", minValue = 1) Integer outputWidth,
-            @DescribeParameter(name = "outputHeight", description = "Target image height in pixels", minValue = 1) Integer outputHeight,
-
-            ProgressListener monitor) throws ProcessException, TransformException {
+            @DescribeParameter(
+                        name = "outputBBOX",
+                        description = "Bounding box for target image extent"
+                    )
+                    ReferencedEnvelope outputEnv,
+            @DescribeParameter(
+                        name = "outputWidth",
+                        description = "Target image width in pixels",
+                        minValue = 1
+                    )
+                    Integer outputWidth,
+            @DescribeParameter(
+                        name = "outputHeight",
+                        description = "Target image height in pixels",
+                        minValue = 1
+                    )
+                    Integer outputHeight,
+            ProgressListener monitor)
+            throws ProcessException, TransformException {
 
         CoordinateReferenceSystem srcCRS = data.getSchema().getCoordinateReferenceSystem();
         CoordinateReferenceSystem dstCRS = outputEnv.getCoordinateReferenceSystem();
@@ -42,9 +79,15 @@
         // assume same CRS for now...
         double cellSizeSrc = cellSize * outputEnv.getWidth() / outputWidth;
 
-        //create cluster points, based on cellSize and width and height of the viewd area.
-        Collection<StackedPoint> stackedPts = stackPoints(data, crsTransform, cellSizeSrc,
-                weightClusterPosition, outputEnv.getMinX(), outputEnv.getMinY());
+        // create cluster points, based on cellSize and width and height of the viewd area.
+        Collection<StackedPoint> stackedPts =
+                stackPoints(
+                        data,
+                        crsTransform,
+                        cellSizeSrc,
+                        weightClusterPosition,
+                        outputEnv.getMinX(),
+                        outputEnv.getMinY());
 
         SimpleFeatureType schema = createType(srcCRS, normalize);
         ListFeatureCollection result = new ListFeatureCollection(schema);
@@ -62,10 +105,8 @@
         int maxCountUnique = 0;
         if (normalize) {
             for (StackedPoint sp : stackedPts) {
-                if (maxCount < sp.getCount())
-                    maxCount = sp.getCount();
-                if (maxCountUnique < sp.getCount())
-                    maxCountUnique = sp.getCountUnique();
+                if (maxCount < sp.getCount()) maxCount = sp.getCount();
+                if (maxCountUnique < sp.getCount()) maxCountUnique = sp.getCountUnique();
             }
         }
 
@@ -84,19 +125,20 @@
             fb.add(point);
             fb.add(sp.getCount());
             fb.add(sp.getCountUnique());
-            //adding bounding box of the points staked, as geometry
-            //envelope transformation
-            Envelope boundingBox=sp.getBoundingBox();
-            srcPt[0]=boundingBox.getMinX();
-            srcPt[1]=boundingBox.getMinY();
-            srcPt2[0]=boundingBox.getMaxX();
-            srcPt2[1]=boundingBox.getMaxY();
-            
+            // adding bounding box of the points staked, as geometry
+            // envelope transformation
+            Envelope boundingBox = sp.getBoundingBox();
+            srcPt[0] = boundingBox.getMinX();
+            srcPt[1] = boundingBox.getMinY();
+            srcPt2[0] = boundingBox.getMaxX();
+            srcPt2[1] = boundingBox.getMaxY();
+
             invTransform.transform(srcPt, 0, dstPt, 0, 1);
             invTransform.transform(srcPt2, 0, dstPt2, 0, 1);
-            Envelope boundingBoxTransformed=new Envelope(dstPt[0],dstPt[1],dstPt2[0],dstPt2[1]);
+            Envelope boundingBoxTransformed =
+                    new Envelope(dstPt[0], dstPt[1], dstPt2[0], dstPt2[1]);
             fb.add(boundingBoxTransformed);
-            //adding bounding box of the points staked, as string
+            // adding bounding box of the points staked, as string
             fb.add(boundingBoxTransformed.toString());
             if (normalize) {
                 fb.add(((double) sp.getCount()) / maxCount);

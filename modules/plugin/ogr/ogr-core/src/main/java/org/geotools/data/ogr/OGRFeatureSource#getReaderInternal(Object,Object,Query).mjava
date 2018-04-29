@@ -1,5 +1,5 @@
-    protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Object dataSource,
-            Object layer, Query query) throws IOException {
+    protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(
+            Object dataSource, Object layer, Query query) throws IOException {
         // check how much we can encode
         OGRFilterTranslator filterTx = new OGRFilterTranslator(getSchema(), query.getFilter());
         if (Filter.EXCLUDE.equals(filterTx.getFilter())) {
@@ -34,21 +34,28 @@
                 // attribute needed to evaluate the post-filter
                 if (postFilter != null) {
                     Set<String> queriedAttributes = new HashSet<String>(Arrays.asList(properties));
-                    FilterAttributeExtractor extraAttributeExtractor = new FilterAttributeExtractor();
+                    FilterAttributeExtractor extraAttributeExtractor =
+                            new FilterAttributeExtractor();
                     postFilter.accept(extraAttributeExtractor, null);
-                    Set<String> extraAttributeSet = new HashSet<String>(
-                            extraAttributeExtractor.getAttributeNameSet());
+                    Set<String> extraAttributeSet =
+                            new HashSet<String>(extraAttributeExtractor.getAttributeNameSet());
                     extraAttributeSet.removeAll(queriedAttributes);
                     if (extraAttributeSet.size() > 0) {
-                        String[] queryProperties = new String[properties.length
-                                + extraAttributeSet.size()];
+                        String[] queryProperties =
+                                new String[properties.length + extraAttributeSet.size()];
                         System.arraycopy(properties, 0, queryProperties, 0, properties.length);
-                        String[] extraAttributes = (String[]) extraAttributeSet
-                                .toArray(new String[extraAttributeSet.size()]);
-                        System.arraycopy(extraAttributes, 0, queryProperties, properties.length,
+                        String[] extraAttributes =
+                                (String[])
+                                        extraAttributeSet.toArray(
+                                                new String[extraAttributeSet.size()]);
+                        System.arraycopy(
+                                extraAttributes,
+                                0,
+                                queryProperties,
+                                properties.length,
                                 extraAttributes.length);
-                        querySchema = SimpleFeatureTypeBuilder
-                                .retype(sourceSchema, queryProperties);
+                        querySchema =
+                                SimpleFeatureTypeBuilder.retype(sourceSchema, queryProperties);
                     }
                 }
             }
@@ -59,40 +66,50 @@
                 if (query.getSortBy() == null || query.getSortBy().length == 0) {
                     layer = ogr.DataSourceGetLayerByName(dataSource, getSchema().getTypeName());
                     setLayerFilters(layer, filterTx);
-                } 
+                }
                 // build the layer query and execute it
                 else {
                     Object driver = ogr.DataSourceGetDriver(dataSource);
                     String driverName = ogr.DriverGetName(driver);
                     ogr.DriverRelease(driver);
                     boolean isNonOgrSql = doesDriverUseNonOgrSql(driverName);
-                    
+
                     String fidColumnName = "FID";
                     if (isNonOgrSql) {
                         boolean needsFid = false;
                         for (SortBy sort : query.getSortBy()) {
-                            if(SortBy.NATURAL_ORDER.equals(sort)|| SortBy.REVERSE_ORDER.equals(sort)) {
+                            if (SortBy.NATURAL_ORDER.equals(sort)
+                                    || SortBy.REVERSE_ORDER.equals(sort)) {
                                 needsFid = true;
                                 break;
                             }
                         }
                         if (needsFid) {
-                            layer = ogr.DataSourceGetLayerByName(dataSource, getSchema().getTypeName());
+                            layer =
+                                    ogr.DataSourceGetLayerByName(
+                                            dataSource, getSchema().getTypeName());
                             fidColumnName = ogr.LayerGetFIDColumnName(layer);
                             ogr.LayerRelease(layer);
                             if (fidColumnName == null) {
-                                throw new IOException("Cannot do natural order without an FID column!");
+                                throw new IOException(
+                                        "Cannot do natural order without an FID column!");
                             }
                         }
                     }
-                    
-                    String sql = getLayerSql(querySchema == sourceSchema ? null : querySchema,
-                            filterTx.getAttributeFilter(), query.getSortBy(), isNonOgrSql, fidColumnName);
+
+                    String sql =
+                            getLayerSql(
+                                    querySchema == sourceSchema ? null : querySchema,
+                                    filterTx.getAttributeFilter(),
+                                    query.getSortBy(),
+                                    isNonOgrSql,
+                                    fidColumnName);
                     Object spatialFilterPtr = null;
                     Geometry spatialFilter = filterTx.getSpatialFilter();
                     if (spatialFilter != null) {
-                        spatialFilterPtr = new GeometryMapper.WKB(new GeometryFactory(), ogr)
-                                .parseGTGeometry(spatialFilter);                
+                        spatialFilterPtr =
+                                new GeometryMapper.WKB(new GeometryFactory(), ogr)
+                                        .parseGTGeometry(spatialFilter);
                     }
                     layer = ogr.DataSourceExecuteSQL(dataSource, sql, spatialFilterPtr);
                     if (layer == null) {
@@ -109,14 +126,15 @@
             GeometryFactory gf = getGeometryFactory(query);
 
             // build the reader
-            FeatureReader<SimpleFeatureType, SimpleFeature> reader = new OGRFeatureReader(
-                    dataSource, layer, querySchema, sourceSchema, gf, ogr);
+            FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    new OGRFeatureReader(dataSource, layer, querySchema, sourceSchema, gf, ogr);
             cleanup = false;
 
             // do we have to post-filter?
             if (!filterTx.isFilterFullySupported()) {
-                reader = new FilteringFeatureReader<SimpleFeatureType, SimpleFeature>(reader,
-                        filterTx.getPostFilter());
+                reader =
+                        new FilteringFeatureReader<SimpleFeatureType, SimpleFeature>(
+                                reader, filterTx.getPostFilter());
                 if (targetSchema != querySchema) {
                     reader = new ReTypeFeatureReader(reader, targetSchema);
                 }

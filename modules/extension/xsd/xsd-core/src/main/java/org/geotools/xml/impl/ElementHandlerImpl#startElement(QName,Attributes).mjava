@@ -1,21 +1,20 @@
-    public void startElement(QName qName, Attributes attributes)
-        throws SAXException {
-        //clear handler list
-        //childHandlers.clear();
+    public void startElement(QName qName, Attributes attributes) throws SAXException {
+        // clear handler list
+        // childHandlers.clear();
 
-        //create the attributes
+        // create the attributes
         List atts = new ArrayList();
 
         for (int i = 0; i < attributes.getLength(); i++) {
             String rawAttQName = attributes.getQName(i);
 
             if (rawAttQName != null) {
-                //ignore namespace declarations
+                // ignore namespace declarations
                 if (rawAttQName.startsWith("xmlns:")) {
                     continue;
                 }
 
-                //ignore xsi:schemaLocation
+                // ignore xsi:schemaLocation
                 if (rawAttQName.endsWith("schemaLocation")) {
                     String prefix = "";
 
@@ -32,11 +31,11 @@
             }
 
             //        	String qName = attributes.getQName(i);
-            //        	
-            //       
+            //
+            //
             //        	//ignore schema location attribute
             //        	if ( attributes.getQName(i) != null && attributes.getQName(index))
-            //            
+            //
             String uri = attributes.getURI(i);
             String name = attributes.getLocalName(i);
 
@@ -45,31 +44,33 @@
             XSDAttributeDeclaration decl = Schemas.getAttributeDeclaration(content, attQName);
 
             if (decl == null) {
-                //check wether unknown attributes should be parsed
+                // check wether unknown attributes should be parsed
                 if (!parser.isStrict()) {
                     if (parser.getLogger().isLoggable(Level.FINE)) {
                         parser.getLogger().fine("Parsing unknown attribute: " + attQName);
                     }
 
-                    //create a mock attribute and continue
+                    // create a mock attribute and continue
                     decl = XSDFactory.eINSTANCE.createXSDAttributeDeclaration();
                     decl.setName(attQName.getLocalPart());
                     decl.setTargetNamespace(attQName.getNamespaceURI());
 
-                    //set the type to be of string
-                    XSDSimpleTypeDefinition type = (XSDSimpleTypeDefinition) XSDUtil.getSchemaForSchema(XSDUtil.SCHEMA_FOR_SCHEMA_URI_2001)
-                                                                                    .getSimpleTypeIdMap()
-                                                                                    .get("string");
+                    // set the type to be of string
+                    XSDSimpleTypeDefinition type =
+                            (XSDSimpleTypeDefinition)
+                                    XSDUtil.getSchemaForSchema(XSDUtil.SCHEMA_FOR_SCHEMA_URI_2001)
+                                            .getSimpleTypeIdMap()
+                                            .get("string");
 
                     decl.setTypeDefinition(type);
                 }
             }
 
-            //TODO: validate, if there is no declaration for an attribute, then 
-            //TODO: make sure no required attributes are missing
+            // TODO: validate, if there is no declaration for an attribute, then
+            // TODO: make sure no required attributes are missing
             // validation should fail, this is being side stepped for now until
-            // a good way of handling the namespace attributes on the root 
-            // element, for now we just ignore attributes we dont find in the 
+            // a good way of handling the namespace attributes on the root
+            // element, for now we just ignore attributes we dont find in the
             // schema
             if (decl != null) {
                 AttributeInstance att = new AttributeImpl(decl);
@@ -83,45 +84,48 @@
             }
         }
 
-        //create the element
+        // create the element
         element = new ElementImpl(content);
         element.setNamespace(qName.getNamespaceURI());
         element.setName(qName.getLocalPart());
-        element.setAttributes((AttributeInstance[]) atts.toArray(new AttributeInstance[atts.size()]));
+        element.setAttributes(
+                (AttributeInstance[]) atts.toArray(new AttributeInstance[atts.size()]));
 
-        //create the parse tree for the node
+        // create the parse tree for the node
         node = new NodeImpl(element);
 
-        //parse the attributes
+        // parse the attributes
         for (int i = 0; i < element.getAttributes().length; i++) {
             AttributeInstance attribute = element.getAttributes()[i];
-            ParseExecutor executor = new ParseExecutor(attribute, null, parent.getContext(), parser);
+            ParseExecutor executor =
+                    new ParseExecutor(attribute, null, parent.getContext(), parser);
 
             parser.getBindingWalker()
-                  .walk(attribute.getAttributeDeclaration(), executor, parent.getContext());
+                    .walk(attribute.getAttributeDeclaration(), executor, parent.getContext());
 
             Object parsed = executor.getValue();
             node.addAttribute(new NodeImpl(attribute, parsed));
         }
 
-
         // trigger the leading edge initialize callback
         ElementInitializer initer = new ElementInitializer(element, node, parent.getContext());
-        parser.getBindingWalker().walk(element.getElementDeclaration(), initer, container(), parent.getContext());
+        parser.getBindingWalker()
+                .walk(element.getElementDeclaration(), initer, container(), parent.getContext());
 
-        //create context for children 
-        //TODO: this should only be done if the element is complex, this class
+        // create context for children
+        // TODO: this should only be done if the element is complex, this class
         // needs to be split into two, one for complex, other for simple
         setContext(new DefaultPicoContainer(parent.getContext()));
 
-        //set the context on the binding factory
+        // set the context on the binding factory
         ((BindingFactoryImpl) parser.getBindingFactory()).setContext(getContext());
 
-        //"start" the child handler
+        // "start" the child handler
         parent.startChildHandler(this);
 
         //        ContextInitializer initer = new ContextInitializer(element, node,
         //                getContext());
-        //        parser.getBindingWalker().walk(element .getElementDeclaration(), initer, getContext() );
+        //        parser.getBindingWalker().walk(element .getElementDeclaration(), initer,
+        // getContext() );
     }
 

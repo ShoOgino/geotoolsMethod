@@ -1,85 +1,84 @@
-	/**
-	 * Interpolates at the specified position. If {@code fallback!=null},
-	 * then {@code dest} <strong>must</strong> have been initialized with
-	 * {@code super.evaluate(...)} prior to invoking this method.
-	 *
-	 * @param x      The x position in pixel's coordinates.
-	 * @param y      The y position in pixel's coordinates.
-	 * @param dest   The destination array, or null.
-	 * @param band   The first band's index to interpolate.
-	 * @param bandUp The last band's index+1 to interpolate.
-	 * @return {@code null} if point is outside grid coverage.
-	 */
-	private synchronized int[] interpolate(final double x, final double y,
-	                                       int[] dest, int band, final int bandUp)
-	{
-	    final double x0 = Math.floor(x);
-	    final double y0 = Math.floor(y);
-	    final int    ix = (int)x0;
-	    final int    iy = (int)y0;
-	    if (!(ix>=xmin && ix<xmax && iy>=ymin && iy<ymax)) 
-	    	return null;
-	    /*
-	     * Creates buffers, if not already created.
-	     */
-	    int[][] samples = ints;
-	    if (samples == null) {
-	        final int rowCount = interpolation.getHeight();
-	        final int colCount = interpolation.getWidth();
-	        ints = samples = new int[rowCount][];
-	        for (int i=0; i<rowCount; i++) {
-	            samples[i] = new int[colCount];
-	        }
-	    }
-	    if (dest == null) {
-	        dest = new int[bandUp];
-	    }
-	       // ROI Check
-            if (hasROI && !roiBounds.contains(ix, iy) && !roi.contains(ix, iy)) {
-                // Outside the ROI. fill it with background values
-                Arrays.fill(dest, (int)background);
+    /**
+     * Interpolates at the specified position. If {@code fallback!=null}, then {@code dest}
+     * <strong>must</strong> have been initialized with {@code super.evaluate(...)} prior to
+     * invoking this method.
+     *
+     * @param x The x position in pixel's coordinates.
+     * @param y The y position in pixel's coordinates.
+     * @param dest The destination array, or null.
+     * @param band The first band's index to interpolate.
+     * @param bandUp The last band's index+1 to interpolate.
+     * @return {@code null} if point is outside grid coverage.
+     */
+    private synchronized int[] interpolate(
+            final double x, final double y, int[] dest, int band, final int bandUp) {
+        final double x0 = Math.floor(x);
+        final double y0 = Math.floor(y);
+        final int ix = (int) x0;
+        final int iy = (int) y0;
+        if (!(ix >= xmin && ix < xmax && iy >= ymin && iy < ymax)) return null;
+        /*
+         * Creates buffers, if not already created.
+         */
+        int[][] samples = ints;
+        if (samples == null) {
+            final int rowCount = interpolation.getHeight();
+            final int colCount = interpolation.getWidth();
+            ints = samples = new int[rowCount][];
+            for (int i = 0; i < rowCount; i++) {
+                samples[i] = new int[colCount];
+            }
+        }
+        if (dest == null) {
+            dest = new int[bandUp];
+        }
+        // ROI Check
+        if (hasROI && !roiBounds.contains(ix, iy) && !roi.contains(ix, iy)) {
+            // Outside the ROI. fill it with background values
+            Arrays.fill(dest, (int) background);
+            return dest;
+        }
+        /*
+         * Builds up a RectIter and use it for interpolating all bands.
+         * There is very few points, so the cost of creating a RectIter
+         * may be important. But it seems to still lower than query tiles
+         * many time (which may involve more computation than necessary).
+         */
+        bounds.x = ix - left;
+        bounds.y = iy - top;
+        final RectIter iter =
+                RectIterFactory.create(image.getExtendedData(bounds, this.borderExtender), bounds);
+        boolean[][] gaps = hasNoData ? new boolean[samples.length][samples[0].length] : null;
+        for (; band < bandUp; band++) {
+            iter.startLines();
+            int j = 0;
+            do {
+                iter.startPixels();
+                final boolean[] nodLine = hasNoData ? gaps[j] : null;
+                final int[] row = samples[j++];
+                int i = 0;
+                do {
+                    int sample = iter.getSample(band);
+                    // NoData Check
+                    if (hasNoData && !nodata.contains(sample)) {
+                        nodLine[i] = true;
+                    }
+                    row[i++] = sample;
+                } while (!iter.nextPixelDone());
+                assert i == row.length;
+            } while (!iter.nextLineDone());
+            assert j == samples.length;
+            // If has NoData the gas must be filled
+            boolean result = fixNoData(samples, gaps);
+            if (!result) {
+                // Totally nodata. fill it with background values
+                Arrays.fill(dest, (int) background);
                 return dest;
             }
-	    /*
-	     * Builds up a RectIter and use it for interpolating all bands.
-	     * There is very few points, so the cost of creating a RectIter
-	     * may be important. But it seems to still lower than query tiles
-	     * many time (which may involve more computation than necessary).
-	     */
-	    bounds.x = ix - left;
-	    bounds.y = iy - top;
-	    final RectIter iter = RectIterFactory.create(image.getExtendedData(bounds, this.borderExtender), bounds);
-	    boolean[][] gaps = hasNoData ? new boolean[samples.length][samples[0].length] : null;
-	    for (; band<bandUp; band++) {
-	        iter.startLines();
-	        int j=0; do {
-	            iter.startPixels();
-	            final boolean[] nodLine=hasNoData ? gaps[j] : null;
-	            final int[] row=samples[j++];
-	            int i=0; do {
-	                int sample = iter.getSample(band);
-                        // NoData Check
-                        if(hasNoData && !nodata.contains(sample)){
-                            nodLine[i] = true;
-                        }
-                        row[i++] = sample;
-	            }
-	            while (!iter.nextPixelDone());
-	            assert i==row.length;
-	        }
-	        while (!iter.nextLineDone());
-	        assert j == samples.length;
-	               // If has NoData the gas must be filled
-                boolean result = fixNoData(samples, gaps);
-                if (!result) {
-                    // Totally nodata. fill it with background values
-                    Arrays.fill(dest, (int)background);
-                    return dest;
-                }
-	        final int xfrac = (int) ((x-x0) * (1 << interpolation.getSubsampleBitsH()));
-	        final int yfrac = (int) ((y-y0) * (1 << interpolation.getSubsampleBitsV()));
-	        dest[band] = interpolation.interpolate(samples, xfrac, yfrac);
-	    }
-	    return dest;
-	}
+            final int xfrac = (int) ((x - x0) * (1 << interpolation.getSubsampleBitsH()));
+            final int yfrac = (int) ((y - y0) * (1 << interpolation.getSubsampleBitsV()));
+            dest[band] = interpolation.interpolate(samples, xfrac, yfrac);
+        }
+        return dest;
+    }
 

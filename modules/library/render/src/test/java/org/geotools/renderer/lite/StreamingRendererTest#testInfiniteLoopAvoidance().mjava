@@ -1,58 +1,61 @@
     @Test
     public void testInfiniteLoopAvoidance() throws Exception {
-        final Exception sentinel = new RuntimeException("This is the one that should be thrown in hasNext()");
-        
+        final Exception sentinel =
+                new RuntimeException("This is the one that should be thrown in hasNext()");
+
         // setup the mock necessary to have the renderer hit into the exception in hasNext()
         SimpleFeatureIterator it2 = createNiceMock(SimpleFeatureIterator.class);
         expect(it2.hasNext()).andThrow(sentinel).anyTimes();
         replay(it2);
-        
+
         SimpleFeatureCollection fc = createNiceMock(SimpleFeatureCollection.class);
         expect(fc.features()).andReturn(it2);
         expect(fc.size()).andReturn(200);
         expect(fc.getSchema()).andReturn(testLineFeatureType).anyTimes();
         replay(fc);
-        
+
         SimpleFeatureSource fs = createNiceMock(SimpleFeatureSource.class);
         expect(fs.getFeatures((Query) anyObject())).andReturn(fc);
         expect(fs.getSchema()).andReturn(testLineFeatureType).anyTimes();
         expect(fs.getSupportedHints()).andReturn(new HashSet()).anyTimes();
         replay(fs);
-        
+
         // build map context
         MapContext mapContext = new DefaultMapContext(DefaultGeographicCRS.WGS84);
         mapContext.addLayer(fs, createLineStyle());
-        
+
         // setup the renderer and listen for errors
         final StreamingRenderer sr = new StreamingRenderer();
         sr.setContext(mapContext);
-        sr.addRenderListener(new RenderListener() {
-            public void featureRenderer(SimpleFeature feature) {
-                features++;
-            }
-            public void errorOccurred(Exception e) {
-                errors++;
-                
-                if(errors > 2) {
-                    // we dont' want to block the loop in case of regression on this bug
-                    sr.stopRendering();
-                }
+        sr.addRenderListener(
+                new RenderListener() {
+                    public void featureRenderer(SimpleFeature feature) {
+                        features++;
+                    }
 
-                // but we want to make sure we're getting
-                Throwable t = e;
-                while(t != sentinel && t.getCause() != null)
-                    t = t.getCause();
-                assertSame(sentinel, t);
-            }
-        });
+                    public void errorOccurred(Exception e) {
+                        errors++;
+
+                        if (errors > 2) {
+                            // we dont' want to block the loop in case of regression on this bug
+                            sr.stopRendering();
+                        }
+
+                        // but we want to make sure we're getting
+                        Throwable t = e;
+                        while (t != sentinel && t.getCause() != null) t = t.getCause();
+                        assertSame(sentinel, t);
+                    }
+                });
         errors = 0;
         features = 0;
-        BufferedImage image = new BufferedImage(200, 200,BufferedImage.TYPE_4BYTE_ABGR);
-        ReferencedEnvelope reWgs = new ReferencedEnvelope(new Envelope(-180,
-                -170, 20, 40), DefaultGeographicCRS.WGS84);
-        sr.paint((Graphics2D) image.getGraphics(), new Rectangle(200, 200),reWgs);
+        BufferedImage image = new BufferedImage(200, 200, BufferedImage.TYPE_4BYTE_ABGR);
+        ReferencedEnvelope reWgs =
+                new ReferencedEnvelope(
+                        new Envelope(-180, -170, 20, 40), DefaultGeographicCRS.WGS84);
+        sr.paint((Graphics2D) image.getGraphics(), new Rectangle(200, 200), reWgs);
         mapContext.dispose();
-        
+
         // we should get two errors since there are two features that cannot be
         // projected but the renderer itself should not throw exceptions
         assertEquals(0, features);

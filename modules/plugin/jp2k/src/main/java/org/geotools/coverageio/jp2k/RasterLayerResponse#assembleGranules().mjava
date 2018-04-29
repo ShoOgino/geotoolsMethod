@@ -1,94 +1,105 @@
-	/**
-	 * This method loads the granules which overlap the requested
-	 * {@link GeneralEnvelope} using the provided values for alpha and input
-	 * ROI.
-	 */
-	private RenderedImage assembleGranules() throws DataSourceException {
+    /**
+     * This method loads the granules which overlap the requested {@link GeneralEnvelope} using the
+     * provided values for alpha and input ROI.
+     */
+    private RenderedImage assembleGranules() throws DataSourceException {
 
-		try {
-			
-			// select the relevant overview, notice that at this time we have
-			// relaxed a bit the requirement to have the same exact resolution
-			// for all the overviews, but still we do not allow for reading the
-			// various grid to world transform directly from the input files,
-			// therefore we are assuming that each granule has a scale and
-			// translate only grid to world that can be deduced from its base
-			// level dimension and envelope. The grid to world transforms for
-			// the other levels can be computed accordingly knowning the scale
-			// factors.
-			
-			if (request.getRequestedBBox() != null && request.getRequestedRasterArea() != null)
-				imageChoice = setReadParams(request.getOverviewPolicy(), baseReadParameters,request);
-			else
-				imageChoice = 0;
-			assert imageChoice>=0;
-			if (LOGGER.isLoggable(Level.FINE))
-				LOGGER.fine(new StringBuffer("Loading level ").append(
-						imageChoice).append(" with subsampling factors ")
-						.append(baseReadParameters.getSourceXSubsampling()).append(" ")
-						.append(baseReadParameters.getSourceYSubsampling()).toString());			
-			
-			
-			final BoundingBox cropBBOX = request.getCropBBox();
-			if (cropBBOX != null)
-				bbox = ReferencedEnvelope.reference(cropBBOX);
-			else
-				bbox = new ReferencedEnvelope(coverageEnvelope);
-			
-			//compute final world to grid
-			// base grid to world for the center of pixels
-			final AffineTransform g2w = new AffineTransform((AffineTransform) baseGridToWorld);
-			// move it to the corner
-			g2w.concatenate(CoverageUtilities.CENTER_TO_CORNER);
-			
-			//keep into account overviews and subsampling
-			final OverviewLevel level = rasterManager.overviewsController.resolutionsLevels.get(imageChoice);
-			final OverviewLevel baseLevel = rasterManager.overviewsController.resolutionsLevels.get(0);
-			final AffineTransform2D adjustments = new AffineTransform2D(
-					(level.resolutionX/baseLevel.resolutionX)*baseReadParameters.getSourceXSubsampling(),
-					0,
-					0,
-					(level.resolutionY/baseLevel.resolutionY)*baseReadParameters.getSourceYSubsampling(),
-					0,
-					0);
-			g2w.concatenate(adjustments);
-			finalGridToWorldCorner = new AffineTransform2D(g2w);
-			finalWorldToGridCorner = finalGridToWorldCorner.inverse();// compute raster bounds
-			rasterBounds=new GeneralGridEnvelope(CRS.transform(finalWorldToGridCorner, bbox),PixelInCell.CELL_CORNER,false).toRectangle();
-			
-			// create Init the granuleWorker
-			final GranuleWorker worker = new GranuleWorker();
-			worker.init(new ReferencedEnvelope(coverageEnvelope));
-			worker.produce();
-			
-			//
-			// Did we actually load anything?? 
-			//
-			if (worker.granulesNumber>=1) {
+        try {
 
-				if (LOGGER.isLoggable(Level.FINE))
-					LOGGER.fine(new StringBuilder("Loaded bbox ").append(
-							bbox.toString()).append(" while crop bbox ")
-							.append(request.getCropBBox().toString())
-							.toString());
-				return theImage;				
-			
-			}
-			else{
-				// if we get here that means that we do not have anything to load
-				// but still we are inside the definition area 
-				//we don't have background values available
-				return ConstantDescriptor.create(
-								Float.valueOf(rasterBounds.width), 
-								Float.valueOf(rasterBounds.height),
-								new Byte[] { 0 },
-								this.rasterManager.getHints());
-			}
+            // select the relevant overview, notice that at this time we have
+            // relaxed a bit the requirement to have the same exact resolution
+            // for all the overviews, but still we do not allow for reading the
+            // various grid to world transform directly from the input files,
+            // therefore we are assuming that each granule has a scale and
+            // translate only grid to world that can be deduced from its base
+            // level dimension and envelope. The grid to world transforms for
+            // the other levels can be computed accordingly knowning the scale
+            // factors.
 
-		} catch (IOException e) {
-			throw new DataSourceException("Unable to create this image", e);
-		} catch (TransformException e) {
-			throw new DataSourceException("Unable to create this image", e);
-		} 
-	}
+            if (request.getRequestedBBox() != null && request.getRequestedRasterArea() != null)
+                imageChoice =
+                        setReadParams(request.getOverviewPolicy(), baseReadParameters, request);
+            else imageChoice = 0;
+            assert imageChoice >= 0;
+            if (LOGGER.isLoggable(Level.FINE))
+                LOGGER.fine(
+                        new StringBuffer("Loading level ")
+                                .append(imageChoice)
+                                .append(" with subsampling factors ")
+                                .append(baseReadParameters.getSourceXSubsampling())
+                                .append(" ")
+                                .append(baseReadParameters.getSourceYSubsampling())
+                                .toString());
+
+            final BoundingBox cropBBOX = request.getCropBBox();
+            if (cropBBOX != null) bbox = ReferencedEnvelope.reference(cropBBOX);
+            else bbox = new ReferencedEnvelope(coverageEnvelope);
+
+            // compute final world to grid
+            // base grid to world for the center of pixels
+            final AffineTransform g2w = new AffineTransform((AffineTransform) baseGridToWorld);
+            // move it to the corner
+            g2w.concatenate(CoverageUtilities.CENTER_TO_CORNER);
+
+            // keep into account overviews and subsampling
+            final OverviewLevel level =
+                    rasterManager.overviewsController.resolutionsLevels.get(imageChoice);
+            final OverviewLevel baseLevel =
+                    rasterManager.overviewsController.resolutionsLevels.get(0);
+            final AffineTransform2D adjustments =
+                    new AffineTransform2D(
+                            (level.resolutionX / baseLevel.resolutionX)
+                                    * baseReadParameters.getSourceXSubsampling(),
+                            0,
+                            0,
+                            (level.resolutionY / baseLevel.resolutionY)
+                                    * baseReadParameters.getSourceYSubsampling(),
+                            0,
+                            0);
+            g2w.concatenate(adjustments);
+            finalGridToWorldCorner = new AffineTransform2D(g2w);
+            finalWorldToGridCorner = finalGridToWorldCorner.inverse(); // compute raster bounds
+            rasterBounds =
+                    new GeneralGridEnvelope(
+                                    CRS.transform(finalWorldToGridCorner, bbox),
+                                    PixelInCell.CELL_CORNER,
+                                    false)
+                            .toRectangle();
+
+            // create Init the granuleWorker
+            final GranuleWorker worker = new GranuleWorker();
+            worker.init(new ReferencedEnvelope(coverageEnvelope));
+            worker.produce();
+
+            //
+            // Did we actually load anything??
+            //
+            if (worker.granulesNumber >= 1) {
+
+                if (LOGGER.isLoggable(Level.FINE))
+                    LOGGER.fine(
+                            new StringBuilder("Loaded bbox ")
+                                    .append(bbox.toString())
+                                    .append(" while crop bbox ")
+                                    .append(request.getCropBBox().toString())
+                                    .toString());
+                return theImage;
+
+            } else {
+                // if we get here that means that we do not have anything to load
+                // but still we are inside the definition area
+                // we don't have background values available
+                return ConstantDescriptor.create(
+                        Float.valueOf(rasterBounds.width),
+                        Float.valueOf(rasterBounds.height),
+                        new Byte[] {0},
+                        this.rasterManager.getHints());
+            }
+
+        } catch (IOException e) {
+            throw new DataSourceException("Unable to create this image", e);
+        } catch (TransformException e) {
+            throw new DataSourceException("Unable to create this image", e);
+        }
+    }
 

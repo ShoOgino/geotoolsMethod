@@ -1,95 +1,85 @@
-	/**
-	 * Parses a polygon.
-	 * <p>
-	 * Precondition: parser positioned at a {@link GML#Polygon Polygon} start
-	 * tag
-	 * </p>
-	 * <p>
-	 * Postcondition: parser positioned at the {@link GML#Polygon Polygon} end
-	 * tag of the starting tag
-	 * </p>
-	 * 
-	 * @param dimension
-	 * @param crs
-	 * @return
-	 * @throws XmlPullParserException
-	 * @throws IOException
-	 * @throws NoSuchAuthorityCodeException
-	 * @throws FactoryException
-	 */
-	private Polygon parsePolygon(int dimension, CoordinateReferenceSystem crs)
-			throws XmlPullParserException, IOException,
-			NoSuchAuthorityCodeException, FactoryException {
-		Polygon geom;
-		LinearRing shell;
-		List<LinearRing> holes = null;
+    /**
+     * Parses a polygon.
+     *
+     * <p>Precondition: parser positioned at a {@link GML#Polygon Polygon} start tag
+     *
+     * <p>Postcondition: parser positioned at the {@link GML#Polygon Polygon} end tag of the
+     * starting tag
+     *
+     * @param dimension
+     * @param crs
+     * @return
+     * @throws XmlPullParserException
+     * @throws IOException
+     * @throws NoSuchAuthorityCodeException
+     * @throws FactoryException
+     */
+    private Polygon parsePolygon(int dimension, CoordinateReferenceSystem crs)
+            throws XmlPullParserException, IOException, NoSuchAuthorityCodeException,
+                    FactoryException {
+        Polygon geom;
+        LinearRing shell;
+        List<LinearRing> holes = null;
 
-		parser.nextTag();
-		parser.require(START_TAG, GML.NAMESPACE, null);
+        parser.nextTag();
+        parser.require(START_TAG, GML.NAMESPACE, null);
 
-		QName name = new QName(parser.getNamespace(), parser.getName());
+        QName name = new QName(parser.getNamespace(), parser.getName());
 
-		if (GML.exterior.equals(name)) {
-			parser.nextTag();
-			shell = parseLinearRing(dimension, crs);
-			parser.nextTag();
-			parser.require(END_TAG, GML.NAMESPACE, GML.exterior.getLocalPart());
-		} else if (GML.outerBoundaryIs.equals(name)) {
-			parser.nextTag();
-			parser.require(START_TAG, GML.NAMESPACE,
-					GML.LinearRing.getLocalPart());
-			shell = parseLinearRing(dimension, crs);
-			parser.nextTag();
-			parser.require(END_TAG, GML.NAMESPACE,
-					GML.outerBoundaryIs.getLocalPart());
-		} else {
-			throw new IllegalStateException(
-					"Unknown polygon boundary element: " + name);
-		}
+        if (GML.exterior.equals(name)) {
+            parser.nextTag();
+            shell = parseLinearRing(dimension, crs);
+            parser.nextTag();
+            parser.require(END_TAG, GML.NAMESPACE, GML.exterior.getLocalPart());
+        } else if (GML.outerBoundaryIs.equals(name)) {
+            parser.nextTag();
+            parser.require(START_TAG, GML.NAMESPACE, GML.LinearRing.getLocalPart());
+            shell = parseLinearRing(dimension, crs);
+            parser.nextTag();
+            parser.require(END_TAG, GML.NAMESPACE, GML.outerBoundaryIs.getLocalPart());
+        } else {
+            throw new IllegalStateException("Unknown polygon boundary element: " + name);
+        }
 
-		parser.nextTag();
+        parser.nextTag();
 
-		name = new QName(parser.getNamespace(), parser.getName());
+        name = new QName(parser.getNamespace(), parser.getName());
 
-		if (START_TAG == parser.getEventType()) {
-			if (GML.interior.equals(name) || GML.innerBoundaryIs.equals(name)) {
-				// parse interior rings
-				holes = new ArrayList<LinearRing>(2);
-				while (true) {
-					parser.require(START_TAG, GML.NAMESPACE,
-							name.getLocalPart());
-					parser.nextTag();
-					parser.require(START_TAG, GML.NAMESPACE,
-							GML.LinearRing.getLocalPart());
+        if (START_TAG == parser.getEventType()) {
+            if (GML.interior.equals(name) || GML.innerBoundaryIs.equals(name)) {
+                // parse interior rings
+                holes = new ArrayList<LinearRing>(2);
+                while (true) {
+                    parser.require(START_TAG, GML.NAMESPACE, name.getLocalPart());
+                    parser.nextTag();
+                    parser.require(START_TAG, GML.NAMESPACE, GML.LinearRing.getLocalPart());
 
-					LinearRing hole = parseLinearRing(dimension, crs);
+                    LinearRing hole = parseLinearRing(dimension, crs);
 
-					parser.require(END_TAG, GML.NAMESPACE,
-							GML.LinearRing.getLocalPart());
+                    parser.require(END_TAG, GML.NAMESPACE, GML.LinearRing.getLocalPart());
 
-					holes.add(hole);
+                    holes.add(hole);
 
-					parser.nextTag();
-					parser.require(END_TAG, GML.NAMESPACE, name.getLocalPart());
-					parser.nextTag();
-					if (END_TAG == parser.getEventType()) {
-						// we're done
-						parser.require(END_TAG, GML.NAMESPACE,
-								GML.Polygon.getLocalPart());
-						break;
-					}
-				}
-			}
-		}
+                    parser.nextTag();
+                    parser.require(END_TAG, GML.NAMESPACE, name.getLocalPart());
+                    parser.nextTag();
+                    if (END_TAG == parser.getEventType()) {
+                        // we're done
+                        parser.require(END_TAG, GML.NAMESPACE, GML.Polygon.getLocalPart());
+                        break;
+                    }
+                }
+            }
+        }
 
-		parser.require(END_TAG, GML.NAMESPACE, GML.Polygon.getLocalPart());
+        parser.require(END_TAG, GML.NAMESPACE, GML.Polygon.getLocalPart());
 
-		LinearRing[] holesArray = null;
-		if (holes != null) {
-			holesArray = holes.toArray(new LinearRing[holes.size()]);
-		}
-		geom = geomFac.createPolygon(shell, holesArray);
-		geom.setUserData(crs);
-		return geom;
-	}
+        LinearRing[] holesArray = null;
+        if (holes != null) {
+            holesArray = holes.toArray(new LinearRing[holes.size()]);
+        }
+        geom = geomFac.createPolygon(shell, holesArray);
+        geom.setUserData(crs);
+        return geom;
+    }
 

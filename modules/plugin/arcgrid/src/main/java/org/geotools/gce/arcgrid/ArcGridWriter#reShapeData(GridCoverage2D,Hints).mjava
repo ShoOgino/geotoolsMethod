@@ -1,86 +1,84 @@
-	/**
-	 * Resampling the raster in order to have square pixels instead of
-	 * rectangular which are not suitable for an Esrii ascii grid.
-	 * 
-	 * @param gc
-	 *            Input coverage.
-	 * @return A new coverage with square pixels.
-	 */
-	private static GridCoverage2D reShapeData(final GridCoverage2D gc, final Hints hints) {
+    /**
+     * Resampling the raster in order to have square pixels instead of rectangular which are not
+     * suitable for an Esrii ascii grid.
+     *
+     * @param gc Input coverage.
+     * @return A new coverage with square pixels.
+     */
+    private static GridCoverage2D reShapeData(final GridCoverage2D gc, final Hints hints) {
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// Getting the dx and dy for this coverage and checking if they differ
-		// so much that we need to reshape in order to have square pixels
-		//
-		// /////////////////////////////////////////////////////////////////////
-		final AffineTransform gridToWorld = (AffineTransform) ((GridGeometry2D) gc.getGridGeometry()).getGridToCRS2D();
-		final double dx = XAffineTransform.getScaleX0(gridToWorld);
-		final double dy = XAffineTransform.getScaleY0(gridToWorld);
-		if (AsciiGridsImageWriter.resolutionCheck(dx, dy, AsciiGridsImageWriter.EPS)) {
-			return gc;
-		}
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Getting the dx and dy for this coverage and checking if they differ
+        // so much that we need to reshape in order to have square pixels
+        //
+        // /////////////////////////////////////////////////////////////////////
+        final AffineTransform gridToWorld =
+                (AffineTransform) ((GridGeometry2D) gc.getGridGeometry()).getGridToCRS2D();
+        final double dx = XAffineTransform.getScaleX0(gridToWorld);
+        final double dy = XAffineTransform.getScaleY0(gridToWorld);
+        if (AsciiGridsImageWriter.resolutionCheck(dx, dy, AsciiGridsImageWriter.EPS)) {
+            return gc;
+        }
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// Getting info about the original image in order to create the new
-		// gridgeometry
-		//
-		// /////////////////////////////////////////////////////////////////////
-		final RenderedImage image = gc.getRenderedImage();
-		int Nx = image.getWidth();
-		int Ny = image.getHeight();
-		final double _Nx;
-		final double _Ny;
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Getting info about the original image in order to create the new
+        // gridgeometry
+        //
+        // /////////////////////////////////////////////////////////////////////
+        final RenderedImage image = gc.getRenderedImage();
+        int Nx = image.getWidth();
+        int Ny = image.getHeight();
+        final double _Nx;
+        final double _Ny;
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// Getting info about the original evelope n order to create the new
-		// gridgeometry
-		//
-		// /////////////////////////////////////////////////////////////////////
-		final Envelope oldEnv = gc.getEnvelope2D();
-		final double W = oldEnv.getSpan(0);
-		final double H = oldEnv.getSpan(1);
-		if ((dx - dy) > ArcGridWriter.ROTATION_EPS) {
-			/**
-			 * we have higher resolution on the Y axis we have to increase it on
-			 * the X axis as well.
-			 */
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Getting info about the original evelope n order to create the new
+        // gridgeometry
+        //
+        // /////////////////////////////////////////////////////////////////////
+        final Envelope oldEnv = gc.getEnvelope2D();
+        final double W = oldEnv.getSpan(0);
+        final double H = oldEnv.getSpan(1);
+        if ((dx - dy) > ArcGridWriter.ROTATION_EPS) {
+            /**
+             * we have higher resolution on the Y axis we have to increase it on the X axis as well.
+             */
 
-			// new number of columns
-			_Nx = W / dy;
-			Nx = (int) (_Nx + 0.5);
-		} else {
-			/**
-			 * we have higher resolution on the X axis we have to increase it on
-			 * the Y axis as well.
-			 */
+            // new number of columns
+            _Nx = W / dy;
+            Nx = (int) (_Nx + 0.5);
+        } else {
+            /**
+             * we have higher resolution on the X axis we have to increase it on the Y axis as well.
+             */
 
-			// new number of rows
-			_Ny = H / dx;
-			Ny = (int) (_Ny + 0.5);
-		}
+            // new number of rows
+            _Ny = H / dx;
+            Ny = (int) (_Ny + 0.5);
+        }
 
-		// new grid range
-		final GeneralGridEnvelope newGridrange = new GeneralGridEnvelope(new int[] {0, 0 }, new int[] { Nx, Ny });
-		final GridGeometry2D newGridGeometry = new GridGeometry2D(newGridrange,new GeneralEnvelope(gc.getEnvelope()));
+        // new grid range
+        final GeneralGridEnvelope newGridrange =
+                new GeneralGridEnvelope(new int[] {0, 0}, new int[] {Nx, Ny});
+        final GridGeometry2D newGridGeometry =
+                new GridGeometry2D(newGridrange, new GeneralEnvelope(gc.getEnvelope()));
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// Reshaping using the resample operation for having best precision.
-		//
-		// /////////////////////////////////////////////////////////////////////
-		final ParameterValueGroup param = (ParameterValueGroup) processor.getOperation(
-				"Resample").getParameters()
-				.clone();
-		param.parameter("source").setValue(gc);
-		param.parameter("CoordinateReferenceSystem").setValue(
-				gc.getCoordinateReferenceSystem2D());
-		param.parameter("GridGeometry").setValue(newGridGeometry);
-		param.parameter("InterpolationType").setValue(
-				Interpolation.getInstance(Interpolation.INTERP_NEAREST));
-		return (GridCoverage2D) ((Resample)processor.getOperation(
-				"Resample")).doOperation(param, hints);
-	}
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Reshaping using the resample operation for having best precision.
+        //
+        // /////////////////////////////////////////////////////////////////////
+        final ParameterValueGroup param =
+                (ParameterValueGroup) processor.getOperation("Resample").getParameters().clone();
+        param.parameter("source").setValue(gc);
+        param.parameter("CoordinateReferenceSystem").setValue(gc.getCoordinateReferenceSystem2D());
+        param.parameter("GridGeometry").setValue(newGridGeometry);
+        param.parameter("InterpolationType")
+                .setValue(Interpolation.getInstance(Interpolation.INTERP_NEAREST));
+        return (GridCoverage2D)
+                ((Resample) processor.getOperation("Resample")).doOperation(param, hints);
+    }
 

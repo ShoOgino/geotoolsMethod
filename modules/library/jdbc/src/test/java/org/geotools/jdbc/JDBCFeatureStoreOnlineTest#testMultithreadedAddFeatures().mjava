@@ -1,9 +1,9 @@
     /**
-     * Tests that returned keys are actually allowing the code to get back the same feature
-     * inserted (SQLServer code used to rely on a key generation approach that failed this test)
-     * 
+     * Tests that returned keys are actually allowing the code to get back the same feature inserted
+     * (SQLServer code used to rely on a key generation approach that failed this test)
+     *
      * @throws IOException
-     * @throws InterruptedException 
+     * @throws InterruptedException
      */
     public void testMultithreadedAddFeatures() throws IOException, InterruptedException {
         SimpleFeatureBuilder b = new SimpleFeatureBuilder(featureStore.getSchema());
@@ -18,22 +18,26 @@
                 final Integer theValue = new Integer(i + 3);
                 b.set(theProperty, theValue);
                 SimpleFeature feature = b.buildFeature(null);
-                cs.submit(() -> {
-                    List<FeatureId> ids = featureStore.addFeatures(Arrays.asList(feature));
-                    Filter filter = dataStore.getFilterFactory().id(Collections.singleton(ids.get(0)));
-                    ContentFeatureCollection features = featureStore.getFeatures(filter);
-                    assertEquals(1, features.size());
-                    SimpleFeature found = DataUtilities.first(features);
-                    assertEquals(theValue, found.getAttribute(theProperty));
-                    return null;
-                });
+                cs.submit(
+                        () -> {
+                            List<FeatureId> ids = featureStore.addFeatures(Arrays.asList(feature));
+                            Filter filter =
+                                    dataStore
+                                            .getFilterFactory()
+                                            .id(Collections.singleton(ids.get(0)));
+                            ContentFeatureCollection features = featureStore.getFeatures(filter);
+                            assertEquals(1, features.size());
+                            SimpleFeature found = DataUtilities.first(features);
+                            assertEquals(theValue, found.getAttribute(theProperty));
+                            return null;
+                        });
             }
-            
+
             // gather the results to make sure there are no exceptions
             for (int i = 0; i < LOOPS; i++) {
                 cs.take();
             }
-            
+
         } finally {
             executor.shutdown();
         }

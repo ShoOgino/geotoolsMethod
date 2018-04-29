@@ -1,41 +1,43 @@
     public CategorizeFunction(List<Expression> parameters, Literal fallback) {
         this.parameters = parameters;
         this.fallback = fallback;
-        
-        // check for valid structure, we need lookup, value, [threshold, value]*, [thresholdInclusion]
-        if(parameters.size() % 2 != 0) {
+
+        // check for valid structure, we need lookup, value, [threshold, value]*,
+        // [thresholdInclusion]
+        if (parameters.size() % 2 != 0) {
             // in this case the last value must be either succeeding or preceding, as a literal
             Expression lastParameter = parameters.get(parameters.size() - 1);
             String lastValue = lastParameter.evaluate(null, String.class);
-            
+
             if (PRECEDING.equalsIgnoreCase(lastValue)) {
                 belongsTo = PRECEDING;
             } else if (SUCCEEDING.equalsIgnoreCase(lastValue)) {
                 belongsTo = SUCCEEDING;
             } else {
-                throw new IllegalArgumentException("The valid structure of a categorize function call is " +
-                		"\"lookup, value, [threshold, value]*, [succeeding|preceding]\", " +
-                		"yet there is a odd number of parameters and the last value is not succeeding nor preceeding");
+                throw new IllegalArgumentException(
+                        "The valid structure of a categorize function call is "
+                                + "\"lookup, value, [threshold, value]*, [succeeding|preceding]\", "
+                                + "yet there is a odd number of parameters and the last value is not succeeding nor preceeding");
             }
         }
-        
+
         // see if the table is full of attribute independent expressions
         FilterAttributeExtractor extractor = new FilterAttributeExtractor();
         thresholds = new double[(parameters.size() - 1) / 2];
         values = new Expression[thresholds.length + 1];
         for (int i = 1; i < parameters.size(); i++) {
             Expression expression = parameters.get(i);
-            if(expression != null) {
+            if (expression != null) {
                 extractor.clear();
                 expression.accept(extractor, null);
-                if(!extractor.isConstantExpression()) {
+                if (!extractor.isConstantExpression()) {
                     staticTable = false;
                     thresholds = null;
                     break;
-                } else { 
-                    if(i % 2 == 0) {
+                } else {
+                    if (i % 2 == 0) {
                         Double threshold = expression.evaluate(null, Double.class);
-                        if(threshold == null) {
+                        if (threshold == null) {
                             staticTable = false;
                             thresholds = null;
                             break;
@@ -43,13 +45,13 @@
                             thresholds[i / 2 - 1] = threshold;
                         }
                     } else {
-                        values[i / 2] = expression; 
+                        values[i / 2] = expression;
                     }
                 }
             }
         }
         // allow for binary search
-        if(thresholds != null) {
+        if (thresholds != null) {
             Arrays.sort(thresholds);
         }
     }

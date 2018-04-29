@@ -1,28 +1,31 @@
     /**
-     * Returns all the available operations for conversion or transformation between two coordinate reference systems. If no operation exists, then an
-     * empty set is returned.
-     * <P>
-     * The default implementation inspects the CRS and delegates the work to one or many {@code createOperationStep(...)} methods. This method fails
-     * if no path between the CRSs is found.
+     * Returns all the available operations for conversion or transformation between two coordinate
+     * reference systems. If no operation exists, then an empty set is returned.
+     *
+     * <p>The default implementation inspects the CRS and delegates the work to one or many {@code
+     * createOperationStep(...)} methods. This method fails if no path between the CRSs is found.
      *
      * @param sourceCRS Input coordinate reference system.
      * @param targetCRS Output coordinate reference system.
-     * @param limit The maximum number of operations to be returned. Use -1 to return all the available operations. Use 1 to return just one
-     *        operations. Currently, the behavior for other values of {@code limit} is undefined.
+     * @param limit The maximum number of operations to be returned. Use -1 to return all the
+     *     available operations. Use 1 to return just one operations. Currently, the behavior for
+     *     other values of {@code limit} is undefined.
      * @return A {@code Set} of coordinate operations from {@code sourceCRS} to {@code targetCRS}.
      * @throws FactoryException if the operation creation failed for some other reason.
      */
-    protected Set<CoordinateOperation> findOperations(final CoordinateReferenceSystem sourceCRS,
-            final CoordinateReferenceSystem targetCRS, int limit)
-            throws FactoryException
-    {
+    protected Set<CoordinateOperation> findOperations(
+            final CoordinateReferenceSystem sourceCRS,
+            final CoordinateReferenceSystem targetCRS,
+            int limit)
+            throws FactoryException {
         ensureNonNull("sourceCRS", sourceCRS);
         ensureNonNull("targetCRS", targetCRS);
         if (equalsIgnoreMetadata(sourceCRS, targetCRS)) {
-            final int dim  = getDimension(sourceCRS);
-            assert    dim == getDimension(targetCRS) : dim;
-            CoordinateOperation op = createFromAffineTransform(IDENTITY, sourceCRS, targetCRS,
-                                             MatrixFactory.create(dim+1));
+            final int dim = getDimension(sourceCRS);
+            assert dim == getDimension(targetCRS) : dim;
+            CoordinateOperation op =
+                    createFromAffineTransform(
+                            IDENTITY, sourceCRS, targetCRS, MatrixFactory.create(dim + 1));
             return Collections.singleton(op);
         } else {
             // Query the database (if any) before to try to find the operation by ourself.
@@ -31,24 +34,24 @@
                 return result;
             }
         }
-        
+
         /////////////////////////////////////////
         ////                                 ////
         ////     Generic  -->  various CS    ////
         ////     Various CS --> Generic      ////
         ////                                 ////
         /////////////////////////////////////////
-        if (isWildcard(sourceCRS) || isWildcard(targetCRS))
-        {
+        if (isWildcard(sourceCRS) || isWildcard(targetCRS)) {
             final int dimSource = getDimension(sourceCRS);
             final int dimTarget = getDimension(targetCRS);
             if (dimTarget == dimSource) {
-                final Matrix matrix = MatrixFactory.create(dimTarget+1, dimSource+1);
-                CoordinateOperation op = createFromAffineTransform(IDENTITY, sourceCRS, targetCRS, matrix);
+                final Matrix matrix = MatrixFactory.create(dimTarget + 1, dimSource + 1);
+                CoordinateOperation op =
+                        createFromAffineTransform(IDENTITY, sourceCRS, targetCRS, matrix);
                 return Collections.singleton(op);
             }
         }
-        
+
         /*
          * Before to process, performs a special check for CompoundCRS where the target contains
          * every elements included in the source.  CompoundCRS are usually verified last, but in
@@ -161,7 +164,7 @@
             // Note: this code is identical to 'createOperationStep(GeographicCRS, ProjectedCRS)'
             //       except that the later invokes directly the right method for 'step1' instead
             //       of invoking 'createOperation' recursively.
-            final GeneralDerivedCRS  target = (GeneralDerivedCRS) targetCRS;
+            final GeneralDerivedCRS target = (GeneralDerivedCRS) targetCRS;
             final CoordinateReferenceSystem base = target.getBaseCRS();
             final Set<CoordinateOperation> step1 = findOperations(sourceCRS, base, limit);
             final CoordinateOperation step2 = target.getConversionFromBase();
@@ -176,11 +179,11 @@
             // Note: this code is identical to 'createOperationStep(ProjectedCRS, GeographicCRS)'
             //       except that the later invokes directly the right method for 'step2' instead
             //       of invoking 'createOperation' recursively.
-            final GeneralDerivedCRS       source = (GeneralDerivedCRS) sourceCRS;
+            final GeneralDerivedCRS source = (GeneralDerivedCRS) sourceCRS;
             final CoordinateReferenceSystem base = source.getBaseCRS();
             final Set<CoordinateOperation> step2 = findOperations(base, targetCRS, limit);
-            CoordinateOperation            step1 = source.getConversionFromBase();
-            MathTransform              transform = step1.getMathTransform();
+            CoordinateOperation step1 = source.getConversionFromBase();
+            MathTransform transform = step1.getMathTransform();
             try {
                 transform = transform.inverse();
             } catch (NoninvertibleTransformException exception) {

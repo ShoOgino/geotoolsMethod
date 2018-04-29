@@ -1,16 +1,16 @@
     public boolean visit(XSDTypeDefinition type) {
-        //look up the associated binding object for this type
+        // look up the associated binding object for this type
         QName bindingName = null;
 
         if (type.getName() != null) {
             bindingName = new QName(type.getTargetNamespace(), type.getName());
         } else {
-            //anonymous type, does it belong to a global element
-            for (Iterator e = type.getSchema().getElementDeclarations().iterator(); e.hasNext();) {
+            // anonymous type, does it belong to a global element
+            for (Iterator e = type.getSchema().getElementDeclarations().iterator(); e.hasNext(); ) {
                 XSDElementDeclaration element = (XSDElementDeclaration) e.next();
 
                 if (type.equals(element.getAnonymousTypeDefinition())) {
-                    //TODO: this naming convention for anonymous types could conflict with 
+                    // TODO: this naming convention for anonymous types could conflict with
                     // other types in the schema
                     bindingName = new QName(type.getTargetNamespace(), "_" + element.getName());
 
@@ -19,61 +19,66 @@
             }
 
             if (bindingName == null) {
-                //do we have a containing type?
+                // do we have a containing type?
                 if (container != null) {
                     XSDNamedComponent base = container;
-                    
-                    //the container itself could be an anonymous type, check for 
+
+                    // the container itself could be an anonymous type, check for
                     // a named containing element
-                    if ( container.getName() == null ) {
-                        if ( container.getContainer() instanceof XSDElementDeclaration ) {
-                            XSDElementDeclaration e = (XSDElementDeclaration) container.getContainer();
-                            
-                            //only do this if the containing element is global
-                            if ( e.isGlobal() ) {
+                    if (container.getName() == null) {
+                        if (container.getContainer() instanceof XSDElementDeclaration) {
+                            XSDElementDeclaration e =
+                                    (XSDElementDeclaration) container.getContainer();
+
+                            // only do this if the containing element is global
+                            if (e.isGlobal()) {
                                 base = e;
                             }
                         }
                     }
-                    
-                    //get the anonymous element, and look it up in the container type
+
+                    // get the anonymous element, and look it up in the container type
                     if (type.getContainer() instanceof XSDElementDeclaration) {
-                        XSDElementDeclaration anonymous = (XSDElementDeclaration) type.getContainer();
-                        XSDParticle particle = Schemas.getChildElementParticle(container,
-                                anonymous.getName(), true);
+                        XSDElementDeclaration anonymous =
+                                (XSDElementDeclaration) type.getContainer();
+                        XSDParticle particle =
+                                Schemas.getChildElementParticle(
+                                        container, anonymous.getName(), true);
 
                         if (particle != null) {
-                            bindingName = new QName(base.getTargetNamespace(),
-                                    base.getName() + "_" + anonymous.getName());
+                            bindingName =
+                                    new QName(
+                                            base.getTargetNamespace(),
+                                            base.getName() + "_" + anonymous.getName());
                         }
                     }
                 }
             }
 
             if ((bindingName == null) || (loader.getBinding(bindingName) == null)) {
-                //special case check, look for an anonymous complex type 
+                // special case check, look for an anonymous complex type
                 // with simple content
                 if (type instanceof XSDComplexTypeDefinition
                         && type.getBaseType() instanceof XSDSimpleTypeDefinition) {
-                    //we assign the default complex binding instread of 
+                    // we assign the default complex binding instread of
                     // delegating to parent, because if we dont, any attributes
                     // defined by the type will not be parsed because simple
                     // types cannot have attributes.
-                    //TODO: put this somewhere else, perahps in teh factories
+                    // TODO: put this somewhere else, perahps in teh factories
                     // that create the bindings
                     bindingName = XS.ANYTYPE;
                 }
             }
         }
 
-        //load the binding into the current context
+        // load the binding into the current context
         Binding binding = loader.loadBinding(bindingName, context);
 
         if (binding != null) {
-            //add the binding
+            // add the binding
             bindings.add(binding);
 
-            //check execution mode, if override break out
+            // check execution mode, if override break out
             if (binding.getExecutionMode() == Binding.OVERRIDE) {
                 return false;
             }

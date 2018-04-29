@@ -1,6 +1,6 @@
     /**
      * Process the input data set.
-     * 
+     *
      * @param featureCollection the data set
      * @param crs the CRS
      * @param point the given point
@@ -9,11 +9,27 @@
      */
     @DescribeResult(name = "result", description = "Output feature collection")
     public FeatureCollection execute(
-            @DescribeParameter(name = "features", description = "Input feature collection") FeatureCollection featureCollection,
-            @DescribeParameter(name = "from_measure_attb", description = "Attribute providing start measure of feature") String fromMeasureAttb,
-            @DescribeParameter(name = "to_measure_attb", description = "Attribute providing end measure of feature") String toMeasureAttb,
-            @DescribeParameter(name = "point", description = "Point whose location to measure") Point point,
-            @DescribeParameter(name = "crs", min = 0, description = "Coordinate reference system to use for input (default is the input collection CRS)") CoordinateReferenceSystem crs)
+            @DescribeParameter(name = "features", description = "Input feature collection")
+                    FeatureCollection featureCollection,
+            @DescribeParameter(
+                        name = "from_measure_attb",
+                        description = "Attribute providing start measure of feature"
+                    )
+                    String fromMeasureAttb,
+            @DescribeParameter(
+                        name = "to_measure_attb",
+                        description = "Attribute providing end measure of feature"
+                    )
+                    String toMeasureAttb,
+            @DescribeParameter(name = "point", description = "Point whose location to measure")
+                    Point point,
+            @DescribeParameter(
+                        name = "crs",
+                        min = 0,
+                        description =
+                                "Coordinate reference system to use for input (default is the input collection CRS)"
+                    )
+                    CoordinateReferenceSystem crs)
             throws ProcessException {
         DefaultFeatureCollection results = new DefaultFeatureCollection();
         try {
@@ -64,13 +80,19 @@
                 featureIterator = featureCollection.features();
                 while (featureIterator.hasNext()) {
                     SimpleFeature f = (SimpleFeature) featureIterator.next();
-                    if (f.getDefaultGeometryProperty().getValue() == null)
-                        continue;
-                    DistanceOp op = new DistanceOp(point, (Geometry) f.getDefaultGeometryProperty()
-                            .getValue());
+                    if (f.getDefaultGeometryProperty().getValue() == null) continue;
+                    DistanceOp op =
+                            new DistanceOp(
+                                    point, (Geometry) f.getDefaultGeometryProperty().getValue());
                     Coordinate[] co = op.closestPoints();
-                    double[] co0 = new double[] { co[0].x, co[0].y, };
-                    double[] co1 = new double[] { co[1].x, co[1].y, };
+                    double[] co0 =
+                            new double[] {
+                                co[0].x, co[0].y,
+                            };
+                    double[] co1 =
+                            new double[] {
+                                co[1].x, co[1].y,
+                            };
                     double[] geo0 = new double[2];
                     double[] geo1 = new double[2];
                     crsTransform.transform(co0, 0, geo0, 0, 1);
@@ -78,33 +100,37 @@
 
                     // get distance
                     Measure m = DefaultGeographicCRS.WGS84.distance(geo0, geo1);
-                    if (m.doubleValue() > nearestDistance)
-                        continue;
+                    if (m.doubleValue() > nearestDistance) continue;
                     nearestFeature = f;
                     nearestDistance = m.doubleValue();
                     nearestCoords = co;
                 }
             } finally {
-                if (featureIterator != null)
-                    featureIterator.close();
+                if (featureIterator != null) featureIterator.close();
             }
             if (nearestFeature != null) {
-                LengthIndexedLine lengthIndexedLine = new LengthIndexedLine(
-                        (Geometry) nearestFeature.getDefaultGeometryProperty().getValue());
+                LengthIndexedLine lengthIndexedLine =
+                        new LengthIndexedLine(
+                                (Geometry) nearestFeature.getDefaultGeometryProperty().getValue());
                 double lineIndex = lengthIndexedLine.indexOf(nearestCoords[1]);
-                double lineLength = ((Geometry) nearestFeature.getDefaultGeometryProperty()
-                        .getValue()).getLength();
-                Double featureFromMeasure = (Double) nearestFeature.getProperty(fromMeasureAttb)
-                        .getValue();
-                Double featureToMeasure = (Double) nearestFeature.getProperty(toMeasureAttb)
-                        .getValue();
-                double lrsMeasure = featureFromMeasure + (featureToMeasure - featureFromMeasure)
-                        * lineIndex / lineLength;
-                nearestFeature.getDefaultGeometryProperty().setValue(
-                        geometryFactory.createPoint(new Coordinate(nearestCoords[1].x,
-                                nearestCoords[1].y)));
-                results.add(createTargetFeature(nearestFeature,
-                        (SimpleFeatureType) targetFeatureType, lrsMeasure));
+                double lineLength =
+                        ((Geometry) nearestFeature.getDefaultGeometryProperty().getValue())
+                                .getLength();
+                Double featureFromMeasure =
+                        (Double) nearestFeature.getProperty(fromMeasureAttb).getValue();
+                Double featureToMeasure =
+                        (Double) nearestFeature.getProperty(toMeasureAttb).getValue();
+                double lrsMeasure =
+                        featureFromMeasure
+                                + (featureToMeasure - featureFromMeasure) * lineIndex / lineLength;
+                nearestFeature
+                        .getDefaultGeometryProperty()
+                        .setValue(
+                                geometryFactory.createPoint(
+                                        new Coordinate(nearestCoords[1].x, nearestCoords[1].y)));
+                results.add(
+                        createTargetFeature(
+                                nearestFeature, (SimpleFeatureType) targetFeatureType, lrsMeasure));
                 return results;
             }
             return results;

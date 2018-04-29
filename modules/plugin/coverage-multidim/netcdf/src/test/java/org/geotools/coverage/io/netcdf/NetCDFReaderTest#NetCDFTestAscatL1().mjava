@@ -1,6 +1,7 @@
     @Test
-  public void NetCDFTestAscatL1() throws NoSuchAuthorityCodeException, FactoryException, IOException, ParseException {
-        File mosaic = new File(TestData.file(this,"."),"NetCDFTestAscatL1");
+    public void NetCDFTestAscatL1()
+            throws NoSuchAuthorityCodeException, FactoryException, IOException, ParseException {
+        File mosaic = new File(TestData.file(this, "."), "NetCDFTestAscatL1");
         if (mosaic.exists()) {
             FileUtils.deleteDirectory(mosaic);
         }
@@ -8,90 +9,100 @@
         File file = TestData.file(this, "ascatl1.nc");
         FileUtils.copyFileToDirectory(file, mosaic);
         file = new File(mosaic, "ascatl1.nc");
-        
-      final Hints hints= new Hints(Hints.DEFAULT_COORDINATE_REFERENCE_SYSTEM, CRS.decode("EPSG:4326", true));
-      hints.add(new Hints(Utils.EXCLUDE_MOSAIC, true));
 
-      // Get format
-      final AbstractGridFormat format = (AbstractGridFormat) GridFormatFinder.findFormat(file.toURI().toURL(),hints);
-      final NetCDFReader reader = (NetCDFReader) format.getReader(file.toURI().toURL(), hints);
-      
-      assertNotNull(format);
-      try {
-          String[] names = reader.getGridCoverageNames();
-          names = new String[] { names[1] };
+        final Hints hints =
+                new Hints(Hints.DEFAULT_COORDINATE_REFERENCE_SYSTEM, CRS.decode("EPSG:4326", true));
+        hints.add(new Hints(Utils.EXCLUDE_MOSAIC, true));
 
-          for (String coverageName : names) {
+        // Get format
+        final AbstractGridFormat format =
+                (AbstractGridFormat) GridFormatFinder.findFormat(file.toURI().toURL(), hints);
+        final NetCDFReader reader = (NetCDFReader) format.getReader(file.toURI().toURL(), hints);
 
-              final String[] metadataNames = reader.getMetadataNames(coverageName);
-              assertNotNull(metadataNames);
-              assertEquals(17, metadataNames.length);
+        assertNotNull(format);
+        try {
+            String[] names = reader.getGridCoverageNames();
+            names = new String[] {names[1]};
 
-              // Parsing metadata values
-              assertEquals("false", reader.getMetadataValue(coverageName, "HAS_TIME_DOMAIN"));
+            for (String coverageName : names) {
 
-              assertEquals("false", reader.getMetadataValue(coverageName, "HAS_ELEVATION_DOMAIN"));
-              
-              assertEquals("true", reader.getMetadataValue(coverageName, "HAS_NUMSIGMA_DOMAIN"));
-              final String sigmaMetadata = reader.getMetadataValue(coverageName, "NUMSIGMA_DOMAIN");
-              assertNotNull(sigmaMetadata);
-              assertEquals("0,1,2", sigmaMetadata);
-              assertEquals(3, sigmaMetadata.split(",").length);
+                final String[] metadataNames = reader.getMetadataNames(coverageName);
+                assertNotNull(metadataNames);
+                assertEquals(17, metadataNames.length);
 
-              // subsetting the envelope
-              final ParameterValue<GridGeometry2D> gg = AbstractGridFormat.READ_GRIDGEOMETRY2D
-                      .createValue();
-              final GeneralEnvelope originalEnvelope = reader.getOriginalEnvelope(coverageName);
-              final GeneralEnvelope reducedEnvelope = new GeneralEnvelope(new double[] {
-                      originalEnvelope.getLowerCorner().getOrdinate(0),
-                      originalEnvelope.getLowerCorner().getOrdinate(1) }, new double[] {
-                      originalEnvelope.getMedian().getOrdinate(0),
-                      originalEnvelope.getMedian().getOrdinate(1) });
-              reducedEnvelope.setCoordinateReferenceSystem(reader
-                      .getCoordinateReferenceSystem(coverageName));
+                // Parsing metadata values
+                assertEquals("false", reader.getMetadataValue(coverageName, "HAS_TIME_DOMAIN"));
 
-              // Selecting bigger gridRange for a zoomed result
-              final Dimension dim = new Dimension();
-              GridEnvelope gridRange = reader.getOriginalGridRange(coverageName);
-              dim.setSize(gridRange.getSpan(0) * 4.0, gridRange.getSpan(1) * 2.0);
-              final Rectangle rasterArea = ((GridEnvelope2D) gridRange);
-              rasterArea.setSize(dim);
-              final GridEnvelope2D range = new GridEnvelope2D(rasterArea);
-              gg.setValue(new GridGeometry2D(range, reducedEnvelope));
+                assertEquals(
+                        "false", reader.getMetadataValue(coverageName, "HAS_ELEVATION_DOMAIN"));
 
-              ParameterValue<List<String>> sigmaValue = null;
-              final String selectedSigma = "1";
-              Set<ParameterDescriptor<List>> params = reader.getDynamicParameters(coverageName);
-              for (ParameterDescriptor param : params) {
-                  if (param.getName().getCode().equalsIgnoreCase("NUMSIGMA")) {
-                      sigmaValue = param.createValue();
-                      sigmaValue.setValue(new ArrayList<String>() {
-                          {
-                              add(selectedSigma);
-                          }
-                      });
-                  }
-              }
-              
-              GeneralParameterValue[] values = new GeneralParameterValue[] { gg, sigmaValue};
-              GridCoverage2D coverage = reader.read(coverageName, values);
-              assertNotNull(coverage);
-              if (TestData.isInteractiveTest()) {
-                  coverage.show();
-              } else {
-                  PlanarImage.wrapRenderedImage(coverage.getRenderedImage()).getTiles();
-              }
-          }
-      } catch (Throwable t) {
-          throw new RuntimeException(t);
-      } finally {
-          if (reader != null) {
-              try {
-                  reader.dispose();
-              } catch (Throwable t) {
-                  // Does nothing
-              }
-          }
-      }
-  }
+                assertEquals("true", reader.getMetadataValue(coverageName, "HAS_NUMSIGMA_DOMAIN"));
+                final String sigmaMetadata =
+                        reader.getMetadataValue(coverageName, "NUMSIGMA_DOMAIN");
+                assertNotNull(sigmaMetadata);
+                assertEquals("0,1,2", sigmaMetadata);
+                assertEquals(3, sigmaMetadata.split(",").length);
+
+                // subsetting the envelope
+                final ParameterValue<GridGeometry2D> gg =
+                        AbstractGridFormat.READ_GRIDGEOMETRY2D.createValue();
+                final GeneralEnvelope originalEnvelope = reader.getOriginalEnvelope(coverageName);
+                final GeneralEnvelope reducedEnvelope =
+                        new GeneralEnvelope(
+                                new double[] {
+                                    originalEnvelope.getLowerCorner().getOrdinate(0),
+                                    originalEnvelope.getLowerCorner().getOrdinate(1)
+                                },
+                                new double[] {
+                                    originalEnvelope.getMedian().getOrdinate(0),
+                                    originalEnvelope.getMedian().getOrdinate(1)
+                                });
+                reducedEnvelope.setCoordinateReferenceSystem(
+                        reader.getCoordinateReferenceSystem(coverageName));
+
+                // Selecting bigger gridRange for a zoomed result
+                final Dimension dim = new Dimension();
+                GridEnvelope gridRange = reader.getOriginalGridRange(coverageName);
+                dim.setSize(gridRange.getSpan(0) * 4.0, gridRange.getSpan(1) * 2.0);
+                final Rectangle rasterArea = ((GridEnvelope2D) gridRange);
+                rasterArea.setSize(dim);
+                final GridEnvelope2D range = new GridEnvelope2D(rasterArea);
+                gg.setValue(new GridGeometry2D(range, reducedEnvelope));
+
+                ParameterValue<List<String>> sigmaValue = null;
+                final String selectedSigma = "1";
+                Set<ParameterDescriptor<List>> params = reader.getDynamicParameters(coverageName);
+                for (ParameterDescriptor param : params) {
+                    if (param.getName().getCode().equalsIgnoreCase("NUMSIGMA")) {
+                        sigmaValue = param.createValue();
+                        sigmaValue.setValue(
+                                new ArrayList<String>() {
+                                    {
+                                        add(selectedSigma);
+                                    }
+                                });
+                    }
+                }
+
+                GeneralParameterValue[] values = new GeneralParameterValue[] {gg, sigmaValue};
+                GridCoverage2D coverage = reader.read(coverageName, values);
+                assertNotNull(coverage);
+                if (TestData.isInteractiveTest()) {
+                    coverage.show();
+                } else {
+                    PlanarImage.wrapRenderedImage(coverage.getRenderedImage()).getTiles();
+                }
+            }
+        } catch (Throwable t) {
+            throw new RuntimeException(t);
+        } finally {
+            if (reader != null) {
+                try {
+                    reader.dispose();
+                } catch (Throwable t) {
+                    // Does nothing
+                }
+            }
+        }
+    }
 

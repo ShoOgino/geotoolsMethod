@@ -1,26 +1,38 @@
     /**
-     * Generates an expression for the output of this {@link MBFunction} (as an  {@link MBFunction.FunctionType#INTERVAL}  function), based on the provided input Expression.
-     * 
-     * Note: A mapbox "interval" function is implemented as a GeoTools "categorize" function, hence the name of this method.
-     * 
+     * Generates an expression for the output of this {@link MBFunction} (as an {@link
+     * MBFunction.FunctionType#INTERVAL} function), based on the provided input Expression.
+     *
+     * <p>Note: A mapbox "interval" function is implemented as a GeoTools "categorize" function,
+     * hence the name of this method.
+     *
      * @param expression The expression for the function input
-     * @param parseValue A function of two arguments (stopValue, stop) that parses the stop value into an Expression. 
-     * @return The expression for the output of this function (as a {@link MBFunction.FunctionType#INTERVAL} function)
+     * @param parseValue A function of two arguments (stopValue, stop) that parses the stop value
+     *     into an Expression.
+     * @return The expression for the output of this function (as a {@link
+     *     MBFunction.FunctionType#INTERVAL} function)
      */
-    private Expression generateCategorize(Expression expression, java.util.function.BiFunction<Object, Object, Expression> parseValue) {
-        
+    private Expression generateCategorize(
+            Expression expression,
+            java.util.function.BiFunction<Object, Object, Expression> parseValue) {
+
         JSONArray stopsJson = getStops();
-        List<Expression> parameters = new ArrayList<>(stopsJson.size()*2+3); // each stop is 2, plus property name, leading interval value, and "succeeding"
+        List<Expression> parameters =
+                new ArrayList<>(
+                        stopsJson.size() * 2
+                                + 3); // each stop is 2, plus property name, leading interval value,
+        // and "succeeding"
         parameters.add(expression);
         for (int i = 0; i < stopsJson.size(); i++) {
             JSONArray entry = parse.jsonArray(stopsJson.get(i));
             Object stop = entry.get(0);
             Expression value = parseValue.apply(entry.get(1), stop);
-            
+
             if (i == 0) {
-                // CategorizeFunction expects there to be a leading value for inputs < firstStopThreshold.
+                // CategorizeFunction expects there to be a leading value for inputs <
+                // firstStopThreshold.
                 // But the MapBox spec does not define the expected behavior in that case.
-                // (spec: "functions return the output value of the stop just less than the function input.")
+                // (spec: "functions return the output value of the stop just less than the function
+                // input.")
                 // Return the default value (if any), otherwise the first stop's value.
                 Expression initialValue;
                 Object defaultValue = getDefault();
@@ -31,13 +43,14 @@
                 }
                 parameters.add(initialValue);
             }
-            
+
             parameters.add(ff.literal(stop));
             parameters.add(value);
         }
         parameters.add(ff.literal("succeeding"));
-        
-        Function categorizeFunction = ff.function("Categorize", parameters.toArray(new Expression[parameters.size()]));
+
+        Function categorizeFunction =
+                ff.function("Categorize", parameters.toArray(new Expression[parameters.size()]));
         return withFallback(categorizeFunction);
     }
 

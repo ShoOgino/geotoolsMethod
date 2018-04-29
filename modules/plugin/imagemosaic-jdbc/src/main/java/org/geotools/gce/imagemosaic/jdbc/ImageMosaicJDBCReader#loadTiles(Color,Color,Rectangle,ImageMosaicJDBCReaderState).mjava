@@ -1,20 +1,28 @@
     /**
-     * @param backgroundColor
-     *          the background color
-     * @param outputTransparentColor
-     *          the transparent color
+     * @param backgroundColor the background color
+     * @param outputTransparentColor the transparent color
      * @param pixelDimension
      * @return the gridcoverage as the final result
      * @throws IOException
      */
-    private GridCoverage2D loadTiles(Color backgroundColor,Color outputTransparentColor, Rectangle pixelDimension,
-            ImageMosaicJDBCReaderState state) throws IOException {
+    private GridCoverage2D loadTiles(
+            Color backgroundColor,
+            Color outputTransparentColor,
+            Rectangle pixelDimension,
+            ImageMosaicJDBCReaderState state)
+            throws IOException {
         if (LOGGER.isLoggable(Level.FINE)) {
-            LOGGER.fine(new StringBuffer("Creating mosaic to comply with envelope ").append(
-                    (state.getRequestedEnvelope() != null) ? state.getRequestedEnvelope()
-                            .toString() : null).append(" crs ").append(crs.toWKT()).append(" dim ")
-                    .append((pixelDimension == null) ? " null" : pixelDimension.toString())
-                    .toString());
+            LOGGER.fine(
+                    new StringBuffer("Creating mosaic to comply with envelope ")
+                            .append(
+                                    (state.getRequestedEnvelope() != null)
+                                            ? state.getRequestedEnvelope().toString()
+                                            : null)
+                            .append(" crs ")
+                            .append(crs.toWKT())
+                            .append(" dim ")
+                            .append((pixelDimension == null) ? " null" : pixelDimension.toString())
+                            .toString());
         }
 
         transformRequestEnvelope(state);
@@ -26,14 +34,15 @@
         //
         // /////////////////////////////////////////////////////////////////////
         if (!state.getRequestEnvelopeTransformed().intersects(this.originalEnvelope, true)) {
-            LOGGER
-                    .warning("The requested envelope does not intersect the envelope of this mosaic");
+            LOGGER.warning("The requested envelope does not intersect the envelope of this mosaic");
             LOGGER.warning(state.getRequestEnvelopeTransformed().toString());
             LOGGER.warning(originalEnvelope.toString());
 
-//            return coverageFactory.create(coverageName, getEmptyImage((int) pixelDimension
-//                    .getWidth(), (int) pixelDimension.getHeight(), backgroundColor, outputTransparentColor), state
-//                    .getRequestedEnvelope());
+            //            return coverageFactory.create(coverageName, getEmptyImage((int)
+            // pixelDimension
+            //                    .getWidth(), (int) pixelDimension.getHeight(), backgroundColor,
+            // outputTransparentColor), state
+            //                    .getRequestedEnvelope());
             return null;
         }
 
@@ -49,14 +58,23 @@
 
         if (pixelDimension != null) {
             try {
-                imageChoice = setReadParams(OverviewPolicy.getDefaultPolicy(), readP, state
-                        .getRequestEnvelopeTransformed(), pixelDimension);
+                imageChoice =
+                        setReadParams(
+                                OverviewPolicy.getDefaultPolicy(),
+                                readP,
+                                state.getRequestEnvelopeTransformed(),
+                                pixelDimension);
                 readP.setSourceSubsampling(1, 1, 0, 0);
             } catch (TransformException e) {
                 LOGGER.severe(e.getLocalizedMessage());
 
-                return coverageFactory.create(coverageName, getEmptyImage((int) pixelDimension
-                        .getWidth(), (int) pixelDimension.getHeight(), backgroundColor,outputTransparentColor),
+                return coverageFactory.create(
+                        coverageName,
+                        getEmptyImage(
+                                (int) pixelDimension.getWidth(),
+                                (int) pixelDimension.getHeight(),
+                                backgroundColor,
+                                outputTransparentColor),
                         state.getRequestedEnvelope());
             }
         } else {
@@ -64,16 +82,33 @@
         }
 
         ImageLevelInfo info = jdbcAccess.getLevelInfo(imageChoice.intValue());
-        LOGGER.info("Coverage " + info.getCoverageName() + " using spatial table "
-                + info.getSpatialTableName() + ", image table " + info.getTileTableName());
+        LOGGER.info(
+                "Coverage "
+                        + info.getCoverageName()
+                        + " using spatial table "
+                        + info.getSpatialTableName()
+                        + ", image table "
+                        + info.getTileTableName());
 
-        ImageComposerThread imageComposerThread = new ImageComposerThread(backgroundColor,outputTransparentColor,
-                pixelDimension, state.getRequestEnvelopeTransformed(), info, state.getTileQueue(),
-                config, state.isXAxisSwitch(), coverageFactory);
+        ImageComposerThread imageComposerThread =
+                new ImageComposerThread(
+                        backgroundColor,
+                        outputTransparentColor,
+                        pixelDimension,
+                        state.getRequestEnvelopeTransformed(),
+                        info,
+                        state.getTileQueue(),
+                        config,
+                        state.isXAxisSwitch(),
+                        coverageFactory);
         imageComposerThread.start();
 
-        jdbcAccess.startTileDecoders(pixelDimension, state.getRequestEnvelopeTransformed(), info,
-                state.getTileQueue(), coverageFactory);
+        jdbcAccess.startTileDecoders(
+                pixelDimension,
+                state.getRequestEnvelopeTransformed(),
+                info,
+                state.getTileQueue(),
+                coverageFactory);
 
         try {
             imageComposerThread.join();

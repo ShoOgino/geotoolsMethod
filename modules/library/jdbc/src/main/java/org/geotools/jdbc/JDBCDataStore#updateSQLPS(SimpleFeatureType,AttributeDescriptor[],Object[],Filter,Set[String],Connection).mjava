@@ -1,10 +1,13 @@
-    /**
-     * Generates an 'UPDATE' prepared statement.
-     */
-    protected PreparedStatement updateSQLPS(SimpleFeatureType featureType, AttributeDescriptor[] attributes,
-            Object[] values, Filter filter, Set<String> pkColumnNames, Connection cx ) throws IOException, SQLException {
+    /** Generates an 'UPDATE' prepared statement. */
+    protected PreparedStatement updateSQLPS(
+            SimpleFeatureType featureType,
+            AttributeDescriptor[] attributes,
+            Object[] values,
+            Filter filter,
+            Set<String> pkColumnNames,
+            Connection cx)
+            throws IOException, SQLException {
         PreparedStatementSQLDialect dialect = (PreparedStatementSQLDialect) getSQLDialect();
-        
 
         StringBuffer sql = new StringBuffer();
         sql.append("UPDATE ");
@@ -16,18 +19,23 @@
             // skip exposed primary key values, they are read only
             AttributeDescriptor att = attributes[i];
             String attName = att.getLocalName();
-            if(pkColumnNames.contains(attName)) {
+            if (pkColumnNames.contains(attName)) {
                 continue;
             }
-            
+
             dialect.encodeColumnName(attName, sql);
             sql.append(" = ");
-            
+
             // geometries might need special treatment, delegate to the dialect
-            if(attributes[i] instanceof GeometryDescriptor) {
+            if (attributes[i] instanceof GeometryDescriptor) {
                 Geometry geometry = (Geometry) values[i];
                 final Class<?> binding = att.getType().getBinding();
-                dialect.prepareGeometryValue(geometry, getDescriptorDimension(att), getDescriptorSRID(att), binding,  sql );
+                dialect.prepareGeometryValue(
+                        geometry,
+                        getDescriptorDimension(att),
+                        getDescriptorSRID(att),
+                        binding,
+                        sql);
             } else {
                 sql.append("?");
             }
@@ -37,8 +45,8 @@
         sql.append(" ");
 
         PreparedFilterToSQL toSQL = null;
-        if (filter != null  && !Filter.INCLUDE.equals(filter)) {
-            //encode filter
+        if (filter != null && !Filter.INCLUDE.equals(filter)) {
+            // encode filter
             try {
                 toSQL = createPreparedFilterToSQL(featureType);
                 sql.append(" ").append(toSQL.encodeToString(filter));
@@ -46,38 +54,39 @@
                 throw new RuntimeException(e);
             }
         }
-        
+
         PreparedStatement ps = cx.prepareStatement(sql.toString());
         LOGGER.log(Level.FINE, "Updating features with prepared statement: {0}", sql);
-        
+
         int i = 0;
         int j = 0;
         for (; i < attributes.length; i++) {
             // skip exposed primary key columns
             AttributeDescriptor att = attributes[i];
             String attName = att.getLocalName();
-            if(pkColumnNames.contains(attName)) {
+            if (pkColumnNames.contains(attName)) {
                 continue;
             }
-            
+
             Class binding = att.getType().getBinding();
-            if (Geometry.class.isAssignableFrom( binding ) ) {
+            if (Geometry.class.isAssignableFrom(binding)) {
                 Geometry g = (Geometry) values[i];
-                dialect.setGeometryValue(g, getDescriptorDimension(att), getDescriptorSRID(att), binding, ps, j+1);
+                dialect.setGeometryValue(
+                        g, getDescriptorDimension(att), getDescriptorSRID(att), binding, ps, j + 1);
             } else {
-                dialect.setValue( values[i], binding, ps, j+1, cx);    
+                dialect.setValue(values[i], binding, ps, j + 1, cx);
             }
-            if ( LOGGER.isLoggable( Level.FINE ) ) {
-                LOGGER.fine( (j+1) + " = " + values[i] );
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine((j + 1) + " = " + values[i]);
             }
             // we do this only if we did not skip the exposed pk
             j++;
         }
-        
-        if ( toSQL != null ) {
+
+        if (toSQL != null) {
             setPreparedFilterValues(ps, toSQL, j, cx);
         }
-        
+
         return ps;
     }
 

@@ -1,8 +1,8 @@
     @Override
-    public List<ReferencedEnvelope> getOptimizedBounds(String schema, SimpleFeatureType featureType,
-            Connection cx) throws SQLException, IOException {
-        if (!estimatedExtentsEnabled)
-            return null;
+    public List<ReferencedEnvelope> getOptimizedBounds(
+            String schema, SimpleFeatureType featureType, Connection cx)
+            throws SQLException, IOException {
+        if (!estimatedExtentsEnabled) return null;
 
         String tableName = featureType.getTypeName();
         if (dataStore.getVirtualTables().get(tableName) != null) {
@@ -16,7 +16,7 @@
         Savepoint savePoint = null;
         try {
             st = cx.createStatement();
-            if(!cx.getAutoCommit()) {
+            if (!cx.getAutoCommit()) {
                 savePoint = cx.setSavepoint();
             }
 
@@ -24,9 +24,13 @@
                 if (att instanceof GeometryDescriptor) {
                     // use estimated extent (optimizer statistics)
                     StringBuffer sql = new StringBuffer();
-                    sql.append("select ST_AsText(" + getForce2DFunction() + "(ST_Envelope("
-                            + getEstimatedExtentFunction() + "('");
-                    if(schema != null) {
+                    sql.append(
+                            "select ST_AsText("
+                                    + getForce2DFunction()
+                                    + "(ST_Envelope("
+                                    + getEstimatedExtentFunction()
+                                    + "('");
+                    if (schema != null) {
                         sql.append(schema);
                         sql.append("', '");
                     }
@@ -42,28 +46,32 @@
 
                         // reproject and merge
                         if (!env.isNull()) {
-                            CoordinateReferenceSystem crs = ((GeometryDescriptor) att)
-                                    .getCoordinateReferenceSystem();
+                            CoordinateReferenceSystem crs =
+                                    ((GeometryDescriptor) att).getCoordinateReferenceSystem();
                             result.add(new ReferencedEnvelope(env, crs));
                         }
                     }
                     rs.close();
                 }
             }
-        } catch(SQLException e) {
-            if(savePoint != null) {
+        } catch (SQLException e) {
+            if (savePoint != null) {
                 cx.rollback(savePoint);
             }
-            LOGGER.log(Level.WARNING, "Failed to use " + getEstimatedExtentFunction()
-                    + ", falling back on envelope aggregation", e);
+            LOGGER.log(
+                    Level.WARNING,
+                    "Failed to use "
+                            + getEstimatedExtentFunction()
+                            + ", falling back on envelope aggregation",
+                    e);
             return null;
         } finally {
-            if(savePoint != null) {
+            if (savePoint != null) {
                 cx.releaseSavepoint(savePoint);
             }
             dataStore.closeSafe(rs);
             dataStore.closeSafe(st);
-        } 
+        }
         return result;
     }
 

@@ -11,25 +11,28 @@
         for (int i = 0; i < 50; i++) {
             // check that we are going to load the same path just once
             AtomicInteger counter = new AtomicInteger();
-            SVGGraphicFactory svg = new SVGGraphicFactory() {
-                @Override
-                protected SVGGraphicFactory.RenderableSVG toRenderableSVG(String svgfile, URL svgUrl) throws SAXException, IOException {
-                    int value = counter.incrementAndGet();
-                    assertEquals(1, value);
-                    return super.toRenderableSVG(svgfile, svgUrl);
-                }
-            };
-            
+            SVGGraphicFactory svg =
+                    new SVGGraphicFactory() {
+                        @Override
+                        protected SVGGraphicFactory.RenderableSVG toRenderableSVG(
+                                String svgfile, URL svgUrl) throws SAXException, IOException {
+                            int value = counter.incrementAndGet();
+                            assertEquals(1, value);
+                            return super.toRenderableSVG(svgfile, svgUrl);
+                        }
+                    };
+
             // if all goes well, only one thread will actually load the SVG
             List<Future<Void>> futures = new ArrayList<>();
             for (int j = 0; j < THREADS * 4; j++) {
-                executorService.submit(() -> {
-                    Icon icon = svg.getIcon(null, expression, "image/svg", 20);
-                    assertNotNull(icon);
-                    assertEquals(20, icon.getIconHeight());
-                    assertTrue(SVGGraphicFactory.glyphCache.containsKey(url.toString()));
-                    return null;
-                });
+                executorService.submit(
+                        () -> {
+                            Icon icon = svg.getIcon(null, expression, "image/svg", 20);
+                            assertNotNull(icon);
+                            assertEquals(20, icon.getIconHeight());
+                            assertTrue(SVGGraphicFactory.glyphCache.containsKey(url.toString()));
+                            return null;
+                        });
             }
             // get all
             for (Future<Void> future : futures) {
@@ -38,7 +41,5 @@
             // clear the cache
             SVGGraphicFactory.glyphCache.clear();
         }
-
-
     }
 

@@ -1,46 +1,48 @@
         /**
          * @see org.geotools.xml.schema.Type#encode(org.geotools.xml.schema.Element,
-         *      java.lang.Object, org.geotools.xml.PrintHandler,
-         *      java.util.Map)
+         *     java.lang.Object, org.geotools.xml.PrintHandler, java.util.Map)
          */
-        public void encode(Element element, Object value, PrintHandler output,
-            Map hints) throws IOException, OperationNotSupportedException {
+        public void encode(Element element, Object value, PrintHandler output, Map hints)
+                throws IOException, OperationNotSupportedException {
             if (!canEncode(element, value, hints)) {
                 return;
             }
-            
+
             AttributesImpl ai = new AttributesImpl();
 
-
-            if(value instanceof String){
+            if (value instanceof String) {
                 // short cut for single type
                 output.startElement(element.getNamespace(), element.getName(), ai);
                 output.characters(value.toString());
                 output.endElement(element.getNamespace(), element.getName());
                 return;
             }
-            
+
             Literal me = (Literal) value;
             output.startElement(element.getNamespace(), element.getName(), ai);
 
             switch (Filters.getExpressionType(me)) {
-            case org.geotools.filter.ExpressionType.LITERAL_GEOMETRY:
+                case org.geotools.filter.ExpressionType.LITERAL_GEOMETRY:
+                    if (me.getValue() instanceof Geometry) {
+                        GMLSchema.getInstance()
+                                .getElements()[29]
+                                .getType()
+                                .encode(
+                                        GMLSchema.getInstance().getElements()[29],
+                                        me.getValue(),
+                                        output,
+                                        hints);
 
-                if (me.getValue() instanceof Geometry) {
-                    GMLSchema.getInstance().getElements()[29].getType().encode(GMLSchema.getInstance()
-                                                                                        .getElements()[29],
-                        me.getValue(), output, hints);
+                        break;
+                    }
+
+                case org.geotools.filter.ExpressionType.LITERAL_DOUBLE:
+                case org.geotools.filter.ExpressionType.LITERAL_INTEGER:
+                case org.geotools.filter.ExpressionType.LITERAL_STRING:
+                case org.geotools.filter.ExpressionType.LITERAL_LONG:
+                    output.characters(me.getValue().toString());
 
                     break;
-                }
-
-            case org.geotools.filter.ExpressionType.LITERAL_DOUBLE:
-            case org.geotools.filter.ExpressionType.LITERAL_INTEGER:
-            case org.geotools.filter.ExpressionType.LITERAL_STRING:
-            case org.geotools.filter.ExpressionType.LITERAL_LONG:
-                output.characters(me.getValue().toString());
-
-                break;
             }
 
             output.endElement(element.getNamespace(), element.getName());

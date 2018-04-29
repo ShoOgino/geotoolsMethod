@@ -1,43 +1,49 @@
         /**
-         * Returns a set of authority codes that <strong>may</strong> identify the same object
-         * than the specified one. This implementation tries to get a smaller set than what
-         * {@link DirectEpsgFactory#getAuthorityCodes} would produce.
+         * Returns a set of authority codes that <strong>may</strong> identify the same object than
+         * the specified one. This implementation tries to get a smaller set than what {@link
+         * DirectEpsgFactory#getAuthorityCodes} would produce.
          */
         @Override
-        protected Set getSpecificCodeCandidates(final IdentifiedObject object) throws FactoryException {
+        protected Set getSpecificCodeCandidates(final IdentifiedObject object)
+                throws FactoryException {
             String select = "COORD_REF_SYS_CODE";
-            String from   = "[Coordinate Reference System]";
+            String from = "[Coordinate Reference System]";
             String where, code;
             String sql;
             if (object instanceof Ellipsoid) {
                 final double semiMajorAxis = ((Ellipsoid) object).getSemiMajorAxis();
                 double tol = getTolerance();
                 // consider tolerance
-                final double min = semiMajorAxis - semiMajorAxis * tol; 
+                final double min = semiMajorAxis - semiMajorAxis * tol;
                 final double max = semiMajorAxis + semiMajorAxis * tol;
-                code   = Double.toString(semiMajorAxis);
-                sql = "SELECT ELLIPSOID_CODE FROM [Ellipsoid] JOIN [Unit of Measure] on [Ellipsoid].UOM_CODE = [Unit of Measure].UOM_CODE WHERE (SEMI_MAJOR_AXIS * FACTOR_B / FACTOR_C) between " + min + " AND " + max + " ORDER BY ABS(DEPRECATED)";
+                code = Double.toString(semiMajorAxis);
+                sql =
+                        "SELECT ELLIPSOID_CODE FROM [Ellipsoid] JOIN [Unit of Measure] on [Ellipsoid].UOM_CODE = [Unit of Measure].UOM_CODE WHERE (SEMI_MAJOR_AXIS * FACTOR_B / FACTOR_C) between "
+                                + min
+                                + " AND "
+                                + max
+                                + " ORDER BY ABS(DEPRECATED)";
             } else {
                 IdentifiedObject dependency;
                 if (object instanceof GeneralDerivedCRS) {
                     dependency = ((GeneralDerivedCRS) object).getBaseCRS();
-                    where      = "SOURCE_GEOGCRS_CODE";
+                    where = "SOURCE_GEOGCRS_CODE";
                 } else if (object instanceof SingleCRS) {
                     dependency = ((SingleCRS) object).getDatum();
-                    where      = "DATUM_CODE";
+                    where = "DATUM_CODE";
                 } else if (object instanceof GeodeticDatum) {
                     dependency = ((GeodeticDatum) object).getEllipsoid();
-                    select     = "DATUM_CODE";
-                    from       = "[Datum]";
-                    where      = "ELLIPSOID_CODE";
+                    select = "DATUM_CODE";
+                    from = "[Datum]";
+                    where = "ELLIPSOID_CODE";
                 } else {
                     return super.getCodeCandidates(object);
                 }
-                if(dependency instanceof Ellipsoid) {
+                if (dependency instanceof Ellipsoid) {
                     // since we match only by major axis length, which is shared among several,
                     // we need to pick all codes, not just some
                     Set candidates = getSpecificCodeCandidates(dependency);
-                    if(candidates.isEmpty()) {
+                    if (candidates.isEmpty()) {
                         // could not find the object using a fast scan, bail out
                         return Collections.emptySet();
                     }
@@ -56,7 +62,16 @@
                             return Collections.emptySet();
                         }
                     }
-                    sql = "SELECT " + select + " FROM " + from + " WHERE " + where + "='" + code + "' ORDER BY ABS(DEPRECATED)";
+                    sql =
+                            "SELECT "
+                                    + select
+                                    + " FROM "
+                                    + from
+                                    + " WHERE "
+                                    + where
+                                    + "='"
+                                    + code
+                                    + "' ORDER BY ABS(DEPRECATED)";
                 }
             }
             sql = adaptSQL(sql);

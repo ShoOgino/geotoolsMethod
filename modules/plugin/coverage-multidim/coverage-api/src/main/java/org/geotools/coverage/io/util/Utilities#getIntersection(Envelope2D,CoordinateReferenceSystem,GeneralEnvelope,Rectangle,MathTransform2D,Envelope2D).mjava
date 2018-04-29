@@ -1,55 +1,68 @@
     /**
      * Returns the intersection between the base envelope and the requested envelope.
-     * 
+     *
      * @param baseEnvelope2D the base envelope.
-     * 
-     * @param requestedEnvelope2D the requested 2D envelope to be intersected with the base envelope.
+     * @param requestedEnvelope2D the requested 2D envelope to be intersected with the base
+     *     envelope.
      * @param requestedDim is the requested region where to load data of the specified envelope.
      * @param readGridToWorld the Grid to world transformation to be used in read
-     * @param wgs84BaseEnvelope2D a WGS84 version of the baseEnvelope to be used to try finding an intersection in wgs84 in case it is impossible to
-     *        compute an intersection of the base envelope with the specified requested envelope.
-     * @return the resulting intersection of envelopes. In case of empty intersection, this method is allowed to return {@code null}
+     * @param wgs84BaseEnvelope2D a WGS84 version of the baseEnvelope to be used to try finding an
+     *     intersection in wgs84 in case it is impossible to compute an intersection of the base
+     *     envelope with the specified requested envelope.
+     * @return the resulting intersection of envelopes. In case of empty intersection, this method
+     *     is allowed to return {@code null}
      * @throws TransformException
      * @throws FactoryException
-     * @todo TODO XXX refactor this method leveraging on the coverageSourceCapabilities of reprojection. Moreover add a boolean parameter saying if
-     *       trying to reproject to WGS84 always need to be done
+     * @todo TODO XXX refactor this method leveraging on the coverageSourceCapabilities of
+     *     reprojection. Moreover add a boolean parameter saying if trying to reproject to WGS84
+     *     always need to be done
      */
-    public static GeneralEnvelope getIntersection(final Envelope2D baseEnvelope2D,
+    public static GeneralEnvelope getIntersection(
+            final Envelope2D baseEnvelope2D,
             final CoordinateReferenceSystem spatialReferenceSystem2D,
-            GeneralEnvelope requestedEnvelope2D, Rectangle requestedDim,
-            MathTransform2D readGridToWorld, final Envelope2D wgs84BaseEnvelope2D)
+            GeneralEnvelope requestedEnvelope2D,
+            Rectangle requestedDim,
+            MathTransform2D readGridToWorld,
+            final Envelope2D wgs84BaseEnvelope2D)
             throws TransformException, FactoryException {
 
-        if (baseEnvelope2D == null || spatialReferenceSystem2D == null
-                || requestedEnvelope2D == null || requestedDim == null || readGridToWorld == null) {
-            StringBuilder sb = new StringBuilder("Some of the specified parameters are null:")
-                    .append(baseEnvelope2D == null ? "base envelope \n" : "")
-                    .append(spatialReferenceSystem2D == null ? "native spatial reference system\n"
-                            : "")
-                    .append(requestedEnvelope2D == null ? "requested envelope \n" : "")
-                    .append(requestedDim == null ? "requested dim\n" : "")
-                    .append(readGridToWorld == null ? "requested grid to world transformation \n"
-                            : "");
+        if (baseEnvelope2D == null
+                || spatialReferenceSystem2D == null
+                || requestedEnvelope2D == null
+                || requestedDim == null
+                || readGridToWorld == null) {
+            StringBuilder sb =
+                    new StringBuilder("Some of the specified parameters are null:")
+                            .append(baseEnvelope2D == null ? "base envelope \n" : "")
+                            .append(
+                                    spatialReferenceSystem2D == null
+                                            ? "native spatial reference system\n"
+                                            : "")
+                            .append(requestedEnvelope2D == null ? "requested envelope \n" : "")
+                            .append(requestedDim == null ? "requested dim\n" : "")
+                            .append(
+                                    readGridToWorld == null
+                                            ? "requested grid to world transformation \n"
+                                            : "");
             throw new IllegalArgumentException(sb.toString());
         }
         GeneralEnvelope adjustedRequestedEnvelope = new GeneralEnvelope(2);
-        final CoordinateReferenceSystem requestedEnvelopeCRS2D = requestedEnvelope2D
-                .getCoordinateReferenceSystem();
+        final CoordinateReferenceSystem requestedEnvelopeCRS2D =
+                requestedEnvelope2D.getCoordinateReferenceSystem();
         boolean tryWithWGS84 = false;
 
         try {
             // convert the requested envelope 2D to this coverage native crs.
             if (!CRS.equalsIgnoreMetadata(requestedEnvelopeCRS2D, spatialReferenceSystem2D)) {
-                adjustedRequestedEnvelope = CRS.transform(requestedEnvelope2D,
-                        spatialReferenceSystem2D);
+                adjustedRequestedEnvelope =
+                        CRS.transform(requestedEnvelope2D, spatialReferenceSystem2D);
             } else {
                 adjustedRequestedEnvelope.setEnvelope(requestedEnvelope2D);
             }
 
             // intersect the requested area with the bounds of this
             // layer in native crs
-            if (!adjustedRequestedEnvelope.intersects(baseEnvelope2D, true))
-                return null;
+            if (!adjustedRequestedEnvelope.intersects(baseEnvelope2D, true)) return null;
             adjustedRequestedEnvelope.intersect(baseEnvelope2D);
             adjustedRequestedEnvelope.setCoordinateReferenceSystem(spatialReferenceSystem2D);
 
@@ -59,10 +72,11 @@
             // space to the requested raster space
             //
             // //
-            final Envelope requestedEnvelopeCropped = CRS.transform(adjustedRequestedEnvelope,
-                    requestedEnvelopeCRS2D);
-            final Rectangle2D ordinates = CRS.transform(readGridToWorld.inverse(),
-                    requestedEnvelopeCropped).toRectangle2D();
+            final Envelope requestedEnvelopeCropped =
+                    CRS.transform(adjustedRequestedEnvelope, requestedEnvelopeCRS2D);
+            final Rectangle2D ordinates =
+                    CRS.transform(readGridToWorld.inverse(), requestedEnvelopeCropped)
+                            .toRectangle2D();
             final GeneralGridEnvelope finalRange = new GeneralGridEnvelope(ordinates.getBounds());
             final Rectangle tempRect = finalRange.toRectangle();
             // check that we stay inside the source rectangle
@@ -81,20 +95,18 @@
         //
         // //
         if (tryWithWGS84) {
-            final GeneralEnvelope requestedEnvelopeWGS84 = (GeneralEnvelope) getEnvelopeAsWGS84(
-                    requestedEnvelope2D, false);
+            final GeneralEnvelope requestedEnvelopeWGS84 =
+                    (GeneralEnvelope) getEnvelopeAsWGS84(requestedEnvelope2D, false);
 
             // checking the intersection in wgs84
-            if (!requestedEnvelopeWGS84.intersects(wgs84BaseEnvelope2D, true))
-                return null;
+            if (!requestedEnvelopeWGS84.intersects(wgs84BaseEnvelope2D, true)) return null;
 
             // intersect
             adjustedRequestedEnvelope = new GeneralEnvelope(requestedEnvelopeWGS84);
             adjustedRequestedEnvelope.intersect(wgs84BaseEnvelope2D);
-            adjustedRequestedEnvelope = CRS.transform(adjustedRequestedEnvelope,
-                    spatialReferenceSystem2D);
+            adjustedRequestedEnvelope =
+                    CRS.transform(adjustedRequestedEnvelope, spatialReferenceSystem2D);
             adjustedRequestedEnvelope.setCoordinateReferenceSystem(spatialReferenceSystem2D);
-
         }
         return adjustedRequestedEnvelope;
     }

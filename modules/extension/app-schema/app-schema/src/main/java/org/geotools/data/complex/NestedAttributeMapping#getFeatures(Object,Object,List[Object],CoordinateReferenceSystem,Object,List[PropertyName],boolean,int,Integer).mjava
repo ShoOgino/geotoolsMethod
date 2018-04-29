@@ -1,20 +1,28 @@
     /**
      * Get the maching built features that are stored in this mapping using a supplied link value
-     * 
+     *
      * @param foreignKeyValue
-     * @param reprojection
-     *            Reprojected CRS or null
+     * @param reprojection Reprojected CRS or null
      * @param selectedProperties list of properties to get
      * @return The matching simple features
      * @throws IOException
      */
-    public List<Feature> getFeatures(Object source, Object foreignKeyValue,  List<Object> idValues, 
-            CoordinateReferenceSystem reprojection, Object feature, List<PropertyName> selectedProperties, boolean includeMandatory, int resolveDepth, Integer resolveTimeOut) throws IOException {
+    public List<Feature> getFeatures(
+            Object source,
+            Object foreignKeyValue,
+            List<Object> idValues,
+            CoordinateReferenceSystem reprojection,
+            Object feature,
+            List<PropertyName> selectedProperties,
+            boolean includeMandatory,
+            int resolveDepth,
+            Integer resolveTimeOut)
+            throws IOException {
 
-    	if (foreignKeyValue == null) {    		
-    		return Collections.<Feature>emptyList();
-    	}
-    	
+        if (foreignKeyValue == null) {
+            return Collections.<Feature>emptyList();
+        }
+
         if (isSameSource()) {
             // if linkField is null, this method shouldn't be called because the mapping
             // should use the same table, and handles it differently
@@ -25,48 +33,47 @@
         FeatureSource<FeatureType, Feature> fSource = getMappingSource(feature);
         if (fSource == null) {
             return null;
-        }       
-        
+        }
+
         Query query = new Query();
         query.setCoordinateSystemReproject(reprojection);
-        
+
         Filter filter;
         PropertyName propertyName = filterFac.property(this.nestedTargetXPath.toString());
-        filter = filterFac.equals(propertyName, filterFac.literal(foreignKeyValue));              
+        filter = filterFac.equals(propertyName, filterFac.literal(foreignKeyValue));
         query.setFilter(filter);
-        
-        if (selectedProperties!=null && !selectedProperties.isEmpty()) {
+
+        if (selectedProperties != null && !selectedProperties.isEmpty()) {
             selectedProperties = new ArrayList<PropertyName>(selectedProperties);
             selectedProperties.add(propertyName);
         }
-        
+
         final Hints hints = new Hints();
         hints.put(Query.INCLUDE_MANDATORY_PROPS, includeMandatory);
-        
-        if (resolveDepth > 0 ) {
-			hints.put(Hints.RESOLVE, ResolveValueType.ALL);
-			hints.put(Hints.ASSOCIATION_TRAVERSAL_DEPTH, resolveDepth);
-			hints.put(Hints.RESOLVE_TIMEOUT, resolveTimeOut);
-		} else {
-			hints.put(Hints.RESOLVE, ResolveValueType.NONE);
-		}
-        
+
+        if (resolveDepth > 0) {
+            hints.put(Hints.RESOLVE, ResolveValueType.ALL);
+            hints.put(Hints.ASSOCIATION_TRAVERSAL_DEPTH, resolveDepth);
+            hints.put(Hints.RESOLVE_TIMEOUT, resolveTimeOut);
+        } else {
+            hints.put(Hints.RESOLVE, ResolveValueType.NONE);
+        }
+
         query.setHints(hints);
-        
+
         query.setProperties(selectedProperties);
 
         ArrayList<Feature> matchingFeatures = new ArrayList<Feature>();
-        
+
         // get all the mapped nested features based on the link values
         FeatureCollection<FeatureType, Feature> fCollection = fSource.getFeatures(query);
-        if (fCollection instanceof MappingFeatureCollection) {            
+        if (fCollection instanceof MappingFeatureCollection) {
             try (FeatureIterator<Feature> iterator = fCollection.features()) {
                 while (iterator.hasNext()) {
                     matchingFeatures.add(iterator.next());
                 }
             }
         }
-
 
         return matchingFeatures;
     }

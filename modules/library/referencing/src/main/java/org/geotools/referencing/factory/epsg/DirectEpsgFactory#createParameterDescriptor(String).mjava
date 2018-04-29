@@ -1,34 +1,40 @@
     /**
      * Returns a parameter descriptor from a code.
      *
-     * @param  code The parameter descriptor code allocated by EPSG authority.
+     * @param code The parameter descriptor code allocated by EPSG authority.
      * @throws NoSuchAuthorityCodeException if this method can't find the requested code.
-     * @throws FactoryException if some other kind of failure occured in the backing
-     *         store. This exception usually have {@link SQLException} as its cause.
+     * @throws FactoryException if some other kind of failure occured in the backing store. This
+     *     exception usually have {@link SQLException} as its cause.
      */
     @Override
     public synchronized ParameterDescriptor createParameterDescriptor(final String code)
-            throws FactoryException
-    {
+            throws FactoryException {
         ensureNonNull("code", code);
         ParameterDescriptor returnValue = null;
         final PreparedStatement stmt;
         try {
-            final String primaryKey = toPrimaryKey(ParameterDescriptor.class, code,
-                    "[Coordinate_Operation Parameter]", "PARAMETER_CODE", "PARAMETER_NAME");
-            stmt = prepareStatement("ParameterDescriptor", // Must be singular form.
-                                        "SELECT PARAMETER_CODE,"
-                                      +       " PARAMETER_NAME,"
-                                      +       " DESCRIPTION"
-                                      + " FROM [Coordinate_Operation Parameter]"
-                                      + " WHERE PARAMETER_CODE = ?");
+            final String primaryKey =
+                    toPrimaryKey(
+                            ParameterDescriptor.class,
+                            code,
+                            "[Coordinate_Operation Parameter]",
+                            "PARAMETER_CODE",
+                            "PARAMETER_NAME");
+            stmt =
+                    prepareStatement(
+                            "ParameterDescriptor", // Must be singular form.
+                            "SELECT PARAMETER_CODE,"
+                                    + " PARAMETER_NAME,"
+                                    + " DESCRIPTION"
+                                    + " FROM [Coordinate_Operation Parameter]"
+                                    + " WHERE PARAMETER_CODE = ?");
             stmt.setInt(1, Integer.parseInt(primaryKey));
             ResultSet result = stmt.executeQuery();
             while (result.next()) {
-                final String epsg    = getString(result, 1, code);
-                final String name    = getString(result, 2, code);
-                final String remarks = result.getString( 3);
-                final Unit   unit;
+                final String epsg = getString(result, 1, code);
+                final String name = getString(result, 2, code);
+                final String remarks = result.getString(3);
+                final Unit unit;
                 final Class<?> type;
                 /*
                  * Search for units. We will choose the most commonly used one in parameter values.
@@ -36,20 +42,25 @@
                  * File Name" column, then the type is assumed to be URI. Otherwise, the type is a
                  * floating point number.
                  */
-                final PreparedStatement units = prepareStatement("ParameterUnit",
-                                                  "SELECT MIN(UOM_CODE) AS UOM,"
-                                                 +      " MIN(PARAM_VALUE_FILE_REF) AS FILEREF"
-                                                 +    " FROM [Coordinate_Operation Parameter Value]"
-                                                 +   " WHERE (PARAMETER_CODE = ?)"
-                                                 + " GROUP BY UOM_CODE"
-                                                 + " ORDER BY COUNT(UOM_CODE) DESC");
+                final PreparedStatement units =
+                        prepareStatement(
+                                "ParameterUnit",
+                                "SELECT MIN(UOM_CODE) AS UOM,"
+                                        + " MIN(PARAM_VALUE_FILE_REF) AS FILEREF"
+                                        + " FROM [Coordinate_Operation Parameter Value]"
+                                        + " WHERE (PARAMETER_CODE = ?)"
+                                        + " GROUP BY UOM_CODE"
+                                        + " ORDER BY COUNT(UOM_CODE) DESC");
                 units.setInt(1, Integer.parseInt(epsg));
                 final ResultSet resultUnits = units.executeQuery();
                 if (resultUnits.next()) {
                     String element = resultUnits.getString(1);
-                    unit = (element!=null) ? buffered.createUnit(element) : null;
+                    unit = (element != null) ? buffered.createUnit(element) : null;
                     element = resultUnits.getString(2);
-                    type = (element!=null && element.trim().length()!=0) ? URI.class : double.class;
+                    type =
+                            (element != null && element.trim().length() != 0)
+                                    ? URI.class
+                                    : double.class;
                 } else {
                     unit = null;
                     type = double.class;
@@ -59,16 +70,17 @@
                  * Now creates the parameter descriptor.
                  */
                 final ParameterDescriptor descriptor;
-                final Map<String,Object> properties = createProperties(name, epsg, remarks);
-                descriptor = new DefaultParameterDescriptor(properties, type,
-                                    null, null, null, null, unit, true);
+                final Map<String, Object> properties = createProperties(name, epsg, remarks);
+                descriptor =
+                        new DefaultParameterDescriptor(
+                                properties, type, null, null, null, null, unit, true);
                 returnValue = ensureSingleton(descriptor, returnValue, code);
             }
         } catch (SQLException exception) {
             throw databaseFailure(OperationMethod.class, code, exception);
         }
         if (returnValue == null) {
-             throw noSuchAuthorityCode(OperationMethod.class, code);
+            throw noSuchAuthorityCode(OperationMethod.class, code);
         }
         return returnValue;
     }

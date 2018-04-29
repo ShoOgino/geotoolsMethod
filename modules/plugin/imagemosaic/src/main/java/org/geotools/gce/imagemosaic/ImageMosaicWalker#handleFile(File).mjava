@@ -6,8 +6,7 @@
         //
         // Check that this file is actually good to go
         //
-        if (!checkFile(fileBeingProcessed))
-            return;
+        if (!checkFile(fileBeingProcessed)) return;
 
         // replacing chars on input path
         String validFileName;
@@ -17,16 +16,21 @@
             validFileName = FilenameUtils.normalize(validFileName);
             extension = FilenameUtils.getExtension(validFileName);
         } catch (IOException e) {
-            eventHandler.fireFileEvent(Level.FINER,
-                    fileBeingProcessed, false, "Exception occurred while processing file "
-                            + fileBeingProcessed + ": " + e.getMessage(),
+            eventHandler.fireFileEvent(
+                    Level.FINER,
+                    fileBeingProcessed,
+                    false,
+                    "Exception occurred while processing file "
+                            + fileBeingProcessed
+                            + ": "
+                            + e.getMessage(),
                     ((fileIndex * 100.0) / numFiles));
             eventHandler.fireException(e);
             return;
         }
         validFileName = FilenameUtils.getName(validFileName);
-        eventHandler.fireEvent(Level.INFO, "Now indexing file " + validFileName,
-                ((fileIndex * 100.0) / numFiles));
+        eventHandler.fireEvent(
+                Level.INFO, "Now indexing file " + validFileName, ((fileIndex * 100.0) / numFiles));
         GridCoverage2DReader coverageReader = null;
         try {
             // STEP 1
@@ -34,9 +38,11 @@
             //
             final AbstractGridFormat format;
             if (cachedFormat == null) {
-                // When looking for formats which may parse this file, make sure to exclude the ImageMosaicFormat as return
-                format = (AbstractGridFormat) GridFormatFinder.findFormat(fileBeingProcessed,
-                        excludeMosaicHints);
+                // When looking for formats which may parse this file, make sure to exclude the
+                // ImageMosaicFormat as return
+                format =
+                        (AbstractGridFormat)
+                                GridFormatFinder.findFormat(fileBeingProcessed, excludeMosaicHints);
             } else {
                 if (cachedFormat.accepts(fileBeingProcessed)) {
                     format = cachedFormat;
@@ -46,8 +52,12 @@
             }
             if ((format instanceof UnknownFormat) || format == null) {
                 if (!logExcludes.contains(extension)) {
-                    eventHandler.fireFileEvent(Level.INFO, fileBeingProcessed, false,
-                            "Skipped file " + fileBeingProcessed
+                    eventHandler.fireFileEvent(
+                            Level.INFO,
+                            fileBeingProcessed,
+                            false,
+                            "Skipped file "
+                                    + fileBeingProcessed
                                     + ": File format is not supported.",
                             ((fileIndex * 99.0) / numFiles));
                 }
@@ -56,8 +66,8 @@
             cachedFormat = format;
 
             final Hints configurationHints = configHandler.getRunConfiguration().getHints();
-            coverageReader = (GridCoverage2DReader) format.getReader(fileBeingProcessed,
-                    configurationHints);
+            coverageReader =
+                    (GridCoverage2DReader) format.getReader(fileBeingProcessed, configurationHints);
 
             // Setting of the ReaderSPI to use
             if (configHandler.getCachedReaderSPI() == null) {
@@ -72,8 +82,9 @@
                 ImageInputStream inStream = null;
                 try {
                     // Get the ImageInputStream from the SPI
-                    inStream = inStreamSpi.createInputStreamInstance(granuleUrl,
-                            ImageIO.getUseCache(), ImageIO.getCacheDirectory());
+                    inStream =
+                            inStreamSpi.createInputStreamInstance(
+                                    granuleUrl, ImageIO.getUseCache(), ImageIO.getCacheDirectory());
                     // Throws an Exception if the ImageInputStream is not present
                     if (inStream == null) {
                         if (LOGGER.isLoggable(Level.WARNING)) {
@@ -85,14 +96,14 @@
                     }
                     // Selection of the ImageReaderSpi from the Stream
                     ImageReaderSpi spi = Utils.getReaderSpiFromStream(null, inStream);
-                    // Setting of the ImageReaderSpi to the ImageMosaicConfigHandler in order to set it inside the indexer properties
+                    // Setting of the ImageReaderSpi to the ImageMosaicConfigHandler in order to set
+                    // it inside the indexer properties
                     configHandler.setCachedReaderSPI(spi);
                 } finally {
                     if (inStream != null) {
                         inStream.close();
                     }
                 }
-
             }
 
             // Getting available coverageNames from the reader
@@ -101,11 +112,15 @@
             for (String cvName : coverageNames) {
                 boolean shouldAccept = true;
                 for (GranuleAcceptor acceptor : this.configHandler.getGranuleAcceptors()) {
-                    if (!acceptor.accepts(coverageReader, cvName, fileBeingProcessed,
-                            configHandler)) {
+                    if (!acceptor.accepts(
+                            coverageReader, cvName, fileBeingProcessed, configHandler)) {
                         shouldAccept = false;
-                        eventHandler.fireFileEvent(Level.FINE, fileBeingProcessed, true,
-                                "Granule acceptor  " + acceptor.getClass().getName()
+                        eventHandler.fireFileEvent(
+                                Level.FINE,
+                                fileBeingProcessed,
+                                true,
+                                "Granule acceptor  "
+                                        + acceptor.getClass().getName()
                                         + " rejected the granule being processed"
                                         + fileBeingProcessed,
                                 ((fileIndex + 1) * 99.0) / numFiles);
@@ -114,15 +129,22 @@
                 }
 
                 if (shouldAccept) {
-                    configHandler.updateConfiguration(coverageReader, cvName, fileBeingProcessed,
-                            fileIndex, numFiles, transaction);
+                    configHandler.updateConfiguration(
+                            coverageReader,
+                            cvName,
+                            fileBeingProcessed,
+                            fileIndex,
+                            numFiles,
+                            transaction);
                 }
 
                 // fire event
-                eventHandler.fireFileEvent(Level.FINE, fileBeingProcessed, true,
+                eventHandler.fireFileEvent(
+                        Level.FINE,
+                        fileBeingProcessed,
+                        true,
                         "Done with file " + fileBeingProcessed,
                         (((fileIndex + 1) * 99.0) / numFiles));
-
             }
         } catch (Exception e) {
             // we got an exception, we should stop the walk
@@ -146,6 +168,5 @@
                     LOGGER.log(Level.FINEST, e.getLocalizedMessage(), e);
             }
         }
-
     }
 

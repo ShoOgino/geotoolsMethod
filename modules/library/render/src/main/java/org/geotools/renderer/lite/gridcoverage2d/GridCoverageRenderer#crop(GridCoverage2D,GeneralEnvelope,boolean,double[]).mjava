@@ -1,64 +1,71 @@
     /**
-     * @param destinationEnvelope 
+     * @param destinationEnvelope
      * @param backgroundValues
      * @param gridCoverage
      * @return
      */
     private GridCoverage2D crop(
-            final GridCoverage2D inputCoverage, 
+            final GridCoverage2D inputCoverage,
             final GeneralEnvelope destinationEnvelope,
-            final boolean doReprojection, double[] backgroundValues) {
-        
+            final boolean doReprojection,
+            double[] backgroundValues) {
+
         // //
         //
         // CREATING THE CROP ENVELOPE
         //
-        // //  
-        GridCoverage2D outputCoverage=inputCoverage;
-        final GeneralEnvelope coverageEnvelope = (GeneralEnvelope) inputCoverage.getEnvelope();       
-        final CoordinateReferenceSystem coverageCRS = inputCoverage.getCoordinateReferenceSystem2D();
+        // //
+        GridCoverage2D outputCoverage = inputCoverage;
+        final GeneralEnvelope coverageEnvelope = (GeneralEnvelope) inputCoverage.getEnvelope();
+        final CoordinateReferenceSystem coverageCRS =
+                inputCoverage.getCoordinateReferenceSystem2D();
 
-        try{
-            GeneralEnvelope renderingEnvelopeInCoverageCRS=null; 
-            if(doReprojection){
-                renderingEnvelopeInCoverageCRS = GridCoverageRendererUtilities
-                        .reprojectEnvelopeWithWGS84Pivot(destinationEnvelope, coverageCRS);
-            }else{
+        try {
+            GeneralEnvelope renderingEnvelopeInCoverageCRS = null;
+            if (doReprojection) {
+                renderingEnvelopeInCoverageCRS =
+                        GridCoverageRendererUtilities.reprojectEnvelopeWithWGS84Pivot(
+                                destinationEnvelope, coverageCRS);
+            } else {
                 // NO REPROJECTION
                 renderingEnvelopeInCoverageCRS = new GeneralEnvelope(destinationEnvelope);
             }
-            final GeneralEnvelope cropEnvelope = new GeneralEnvelope(renderingEnvelopeInCoverageCRS);
+            final GeneralEnvelope cropEnvelope =
+                    new GeneralEnvelope(renderingEnvelopeInCoverageCRS);
             cropEnvelope.intersect(coverageEnvelope);
-            if (cropEnvelope.isEmpty()||cropEnvelope.isNull()) {
+            if (cropEnvelope.isEmpty() || cropEnvelope.isNull()) {
                 if (LOGGER.isLoggable(Level.INFO)) {
-                    LOGGER.info("The destination envelope does not intersect the envelope of the source coverage.");
+                    LOGGER.info(
+                            "The destination envelope does not intersect the envelope of the source coverage.");
                 }
                 return null;
-            }   
-            
+            }
+
             ////
             //
             // Cropping for real
             //
             /////
-            outputCoverage = GridCoverageRendererUtilities.crop(inputCoverage, cropEnvelope, backgroundValues, hints);
-        }catch (Throwable t) {
-                ////
-                //
-                // If it happens that the crop fails we try to proceed since the crop does only an optimization. Things might
-                // work out anyway.
-                //
-                ////{
-            if (LOGGER.isLoggable(Level.FINE)){
-                LOGGER.log(Level.FINE,"Crop Failed for reason: "+t.getLocalizedMessage(),t);
+            outputCoverage =
+                    GridCoverageRendererUtilities.crop(
+                            inputCoverage, cropEnvelope, backgroundValues, hints);
+        } catch (Throwable t) {
+            ////
+            //
+            // If it happens that the crop fails we try to proceed since the crop does only an
+            // optimization. Things might
+            // work out anyway.
+            //
+            //// {
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.log(Level.FINE, "Crop Failed for reason: " + t.getLocalizedMessage(), t);
             }
-            outputCoverage=inputCoverage;
+            outputCoverage = inputCoverage;
         }
 
         if (DEBUG) {
             writeRenderedImage(outputCoverage.getRenderedImage(), "crop");
         }
         return outputCoverage;
-        
     }
 

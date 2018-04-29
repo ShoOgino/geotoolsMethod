@@ -1,47 +1,44 @@
         private Object convertFromString(final String source, final Class<?> target) {
 
             // don't bother performing conversions if the target types are not dates/times
-            if(!Calendar.class.equals(target) && !Date.class.isAssignableFrom(target))
-                return null;
+            if (!Calendar.class.equals(target) && !Date.class.isAssignableFrom(target)) return null;
 
-            //JD: this is a bit of a hack but delegate to the 
+            // JD: this is a bit of a hack but delegate to the
             // commons converter in case we are executing first.
             try {
-                Converter converter = new CommonsConverterFactory().createConverter(String.class,
-                        target, null);
-    
+                Converter converter =
+                        new CommonsConverterFactory().createConverter(String.class, target, null);
+
                 if (converter != null) {
                     Object converted = null;
-    
+
                     try {
                         converted = converter.convert(source, target);
                     } catch (Exception e) {
-                        //ignore
+                        // ignore
                     }
-    
+
                     if (converted != null) {
                         return converted;
                     }
                 }
+            } catch (Exception e) {
+                // fall through to jaxb parsing
             }
-            catch(Exception e) {
-                //fall through to jaxb parsing
-            }
-            
+
             Calendar date;
 
-            //try parsing as dateTime
+            // try parsing as dateTime
             try {
                 try {
                     date = DatatypeConverterImpl.getInstance().parseDateTime(source);
+                } catch (Exception e) {
+                    // try as just date
+                    date = DatatypeConverterImpl.getInstance().parseDate(source);
                 }
-                catch(Exception e) {
-                    //try as just date
-                    date = DatatypeConverterImpl.getInstance().parseDate(source);    
-                }
-                
+
             } catch (Exception e) {
-                //try as just time
+                // try as just time
                 date = DatatypeConverterImpl.getInstance().parseTime(source);
             }
 
@@ -52,7 +49,7 @@
             if (Date.class.isAssignableFrom(target)) {
                 Date time = date.getTime();
 
-                //check for subclasses
+                // check for subclasses
                 if (java.sql.Date.class.equals(target)) {
                     return new java.sql.Date(time.getTime());
                 }

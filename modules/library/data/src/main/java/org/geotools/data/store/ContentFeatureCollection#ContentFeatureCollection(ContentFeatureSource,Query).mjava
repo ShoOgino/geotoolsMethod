@@ -1,29 +1,34 @@
-    protected ContentFeatureCollection( ContentFeatureSource featureSource, Query query ) {
+    protected ContentFeatureCollection(ContentFeatureSource featureSource, Query query) {
         this.featureSource = featureSource;
         this.query = query;
-        
+
         this.featureType = featureSource.getSchema();
 
-        //retype feature type if necessary
-        if ( query.getPropertyNames() != Query.ALL_NAMES ) {
-            this.featureType = 
-                SimpleFeatureTypeBuilder.retype(this.featureType, query.getPropertyNames() );
+        // retype feature type if necessary
+        if (query.getPropertyNames() != Query.ALL_NAMES) {
+            this.featureType =
+                    SimpleFeatureTypeBuilder.retype(this.featureType, query.getPropertyNames());
         }
         // Check for change in coordinate reference system
         // (Even if featureSource.canReproject the feature reader, we will need to adjust the
         //  featureType generated here to be correct)
         try {
-            if (query.getCoordinateSystemReproject() != null){
-                this.featureType = FeatureTypes.transform(this.featureType, query.getCoordinateSystemReproject() );
-            }
-            else if (query.getCoordinateSystem() != null){
-                this.featureType = FeatureTypes.transform(this.featureType, query.getCoordinateSystem() );
+            if (query.getCoordinateSystemReproject() != null) {
+                this.featureType =
+                        FeatureTypes.transform(
+                                this.featureType, query.getCoordinateSystemReproject());
+            } else if (query.getCoordinateSystem() != null) {
+                this.featureType =
+                        FeatureTypes.transform(this.featureType, query.getCoordinateSystem());
             }
         } catch (SchemaException e) {
-            LOGGER.log(Level.FINER,"Problem handling Query change of CoordinateReferenceSystem:"+e,e);
+            LOGGER.log(
+                    Level.FINER,
+                    "Problem handling Query change of CoordinateReferenceSystem:" + e,
+                    e);
         }
 
-        //check for join and expand attributes as necessary
+        // check for join and expand attributes as necessary
         if (!query.getJoins().isEmpty()) {
             SimpleFeatureTypeBuilder tb = new SimpleFeatureTypeBuilder();
             tb.init(this.featureType);
@@ -31,14 +36,14 @@
             for (Join join : query.getJoins()) {
                 try {
                     String typeName = join.getTypeName();
-                    tb.userData(ContentDataStore.JOINED_FEATURE_TYPE,
+                    tb.userData(
+                            ContentDataStore.JOINED_FEATURE_TYPE,
                             featureSource.getDataStore().getSchema(typeName));
                 } catch (Exception e) {
                     LOGGER.log(Level.WARNING, "Failed to retrieve the joined feature type");
                 }
 
                 tb.add(join.attributeName(), SimpleFeature.class);
-
             }
             this.featureType = tb.buildFeatureType();
         }

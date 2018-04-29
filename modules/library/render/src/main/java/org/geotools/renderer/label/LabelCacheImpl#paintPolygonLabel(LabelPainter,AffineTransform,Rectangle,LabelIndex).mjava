@@ -1,56 +1,61 @@
     /**
      * returns the representative geometry (for further processing)
-     * 
-     * TODO: handle lineplacement for a polygon (perhaps we're supposed to grab
-     * the outside line and label it, but spec is unclear)
+     *
+     * <p>TODO: handle lineplacement for a polygon (perhaps we're supposed to grab the outside line
+     * and label it, but spec is unclear)
      */
-    private boolean paintPolygonLabel(LabelPainter painter, AffineTransform tempTransform,
-            Rectangle displayArea, LabelIndex glyphs) throws Exception {
+    private boolean paintPolygonLabel(
+            LabelPainter painter,
+            AffineTransform tempTransform,
+            Rectangle displayArea,
+            LabelIndex glyphs)
+            throws Exception {
         LabelCacheItem labelItem = painter.getLabel();
-        Polygon geom = getPolySetRepresentativeLocation(labelItem.getGeoms(), displayArea, labelItem.isPartialsEnabled());
+        Polygon geom =
+                getPolySetRepresentativeLocation(
+                        labelItem.getGeoms(), displayArea, labelItem.isPartialsEnabled());
         if (geom == null) {
             return false;
         }
-        
+
         Point centroid = RendererUtilities.getPolygonCentroid(geom);
         if (centroid == null) {
             return false;
         }
-        
+
         // check we're inside, if not, use a different approach
         PreparedGeometry pg = PreparedGeometryFactory.prepare(geom);
-        if(!pg.contains(centroid)) {
+        if (!pg.contains(centroid)) {
             // resort to sampling, computing the intersection is slow and
             // due invalid geometries can easily break with an exception
-            Point central = RendererUtilities.sampleForInternalPoint(geom, centroid, pg, gf, 5d, -1);
+            Point central =
+                    RendererUtilities.sampleForInternalPoint(geom, centroid, pg, gf, 5d, -1);
             if (central != null) {
                 centroid = central;
-            }
-            else {
+            } else {
                 return false;
             }
         }
 
         // compute the transformation used to position the label
         TextStyle2DExt textStyle = new TextStyle2DExt(labelItem);
-        if(labelItem.getMaxDisplacement() > 0) {
+        if (labelItem.getMaxDisplacement() > 0) {
             textStyle.setDisplacementX(0);
             textStyle.setDisplacementY(0);
             textStyle.setAnchorX(0.5);
             textStyle.setAnchorY(0.5);
         }
         AffineTransform tx = new AffineTransform(tempTransform);
-        if(paintPolygonLabelInternal(painter, tx, displayArea, glyphs, labelItem,
-                pg, centroid, textStyle))
-            return true;
-        
+        if (paintPolygonLabelInternal(
+                painter, tx, displayArea, glyphs, labelItem, pg, centroid, textStyle)) return true;
+
         int[] displacementAngles = labelItem.getDisplacementAngles();
         if (displacementAngles == null) {
             displacementAngles = DEFAULT_DISPLACEMENT_ANGLES;
         }
-        
+
         // ... use at least a 2 pixel step, no matter what the label length is
-        final double step = painter.getAscent() > 2 ? painter.getAscent() : 2;     
+        final double step = painter.getAscent() > 2 ? painter.getAscent() : 2;
         double radius = step;
         Coordinate c = new Coordinate(centroid.getCoordinate());
         Coordinate cc = centroid.getCoordinate();
@@ -63,22 +68,20 @@
                 c.x = cc.x + dx;
                 c.y = cc.y + dy;
                 testPoint.geometryChanged();
-                if (!pg.contains(testPoint))
-                    continue;
+                if (!pg.contains(testPoint)) continue;
 
                 textStyle.setDisplacementX(dx);
                 textStyle.setDisplacementY(dy);
 
                 tx = new AffineTransform(tempTransform);
-                if (paintPolygonLabelInternal(painter, tx, displayArea, glyphs, labelItem, pg,
-                        centroid, textStyle))
+                if (paintPolygonLabelInternal(
+                        painter, tx, displayArea, glyphs, labelItem, pg, centroid, textStyle))
                     return true;
             }
 
             radius += step;
         }
-        
+
         return false;
-        
     }
 

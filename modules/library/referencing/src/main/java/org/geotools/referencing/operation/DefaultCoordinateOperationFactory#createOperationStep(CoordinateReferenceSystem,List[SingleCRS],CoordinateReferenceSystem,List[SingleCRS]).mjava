@@ -1,10 +1,12 @@
     /**
      * Implementation of transformation step on compound CRS.
-     * <p>
-     * <strong>NOTE:</strong> If there is a horizontal (geographic or projected) CRS together with a vertical CRS, then we can't performs the
-     * transformation since the vertical value has an impact on the horizontal value, and this impact is not taken in account if the horizontal and
-     * vertical components are not together in a 3D geographic CRS. This case occurs when the vertical CRS is not a height above the ellipsoid. It
-     * must be checked by the caller before this method is invoked.
+     *
+     * <p><strong>NOTE:</strong> If there is a horizontal (geographic or projected) CRS together
+     * with a vertical CRS, then we can't performs the transformation since the vertical value has
+     * an impact on the horizontal value, and this impact is not taken in account if the horizontal
+     * and vertical components are not together in a 3D geographic CRS. This case occurs when the
+     * vertical CRS is not a height above the ellipsoid. It must be checked by the caller before
+     * this method is invoked.
      *
      * @param sourceCRS Input coordinate reference system.
      * @param sources The source CRS components.
@@ -13,9 +15,12 @@
      * @return A coordinate operation from {@code sourceCRS} to {@code targetCRS}.
      * @throws FactoryException If the operation can't be constructed.
      */
-    private CoordinateOperation createOperationStep(final CoordinateReferenceSystem sourceCRS,
-            final List<SingleCRS> sources, final CoordinateReferenceSystem targetCRS,
-            final List<SingleCRS> targets) throws FactoryException {
+    private CoordinateOperation createOperationStep(
+            final CoordinateReferenceSystem sourceCRS,
+            final List<SingleCRS> sources,
+            final CoordinateReferenceSystem targetCRS,
+            final List<SingleCRS> targets)
+            throws FactoryException {
         /*
          * Try to find operations from source CRSs to target CRSs. All pairwise combinations are tried, but the preference is given to CRS in the same
          * order (source[0] with target[0], source[1] with target[1], etc.). Operations found are stored in 'steps', but are not yet given to pass
@@ -24,16 +29,17 @@
          */
         final CoordinateReferenceSystem[] ordered = new CoordinateReferenceSystem[targets.size()];
         final CoordinateOperation[] steps = new CoordinateOperation[targets.size()];
-        final boolean[]                   done    = new boolean                  [sources.size()];
-        final int[]                       indices = new int[getDimension(sourceCRS)];
-        int count=0, dimensions=0;
-search: for (int j=0; j<targets.size(); j++) {
-            int lower, upper=0;
+        final boolean[] done = new boolean[sources.size()];
+        final int[] indices = new int[getDimension(sourceCRS)];
+        int count = 0, dimensions = 0;
+        search:
+        for (int j = 0; j < targets.size(); j++) {
+            int lower, upper = 0;
             final CoordinateReferenceSystem target = targets.get(j);
             OperationNotFoundException cause = null;
-            for (int i=0; i<sources.size(); i++) {
+            for (int i = 0; i < sources.size(); i++) {
                 final CoordinateReferenceSystem source = sources.get(i);
-                lower  = upper;
+                lower = upper;
                 upper += getDimension(source);
                 if (done[i]) continue;
                 try {
@@ -41,7 +47,7 @@ search: for (int j=0; j<targets.size(); j++) {
                 } catch (OperationNotFoundException exception) {
                     // No operation path for this pair.
                     // Search for an other pair.
-                    if (cause==null || i==j) {
+                    if (cause == null || i == j) {
                         cause = exception;
                     }
                     continue;
@@ -66,23 +72,24 @@ search: for (int j=0; j<targets.size(); j++) {
          * for any target coordinates.
          */
         assert count == targets.size() : count;
-        while (count != 0 && steps[--count].getMathTransform().isIdentity())
-            ;
+        while (count != 0 && steps[--count].getMathTransform().isIdentity()) ;
         final ReferencingFactoryContainer factories = getFactoryContainer();
         CoordinateOperation operation = null;
         CoordinateReferenceSystem sourceStepCRS = sourceCRS;
-        final XMatrix select = MatrixFactory.create(dimensions+1, indices.length+1);
+        final XMatrix select = MatrixFactory.create(dimensions + 1, indices.length + 1);
         select.setZero();
         select.setElement(dimensions, indices.length, 1);
-        for (int j=0; j<dimensions; j++) {
+        for (int j = 0; j < dimensions; j++) {
             select.setElement(j, indices[j], 1);
         }
         if (!select.isIdentity()) {
             if (ordered.length == 1) {
                 sourceStepCRS = ordered[0];
             } else {
-                sourceStepCRS = factories.getCRSFactory().createCompoundCRS(
-                        getTemporaryName(sourceCRS), ordered);
+                sourceStepCRS =
+                        factories
+                                .getCRSFactory()
+                                .createCompoundCRS(getTemporaryName(sourceCRS), ordered);
             }
             operation = createFromAffineTransform(AXIS_CHANGES, sourceCRS, sourceStepCRS, select);
         }
@@ -108,8 +115,10 @@ search: for (int j=0; j<targets.size(); j++) {
             } else if (ordered.length == 1) {
                 targetStepCRS = ordered[0];
             } else {
-                targetStepCRS = factories.getCRSFactory()
-                        .createCompoundCRS(getTemporaryName(target), ordered);
+                targetStepCRS =
+                        factories
+                                .getCRSFactory()
+                                .createCompoundCRS(getTemporaryName(target), ordered);
             }
             lower = upper;
             upper += getDimension(source);
@@ -120,14 +129,21 @@ search: for (int j=0; j<targets.size(); j++) {
                  */
                 if (!(step instanceof Operation)) {
                     final MathTransform stepMT = step.getMathTransform();
-                    step = DefaultOperation.create(AbstractIdentifiedObject.getProperties(step),
-                            step.getSourceCRS(), step.getTargetCRS(), stepMT,
-                            new DefaultOperationMethod(stepMT), step.getClass());
+                    step =
+                            DefaultOperation.create(
+                                    AbstractIdentifiedObject.getProperties(step),
+                                    step.getSourceCRS(),
+                                    step.getTargetCRS(),
+                                    stepMT,
+                                    new DefaultOperationMethod(stepMT),
+                                    step.getClass());
                 }
-                mt = getMathTransformFactory().createPassThroughTransform(lower, mt,
-                        dimensions - upper);
-                step = new DefaultPassThroughOperation(properties, sourceStepCRS, targetStepCRS,
-                        (Operation) step, mt);
+                mt =
+                        getMathTransformFactory()
+                                .createPassThroughTransform(lower, mt, dimensions - upper);
+                step =
+                        new DefaultPassThroughOperation(
+                                properties, sourceStepCRS, targetStepCRS, (Operation) step, mt);
             }
             operation = (operation == null) ? step : concatenate(operation, step);
             sourceStepCRS = targetStepCRS;

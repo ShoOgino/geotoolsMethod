@@ -1,134 +1,154 @@
-	/**
-	 * GTopo30Reader constructor.
-	 * 
-	 * @param source
-	 *            The source object (can be a File, an URL or a String
-	 *            representing a File or an URL).
-	 * @throws MalformedURLException
-	 *             if the URL does not correspond to one of the GTopo30 files
-	 * @throws IOException
-	 * @throws DataSourceException
-	 *             if the given url points to an unrecognized file
-	 * @throws IllegalArgumentException
-	 *             DOCUMENT ME!
-	 */
-	public GTopo30Reader(final Object source, final Hints hints)
-			throws IOException {
-	    super(source, hints);
+    /**
+     * GTopo30Reader constructor.
+     *
+     * @param source The source object (can be a File, an URL or a String representing a File or an
+     *     URL).
+     * @throws MalformedURLException if the URL does not correspond to one of the GTopo30 files
+     * @throws IOException
+     * @throws DataSourceException if the given url points to an unrecognized file
+     * @throws IllegalArgumentException DOCUMENT ME!
+     */
+    public GTopo30Reader(final Object source, final Hints hints) throws IOException {
+        super(source, hints);
 
-		if (source instanceof File) {
-			urlToUse = ((File) source).toURI().toURL();
-		} else if (source instanceof URL) {
-			// we only allow files
-			urlToUse = (URL) source;
-		} else if (source instanceof String) {
-			try {
-				// is it a filename?
-				urlToUse = new File((String) source).toURI().toURL();
-			} catch (MalformedURLException e) {
-				// is it a URL
-				urlToUse = new URL((String) source);
-			}
-		} else {
-			throw new IllegalArgumentException("Illegal input argument!");
-		}
-		this.source = source;
-		coverageName = "gtopo30_coverage";
-		// ///////////////////////////////////////////////////////////
-		//
-		// decoding source
-		//
-		// ///////////////////////////////////////////////////////////
-		final String filename;
+        if (source instanceof File) {
+            urlToUse = ((File) source).toURI().toURL();
+        } else if (source instanceof URL) {
+            // we only allow files
+            urlToUse = (URL) source;
+        } else if (source instanceof String) {
+            try {
+                // is it a filename?
+                urlToUse = new File((String) source).toURI().toURL();
+            } catch (MalformedURLException e) {
+                // is it a URL
+                urlToUse = new URL((String) source);
+            }
+        } else {
+            throw new IllegalArgumentException("Illegal input argument!");
+        }
+        this.source = source;
+        coverageName = "gtopo30_coverage";
+        // ///////////////////////////////////////////////////////////
+        //
+        // decoding source
+        //
+        // ///////////////////////////////////////////////////////////
+        final String filename;
 
-		filename = URLs.urlToFile(urlToUse).getName();
+        filename = URLs.urlToFile(urlToUse).getName();
 
-		boolean recognized = false;
-		boolean extUpperCase = false;
+        boolean recognized = false;
+        boolean extUpperCase = false;
 
-		if (filename.endsWith(dmext) || filename.endsWith(dhext)
-				|| filename.endsWith(srext) || filename.endsWith(shext)
-				|| filename.endsWith(stext) || filename.endsWith(prjext)) {
-			recognized = true;
-		} else {
+        if (filename.endsWith(dmext)
+                || filename.endsWith(dhext)
+                || filename.endsWith(srext)
+                || filename.endsWith(shext)
+                || filename.endsWith(stext)
+                || filename.endsWith(prjext)) {
+            recognized = true;
+        } else {
 
-			if (filename.endsWith(dmext.toUpperCase())
-					|| filename.endsWith(dhext.toUpperCase())
-					|| filename.endsWith(srext.toUpperCase())
-					|| filename.endsWith(shext.toUpperCase())
-					|| filename.endsWith(stext.toUpperCase())
-					|| filename.endsWith(prjext.toUpperCase())) {
-				recognized = true;
-				extUpperCase = true;
-			}
-		}
+            if (filename.endsWith(dmext.toUpperCase())
+                    || filename.endsWith(dhext.toUpperCase())
+                    || filename.endsWith(srext.toUpperCase())
+                    || filename.endsWith(shext.toUpperCase())
+                    || filename.endsWith(stext.toUpperCase())
+                    || filename.endsWith(prjext.toUpperCase())) {
+                recognized = true;
+                extUpperCase = true;
+            }
+        }
 
-		if (!recognized) {
-			throw new IOException(
-					"Unrecognized file (file extension doesn't match)");
-		}
+        if (!recognized) {
+            throw new IOException("Unrecognized file (file extension doesn't match)");
+        }
 
-		this.coverageName = filename.substring(0, filename.length() - 4);
-		demURL = new URL(urlToUse, this.coverageName
-				+ (!extUpperCase ? dmext : dmext.toUpperCase()));
-		prjURL = new URL(urlToUse, this.coverageName
-				+ (!extUpperCase ? prjext : prjext.toUpperCase()));
-		demHeaderURL = new URL(urlToUse, this.coverageName
-				+ (!extUpperCase ? dhext : dhext.toUpperCase()));
-		statsURL = new URL(urlToUse, this.coverageName
-				+ (!extUpperCase ? stext : stext.toUpperCase()));
+        this.coverageName = filename.substring(0, filename.length() - 4);
+        demURL =
+                new URL(
+                        urlToUse,
+                        this.coverageName + (!extUpperCase ? dmext : dmext.toUpperCase()));
+        prjURL =
+                new URL(
+                        urlToUse,
+                        this.coverageName + (!extUpperCase ? prjext : prjext.toUpperCase()));
+        demHeaderURL =
+                new URL(
+                        urlToUse,
+                        this.coverageName + (!extUpperCase ? dhext : dhext.toUpperCase()));
+        statsURL =
+                new URL(
+                        urlToUse,
+                        this.coverageName + (!extUpperCase ? stext : stext.toUpperCase()));
 
-		// ///////////////////////////////////////////////////////////
-		//
-		// Reading header and statistics
-		//
-		// ///////////////////////////////////////////////////////////
-		header = new GT30Header(demHeaderURL);
-		// get information from the header
-		originalGridRange = new GridEnvelope2D(new Rectangle(0, 0, header.getNCols(), header.getNRows()));
-		stats = new GT30Stats(this.statsURL);
+        // ///////////////////////////////////////////////////////////
+        //
+        // Reading header and statistics
+        //
+        // ///////////////////////////////////////////////////////////
+        header = new GT30Header(demHeaderURL);
+        // get information from the header
+        originalGridRange =
+                new GridEnvelope2D(new Rectangle(0, 0, header.getNCols(), header.getNRows()));
+        stats = new GT30Stats(this.statsURL);
 
-		// ///////////////////////////////////////////////////////////
-		//
-		// Build the coordinate system and the envelope
-		//
-		// ///////////////////////////////////////////////////////////
-                final Object tempCRS = this.hints.get(Hints.DEFAULT_COORDINATE_REFERENCE_SYSTEM);
-                if (tempCRS != null) {
-                    this.crs = (CoordinateReferenceSystem) tempCRS;
-                    if(LOGGER.isLoggable(Level.WARNING))
-                            LOGGER.log(Level.WARNING,"Using forced coordinate reference system ");
-                } else
-                    crs = initCRS();
-		this.originalEnvelope = getBounds(crs);
-		final GridToEnvelopeMapper geMapper= new  GridToEnvelopeMapper(originalGridRange,originalEnvelope);
-		geMapper.setPixelAnchor(PixelInCell.CELL_CENTER);
-		this.raster2Model=geMapper.createTransform();
+        // ///////////////////////////////////////////////////////////
+        //
+        // Build the coordinate system and the envelope
+        //
+        // ///////////////////////////////////////////////////////////
+        final Object tempCRS = this.hints.get(Hints.DEFAULT_COORDINATE_REFERENCE_SYSTEM);
+        if (tempCRS != null) {
+            this.crs = (CoordinateReferenceSystem) tempCRS;
+            if (LOGGER.isLoggable(Level.WARNING))
+                LOGGER.log(Level.WARNING, "Using forced coordinate reference system ");
+        } else crs = initCRS();
+        this.originalEnvelope = getBounds(crs);
+        final GridToEnvelopeMapper geMapper =
+                new GridToEnvelopeMapper(originalGridRange, originalEnvelope);
+        geMapper.setPixelAnchor(PixelInCell.CELL_CENTER);
+        this.raster2Model = geMapper.createTransform();
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// Compute source Resolution
-		//
-		// /////////////////////////////////////////////////////////////////////
-		highestRes = getResolution(originalEnvelope, new Rectangle(0, 0, header.getNCols(), header.getNRows()), crs);
-		numOverviews = 0;
-		overViewResolutions = null;
-		
-		//
-		// ImageLayout
-		// 
-                // Prepare temporary colorModel and sample model, needed to build the
-                // RawImageInputStream
-                final ColorModel cm = new ComponentColorModel(ColorSpace
-                                .getInstance(ColorSpace.CS_GRAY), false, false,
-                                Transparency.OPAQUE, DataBuffer.TYPE_SHORT);
-                // building the final image layout
-                final Dimension tileSize = ImageUtilities.toTileSize(new Dimension(originalGridRange.getSpan(0), originalGridRange.getSpan(1)));
-                final SampleModel sm = cm .createCompatibleSampleModel(tileSize.width, tileSize.height);                
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Compute source Resolution
+        //
+        // /////////////////////////////////////////////////////////////////////
+        highestRes =
+                getResolution(
+                        originalEnvelope,
+                        new Rectangle(0, 0, header.getNCols(), header.getNRows()),
+                        crs);
+        numOverviews = 0;
+        overViewResolutions = null;
 
-                ImageLayout il = new ImageLayout(0, 0, originalGridRange.getSpan(0),originalGridRange.getSpan(1));
-                il.setTileGridXOffset(0).setTileGridYOffset(0).setTileWidth(tileSize.width).setTileHeight(tileSize.height);
-                il.setColorModel(cm).setSampleModel(sm);
-                setlayout(il);
-	}
+        //
+        // ImageLayout
+        //
+        // Prepare temporary colorModel and sample model, needed to build the
+        // RawImageInputStream
+        final ColorModel cm =
+                new ComponentColorModel(
+                        ColorSpace.getInstance(ColorSpace.CS_GRAY),
+                        false,
+                        false,
+                        Transparency.OPAQUE,
+                        DataBuffer.TYPE_SHORT);
+        // building the final image layout
+        final Dimension tileSize =
+                ImageUtilities.toTileSize(
+                        new Dimension(originalGridRange.getSpan(0), originalGridRange.getSpan(1)));
+        final SampleModel sm = cm.createCompatibleSampleModel(tileSize.width, tileSize.height);
+
+        ImageLayout il =
+                new ImageLayout(0, 0, originalGridRange.getSpan(0), originalGridRange.getSpan(1));
+        il.setTileGridXOffset(0)
+                .setTileGridYOffset(0)
+                .setTileWidth(tileSize.width)
+                .setTileHeight(tileSize.height);
+        il.setColorModel(cm).setSampleModel(sm);
+        setlayout(il);
+    }
 

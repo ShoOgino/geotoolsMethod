@@ -1,38 +1,38 @@
     /**
      * Creates an AbstractRequest.
-     * 
-     * If properties isn't <code>null</code>, it will use them instead of
-     * creating a new Properties object.
-     * 
-     * This constructor will strip all the query parameters off of
-     * onlineResource and put them in the properties map. This allows clients
-     * to provide their own parameters and have them saved and used along with
-     * the OWS specific ones.
-     * 
-     * However, certain parameters will be over-written by individual requests
-     * themselves. Examples of such parameters include, but are not limited to:
+     *
+     * <p>If properties isn't <code>null</code>, it will use them instead of creating a new
+     * Properties object.
+     *
+     * <p>This constructor will strip all the query parameters off of onlineResource and put them in
+     * the properties map. This allows clients to provide their own parameters and have them saved
+     * and used along with the OWS specific ones.
+     *
+     * <p>However, certain parameters will be over-written by individual requests themselves.
+     * Examples of such parameters include, but are not limited to:
+     *
      * <ul>
-     * <li>WMTVER
-     * <li>REQUEST
-     * <li>VERSION
-     * <li>SERVICE
+     *   <li>WMTVER
+     *   <li>REQUEST
+     *   <li>VERSION
+     *   <li>SERVICE
      * </ul>
      *
      * @param onlineResource the URL to construct the Request for
      * @param properties a map of pre-set parameters to be used. Can be null.
      */
     public AbstractRequest(URL onlineResource, Properties properties) {
-    	
+
         if (properties == null) {
             this.properties = new Properties();
         } else {
             this.properties = properties;
         }
-    	
+
         // Need to strip off the query, as getFinalURL will add it back
         // on, with all the other properties. If we don't, elements will
         // be duplicated.
-        int index = onlineResource.toExternalForm().lastIndexOf("?"); //$NON-NLS-1$
+        int index = onlineResource.toExternalForm().lastIndexOf("?"); // $NON-NLS-1$
         String urlWithoutQuery = null;
 
         if (index <= 0) {
@@ -42,47 +42,45 @@
             }
         } else {
             urlWithoutQuery = onlineResource.toExternalForm().substring(0, index);
-            boolean once=true;   	        
-	        // Doing this preserves all of the query parameters while
-	        // enforcing the mandatory ones
-	        if (onlineResource.getQuery() != null) {
-	            StringTokenizer tokenizer = new StringTokenizer(onlineResource.getQuery(),
-	                    "&"); //$NON-NLS-1$
-	
-	            while (tokenizer.hasMoreTokens()) {
-	                String token = tokenizer.nextToken();
-	                String[] param = token.split("="); //$NON-NLS-1$'
-	                if (param != null && param.length>0 && param[0] != null) {
-	                    String key=param[0];
-	                    String value;
-	                    if( param.length==1 ){
-	                    	// some servers like to keep a few additional settings in their URL
-	                    	// (even though this is not part of the specification we gotta
-	                    	//  let them get away with it)
-	                    	if( once ){
-	                    		urlWithoutQuery += "?"+param[0]+"&";
-	                    		once = false;	                    		
-	                    	}
-	                    	else {
-	                    		urlWithoutQuery += param[0]+"&";                    		
-	                    	}
-	                    }
-	                    else {
-	                        value = param[1];
-	                        setProperty(key.toUpperCase(), value);                        
-	                    }
-	                }
-	            }
-	        }
-	        if( once ){
-	        	urlWithoutQuery += "?";
-	        }
+            boolean once = true;
+            // Doing this preserves all of the query parameters while
+            // enforcing the mandatory ones
+            if (onlineResource.getQuery() != null) {
+                StringTokenizer tokenizer =
+                        new StringTokenizer(onlineResource.getQuery(), "&"); // $NON-NLS-1$
+
+                while (tokenizer.hasMoreTokens()) {
+                    String token = tokenizer.nextToken();
+                    String[] param = token.split("="); // $NON-NLS-1$'
+                    if (param != null && param.length > 0 && param[0] != null) {
+                        String key = param[0];
+                        String value;
+                        if (param.length == 1) {
+                            // some servers like to keep a few additional settings in their URL
+                            // (even though this is not part of the specification we gotta
+                            //  let them get away with it)
+                            if (once) {
+                                urlWithoutQuery += "?" + param[0] + "&";
+                                once = false;
+                            } else {
+                                urlWithoutQuery += param[0] + "&";
+                            }
+                        } else {
+                            value = param[1];
+                            setProperty(key.toUpperCase(), value);
+                        }
+                    }
+                }
+            }
+            if (once) {
+                urlWithoutQuery += "?";
+            }
         }
         try {
             this.onlineResource = new URL(urlWithoutQuery);
         } catch (MalformedURLException e) {
             throw new RuntimeException("Error parsing URL. This is likely a bug in the code.");
-        }        
+        }
         initService();
         initRequest();
         initVersion();

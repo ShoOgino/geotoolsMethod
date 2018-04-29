@@ -1,45 +1,58 @@
     /**
-     * Given a coverage in the mosaic target CRS generates an RenderedImage properly positioned
-     * in the mosaic output raster space
-     * 
+     * Given a coverage in the mosaic target CRS generates an RenderedImage properly positioned in
+     * the mosaic output raster space
+     *
      * @param resampledCoverage
      * @return
      */
     private RenderedImage positionInOutputMosaic(GridCoverage2D resampledCoverage) {
         RenderedImage image = resampledCoverage.getRenderedImage();
-        
+
         // now create the overall transform
-        final AffineTransform finalRaster2Model = new AffineTransform((AffineTransform2D) resampledCoverage.getGridGeometry().getGridToCRS());
+        final AffineTransform finalRaster2Model =
+                new AffineTransform(
+                        (AffineTransform2D) resampledCoverage.getGridGeometry().getGridToCRS());
         finalRaster2Model.concatenate(CoverageUtilities.CENTER_TO_CORNER);
 
         // keep into account translation factors to place this tile
-        AffineTransform finalWorldToGridCorner = (AffineTransform) rasterLayerResponse.getFinalWorldToGridCorner();
+        AffineTransform finalWorldToGridCorner =
+                (AffineTransform) rasterLayerResponse.getFinalWorldToGridCorner();
         finalRaster2Model.preConcatenate(finalWorldToGridCorner);
         RasterLayerRequest request = rasterLayerResponse.getRequest();
         final Interpolation interpolation = request.getInterpolation();
 
-        // paranoiac check to avoid that JAI freaks out when computing its internal layouT on images that are too small
-        Rectangle2D finalLayout = ImageUtilities.layoutHelper(image,
-                (float) finalRaster2Model.getScaleX(), (float) finalRaster2Model.getScaleY(),
-                (float) finalRaster2Model.getTranslateX(),
-                (float) finalRaster2Model.getTranslateY(), interpolation);
+        // paranoiac check to avoid that JAI freaks out when computing its internal layouT on images
+        // that are too small
+        Rectangle2D finalLayout =
+                ImageUtilities.layoutHelper(
+                        image,
+                        (float) finalRaster2Model.getScaleX(),
+                        (float) finalRaster2Model.getScaleY(),
+                        (float) finalRaster2Model.getTranslateX(),
+                        (float) finalRaster2Model.getTranslateY(),
+                        interpolation);
         if (finalLayout.isEmpty()) {
             if (LOGGER.isLoggable(java.util.logging.Level.INFO))
-                LOGGER.info("Unable to create a granuleDescriptor " + this.toString()
-                        + " due to jai scale bug creating a null source area");
+                LOGGER.info(
+                        "Unable to create a granuleDescriptor "
+                                + this.toString()
+                                + " due to jai scale bug creating a null source area");
             return null;
         }
 
         // apply the affine transform conserving indexed color model
-        final RenderingHints localHints = new RenderingHints(JAI.KEY_REPLACE_INDEX_COLOR_MODEL,
-                interpolation instanceof InterpolationNearest ? Boolean.FALSE : Boolean.TRUE);
-        if (XAffineTransform.isIdentity(finalRaster2Model,
-                CoverageUtilities.AFFINE_IDENTITY_EPS)) {
+        final RenderingHints localHints =
+                new RenderingHints(
+                        JAI.KEY_REPLACE_INDEX_COLOR_MODEL,
+                        interpolation instanceof InterpolationNearest
+                                ? Boolean.FALSE
+                                : Boolean.TRUE);
+        if (XAffineTransform.isIdentity(finalRaster2Model, CoverageUtilities.AFFINE_IDENTITY_EPS)) {
             return image;
         } else {
             ImageWorker iw = new ImageWorker(image);
             final Object roi = image.getProperty("ROI");
-            if(roi instanceof ROI) {
+            if (roi instanceof ROI) {
                 iw.setROI((ROI) roi);
             }
             iw.setRenderingHints(localHints);

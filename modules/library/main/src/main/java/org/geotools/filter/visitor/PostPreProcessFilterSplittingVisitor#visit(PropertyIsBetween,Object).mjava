@@ -1,110 +1,103 @@
-        /**
-         * @see FilterVisitor#visit(PropertyIsBetween, Object)
-         * 
-         * NOTE:  This method is extra documented as an example of how
-         * all the other methods are implemented.  If you want to know how this
-         * class works read this method first!
-         * 
-         * @param filter the {@link Filter} to visit
-         */
-	    public Object visit(PropertyIsBetween filter, Object extradata) {
-	        if( original==null )
-	        	original=filter;
+    /**
+     * @see FilterVisitor#visit(PropertyIsBetween, Object)
+     *     <p>NOTE: This method is extra documented as an example of how all the other methods are
+     *     implemented. If you want to know how this class works read this method first!
+     * @param filter the {@link Filter} to visit
+     */
+    public Object visit(PropertyIsBetween filter, Object extradata) {
+        if (original == null) original = filter;
 
-            // Do we support this filter type at all?
-	        if (fcs.supports(PropertyIsBetween.class)) {
-                //Yes, we do.  Now, can we support the sub-filters?
-	            
-                //first, remember how big the current list of "I can't support these"
-                // filters is.
-                int i = postStack.size();
-                
-	            Expression lowerBound = filter.getLowerBoundary();
-	            Expression expr = filter.getExpression();
-	            Expression upperBound = filter.getUpperBoundary();
-	            if(lowerBound==null || 
-	               upperBound==null ||
-	               expr==null ){
-                    //Well, one of the boundaries is null, so I guess
-                    // we're saying that *no* datastore could support this.
-	            	postStack.push(filter);
-	            	return null;
-	            }
-                
-                //Ok, here's the magic.  We know how big our list of "can't support"
-                //filters is.  Now we send off the lowerBound Expression to see if
-                //it can be supported.
-				lowerBound.accept(this, null);
-	
-                //Now we're back, and we check.  Did the postStack get bigger?
-	            if (i < postStack.size()) {
-	            	//Yes, it did.  Well, that means we can't support
-                    //this particular filter.  Let's back out anything that was
-                    //added by the lowerBound.accept() and add ourselves.
-	            	postStack.pop(); //lowerBound.accept()'s bum filter
-	            	postStack.push(filter);
-	
-	                return null;
-	            }
-                
-                //Aha!  The postStack didn't get any bigger, so we're still
-                //all good.  Now try again with the middle expression itself...
-	
-				expr.accept(this, null);
-	
-                //Did postStack get bigger?
-	            if (i < postStack.size()) {
-	            	//Yes, it did.  So that means we can't support
-                    //this particular filter.  We need to back out what we've
-                    //done, which is BOTH the lowerbounds filter *and* the
-                    //thing that was added by expr.accept() when it failed.
-	            	preStack.pop(); // lowerBound.accept()'s success
-	            	postStack.pop(); // expr.accept()'s bum filter
-	            	postStack.push(filter);
-	
-	                return null;
-	            }
-	
-                //Same deal again...
-				upperBound.accept(this, null);
+        // Do we support this filter type at all?
+        if (fcs.supports(PropertyIsBetween.class)) {
+            // Yes, we do.  Now, can we support the sub-filters?
 
-	            if (i < postStack.size()) {
-	            	// post process it
-                    postStack.pop(); // upperBound.accept()'s bum filter
-	            	preStack.pop(); // expr.accept()'s success
-                    preStack.pop(); // lowerBound.accept()'s success
-	            	postStack.push(filter);
-	            	
-	            	return null;
-	            }
-	            
-                //Well, by getting here it means that postStack didn't get
-                //taller, even after accepting all three middle filters.  This
-                //means that this whole filter is totally pre-filterable.
-                
-                //Let's clean up the pre-stack (which got one added to it
-                //for the success at each of the three above .accept() calls)
-                //and add us to the stack.
-                
-                preStack.pop(); // upperBounds.accept()'s success
-            	preStack.pop(); // expr.accept()'s success
-                preStack.pop(); // lowerBounds.accept()'s success
-            	
-	            
-                //finally we add ourselves to the "can be pre-proccessed" filter
-                //stack.  Now when we return we've added exactly one thing to
-                //the preStack...namely, the given filter.
-	            preStack.push(filter);
-	        } else {
-                // No, we don't support this filter.
-                // So we push it onto the postStack, saying
-                // "Hey, here's one more filter that we don't support.
-                // Someone who called us may look at this and say,
-                // "Hmm, I called accept() on this filter and now
-                // the postStack is taller than it was...I guess this
-                // filter wasn't accepted.
-            	postStack.push(filter);
-	        }
-            return null;
-	    }
+            // first, remember how big the current list of "I can't support these"
+            // filters is.
+            int i = postStack.size();
+
+            Expression lowerBound = filter.getLowerBoundary();
+            Expression expr = filter.getExpression();
+            Expression upperBound = filter.getUpperBoundary();
+            if (lowerBound == null || upperBound == null || expr == null) {
+                // Well, one of the boundaries is null, so I guess
+                // we're saying that *no* datastore could support this.
+                postStack.push(filter);
+                return null;
+            }
+
+            // Ok, here's the magic.  We know how big our list of "can't support"
+            // filters is.  Now we send off the lowerBound Expression to see if
+            // it can be supported.
+            lowerBound.accept(this, null);
+
+            // Now we're back, and we check.  Did the postStack get bigger?
+            if (i < postStack.size()) {
+                // Yes, it did.  Well, that means we can't support
+                // this particular filter.  Let's back out anything that was
+                // added by the lowerBound.accept() and add ourselves.
+                postStack.pop(); // lowerBound.accept()'s bum filter
+                postStack.push(filter);
+
+                return null;
+            }
+
+            // Aha!  The postStack didn't get any bigger, so we're still
+            // all good.  Now try again with the middle expression itself...
+
+            expr.accept(this, null);
+
+            // Did postStack get bigger?
+            if (i < postStack.size()) {
+                // Yes, it did.  So that means we can't support
+                // this particular filter.  We need to back out what we've
+                // done, which is BOTH the lowerbounds filter *and* the
+                // thing that was added by expr.accept() when it failed.
+                preStack.pop(); // lowerBound.accept()'s success
+                postStack.pop(); // expr.accept()'s bum filter
+                postStack.push(filter);
+
+                return null;
+            }
+
+            // Same deal again...
+            upperBound.accept(this, null);
+
+            if (i < postStack.size()) {
+                // post process it
+                postStack.pop(); // upperBound.accept()'s bum filter
+                preStack.pop(); // expr.accept()'s success
+                preStack.pop(); // lowerBound.accept()'s success
+                postStack.push(filter);
+
+                return null;
+            }
+
+            // Well, by getting here it means that postStack didn't get
+            // taller, even after accepting all three middle filters.  This
+            // means that this whole filter is totally pre-filterable.
+
+            // Let's clean up the pre-stack (which got one added to it
+            // for the success at each of the three above .accept() calls)
+            // and add us to the stack.
+
+            preStack.pop(); // upperBounds.accept()'s success
+            preStack.pop(); // expr.accept()'s success
+            preStack.pop(); // lowerBounds.accept()'s success
+
+            // finally we add ourselves to the "can be pre-proccessed" filter
+            // stack.  Now when we return we've added exactly one thing to
+            // the preStack...namely, the given filter.
+            preStack.push(filter);
+        } else {
+            // No, we don't support this filter.
+            // So we push it onto the postStack, saying
+            // "Hey, here's one more filter that we don't support.
+            // Someone who called us may look at this and say,
+            // "Hmm, I called accept() on this filter and now
+            // the postStack is taller than it was...I guess this
+            // filter wasn't accepted.
+            postStack.push(filter);
+        }
+        return null;
+    }
 

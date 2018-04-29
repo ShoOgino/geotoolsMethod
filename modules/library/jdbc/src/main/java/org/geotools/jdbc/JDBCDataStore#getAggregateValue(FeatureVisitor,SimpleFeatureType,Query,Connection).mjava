@@ -1,12 +1,15 @@
     /**
      * Results the value of an aggregate function over a query.
+     *
      * @return generated result, or null if unsupported
      */
-    protected Object getAggregateValue(FeatureVisitor visitor, SimpleFeatureType featureType, Query query, Connection cx)
+    protected Object getAggregateValue(
+            FeatureVisitor visitor, SimpleFeatureType featureType, Query query, Connection cx)
             throws IOException {
         // check if group by is supported by the underlying store
-        if (isGroupByVisitor(visitor) && 
-                (!dialect.isGroupBySupported() || !isSupportedGroupBy((GroupByVisitor) visitor))) {
+        if (isGroupByVisitor(visitor)
+                && (!dialect.isGroupBySupported()
+                        || !isSupportedGroupBy((GroupByVisitor) visitor))) {
             return null;
         }
         // try to match the visitor with an aggregate function
@@ -23,7 +26,7 @@
                 return null;
             }
         }
-        
+
         // if the visitor is limiting the result to a given start - max, we will
         // try to apply limits to the aggregate query
         LimitingVisitor limitingVisitor = null;
@@ -38,46 +41,58 @@
             List results = new ArrayList();
             Statement st = null;
             ResultSet rs = null;
-            
+
             try {
-                if ( dialect instanceof PreparedStatementSQLDialect ) {
-                    st = selectAggregateSQLPS(function, aggregateExpression, groupByExpressions, featureType, query, limitingVisitor,  cx);
-                    rs = ((PreparedStatement)st).executeQuery();
-                } 
-                else {
-                    String sql = selectAggregateSQL(function, aggregateExpression, groupByExpressions, featureType, query, limitingVisitor);
-                    LOGGER.fine( sql );
-                    
+                if (dialect instanceof PreparedStatementSQLDialect) {
+                    st =
+                            selectAggregateSQLPS(
+                                    function,
+                                    aggregateExpression,
+                                    groupByExpressions,
+                                    featureType,
+                                    query,
+                                    limitingVisitor,
+                                    cx);
+                    rs = ((PreparedStatement) st).executeQuery();
+                } else {
+                    String sql =
+                            selectAggregateSQL(
+                                    function,
+                                    aggregateExpression,
+                                    groupByExpressions,
+                                    featureType,
+                                    query,
+                                    limitingVisitor);
+                    LOGGER.fine(sql);
+
                     st = cx.createStatement();
                     st.setFetchSize(fetchSize);
-                    rs = st.executeQuery( sql );
+                    rs = st.executeQuery(sql);
                 }
-             
-                while(rs.next()) {
+
+                while (rs.next()) {
                     if (groupByExpressions == null || groupByExpressions.isEmpty()) {
                         Object value = rs.getObject(1);
                         result = value;
                         results.add(value);
-                    }
-                    else {
+                    } else {
                         results.add(extractValuesFromResultSet(rs, groupByExpressions.size()));
                     }
                 }
             } finally {
-                closeSafe( rs );
-                closeSafe( st );
+                closeSafe(rs);
+                closeSafe(st);
             }
 
             if (groupByExpressions != null && !groupByExpressions.isEmpty()) {
                 setResult(visitor, results);
                 return results;
-            } else if ( setResult(visitor, results.size() > 1 ? results : result) ){
+            } else if (setResult(visitor, results.size() > 1 ? results : result)) {
                 return result == null ? results : result;
             }
-            
+
             return null;
-        }
-        catch( SQLException e ) {
+        } catch (SQLException e) {
             throw (IOException) new IOException().initCause(e);
         }
     }

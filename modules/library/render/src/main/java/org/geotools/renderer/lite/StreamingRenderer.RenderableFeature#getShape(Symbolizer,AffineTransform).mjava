@@ -1,30 +1,36 @@
-        public LiteShape2 getShape(Symbolizer symbolizer, AffineTransform at) throws FactoryException {
+        public LiteShape2 getShape(Symbolizer symbolizer, AffineTransform at)
+                throws FactoryException {
             Geometry g = findGeometry(feature, symbolizer); // pulls the geometry
 
-            if (g == null || g.isEmpty())
-                return null;
-            
+            if (g == null || g.isEmpty()) return null;
+
             try {
-                // process screenmap if necessary (only do it once, 
-                // the geometry will be transformed simplified in place and the screenmap 
+                // process screenmap if necessary (only do it once,
+                // the geometry will be transformed simplified in place and the screenmap
                 // really needs to play against the original coordinates, plus, once we start
                 // drawing a geometry we want to apply all symbolizers on it)
-                if (screenMap != null // 
+                if (screenMap != null //
                         && !(symbolizer instanceof PointSymbolizer) //
                         && !(g instanceof Point)
                         && getGeometryIndex(g) == -1) {
                     Envelope env = g.getEnvelopeInternal();
-                    if(screenMap.canSimplify(env))
+                    if (screenMap.canSimplify(env))
                         if (screenMap.checkAndSet(env)) {
                             return null;
                         } else {
-                            g = screenMap.getSimplifiedShape(env.getMinX(), env.getMinY(), 
-                                    env.getMaxX(), env.getMaxY(), g.getFactory(), g.getClass());
+                            g =
+                                    screenMap.getSimplifiedShape(
+                                            env.getMinX(),
+                                            env.getMinY(),
+                                            env.getMaxX(),
+                                            env.getMaxY(),
+                                            g.getFactory(),
+                                            g.getClass());
                         }
                 }
-    
-                SymbolizerAssociation sa = (SymbolizerAssociation) symbolizerAssociationHT
-                .get(symbolizer);
+
+                SymbolizerAssociation sa =
+                        (SymbolizerAssociation) symbolizerAssociationHT.get(symbolizer);
                 MathTransform crsTransform = null;
                 MathTransform atTransform = null;
                 MathTransform fullTransform = null;
@@ -42,20 +48,23 @@
                     sa.xform = fullTransform;
                     sa.crsxform = crsTransform;
                     sa.axform = atTransform;
-                    if(projectionHandler != null) {
+                    if (projectionHandler != null) {
                         sa.rxform = projectionHandler.getRenderingTransform(sa.crsxform);
                     } else {
                         sa.rxform = sa.crsxform;
                     }
-    
+
                     symbolizerAssociationHT.put(symbolizer, sa);
                 }
 
                 // some shapes may be too close to projection boundaries to
                 // get transformed, try to be lenient
                 if (symbolizer instanceof PointSymbolizer) {
-                    // if the coordinate transformation will occurr in place on the coordinate sequence
-                    if(!clone && g.getFactory().getCoordinateSequenceFactory() instanceof LiteCoordinateSequenceFactory) {
+                    // if the coordinate transformation will occurr in place on the coordinate
+                    // sequence
+                    if (!clone
+                            && g.getFactory().getCoordinateSequenceFactory()
+                                    instanceof LiteCoordinateSequenceFactory) {
                         // if the symbolizer is a point symbolizer we first get the transformed
                         // geometry to make sure the coordinates have been modified once, and then
                         // compute the centroid in the screen space. This is a side effect of the
@@ -63,19 +72,22 @@
                         // the reprojected and decimated geometry we risk of transforming it twice
                         // when computing the centroid
                         LiteShape2 first = getTransformedShape(g, sa);
-                        if(first != null) {
-                            if(projectionHandler != null) {
-                                // at the same time, we cannot keep the geometry in screen space because
-                                // that would prevent the advanced projection handling to do its work,
+                        if (first != null) {
+                            if (projectionHandler != null) {
+                                // at the same time, we cannot keep the geometry in screen space
+                                // because
+                                // that would prevent the advanced projection handling to do its
+                                // work,
                                 // to replicate the geometries across the datelines, so we transform
                                 // it back to the original
-                                Geometry tx = JTS.transform(first.getGeometry(), sa.xform.inverse());
+                                Geometry tx =
+                                        JTS.transform(first.getGeometry(), sa.xform.inverse());
                                 return getTransformedShape(RendererUtilities.getCentroid(tx), sa);
                             } else {
                                 return getTransformedShape(RendererUtilities.getCentroid(g), null);
                             }
                         } else {
-                                return null;
+                            return null;
                         }
                     } else {
                         return getTransformedShape(RendererUtilities.getCentroid(g), sa);

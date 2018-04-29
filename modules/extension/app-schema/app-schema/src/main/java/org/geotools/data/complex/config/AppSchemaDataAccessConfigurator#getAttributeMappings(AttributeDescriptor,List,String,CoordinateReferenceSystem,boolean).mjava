@@ -1,40 +1,46 @@
     /**
      * Creates a list of {@link org.geotools.data.complex.AttributeMapping} from the attribute
      * mapping configurations in the provided list of {@link AttributeMapping}
-     * 
+     *
      * @param root
      * @param attDtos
-     * 
      * @return
      */
-    private List getAttributeMappings(final AttributeDescriptor root, final List attDtos,
-            String itemXpath, CoordinateReferenceSystem crs, boolean isJDBC) throws IOException {
+    private List getAttributeMappings(
+            final AttributeDescriptor root,
+            final List attDtos,
+            String itemXpath,
+            CoordinateReferenceSystem crs,
+            boolean isJDBC)
+            throws IOException {
         List attMappings = new LinkedList();
 
-        for (Iterator it = attDtos.iterator(); it.hasNext();) {
+        for (Iterator it = attDtos.iterator(); it.hasNext(); ) {
 
             org.geotools.data.complex.config.AttributeMapping attDto;
             attDto = (org.geotools.data.complex.config.AttributeMapping) it.next();
 
-            String idExpr = attDto.getIdentifierExpression();            
+            String idExpr = attDto.getIdentifierExpression();
             String idXpath = null;
             if (idExpr == null) {
-             // this might be because it's an XPath expression
+                // this might be because it's an XPath expression
                 idXpath = attDto.getIdentifierPath();
                 if (idXpath != null) {
-                    //validate without indexed elements
-                    final StepList inputXPathSteps = XPath.steps(root, itemXpath + "/"+ idXpath, namespaces);
+                    // validate without indexed elements
+                    final StepList inputXPathSteps =
+                            XPath.steps(root, itemXpath + "/" + idXpath, namespaces);
                     validateConfiguredNamespaces(inputXPathSteps);
-                }                         
+                }
             }
-                        
+
             String sourceExpr = attDto.getSourceExpression();
             String inputXPath = null;
             if (sourceExpr == null) {
                 // this might be because it's an XPath expression
                 inputXPath = attDto.getInputAttributePath();
                 if (inputXPath != null) {
-                    final StepList inputXPathSteps = XPath.steps(root, itemXpath + "/" + inputXPath, namespaces);
+                    final StepList inputXPathSteps =
+                            XPath.steps(root, itemXpath + "/" + inputXPath, namespaces);
                     validateConfiguredNamespaces(inputXPathSteps);
                 }
             }
@@ -45,17 +51,27 @@
             validateConfiguredNamespaces(targetXPathSteps);
 
             final boolean isMultiValued = attDto.isMultiple();
-            
-            final Expression idExpression = (idXpath == null) ? parseOgcCqlExpression(idExpr)
-                    : new AttributeExpressionImpl(idXpath, new Hints(
-                            FeaturePropertyAccessorFactory.NAMESPACE_CONTEXT, this.namespaces));
+
+            final Expression idExpression =
+                    (idXpath == null)
+                            ? parseOgcCqlExpression(idExpr)
+                            : new AttributeExpressionImpl(
+                                    idXpath,
+                                    new Hints(
+                                            FeaturePropertyAccessorFactory.NAMESPACE_CONTEXT,
+                                            this.namespaces));
             // if the data source is a data access, the input XPath expression is the source
             // expression
-            final Expression sourceExpression; 
+            final Expression sourceExpression;
 
-            sourceExpression = (inputXPath == null) ? parseOgcCqlExpression(sourceExpr)
-                    : new AttributeExpressionImpl(inputXPath, new Hints(
-                            FeaturePropertyAccessorFactory.NAMESPACE_CONTEXT, this.namespaces));
+            sourceExpression =
+                    (inputXPath == null)
+                            ? parseOgcCqlExpression(sourceExpr)
+                            : new AttributeExpressionImpl(
+                                    inputXPath,
+                                    new Hints(
+                                            FeaturePropertyAccessorFactory.NAMESPACE_CONTEXT,
+                                            this.namespaces));
 
             final AttributeType expectedInstanceOf;
 
@@ -65,16 +81,19 @@
                 Name expectedNodeTypeName = Types.degloseName(expectedInstanceTypeName, namespaces);
                 expectedInstanceOf = typeRegistry.getAttributeType(expectedNodeTypeName, null, crs);
                 if (expectedInstanceOf == null) {
-                    String msg = "mapping expects and instance of " + expectedNodeTypeName
-                            + " for attribute " + targetXPath
-                            + " but the attribute descriptor was not found";
+                    String msg =
+                            "mapping expects and instance of "
+                                    + expectedNodeTypeName
+                                    + " for attribute "
+                                    + targetXPath
+                                    + " but the attribute descriptor was not found";
                     throw new DataSourceException(msg);
                 }
             } else {
                 expectedInstanceOf = null;
             }
             AttributeMapping attMapping;
-            String sourceElement = attDto.getLinkElement();            
+            String sourceElement = attDto.getLinkElement();
             if (sourceElement != null) {
                 // nested complex attributes, this could be a function expression for polymorphic
                 // types
@@ -87,37 +106,64 @@
                     sourceFieldSteps = XPath.steps(root, sourceField, namespaces);
                 }
                 // a nested feature
-                NestedAttributeMapping customNestedMapping = CustomImplementationsFinder.find(this, idExpression, sourceExpression,
-                        targetXPathSteps, isMultiValued, clientProperties, elementExpr,
-                        sourceFieldSteps, namespaces);
+                NestedAttributeMapping customNestedMapping =
+                        CustomImplementationsFinder.find(
+                                this,
+                                idExpression,
+                                sourceExpression,
+                                targetXPathSteps,
+                                isMultiValued,
+                                clientProperties,
+                                elementExpr,
+                                sourceFieldSteps,
+                                namespaces);
                 if (customNestedMapping != null) {
                     attMapping = customNestedMapping;
                 } else if (isJoining() && isJDBC) {
-                    attMapping = new JoiningNestedAttributeMapping(idExpression, sourceExpression,
-                            targetXPathSteps, isMultiValued, clientProperties, elementExpr,
-                            sourceFieldSteps, namespaces);
+                    attMapping =
+                            new JoiningNestedAttributeMapping(
+                                    idExpression,
+                                    sourceExpression,
+                                    targetXPathSteps,
+                                    isMultiValued,
+                                    clientProperties,
+                                    elementExpr,
+                                    sourceFieldSteps,
+                                    namespaces);
                 } else {
-                    attMapping = new NestedAttributeMapping(idExpression, sourceExpression,
-                        targetXPathSteps, isMultiValued, clientProperties, elementExpr,
-                        sourceFieldSteps, namespaces);
+                    attMapping =
+                            new NestedAttributeMapping(
+                                    idExpression,
+                                    sourceExpression,
+                                    targetXPathSteps,
+                                    isMultiValued,
+                                    clientProperties,
+                                    elementExpr,
+                                    sourceFieldSteps,
+                                    namespaces);
                 }
-                
+
             } else {
-                attMapping = new AttributeMapping(idExpression, sourceExpression, attDto.getSourceIndex(), targetXPathSteps,
-                        expectedInstanceOf, isMultiValued, clientProperties);
+                attMapping =
+                        new AttributeMapping(
+                                idExpression,
+                                sourceExpression,
+                                attDto.getSourceIndex(),
+                                targetXPathSteps,
+                                expectedInstanceOf,
+                                isMultiValued,
+                                clientProperties);
             }
-            
+
             if (attDto.isList()) {
                 attMapping.setList(true);
             }
-            
+
             if (attDto.encodeIfEmpty()) {
                 attMapping.setEncodeIfEmpty(true);
             }
 
-            /**
-             * Label and parent label are specific for web service backend
-             */
+            /** Label and parent label are specific for web service backend */
             if (attDto.getLabel() != null) {
                 attMapping.setLabel(attDto.getLabel());
             }
@@ -127,7 +173,7 @@
             if (attDto.getInstancePath() != null) {
                 attMapping.setInstanceXpath(attDto.getInstancePath());
             }
-            
+
             attMappings.add(attMapping);
         }
         return attMappings;

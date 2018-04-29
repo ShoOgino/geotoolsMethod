@@ -12,45 +12,46 @@
         dialect.encodeTableName(tname("river"), sb);
         VirtualTable vt = new VirtualTable("invalid_attribute", sb.toString());
 
-        Handler handler = new Handler() {
-            @Override
-            public synchronized void publish(LogRecord record) {
-                if(!record.getMessage().contains("Failed to execute statement")) {
-                    fail("We should not have received any log statement");
-                }
-            }
+        Handler handler =
+                new Handler() {
+                    @Override
+                    public synchronized void publish(LogRecord record) {
+                        if (!record.getMessage().contains("Failed to execute statement")) {
+                            fail("We should not have received any log statement");
+                        }
+                    }
 
-            @Override
-            public void flush() {
-                // nothing to do
-            }
+                    @Override
+                    public void flush() {
+                        // nothing to do
+                    }
 
-            @Override
-            public void close() throws SecurityException {
-                // nothing to do
-            }
-        };
+                    @Override
+                    public void close() throws SecurityException {
+                        // nothing to do
+                    }
+                };
         handler.setLevel(Level.WARNING);
         Logger logger = Logging.getLogger("org.geotools.jdbc");
         Level oldLevel = logger.getLevel();
 
-            logger.setLevel(java.util.logging.Level.SEVERE);
-            logger.addHandler(handler);
-            dataStore.createVirtualTable(vt);
-            ContentFeatureSource fs = dataStore.getFeatureSource("invalid_attribute");
+        logger.setLevel(java.util.logging.Level.SEVERE);
+        logger.addHandler(handler);
+        dataStore.createVirtualTable(vt);
+        ContentFeatureSource fs = dataStore.getFeatureSource("invalid_attribute");
 
-            // now hack the sql view definition to inject an invalid column name,
-            // it's easier than having to alter the column name in the db to make the existing
-            // view invalid
-            sb.setLength(0);
-            dialect.encodeColumnName(null, aname("not_valid"), sb);
-            String notValid = sb.toString();
-            sb.setLength(0);
-            dialect.encodeColumnName(null, aname("flow"), sb);
-            String flow = sb.toString();
-            dataStore.virtualTables.get("invalid_attribute").sql = vt.sql.replace(flow, notValid);
+        // now hack the sql view definition to inject an invalid column name,
+        // it's easier than having to alter the column name in the db to make the existing
+        // view invalid
+        sb.setLength(0);
+        dialect.encodeColumnName(null, aname("not_valid"), sb);
+        String notValid = sb.toString();
+        sb.setLength(0);
+        dialect.encodeColumnName(null, aname("flow"), sb);
+        String flow = sb.toString();
+        dataStore.virtualTables.get("invalid_attribute").sql = vt.sql.replace(flow, notValid);
 
-        try(SimpleFeatureIterator fi = fs.getFeatures().features()) {
+        try (SimpleFeatureIterator fi = fs.getFeatures().features()) {
             fail("We should not have gotten here, we were supposed to get a sql exception");
         } catch (RuntimeException e) {
             // fine, this is expected

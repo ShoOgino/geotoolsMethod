@@ -1,27 +1,16 @@
     /**
      * Create Linear Ring for exterior/interior polygon ELEM_INFO triplets.
-     * 
-     * <p>
-     * Encoded as a single triplet in elemInfo:
-     * </p>
-     * 
+     *
+     * <p>Encoded as a single triplet in elemInfo:
+     *
      * <ul>
-     * <li>
-     * STARTING_OFFSET: position in ordinal ordinate array
-     * </li>
-     * <li>
-     * ETYPE: 1003 (exterior) or 2003 (interior) or 3 (unknown order)
-     * </li>
-     * <li>
-     * INTERPRETATION: 1 for strait edges, 3 for rectanlge
-     * </li>
+     *   <li>STARTING_OFFSET: position in ordinal ordinate array
+     *   <li>ETYPE: 1003 (exterior) or 2003 (interior) or 3 (unknown order)
+     *   <li>INTERPRETATION: 1 for strait edges, 3 for rectanlge
      * </ul>
-     * 
-     * <p>
-     * The dimensionality of GTYPE will be used to transalte the
-     * <code>STARTING_OFFSET</code> provided by elemInfo into an index into
-     * <code>coords</code>.
-     * </p>
+     *
+     * <p>The dimensionality of GTYPE will be used to transalte the <code>STARTING_OFFSET</code>
+     * provided by elemInfo into an index into <code>coords</code>.
      *
      * @param gf
      * @param GTYPE Encoding of <b>D</b>imension, <b>L</b>RS and <b>TT</b>ype
@@ -29,32 +18,49 @@
      * @param elemInfo
      * @param triplet
      * @param coords
-     *
      * @return LinearRing
-     *
      * @throws IllegalArgumentException If circle, or curve is requested
      */
-    private static LinearRing createLinearRing(CurvedGeometryFactory gf,
-        final int GTYPE, final int SRID, final int[] elemInfo,
-        final int triplet, CoordinateSequence coords) {
-            
+    private static LinearRing createLinearRing(
+            CurvedGeometryFactory gf,
+            final int GTYPE,
+            final int SRID,
+            final int[] elemInfo,
+            final int triplet,
+            CoordinateSequence coords) {
+
         final int STARTING_OFFSET = STARTING_OFFSET(elemInfo, triplet);
         final int eTYPE = ETYPE(elemInfo, triplet);
         final int INTERPRETATION = INTERPRETATION(elemInfo, triplet);
-        final int LENGTH = coords.size()*D(GTYPE);
-        
+        final int LENGTH = coords.size() * D(GTYPE);
+
         if (!(STARTING_OFFSET >= 1) || !(STARTING_OFFSET <= LENGTH))
-            throw new IllegalArgumentException("ELEM_INFO STARTING_OFFSET "+STARTING_OFFSET+" inconsistent with ORDINATES length "+coords.size());
-        
-        ensure("ETYPE {0} must be expected POLYGON or POLYGON_EXTERIOR (one of {1})", eTYPE,
-                new int[] { ETYPE.COMPOUND_POLYGON, ETYPE.COMPOUND_POLYGON_EXTERIOR,
-                        ETYPE.COMPOUND_POLYGON_INTERIOR, ETYPE.POLYGON, ETYPE.POLYGON_EXTERIOR,
-                        ETYPE.POLYGON_INTERIOR, ETYPE.FACE_EXTERIOR });
-        if ((eTYPE != ETYPE.COMPOUND_POLYGON_EXTERIOR) && (eTYPE != ETYPE.COMPOUND_POLYGON)
+            throw new IllegalArgumentException(
+                    "ELEM_INFO STARTING_OFFSET "
+                            + STARTING_OFFSET
+                            + " inconsistent with ORDINATES length "
+                            + coords.size());
+
+        ensure(
+                "ETYPE {0} must be expected POLYGON or POLYGON_EXTERIOR (one of {1})",
+                eTYPE,
+                new int[] {
+                    ETYPE.COMPOUND_POLYGON,
+                    ETYPE.COMPOUND_POLYGON_EXTERIOR,
+                    ETYPE.COMPOUND_POLYGON_INTERIOR,
+                    ETYPE.POLYGON,
+                    ETYPE.POLYGON_EXTERIOR,
+                    ETYPE.POLYGON_INTERIOR,
+                    ETYPE.FACE_EXTERIOR
+                });
+        if ((eTYPE != ETYPE.COMPOUND_POLYGON_EXTERIOR)
+                && (eTYPE != ETYPE.COMPOUND_POLYGON)
                 && (eTYPE != ETYPE.COMPOUND_POLYGON_INTERIOR)
                 && ((INTERPRETATION < 1) || (INTERPRETATION > 4))) {
-            LOGGER.warning("Could not create LinearRing with INTERPRETATION " + INTERPRETATION
-                    + " - we can only support 1, 2, 3 and 4");
+            LOGGER.warning(
+                    "Could not create LinearRing with INTERPRETATION "
+                            + INTERPRETATION
+                            + " - we can only support 1, 2, 3 and 4");
             return null;
         }
         LinearRing ring;
@@ -63,21 +69,33 @@
             int triplets = INTERPRETATION;
             List<LineString> components = new ArrayList<>(triplets);
             for (int i = 1; i <= triplets; i++) {
-                LineString component = createLine(gf, GTYPE, SRID, elemInfo, triplet + i, coords,
-                        i < triplets);
+                LineString component =
+                        createLine(gf, GTYPE, SRID, elemInfo, triplet + i, coords, i < triplets);
                 components.add(component);
             }
             ring = (LinearRing) gf.createCurvedGeometry(components);
         } else if (INTERPRETATION == 1) {
-            CoordinateSequence coordSeq = subList(
-                    gf.getCoordinateSequenceFactory(), coords, GTYPE, elemInfo,
-                    triplet, false);
-            coordSeq = CoordinateSequences.ensureValidRing(
-                    gf.getCoordinateSequenceFactory(), coordSeq);
+            CoordinateSequence coordSeq =
+                    subList(
+                            gf.getCoordinateSequenceFactory(),
+                            coords,
+                            GTYPE,
+                            elemInfo,
+                            triplet,
+                            false);
+            coordSeq =
+                    CoordinateSequences.ensureValidRing(
+                            gf.getCoordinateSequenceFactory(), coordSeq);
             ring = gf.createLinearRing(coordSeq);
         } else if (INTERPRETATION == 2) {
-            CoordinateSequence coordSeq = subList(gf.getCoordinateSequenceFactory(), coords, GTYPE,
-                    elemInfo, triplet, false);
+            CoordinateSequence coordSeq =
+                    subList(
+                            gf.getCoordinateSequenceFactory(),
+                            coords,
+                            GTYPE,
+                            elemInfo,
+                            triplet,
+                            false);
             // not calling ensureValidRing, according to Oracle docs tolerance is not considered:
             // For example, five coordinates are used to describe a polygon made up of two connected
             // circular arcs. Points 1, 2, and 3 define the first arc, and points 3, 4, and 5 define
@@ -88,23 +106,41 @@
         } else if (INTERPRETATION == 3) {
             // rectangle does not maintain measures
             //
-            CoordinateSequence ext = subList(gf.getCoordinateSequenceFactory(), coords, GTYPE,
-                    elemInfo, triplet, false);
+            CoordinateSequence ext =
+                    subList(
+                            gf.getCoordinateSequenceFactory(),
+                            coords,
+                            GTYPE,
+                            elemInfo,
+                            triplet,
+                            false);
             Coordinate min = ext.getCoordinate(0);
             Coordinate max = ext.getCoordinate(1);
-            ring = gf.createLinearRing(new Coordinate[] {
-                        min, new Coordinate(max.x, min.y), max,
-                        new Coordinate(min.x, max.y), min
-                    });
+            ring =
+                    gf.createLinearRing(
+                            new Coordinate[] {
+                                min,
+                                new Coordinate(max.x, min.y),
+                                max,
+                                new Coordinate(min.x, max.y),
+                                min
+                            });
         } else if (INTERPRETATION == 4) {
             // rectangle does not maintain measures
             //
-            CoordinateSequence ext = subList(gf.getCoordinateSequenceFactory(), coords, GTYPE,
-                    elemInfo, triplet, false);
+            CoordinateSequence ext =
+                    subList(
+                            gf.getCoordinateSequenceFactory(),
+                            coords,
+                            GTYPE,
+                            elemInfo,
+                            triplet,
+                            false);
             if (ext.size() != 3) {
                 throw new IllegalArgumentException(
                         "The coordinate sequence for the circle creation must contain 3 points, the one at hand contains "
-                                + ext.size() + " instead");
+                                + ext.size()
+                                + " instead");
             }
             double[] cp = new double[ext.size() * 2 + 2];
             for (int i = 0; i < ext.size(); i++) {
@@ -115,10 +151,12 @@
             CircularArc arc = new CircularArc(cp[0], cp[1], cp[2], cp[3], cp[4], cp[5]);
             ring = CurvedGeometries.toCircle(arc, gf, gf.getTolerance());
         } else {
-            throw new IllegalArgumentException("ELEM_INFO INTERPRETAION "
-                + elemInfo[2] + " not supported"
-                + "for JTS Polygon Linear Rings."
-                    + "ELEM_INFO INTERPRETATION 1,2 and 3 are supported");
+            throw new IllegalArgumentException(
+                    "ELEM_INFO INTERPRETAION "
+                            + elemInfo[2]
+                            + " not supported"
+                            + "for JTS Polygon Linear Rings."
+                            + "ELEM_INFO INTERPRETATION 1,2 and 3 are supported");
         }
 
         ring.setSRID(SRID);

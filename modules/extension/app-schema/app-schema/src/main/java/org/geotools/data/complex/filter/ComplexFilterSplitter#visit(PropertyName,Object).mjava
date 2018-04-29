@@ -6,9 +6,13 @@
             FilterFactory2 ff = new FilterFactoryImplNamespaceAware(mappings.getNamespaces());
             expression = ff.property(defGeomPath);
         }
-        
+
         // break into single steps
-        StepList exprSteps = XPath.steps(mappings.getTargetFeature(), expression.getPropertyName(), this.mappings.getNamespaces());
+        StepList exprSteps =
+                XPath.steps(
+                        mappings.getTargetFeature(),
+                        expression.getPropertyName(),
+                        this.mappings.getNamespaces());
 
         if (exprSteps.containsPredicate()) {
             postStack.push(expression);
@@ -19,49 +23,57 @@
 
         if (AppSchemaDataAccessConfigurator.shouldEncodeNestedFilters()) {
             // check nested mappings
-            FeatureChainedAttributeVisitor nestedAttrExtractor = new FeatureChainedAttributeVisitor(
-                    mappings);
+            FeatureChainedAttributeVisitor nestedAttrExtractor =
+                    new FeatureChainedAttributeVisitor(mappings);
             nestedAttrExtractor.visit(expression, null);
-            List<FeatureChainedAttributeDescriptor> attributes = nestedAttrExtractor
-                    .getFeatureChainedAttributes();
+            List<FeatureChainedAttributeDescriptor> attributes =
+                    nestedAttrExtractor.getFeatureChainedAttributes();
             // encoding of filters on multiple nested attributes is not (yet) supported
             if (attributes.size() == 1) {
                 FeatureChainedAttributeDescriptor nestedAttrDescr = attributes.get(0);
                 if (nestedAttrDescr.chainSize() > 1 && nestedAttrDescr.isJoiningEnabled()) {
                     nestedAttributes++;
 
-                    FeatureTypeMapping featureMapping = nestedAttrDescr.getFeatureTypeOwningAttribute();
+                    FeatureTypeMapping featureMapping =
+                            nestedAttrDescr.getFeatureTypeOwningAttribute();
 
                     // add source expressions for target attribute
-                    List<Expression> nestedMappings = featureMapping.findMappingsFor(
-                            nestedAttrDescr.getAttributePath(), false);
+                    List<Expression> nestedMappings =
+                            featureMapping.findMappingsFor(
+                                    nestedAttrDescr.getAttributePath(), false);
                     Iterator<Expression> it = matchingMappings.iterator();
                     while (it.hasNext()) {
                         if (it.next() == null) {
-                            // necessary to enable encoding of nested filters when joining simple content
+                            // necessary to enable encoding of nested filters when joining simple
+                            // content
                             it.remove();
                         }
                     }
                     matchingMappings.addAll(nestedMappings);
 
-                    // add source expressions for mappings used in join conditions, as they too must be encoded
+                    // add source expressions for mappings used in join conditions, as they too must
+                    // be encoded
                     for (int i = nestedAttrDescr.chainSize() - 2; i > 0; i--) {
                         FeatureChainLink mappingStep = nestedAttrDescr.getLink(i);
                         if (mappingStep.hasNestedFeature()) {
                             FeatureChainLink parentStep = nestedAttrDescr.getLink(i);
 
-                            NestedAttributeMapping nestedAttr = parentStep.getNestedFeatureAttribute();
+                            NestedAttributeMapping nestedAttr =
+                                    parentStep.getNestedFeatureAttribute();
                             FeatureTypeMapping nestedFeature = null;
                             try {
                                 nestedFeature = nestedAttr.getFeatureTypeMapping(null);
                             } catch (IOException e) {
-                                LOGGER.warning("Exception occurred processing nested filter, encoding"
-                                        + "will be disabled: " + e.getMessage());
+                                LOGGER.warning(
+                                        "Exception occurred processing nested filter, encoding"
+                                                + "will be disabled: "
+                                                + e.getMessage());
                                 postStack.push(expression);
                                 return null;
                             }
 
-                            Expression nestedExpr = nestedAttr.getMapping(nestedFeature).getSourceExpression();
+                            Expression nestedExpr =
+                                    nestedAttr.getMapping(nestedFeature).getSourceExpression();
                             matchingMappings.add(nestedExpr);
                         }
                     }
@@ -93,8 +105,7 @@
                 }
             }
         }
-        
+
         return super.visit(expression, notUsed);
-        
     }
 

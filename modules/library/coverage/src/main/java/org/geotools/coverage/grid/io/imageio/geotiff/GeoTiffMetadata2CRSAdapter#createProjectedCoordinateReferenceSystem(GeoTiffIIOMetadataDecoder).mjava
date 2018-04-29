@@ -1,104 +1,108 @@
-	/**
-	 * This code is responsible for creating a projected coordinate reference
-	 * system as specified in the GeoTiff specification. User defined values are
-	 * supported throughout the evolution of this specification with except of
-	 * the coordinate transformation which must be one of the supported types.
-	 * 
-	 * @param metadata
-	 *            to use for building a {@link ProjectedCRS}.
-	 * 
-	 * @return
-	 * @throws IOException
-	 * @throws FactoryException
-	 */
-	private ProjectedCRS createProjectedCoordinateReferenceSystem(
-			GeoTiffIIOMetadataDecoder metadata) throws Exception {
+    /**
+     * This code is responsible for creating a projected coordinate reference system as specified in
+     * the GeoTiff specification. User defined values are supported throughout the evolution of this
+     * specification with except of the coordinate transformation which must be one of the supported
+     * types.
+     *
+     * @param metadata to use for building a {@link ProjectedCRS}.
+     * @return
+     * @throws IOException
+     * @throws FactoryException
+     */
+    private ProjectedCRS createProjectedCoordinateReferenceSystem(
+            GeoTiffIIOMetadataDecoder metadata) throws Exception {
 
-		// //
-		//
-		// Get the projection reference system code in case we have one by
-		// lookig for the ProjectedCSTypeGeoKey key
-		//
-		// //
-		String projCode = metadata.getGeoKey(GeoTiffPCSCodes.ProjectedCSTypeGeoKey);
-		if (projCode == null){
-		    projCode = "unnamed".intern();
-		} else {
-		    projCode=projCode.trim();
-		}
+        // //
+        //
+        // Get the projection reference system code in case we have one by
+        // lookig for the ProjectedCSTypeGeoKey key
+        //
+        // //
+        String projCode = metadata.getGeoKey(GeoTiffPCSCodes.ProjectedCSTypeGeoKey);
+        if (projCode == null) {
+            projCode = "unnamed".intern();
+        } else {
+            projCode = projCode.trim();
+        }
 
-		// //
-		//
-		// getting the linear unit used by this coordinate reference system
-		// since we will use it anyway.
-		//
-		// //
-		Unit<?> linearUnit;
-		try {
-			linearUnit = createUnit(
-			        GeoTiffPCSCodes.ProjLinearUnitsGeoKey,
-			        GeoTiffPCSCodes.ProjLinearUnitSizeGeoKey,
-			        SI.METRE,
-			        SI.METRE,
-			        metadata);
-		} catch (GeoTiffException e) {
-			linearUnit = null;
-		}
-		// //
-		//
-		// if it's user defined, there's a lot of work to do, we have to parse
-		// many information.
-		//
-		// //
-		if (projCode.equalsIgnoreCase("unnamed")
-				|| projCode.equals(GeoTiffConstants.GTUserDefinedGeoKey_String)) {
-			return createUserDefinedPCS(metadata, linearUnit);
+        // //
+        //
+        // getting the linear unit used by this coordinate reference system
+        // since we will use it anyway.
+        //
+        // //
+        Unit<?> linearUnit;
+        try {
+            linearUnit =
+                    createUnit(
+                            GeoTiffPCSCodes.ProjLinearUnitsGeoKey,
+                            GeoTiffPCSCodes.ProjLinearUnitSizeGeoKey,
+                            SI.METRE,
+                            SI.METRE,
+                            metadata);
+        } catch (GeoTiffException e) {
+            linearUnit = null;
+        }
+        // //
+        //
+        // if it's user defined, there's a lot of work to do, we have to parse
+        // many information.
+        //
+        // //
+        if (projCode.equalsIgnoreCase("unnamed")
+                || projCode.equals(GeoTiffConstants.GTUserDefinedGeoKey_String)) {
+            return createUserDefinedPCS(metadata, linearUnit);
+        }
+        // //
+        //
+        // if it's not user defined, just use the EPSG factory to create the
+        // coordinate system
+        //
+        // //
+        try {
+            if (!projCode.toUpperCase().startsWith("EPSG:")) {
+                projCode = "EPSG:" + projCode;
+            }
+            // it is an EPSG crs let's create it.
+            final ProjectedCRS pcrs =
+                    (ProjectedCRS)
+                            allAuthoritiesFactory.createCoordinateReferenceSystem(
+                                    projCode.toString());
+            // //
+            //
+            // We have nothing to do with the unit of measure
+            //
+            // //
+            boolean isDefaultUnit =
+                    metadata.getGeoKey(GeoTiffPCSCodes.ProjLinearUnitsGeoKey) == null
+                            && linearUnit != null
+                            && linearUnit.equals(SI.METRE);
+            if (linearUnit == null
+                    || isDefaultUnit
+                    || linearUnit.equals(pcrs.getCoordinateSystem().getAxis(0).getUnit())) {
+                return pcrs;
+            }
 
-		}
-		// //
-		//
-		// if it's not user defined, just use the EPSG factory to create the
-		// coordinate system
-		//
-		// //
-		try {
-			if (!projCode.toUpperCase().startsWith("EPSG:") ) {
-				projCode="EPSG:"+projCode;
-			}
-			// it is an EPSG crs let's create it.
-			final ProjectedCRS pcrs = (ProjectedCRS)allAuthoritiesFactory.createCoordinateReferenceSystem(projCode.toString());
-			// //
-			//
-			// We have nothing to do with the unit of measure
-			//
-			// //
-                        boolean isDefaultUnit = metadata.getGeoKey(GeoTiffPCSCodes.ProjLinearUnitsGeoKey) == null
-                                && linearUnit != null && linearUnit.equals(SI.METRE);
-			if (linearUnit == null || isDefaultUnit
-			        || linearUnit.equals(pcrs.getCoordinateSystem().getAxis(0).getUnit())){
-			    return pcrs;
-			}
-			
-			// //
-			//
-			// Creating a new projected CRS replacing the CS unit
-			//
-			// //
-			final Conversion conversionFromBase=new DefiningConversion(
-			        pcrs.getConversionFromBase().getName().getCode(), 
-			        pcrs.getConversionFromBase().getParameterValues());
-			return new DefaultProjectedCRS(
-			        java.util.Collections.singletonMap("name",DefaultEllipsoidalCS.getName(pcrs,new CitationImpl("EPSG"))),
-			        conversionFromBase,
-			        pcrs.getBaseCRS(),
-			        pcrs.getConversionFromBase().getMathTransform(),
-			        createProjectedCS(linearUnit)
-			        
-			);
-		} catch (FactoryException fe) {
-			final IOException ex = new GeoTiffException(metadata, fe
-					.getLocalizedMessage(), fe);
-			throw ex;
-		}
-	}
+            // //
+            //
+            // Creating a new projected CRS replacing the CS unit
+            //
+            // //
+            final Conversion conversionFromBase =
+                    new DefiningConversion(
+                            pcrs.getConversionFromBase().getName().getCode(),
+                            pcrs.getConversionFromBase().getParameterValues());
+            return new DefaultProjectedCRS(
+                    java.util.Collections.singletonMap(
+                            "name", DefaultEllipsoidalCS.getName(pcrs, new CitationImpl("EPSG"))),
+                    conversionFromBase,
+                    pcrs.getBaseCRS(),
+                    pcrs.getConversionFromBase().getMathTransform(),
+                    createProjectedCS(linearUnit));
+
+        } catch (FactoryException fe) {
+            final IOException ex = new GeoTiffException(metadata, fe.getLocalizedMessage(), fe);
+            throw ex;
+        }
+    }
 

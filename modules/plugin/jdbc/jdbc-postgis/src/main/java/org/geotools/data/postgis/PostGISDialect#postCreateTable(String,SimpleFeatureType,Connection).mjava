@@ -1,44 +1,41 @@
-    /**
-     * Creates GEOMETRY_COLUMN registrations and spatial indexes for all
-     * geometry columns
-     */
+    /** Creates GEOMETRY_COLUMN registrations and spatial indexes for all geometry columns */
     @Override
-    public void postCreateTable(String schemaName,
-            SimpleFeatureType featureType, Connection cx) throws SQLException {
-        schemaName = schemaName != null ? schemaName : "public"; 
+    public void postCreateTable(String schemaName, SimpleFeatureType featureType, Connection cx)
+            throws SQLException {
+        schemaName = schemaName != null ? schemaName : "public";
         String tableName = featureType.getName().getLocalPart();
-        
+
         Statement st = null;
         try {
             st = cx.createStatement();
 
             // register all geometry columns in the database
-            for (AttributeDescriptor att : featureType
-                    .getAttributeDescriptors()) {
+            for (AttributeDescriptor att : featureType.getAttributeDescriptors()) {
                 if (att instanceof GeometryDescriptor) {
                     GeometryDescriptor gd = (GeometryDescriptor) att;
 
                     // lookup or reverse engineer the srid
                     int srid = -1;
                     if (gd.getUserData().get(JDBCDataStore.JDBC_NATIVE_SRID) != null) {
-                        srid = (Integer) gd.getUserData().get(
-                                JDBCDataStore.JDBC_NATIVE_SRID);
+                        srid = (Integer) gd.getUserData().get(JDBCDataStore.JDBC_NATIVE_SRID);
                     } else if (gd.getCoordinateReferenceSystem() != null) {
                         try {
-                            Integer result = CRS.lookupEpsgCode(gd
-                                    .getCoordinateReferenceSystem(), true);
-                            if (result != null)
-                                srid = result;
+                            Integer result =
+                                    CRS.lookupEpsgCode(gd.getCoordinateReferenceSystem(), true);
+                            if (result != null) srid = result;
                         } catch (Exception e) {
-                            LOGGER.log(Level.FINE, "Error looking up the "
-                                    + "epsg code for metadata "
-                                    + "insertion, assuming -1", e);
+                            LOGGER.log(
+                                    Level.FINE,
+                                    "Error looking up the "
+                                            + "epsg code for metadata "
+                                            + "insertion, assuming -1",
+                                    e);
                         }
                     }
 
                     // setup the dimension according to the geometry hints
                     int dimensions = 2;
-                    if(gd.getUserData().get(Hints.COORDINATE_DIMENSION) != null) {
+                    if (gd.getUserData().get(Hints.COORDINATE_DIMENSION) != null) {
                         dimensions = (Integer) gd.getUserData().get(Hints.COORDINATE_DIMENSION);
                     }
 
@@ -52,102 +49,171 @@
                     if (getVersion(cx).compareTo(V_2_0_0) >= 0) {
                         // postgis 2 and up we don't muck with geometry_columns, we just alter the
                         // type directly to set the geometry type and srid
-                        //setup the geometry type
-                        if(dimensions == 3) {
+                        // setup the geometry type
+                        if (dimensions == 3) {
                             geomType = geomType + "Z";
-                        } else if(dimensions == 4) {
+                        } else if (dimensions == 4) {
                             geomType = geomType + "ZM";
-                        } else if(dimensions > 4){
-                            throw new IllegalArgumentException("PostGIS only supports geometries with 2, 3 and 4 dimensions, current value: " + dimensions);
+                        } else if (dimensions > 4) {
+                            throw new IllegalArgumentException(
+                                    "PostGIS only supports geometries with 2, 3 and 4 dimensions, current value: "
+                                            + dimensions);
                         }
-                        
-                        sql = 
-                            "ALTER TABLE \"" + schemaName + "\".\"" + tableName + "\" " + 
-                             "ALTER COLUMN \"" + gd.getLocalName() + "\" " + 
-                             "TYPE geometry (" + geomType + ", " + srid + ");";
-                        
-                        LOGGER.fine( sql );
-                        st.execute( sql );
-                    }
-                    else {
+
+                        sql =
+                                "ALTER TABLE \""
+                                        + schemaName
+                                        + "\".\""
+                                        + tableName
+                                        + "\" "
+                                        + "ALTER COLUMN \""
+                                        + gd.getLocalName()
+                                        + "\" "
+                                        + "TYPE geometry ("
+                                        + geomType
+                                        + ", "
+                                        + srid
+                                        + ");";
+
+                        LOGGER.fine(sql);
+                        st.execute(sql);
+                    } else {
                         // register the geometry type, first remove and eventual
                         // leftover, then write out the real one
-                        sql = 
-                        "DELETE FROM GEOMETRY_COLUMNS"
-                                + " WHERE f_table_catalog=''" //
-                                + " AND f_table_schema = '" + schemaName + "'" //
-                                + " AND f_table_name = '" + tableName + "'" // 
-                                + " AND f_geometry_column = '" + gd.getLocalName() + "'";
-                        
-                        LOGGER.fine( sql );
-                        st.execute( sql );
-                        
-                        sql = "INSERT INTO GEOMETRY_COLUMNS VALUES (''," //
-                                + "'" + schemaName + "'," //
-                                + "'" + tableName + "'," //
-                                + "'" + gd.getLocalName() + "'," //
-                                + dimensions + "," //
-                                + srid + "," //
-                                + "'" + geomType + "')";
-                        LOGGER.fine( sql );
-                        st.execute( sql );
-                        
+                        sql =
+                                "DELETE FROM GEOMETRY_COLUMNS"
+                                        + " WHERE f_table_catalog=''" //
+                                        + " AND f_table_schema = '"
+                                        + schemaName
+                                        + "'" //
+                                        + " AND f_table_name = '"
+                                        + tableName
+                                        + "'" //
+                                        + " AND f_geometry_column = '"
+                                        + gd.getLocalName()
+                                        + "'";
+
+                        LOGGER.fine(sql);
+                        st.execute(sql);
+
+                        sql =
+                                "INSERT INTO GEOMETRY_COLUMNS VALUES (''," //
+                                        + "'"
+                                        + schemaName
+                                        + "'," //
+                                        + "'"
+                                        + tableName
+                                        + "'," //
+                                        + "'"
+                                        + gd.getLocalName()
+                                        + "'," //
+                                        + dimensions
+                                        + "," //
+                                        + srid
+                                        + "," //
+                                        + "'"
+                                        + geomType
+                                        + "')";
+                        LOGGER.fine(sql);
+                        st.execute(sql);
+
                         // add srid checks
                         if (srid > -1) {
-                            sql = "ALTER TABLE " //
-                                    + "\"" + schemaName + "\"" // 
-                                    + "." //
-                                    + "\"" + tableName + "\"" //
-                                    + " ADD CONSTRAINT \"enforce_srid_" // 
-                                    + gd.getLocalName() + "\""// 
-                                    + " CHECK (ST_SRID(" //
-                                    + "\"" + gd.getLocalName() + "\"" //
-                                    + ") = " + srid + ")";
-                            LOGGER.fine( sql );
+                            sql =
+                                    "ALTER TABLE " //
+                                            + "\""
+                                            + schemaName
+                                            + "\"" //
+                                            + "." //
+                                            + "\""
+                                            + tableName
+                                            + "\"" //
+                                            + " ADD CONSTRAINT \"enforce_srid_" //
+                                            + gd.getLocalName()
+                                            + "\"" //
+                                            + " CHECK (ST_SRID(" //
+                                            + "\""
+                                            + gd.getLocalName()
+                                            + "\"" //
+                                            + ") = "
+                                            + srid
+                                            + ")";
+                            LOGGER.fine(sql);
                             st.execute(sql);
                         }
 
                         // add dimension checks
-                        sql = "ALTER TABLE " //
-                                + "\"" + schemaName + "\"" // 
-                                + "." //
-                                + "\"" + tableName + "\"" //
-                                + " ADD CONSTRAINT \"enforce_dims_" // 
-                                + gd.getLocalName() + "\""// 
-                                + " CHECK (st_ndims(\"" + gd.getLocalName() + "\")" //
-                                + " = " + dimensions + ")";
+                        sql =
+                                "ALTER TABLE " //
+                                        + "\""
+                                        + schemaName
+                                        + "\"" //
+                                        + "." //
+                                        + "\""
+                                        + tableName
+                                        + "\"" //
+                                        + " ADD CONSTRAINT \"enforce_dims_" //
+                                        + gd.getLocalName()
+                                        + "\"" //
+                                        + " CHECK (st_ndims(\""
+                                        + gd.getLocalName()
+                                        + "\")" //
+                                        + " = "
+                                        + dimensions
+                                        + ")";
                         LOGGER.fine(sql);
                         st.execute(sql);
 
                         // add geometry type checks
                         if (!geomType.equals("GEOMETRY")) {
-                            sql = "ALTER TABLE " //
-                                    + "\"" + schemaName + "\"" // 
-                                    + "." //
-                                    + "\"" + tableName + "\"" //
-                                    + " ADD CONSTRAINT \"enforce_geotype_" //
-                                    + gd.getLocalName() + "\""//
-                                    + " CHECK (geometrytype(" //
-                                    + "\"" + gd.getLocalName() + "\"" //
-                                    + ") = '" + geomType + "'::text " + "OR \""
-                                    + gd.getLocalName() + "\"" //
-                                    + " IS NULL)";
+                            sql =
+                                    "ALTER TABLE " //
+                                            + "\""
+                                            + schemaName
+                                            + "\"" //
+                                            + "." //
+                                            + "\""
+                                            + tableName
+                                            + "\"" //
+                                            + " ADD CONSTRAINT \"enforce_geotype_" //
+                                            + gd.getLocalName()
+                                            + "\"" //
+                                            + " CHECK (geometrytype(" //
+                                            + "\""
+                                            + gd.getLocalName()
+                                            + "\"" //
+                                            + ") = '"
+                                            + geomType
+                                            + "'::text "
+                                            + "OR \""
+                                            + gd.getLocalName()
+                                            + "\"" //
+                                            + " IS NULL)";
                             LOGGER.fine(sql);
                             st.execute(sql);
                         }
                     }
-                    
+
                     // add the spatial index
-                    sql = 
-                    "CREATE INDEX \"spatial_" + tableName // 
-                            + "_" + gd.getLocalName().toLowerCase() + "\""// 
-                            + " ON " //
-                            + "\"" + schemaName + "\"" // 
-                            + "." //
-                            + "\"" + tableName + "\"" //
-                            + " USING GIST (" //
-                            + "\"" + gd.getLocalName() + "\"" //
-                            + ")";
+                    sql =
+                            "CREATE INDEX \"spatial_"
+                                    + tableName //
+                                    + "_"
+                                    + gd.getLocalName().toLowerCase()
+                                    + "\"" //
+                                    + " ON " //
+                                    + "\""
+                                    + schemaName
+                                    + "\"" //
+                                    + "." //
+                                    + "\""
+                                    + tableName
+                                    + "\"" //
+                                    + " USING GIST (" //
+                                    + "\""
+                                    + gd.getLocalName()
+                                    + "\"" //
+                                    + ")";
                     LOGGER.fine(sql);
                     st.execute(sql);
                 }
@@ -155,7 +221,7 @@
             if (!cx.getAutoCommit()) {
                 cx.commit();
             }
-         } finally {
+        } finally {
             dataStore.closeSafe(st);
         }
     }

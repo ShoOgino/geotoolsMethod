@@ -1,74 +1,78 @@
-	/**
-	 * Note that the color map can be applied only to a single band hence, in
-	 * principle, applying the {@link ColorMapTransform} element to a coverage with more
-	 * than one band is an error.
-	 */
-	protected GridCoverage2D execute() {
-	    ///////////////////////////////////////////////////////////////////
-	    //
-	    //get the source for this node and ensure it is correct
-	    //
-	    ///////////////////////////////////////////////////////////////////
-	    final CoverageProcessingNode sourceNode = getSource(0);
-	    GridCoverageRendererUtilities.ensureSourceNotNull(sourceNode, this.getName().toString());
-	    final GridCoverage2D sourceCoverage = (GridCoverage2D) sourceNode.getOutput();
-	    GridCoverageRendererUtilities.ensureSourceNotNull(sourceCoverage, this.getName().toString());
-	    
-	    ///////////////////////////////////////////////////////////////////
-            //
-	    //now apply the colormap if one exists
-	    //
-            ///////////////////////////////////////////////////////////////////
-	    if (colorMapTransform != null) {
-	        //get input image
-	        final RenderedImage sourceImage = sourceCoverage.getRenderedImage();
-	        GridCoverageRendererUtilities.ensureSourceNotNull(sourceImage, this.getName().toString());
-	        //prepare the colorMapTransform operation
-	        ImageWorker w = new ImageWorker(sourceImage);
+    /**
+     * Note that the color map can be applied only to a single band hence, in principle, applying
+     * the {@link ColorMapTransform} element to a coverage with more than one band is an error.
+     */
+    protected GridCoverage2D execute() {
+        ///////////////////////////////////////////////////////////////////
+        //
+        // get the source for this node and ensure it is correct
+        //
+        ///////////////////////////////////////////////////////////////////
+        final CoverageProcessingNode sourceNode = getSource(0);
+        GridCoverageRendererUtilities.ensureSourceNotNull(sourceNode, this.getName().toString());
+        final GridCoverage2D sourceCoverage = (GridCoverage2D) sourceNode.getOutput();
+        GridCoverageRendererUtilities.ensureSourceNotNull(
+                sourceCoverage, this.getName().toString());
+
+        ///////////////////////////////////////////////////////////////////
+        //
+        // now apply the colormap if one exists
+        //
+        ///////////////////////////////////////////////////////////////////
+        if (colorMapTransform != null) {
+            // get input image
+            final RenderedImage sourceImage = sourceCoverage.getRenderedImage();
+            GridCoverageRendererUtilities.ensureSourceNotNull(
+                    sourceImage, this.getName().toString());
+            // prepare the colorMapTransform operation
+            ImageWorker w = new ImageWorker(sourceImage);
             if (w.getNumBands() == 2) {
                 w.retainBands(1);
             }
-	        w.setROI(CoverageUtilities.getROIProperty(sourceCoverage));
-	        NoDataContainer noDataProperty = CoverageUtilities.getNoDataProperty(sourceCoverage);
-                w.setNoData(noDataProperty != null ? noDataProperty.getAsRange() : null);
-	        w.classify(colorMapTransform, null);
-	        final RenderedOp classified = w.getRenderedOperation();//JAI.create(RasterClassifierOpImage.OPERATION_NAME,pbj);
+            w.setROI(CoverageUtilities.getROIProperty(sourceCoverage));
+            NoDataContainer noDataProperty = CoverageUtilities.getNoDataProperty(sourceCoverage);
+            w.setNoData(noDataProperty != null ? noDataProperty.getAsRange() : null);
+            w.classify(colorMapTransform, null);
+            final RenderedOp classified =
+                    w
+                            .getRenderedOperation(); // JAI.create(RasterClassifierOpImage.OPERATION_NAME,pbj);
 
-	        ////
-	        //
-	        // prepare the output coverage by specifying its bands
-	        //
-	        ////
-	        final int outputChannels=classified.getColorModel().getNumComponents();
-                final int numBands=classified.getSampleModel().getNumBands();
-                assert outputChannels==1||outputChannels==3||outputChannels==4;
-                final GridSampleDimension [] sd= new GridSampleDimension[numBands];
-                for(int i=0;i<numBands;i++)
-		        sd[i]= new GridSampleDimension(TypeMap.getColorInterpretation(classified.getColorModel(), i).name());
-	        
-	        ////
-                //
-                // Create the the output coverage by preserving its gridgeometry and its bands
-                //
-                ////
-		Map properties = sourceCoverage.getProperties();
-		if(properties == null){
-		    properties = new HashMap<>();
-		}
-		CoverageUtilities.setROIProperty(properties, w.getROI());
-                CoverageUtilities.setNoDataProperty(properties, w.getNoData());
+            ////
+            //
+            // prepare the output coverage by specifying its bands
+            //
+            ////
+            final int outputChannels = classified.getColorModel().getNumComponents();
+            final int numBands = classified.getSampleModel().getNumBands();
+            assert outputChannels == 1 || outputChannels == 3 || outputChannels == 4;
+            final GridSampleDimension[] sd = new GridSampleDimension[numBands];
+            for (int i = 0; i < numBands; i++)
+                sd[i] =
+                        new GridSampleDimension(
+                                TypeMap.getColorInterpretation(classified.getColorModel(), i)
+                                        .name());
 
-                return getCoverageFactory().create(
-        		        "color_mapped_"+sourceCoverage.getName().toString(), 
-        		        classified,
-        		        sourceCoverage.getGridGeometry(),
-        		        sd,
-        		        new GridCoverage[]{sourceCoverage},
-        		        properties
-        		        );
-	    }
-	    return sourceCoverage;	
+            ////
+            //
+            // Create the the output coverage by preserving its gridgeometry and its bands
+            //
+            ////
+            Map properties = sourceCoverage.getProperties();
+            if (properties == null) {
+                properties = new HashMap<>();
+            }
+            CoverageUtilities.setROIProperty(properties, w.getROI());
+            CoverageUtilities.setNoDataProperty(properties, w.getNoData());
 
-
-	}
+            return getCoverageFactory()
+                    .create(
+                            "color_mapped_" + sourceCoverage.getName().toString(),
+                            classified,
+                            sourceCoverage.getGridGeometry(),
+                            sd,
+                            new GridCoverage[] {sourceCoverage},
+                            properties);
+        }
+        return sourceCoverage;
+    }
 

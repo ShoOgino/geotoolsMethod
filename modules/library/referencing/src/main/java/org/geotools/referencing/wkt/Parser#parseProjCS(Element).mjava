@@ -1,38 +1,46 @@
     /**
-     * Parses a "PROJCS" element.
-     * This element has the following pattern:
+     * Parses a "PROJCS" element. This element has the following pattern:
      *
-     * <blockquote><code>
+     * <blockquote>
+     *
+     * <code>
      * PROJCS["<name>", <geographic cs>, <projection>, {<parameter>,}*,
      *        <linear unit> {,<twin axes>}{,<authority>}]
-     * </code></blockquote>
+     * </code>
      *
-     * @param  parent The parent element.
+     * </blockquote>
+     *
+     * @param parent The parent element.
      * @return The "PROJCS" element as a {@link ProjectedCRS} object.
      * @throws ParseException if the "GEOGCS" element can't be parsed.
      */
     private ProjectedCRS parseProjCS(final Element parent) throws ParseException {
-        Element                element = parent.pullElement("PROJCS");
-        String                    name = element.pullString("name");
-        Map<String,?>       properties = parseAuthority(element, name);
-        GeographicCRS           geoCRS = parseGeoGCS(element);
-        Ellipsoid            ellipsoid = geoCRS.getDatum().getEllipsoid();
-        Unit<Length>        linearUnit = parseUnit(element, SI.METRE);
-        Unit<Angle>        angularUnit = geoCRS.getCoordinateSystem().getAxis(0).getUnit().asType(Angle.class);
-        ParameterValueGroup projection = parseProjection(element, ellipsoid, linearUnit, angularUnit);
-        CoordinateSystemAxis     axis0 = parseAxis(element, linearUnit, false);
-        CoordinateSystemAxis     axis1;
+        Element element = parent.pullElement("PROJCS");
+        String name = element.pullString("name");
+        Map<String, ?> properties = parseAuthority(element, name);
+        GeographicCRS geoCRS = parseGeoGCS(element);
+        Ellipsoid ellipsoid = geoCRS.getDatum().getEllipsoid();
+        Unit<Length> linearUnit = parseUnit(element, SI.METRE);
+        Unit<Angle> angularUnit =
+                geoCRS.getCoordinateSystem().getAxis(0).getUnit().asType(Angle.class);
+        ParameterValueGroup projection =
+                parseProjection(element, ellipsoid, linearUnit, angularUnit);
+        CoordinateSystemAxis axis0 = parseAxis(element, linearUnit, false);
+        CoordinateSystemAxis axis1;
         try {
             if (axis0 != null) {
                 axis1 = parseAxis(element, linearUnit, true);
             } else {
                 // Those default values are part of WKT specification.
-                axis0 = createAxis(null, "X", AxisDirection.EAST,  linearUnit);
+                axis0 = createAxis(null, "X", AxisDirection.EAST, linearUnit);
                 axis1 = createAxis(null, "Y", AxisDirection.NORTH, linearUnit);
             }
             element.close();
             final Conversion conversion = new DefiningConversion(name, projection);
-            return crsFactory.createProjectedCRS(properties, geoCRS, conversion,
+            return crsFactory.createProjectedCRS(
+                    properties,
+                    geoCRS,
+                    conversion,
                     csFactory.createCartesianCS(properties, axis0, axis1));
         } catch (FactoryException exception) {
             throw element.parseFailed(exception, null);

@@ -1,15 +1,21 @@
-    //Modified version of paintLineLabels
-    //We compute the Bounding box for each letters instead of the whole label
-    //then we check each letters for collisions
-    private boolean paintLineLabelsWithLetterConflict(LabelPainter painter, AffineTransform originalTransform,
-            Rectangle displayArea, LabelIndex paintedBounds) throws Exception {
+    // Modified version of paintLineLabels
+    // We compute the Bounding box for each letters instead of the whole label
+    // then we check each letters for collisions
+    private boolean paintLineLabelsWithLetterConflict(
+            LabelPainter painter,
+            AffineTransform originalTransform,
+            Rectangle displayArea,
+            LabelIndex paintedBounds)
+            throws Exception {
         final LabelCacheItem labelItem = painter.getLabel();
-        List<LineString> lines = getLineSetRepresentativeLocation(
-                labelItem.getGeoms(), displayArea, labelItem.removeGroupOverlaps(),
-                labelItem.isPartialsEnabled());
+        List<LineString> lines =
+                getLineSetRepresentativeLocation(
+                        labelItem.getGeoms(),
+                        displayArea,
+                        labelItem.removeGroupOverlaps(),
+                        labelItem.isPartialsEnabled());
 
-        if (lines == null || lines.size() == 0)
-            return false;
+        if (lines == null || lines.size() == 0) return false;
 
         // if we just want to label the longest line, remove the others
         if (!labelItem.labelAllGroup() && lines.size() > 1) {
@@ -18,12 +24,13 @@
 
         // pre compute some labelling params
         final Rectangle2D textBounds = painter.getFullLabelBounds();
-        // ... use at least a 8 pixel step (curved processing is quite expensive), no matter what the label length is
+        // ... use at least a 8 pixel step (curved processing is quite expensive), no matter what
+        // the label length is
         final double step = painter.getLineHeight() > 8 ? painter.getLineHeight() : 8;
         int space = labelItem.getSpaceAround();
         // repetition distance, if any
         int labelDistance = labelItem.getRepeat();
-        if(labelDistance > 0 && labelItem.isFollowLineEnabled()) {
+        if (labelDistance > 0 && labelItem.isFollowLineEnabled()) {
             labelDistance += textBounds.getWidth();
         }
         // min distance, if any
@@ -59,7 +66,7 @@
             // and exit right away, since the lines are sorted from longest to
             // shortest
             if ((!allowOverruns || labelItem.isFollowLineEnabled())
-                    && line.getLength() < textBounds.getWidth()){
+                    && line.getLength() < textBounds.getWidth()) {
                 return labelCount > 0;
             }
 
@@ -70,7 +77,10 @@
             // account that we might have to displace the labels
             LineStringCursor cursor = new LineStringCursor(line);
             AffineTransform tx = new AffineTransform();
-            boolean mightSkipLastLabel = line.isClosed() && (lineStringLength - ((labelPositions.length - 1) * labelDistance)) < labelDistance;
+            boolean mightSkipLastLabel =
+                    line.isClosed()
+                            && (lineStringLength - ((labelPositions.length - 1) * labelDistance))
+                                    < labelDistance;
             for (int i = 0; i < labelPositions.length; i++) {
                 cursor.moveTo(labelPositions[i]);
                 Coordinate centroid = cursor.getCurrentPosition();
@@ -102,10 +112,10 @@
                     }
 
                     GlyphVectorProcessor glyphVectorProcessor = null;
-                    //List<AffineTransform> transforms = null;
-                    //For curved labels, we want the glyph's bounding box
-                    //to follow the line
-                    if (curved){
+                    // List<AffineTransform> transforms = null;
+                    // For curved labels, we want the glyph's bounding box
+                    // to follow the line
+                    if (curved) {
                         LineStringCursor oldCursor = new LineStringCursor(cursor);
                         glyphVectorProcessor = new GlyphVectorProcessor.Curved(painter, oldCursor);
                     } else {
@@ -114,24 +124,31 @@
 
                     // We check each letters for collision
                     boolean collision = false;
-                    collision = glyphVectorProcessor.process(new GlyphProcessor.ConflictDetector(painter,
-                            displayArea, paintedBounds, groupLabels), true);
+                    collision =
+                            glyphVectorProcessor.process(
+                                    new GlyphProcessor.ConflictDetector(
+                                            painter, displayArea, paintedBounds, groupLabels),
+                                    true);
 
-                    //If none of the glyphs intersects a bounding box,
-                    //we paint the label
+                    // If none of the glyphs intersects a bounding box,
+                    // we paint the label
                     if (!collision) {
                         if (labelItem.isFollowLineEnabled()) {
                             // for curved labels we never paint in case of
                             // overrun
-                            if ((startOrdinate > 0 && endOrdinate <= cursor.getLineStringLength())) {
+                            if ((startOrdinate > 0
+                                    && endOrdinate <= cursor.getLineStringLength())) {
                                 if (maxAngleChange <= maxAngleDelta) {
-                                    // a max distance related to both the font size, but also having a visual limit
+                                    // a max distance related to both the font size, but also having
+                                    // a visual limit
                                     // of a couple of millimeters assuming 90dpi
                                     double maxDistance = Math.min(painter.getLineHeight() / 2, 7);
-                                    // if straight segment connecting the start and end ordinate is really close, paint as a straight label
+                                    // if straight segment connecting the start and end ordinate is
+                                    // really close, paint as a straight label
                                     if (maxAngleChange == 0
-                                            || cursor.getMaxDistanceFromStraightLine(startOrdinate,
-                                            endOrdinate) < maxDistance) {
+                                            || cursor.getMaxDistanceFromStraightLine(
+                                                            startOrdinate, endOrdinate)
+                                                    < maxDistance) {
                                         painter.paintStraightLabel(tx);
                                     } else {
                                         painter.paintCurvedLabel(cursor);
@@ -142,8 +159,9 @@
                         } else {
                             // for straight labels, check overrun only if
                             // required
-                            if ((allowOverruns || (startOrdinate > 0 && endOrdinate <= cursor
-                                    .getLineStringLength()))) {
+                            if ((allowOverruns
+                                    || (startOrdinate > 0
+                                            && endOrdinate <= cursor.getLineStringLength()))) {
                                 painter.paintStraightLabel(tx);
                                 painted = true;
                             }
@@ -157,21 +175,23 @@
                     if (painted) {
                         labelCount++;
 
-                        if(labelItem.isConflictResolutionEnabled()) {
-                            if(DEBUG_CACHE_BOUNDS) {
+                        if (labelItem.isConflictResolutionEnabled()) {
+                            if (DEBUG_CACHE_BOUNDS) {
                                 painter.graphics.setStroke(new BasicStroke());
                                 painter.graphics.setColor(Color.RED);
-                                glyphVectorProcessor.process(new GlyphProcessor.BoundsPainter(painter));
+                                glyphVectorProcessor.process(
+                                        new GlyphProcessor.BoundsPainter(painter));
                             }
 
                             // Add each glyph's bounding box to the index
-                            glyphVectorProcessor.process(new GlyphProcessor.IndexAdder(painter, paintedBounds));
+                            glyphVectorProcessor.process(
+                                    new GlyphProcessor.IndexAdder(painter, paintedBounds));
                         }
-                        
+
                         // do not paint the last label on a ring if we have painted its symmetric
                         // one and the residual space at the ends does not guarantee labelDistance
                         // between last and second to last
-                        if((i == labelPositions.length - 2) && painted &&  mightSkipLastLabel) {
+                        if ((i == labelPositions.length - 2) && painted && mightSkipLastLabel) {
                             i++;
                         }
                     } else {

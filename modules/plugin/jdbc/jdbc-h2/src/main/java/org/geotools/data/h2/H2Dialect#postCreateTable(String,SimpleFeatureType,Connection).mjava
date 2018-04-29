@@ -1,32 +1,30 @@
     @Override
-    public void postCreateTable(String schemaName,
-            SimpleFeatureType featureType, Connection cx) throws SQLException {
-        
+    public void postCreateTable(String schemaName, SimpleFeatureType featureType, Connection cx)
+            throws SQLException {
+
         Statement st = cx.createStatement();
         String tableName = featureType.getTypeName();
         schemaName = schemaName != null ? schemaName : "PUBLIC";
-        
+
         try {
-            //post process the feature type and set up constraints based on geometry type
-            for ( PropertyDescriptor ad : featureType.getDescriptors() ) {
-                if ( ad instanceof GeometryDescriptor ) {
-                    GeometryDescriptor gd = (GeometryDescriptor)ad;
+            // post process the feature type and set up constraints based on geometry type
+            for (PropertyDescriptor ad : featureType.getDescriptors()) {
+                if (ad instanceof GeometryDescriptor) {
+                    GeometryDescriptor gd = (GeometryDescriptor) ad;
                     Class binding = ad.getType().getBinding();
                     String propertyName = ad.getName().getLocalPart();
-                  
-                    //create a spatial index
+
+                    // create a spatial index
                     int epsg = -1;
                     try {
                         CoordinateReferenceSystem crs = gd.getCoordinateReferenceSystem();
                         if (crs != null) {
-                            Integer code = CRS.lookupEpsgCode(crs, true); 
+                            Integer code = CRS.lookupEpsgCode(crs, true);
                             epsg = code != null ? code : -1;
-                        }
-                        else {
+                        } else {
                             LOGGER.warning("Column " + gd.getLocalName() + " has no crs");
                         }
-                    } 
-                    catch (FactoryException e) {
+                    } catch (FactoryException e) {
                         LOGGER.log(Level.FINER, "Unable to look epsg code", e);
                     }
 
@@ -37,35 +35,35 @@
                     sql.append(", '").append(tableName).append("'");
                     sql.append(", '").append(gd.getLocalName()).append("'");
                     sql.append(", ").append(epsg);
-                    sql.append(", '").append(Geometries.getForBinding(binding).getName()).append("'");
-                    sql.append(", ").append(2); //TODO: dimension
+                    sql.append(", '")
+                            .append(Geometries.getForBinding(binding).getName())
+                            .append("'");
+                    sql.append(", ").append(2); // TODO: dimension
                     sql.append(")");
-                    
+
                     LOGGER.fine(sql.toString());
                     st.execute(sql.toString());
-                    
+
                     if (epsg != -1) {
                         sql = new StringBuffer();
                         sql.append("CALL CreateSpatialIndex(");
                         if (schemaName == null) {
                             sql.append("NULL");
-                        }
-                        else {
+                        } else {
                             sql.append("'").append(schemaName).append("'");
                         }
-                       
+
                         sql.append(",'").append(tableName).append("'");
                         sql.append(",'").append(propertyName).append("'");
                         sql.append(",'").append(epsg).append("')");
-                        
+
                         LOGGER.fine(sql.toString());
                         st.execute(sql.toString());
                     }
                 }
             }
-        }
-        finally {
-            dataStore.closeSafe( st );
+        } finally {
+            dataStore.closeSafe(st);
         }
     }
 

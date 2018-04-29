@@ -1,17 +1,19 @@
     /**
-     * Prepares the parameters to store in the {@link ParameterBlockJAI} object and resample the input {@link GridCoverage2D}.
-     * 
+     * Prepares the parameters to store in the {@link ParameterBlockJAI} object and resample the
+     * input {@link GridCoverage2D}.
+     *
      * @param parameters
      * @param sources
      * @param hints
      * @return
      */
-    private Params prepareParameters(final ParameterValueGroup parameters,
-            GridCoverage2D[] sources, Hints hints) {
+    private Params prepareParameters(
+            final ParameterValueGroup parameters, GridCoverage2D[] sources, Hints hints) {
         final ImagingParameters copy = (ImagingParameters) descriptor.createValue();
         final ParameterBlockJAI block = (ParameterBlockJAI) copy.parameters;
 
-        // Object indicating the policy to use for resampling all the GridCoverages to the same GridGeometry
+        // Object indicating the policy to use for resampling all the GridCoverages to the same
+        // GridGeometry
         GridGeometryPolicy policy = null;
 
         // Check if the External GridGeometry is present
@@ -42,7 +44,8 @@
         }
 
         // Resample to the defined GridGeometry
-        ResampledRasters rr = policy.resampleGridGeometry(sources, alphaCovs, gg, parameters, hints);
+        ResampledRasters rr =
+                policy.resampleGridGeometry(sources, alphaCovs, gg, parameters, hints);
         // Get the resampled RenderedImages
         RenderedImage[] rasters = rr.getRasters();
         // Get returnedROIs
@@ -56,17 +59,17 @@
 
         int numSources = rasters.length;
         // Setting the source rasters for the mosaic
-        if(Boolean.TRUE.equals(hints.get(JAI.KEY_REPLACE_INDEX_COLOR_MODEL))) {
-            // the mosaic operation will blow up in this case, internally the Raster accessors 
+        if (Boolean.TRUE.equals(hints.get(JAI.KEY_REPLACE_INDEX_COLOR_MODEL))) {
+            // the mosaic operation will blow up in this case, internally the Raster accessors
             // are not getting configured to do expansion as needed. Work around it.
             for (int i = 0; i < numSources; i++) {
                 RenderedImage source = rasters[i];
-                if(source.getColorModel() instanceof IndexColorModel) {
+                if (source.getColorModel() instanceof IndexColorModel) {
                     source = new ImageWorker(source).forceComponentColorModel().getRenderedImage();
                 }
                 block.setSource(source, i);
             }
-            
+
             hints = new Hints(hints);
             hints.add(new RenderingHints(JAI.KEY_REPLACE_INDEX_COLOR_MODEL, Boolean.FALSE));
             hints.add(new RenderingHints(JAI.KEY_TRANSFORM_ON_COLORMAP, Boolean.TRUE));
@@ -91,9 +94,9 @@
         ROI[] rois = new ROI[numSources];
         // Cycle on each coverage in order to add the associated ROI
         for (int i = 0; i < numSources; i++) {
-            if(newRois != null && newRois[i] != null){
+            if (newRois != null && newRois[i] != null) {
                 rois[i] = newRois[i];
-            }else{
+            } else {
                 rois[i] = new ROIShape(PlanarImage.wrapRenderedImage(rasters[i]).getBounds());
             }
         }
@@ -104,27 +107,27 @@
         }
 
         // Setting of the Threshold to use
-        double threshold = CoverageUtilities.getMosaicThreshold(rasters[PRIMARY_SOURCE_INDEX]
-                .getSampleModel().getDataType());
+        double threshold =
+                CoverageUtilities.getMosaicThreshold(
+                        rasters[PRIMARY_SOURCE_INDEX].getSampleModel().getDataType());
         // Setting of the Threshold object to use for the mosaic
-        block.set(new double[][] { { threshold } }, THRESHOLD_PARAM);
+        block.set(new double[][] {{threshold}}, THRESHOLD_PARAM);
 
         // Setting of the Mosaic type as Overlay
         block.set(MosaicDescriptor.MOSAIC_TYPE_OVERLAY, MOSAIC_TYPE_PARAM);
 
         // Check if it is a JAI-Ext operation
-        if(JAIExt.isJAIExtOperation("Mosaic")){
-            // Get the nodata values 
+        if (JAIExt.isJAIExtOperation("Mosaic")) {
+            // Get the nodata values
             double[] nodatas = rr.getBackgrounds();
-            if(nodatas != null && rr.hasNoData()){
+            if (nodatas != null && rr.hasNoData()) {
                 Range[] ranges = new Range[numSources];
-                for(int i = 0; i < numSources; i++){
+                for (int i = 0; i < numSources; i++) {
                     double value = nodatas[i];
                     ranges[i] = RangeFactory.create(value, value);
                 }
                 block.set(ranges, NODATA_RANGE_PARAM);
             }
-
         }
 
         // Creation of the finel Parameters

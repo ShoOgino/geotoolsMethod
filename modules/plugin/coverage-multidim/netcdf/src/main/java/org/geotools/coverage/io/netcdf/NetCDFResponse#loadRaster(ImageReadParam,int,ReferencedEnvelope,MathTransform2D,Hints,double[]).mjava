@@ -1,45 +1,60 @@
     /**
-     * Load a specified a raster as a portion of the granule describe by this {@link DefaultGranuleDescriptor}.
-     * 
+     * Load a specified a raster as a portion of the granule describe by this {@link
+     * DefaultGranuleDescriptor}.
+     *
      * @param imageReadParameters the {@link ImageReadParam} to use for reading.
      * @param index the index to use for the {@link ImageReader}.
      * @param cropBBox the bbox to use for cropping.
      * @param mosaicWorldToGrid the cropping grid to world transform.
      * @param request the incoming request to satisfy.
      * @param hints {@link Hints} to be used for creating this raster.
-     * @param noData 
-     * @return a specified a raster as a portion of the granule describe by this {@link DefaultGranuleDescriptor}.
+     * @param noData
+     * @return a specified a raster as a portion of the granule describe by this {@link
+     *     DefaultGranuleDescriptor}.
      * @throws IOException in case an error occurs.
      */
-    private RenderedImage loadRaster(final ImageReadParam imageReadParameters, final int index,
-            final ReferencedEnvelope cropBBox, final MathTransform2D mosaicWorldToGrid,
-            final Hints hints, double[] noData) throws IOException {
+    private RenderedImage loadRaster(
+            final ImageReadParam imageReadParameters,
+            final int index,
+            final ReferencedEnvelope cropBBox,
+            final MathTransform2D mosaicWorldToGrid,
+            final Hints hints,
+            double[] noData)
+            throws IOException {
 
         if (LOGGER.isLoggable(java.util.logging.Level.FINER)) {
             final String name = Thread.currentThread().getName();
-            LOGGER.finer("Thread:" + name + " Loading raster data for granuleDescriptor "
-                    + this.toString());
+            LOGGER.finer(
+                    "Thread:"
+                            + name
+                            + " Loading raster data for granuleDescriptor "
+                            + this.toString());
         }
         ImageReadParam readParameters = null;
         int imageIndex;
-        final ReferencedEnvelope bbox = request.spatialRequestHelper.getCoverageProperties().getBbox();
+        final ReferencedEnvelope bbox =
+                request.spatialRequestHelper.getCoverageProperties().getBbox();
 
         // intersection of this tile bound with the current crop bbox
-        final ReferencedEnvelope intersection = new ReferencedEnvelope(bbox.intersection(cropBBox),
-                cropBBox.getCoordinateReferenceSystem());
+        final ReferencedEnvelope intersection =
+                new ReferencedEnvelope(
+                        bbox.intersection(cropBBox), cropBBox.getCoordinateReferenceSystem());
         if (intersection.isEmpty()) {
             if (LOGGER.isLoggable(java.util.logging.Level.FINE)) {
-                LOGGER.fine(new StringBuilder("Got empty intersection for granule ")
-                        .append(this.toString()).append(" with request ")
-                        .append(request.toString())
-                        .append(" Resulting in no granule loaded: Empty result").toString());
+                LOGGER.fine(
+                        new StringBuilder("Got empty intersection for granule ")
+                                .append(this.toString())
+                                .append(" with request ")
+                                .append(request.toString())
+                                .append(" Resulting in no granule loaded: Empty result")
+                                .toString());
             }
             return null;
         }
         try {
 
             // What about thread safety?
-            
+
             imageIndex = index;
             readParameters = imageReadParameters;
 
@@ -58,27 +73,42 @@
             // take into account the fact that we might also decimate therefore
             // we cannot just use the crop grid to world but we need to correct
             // it.
-            Rectangle sourceArea = CRS.transform(cropWorldToGrid, intersection)
-                    .toRectangle2D().getBounds();
-            // Selection of the source original area for cropping the computed source area 
+            Rectangle sourceArea =
+                    CRS.transform(cropWorldToGrid, intersection).toRectangle2D().getBounds();
+            // Selection of the source original area for cropping the computed source area
             // (may have negative values for the approximation)
-            final Rectangle initialArea = request.source.getSpatialDomain()
-                    .getRasterElements(true, null).iterator().next().toRectangle();
+            final Rectangle initialArea =
+                    request.source
+                            .getSpatialDomain()
+                            .getRasterElements(true, null)
+                            .iterator()
+                            .next()
+                            .toRectangle();
             sourceArea = sourceArea.intersection(initialArea);
 
             if (sourceArea.isEmpty()) {
                 if (LOGGER.isLoggable(java.util.logging.Level.FINE)) {
-                    LOGGER.fine("Got empty area for granuleDescriptor " + this.toString()
-                            + " with request " + request.toString()
-                            + " Resulting in no granule loaded: Empty result");
-
+                    LOGGER.fine(
+                            "Got empty area for granuleDescriptor "
+                                    + this.toString()
+                                    + " with request "
+                                    + request.toString()
+                                    + " Resulting in no granule loaded: Empty result");
                 }
                 return null;
 
             } else if (LOGGER.isLoggable(java.util.logging.Level.FINER)) {
-                LOGGER.finer("Loading level " + imageIndex + " with source region: " + sourceArea
-                        + " subsampling: " + readParameters.getSourceXSubsampling() + ","
-                        + readParameters.getSourceYSubsampling() + " for granule:" + datasetURL);
+                LOGGER.finer(
+                        "Loading level "
+                                + imageIndex
+                                + " with source region: "
+                                + sourceArea
+                                + " subsampling: "
+                                + readParameters.getSourceXSubsampling()
+                                + ","
+                                + readParameters.getSourceYSubsampling()
+                                + " for granule:"
+                                + datasetURL);
             }
 
             // set the source region
@@ -86,16 +116,28 @@
             final RenderedImage raster;
             try {
                 // read
-                raster = request.readType.read(readParameters, imageIndex, datasetURL,
-                        request.spatialRequestHelper.getCoverageProperties().getRasterArea(),
-                        request.source.reader, hints, false);
+                raster =
+                        request.readType.read(
+                                readParameters,
+                                imageIndex,
+                                datasetURL,
+                                request.spatialRequestHelper
+                                        .getCoverageProperties()
+                                        .getRasterArea(),
+                                request.source.reader,
+                                hints,
+                                false);
 
             } catch (Throwable e) {
                 if (LOGGER.isLoggable(java.util.logging.Level.FINE)) {
-                    LOGGER.log(java.util.logging.Level.FINE,
-                            "Unable to load raster for granuleDescriptor " + this.toString()
-                                    + " with request " + request.toString()
-                                    + " Resulting in no granule loaded: Empty result", e);
+                    LOGGER.log(
+                            java.util.logging.Level.FINE,
+                            "Unable to load raster for granuleDescriptor "
+                                    + this.toString()
+                                    + " with request "
+                                    + request.toString()
+                                    + " Resulting in no granule loaded: Empty result",
+                            e);
                 }
                 return null;
             }
@@ -116,15 +158,16 @@
             // place it in the mosaic using the coords created above;
             double decimationScaleX = ((1.0 * sourceArea.width) / raster.getWidth());
             double decimationScaleY = ((1.0 * sourceArea.height) / raster.getHeight());
-            final AffineTransform decimationScaleTranform = XAffineTransform.getScaleInstance(
-                    decimationScaleX, decimationScaleY);
+            final AffineTransform decimationScaleTranform =
+                    XAffineTransform.getScaleInstance(decimationScaleX, decimationScaleY);
 
             // keep into account translation to work into the selected level raster space
-            final AffineTransform afterDecimationTranslateTranform = XAffineTransform
-                    .getTranslateInstance(sourceArea.x, sourceArea.y);
+            final AffineTransform afterDecimationTranslateTranform =
+                    XAffineTransform.getTranslateInstance(sourceArea.x, sourceArea.y);
 
             // // now we need to go back to the base level raster space
-            // final AffineTransform backToBaseLevelScaleTransform =selectedlevel.baseToLevelTransform;
+            // final AffineTransform backToBaseLevelScaleTransform
+            // =selectedlevel.baseToLevelTransform;
             //
             // now create the overall transform
             final AffineTransform finalRaster2Model = new AffineTransform(baseGridToWorld);
@@ -139,20 +182,31 @@
             finalRaster2Model.preConcatenate((AffineTransform) mosaicWorldToGrid);
 
             final Interpolation interpolation = request.getInterpolation();
-            // paranoiac check to avoid that JAI freaks out when computing its internal layouT on images that are too small
-            Rectangle2D finalLayout = ImageUtilities.layoutHelper(raster,
-                    (float) finalRaster2Model.getScaleX(), (float) finalRaster2Model.getScaleY(),
-                    (float) finalRaster2Model.getTranslateX(),
-                    (float) finalRaster2Model.getTranslateY(), interpolation);
+            // paranoiac check to avoid that JAI freaks out when computing its internal layouT on
+            // images that are too small
+            Rectangle2D finalLayout =
+                    ImageUtilities.layoutHelper(
+                            raster,
+                            (float) finalRaster2Model.getScaleX(),
+                            (float) finalRaster2Model.getScaleY(),
+                            (float) finalRaster2Model.getTranslateX(),
+                            (float) finalRaster2Model.getTranslateY(),
+                            interpolation);
             if (finalLayout.isEmpty()) {
                 if (LOGGER.isLoggable(java.util.logging.Level.INFO))
-                    LOGGER.info("Unable to create a granuleDescriptor " + this.toString()
-                            + " due to jai scale bug creating a null source area");
+                    LOGGER.info(
+                            "Unable to create a granuleDescriptor "
+                                    + this.toString()
+                                    + " due to jai scale bug creating a null source area");
                 return null;
             }
             // apply the affine transform conserving indexed color model
-            final RenderingHints localHints = new RenderingHints(JAI.KEY_REPLACE_INDEX_COLOR_MODEL,
-                    interpolation instanceof InterpolationNearest ? Boolean.FALSE : Boolean.TRUE);
+            final RenderingHints localHints =
+                    new RenderingHints(
+                            JAI.KEY_REPLACE_INDEX_COLOR_MODEL,
+                            interpolation instanceof InterpolationNearest
+                                    ? Boolean.FALSE
+                                    : Boolean.TRUE);
             //
             // In case we are asked to use certain tile dimensions we tile
             // also at this stage in case the read type is Direct since
@@ -168,7 +222,8 @@
             // if (hints != null && hints.containsKey(JAI.KEY_IMAGE_LAYOUT)) {
             // final Object layout = hints.get(JAI.KEY_IMAGE_LAYOUT);
             // if (layout != null && layout instanceof ImageLayout) {
-            // localHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, ((ImageLayout) layout).clone()));
+            // localHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, ((ImageLayout)
+            // layout).clone()));
             // }
             // }
             // }
@@ -180,15 +235,15 @@
             if (hints != null && hints.containsKey(JAI.KEY_TILE_SCHEDULER)) {
                 final Object scheduler = hints.get(JAI.KEY_TILE_SCHEDULER);
                 if (scheduler != null && scheduler instanceof TileScheduler)
-                    localHints.add(new RenderingHints(JAI.KEY_TILE_SCHEDULER,
-                            (TileScheduler) scheduler));
+                    localHints.add(
+                            new RenderingHints(JAI.KEY_TILE_SCHEDULER, (TileScheduler) scheduler));
             }
             boolean addBorderExtender = true;
             if (hints != null && hints.containsKey(JAI.KEY_BORDER_EXTENDER)) {
                 final Object extender = hints.get(JAI.KEY_BORDER_EXTENDER);
                 if (extender != null && extender instanceof BorderExtender) {
-                    localHints.add(new RenderingHints(JAI.KEY_BORDER_EXTENDER,
-                            (BorderExtender) extender));
+                    localHints.add(
+                            new RenderingHints(JAI.KEY_BORDER_EXTENDER, (BorderExtender) extender));
                     addBorderExtender = false;
                 }
             }
@@ -204,45 +259,56 @@
 
         } catch (IllegalStateException e) {
             if (LOGGER.isLoggable(java.util.logging.Level.WARNING)) {
-                LOGGER.log(java.util.logging.Level.WARNING,
+                LOGGER.log(
+                        java.util.logging.Level.WARNING,
                         new StringBuilder("Unable to load raster for granuleDescriptor ")
-                                .append(this.toString()).append(" with request ")
+                                .append(this.toString())
+                                .append(" with request ")
                                 .append(request.toString())
-                                .append(" Resulting in no granule loaded: Empty result").toString(),
+                                .append(" Resulting in no granule loaded: Empty result")
+                                .toString(),
                         e);
             }
             return null;
         } catch (org.opengis.referencing.operation.NoninvertibleTransformException e) {
             if (LOGGER.isLoggable(java.util.logging.Level.WARNING)) {
-                LOGGER.log(java.util.logging.Level.WARNING,
+                LOGGER.log(
+                        java.util.logging.Level.WARNING,
                         new StringBuilder("Unable to load raster for granuleDescriptor ")
-                                .append(this.toString()).append(" with request ")
+                                .append(this.toString())
+                                .append(" with request ")
                                 .append(request.toString())
-                                .append(" Resulting in no granule loaded: Empty result").toString(),
+                                .append(" Resulting in no granule loaded: Empty result")
+                                .toString(),
                         e);
             }
             return null;
         } catch (TransformException e) {
             if (LOGGER.isLoggable(java.util.logging.Level.WARNING)) {
-                LOGGER.log(java.util.logging.Level.WARNING,
+                LOGGER.log(
+                        java.util.logging.Level.WARNING,
                         new StringBuilder("Unable to load raster for granuleDescriptor ")
-                                .append(this.toString()).append(" with request ")
+                                .append(this.toString())
+                                .append(" with request ")
                                 .append(request.toString())
-                                .append(" Resulting in no granule loaded: Empty result").toString(),
+                                .append(" Resulting in no granule loaded: Empty result")
+                                .toString(),
                         e);
             }
             return null;
 
         } finally {
-//            try {
-//                if (request.getReadType() != ReadType.JAI_IMAGEREAD && inStream != null) {
-//                    inStream.close();
-//                }
-//            } finally {
-//                if (request.getReadType() != ReadType.JAI_IMAGEREAD && reader != null) {
-//                    reader.dispose();
-//                }
-//            }
+            //            try {
+            //                if (request.getReadType() != ReadType.JAI_IMAGEREAD && inStream !=
+            // null) {
+            //                    inStream.close();
+            //                }
+            //            } finally {
+            //                if (request.getReadType() != ReadType.JAI_IMAGEREAD && reader != null)
+            // {
+            //                    reader.dispose();
+            //                }
+            //            }
         }
     }
 

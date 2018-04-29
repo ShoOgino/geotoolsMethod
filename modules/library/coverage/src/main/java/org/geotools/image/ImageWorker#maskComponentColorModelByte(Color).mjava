@@ -1,37 +1,35 @@
     /**
-     * For an image backed by an {@link ComponentColorModel}, replaces all occurences of the given color (usually opaque) by a fully transparent
-     * color.
-     * 
+     * For an image backed by an {@link ComponentColorModel}, replaces all occurences of the given
+     * color (usually opaque) by a fully transparent color.
+     *
      * @param transparentColor The color to make transparent.
      * @return this image worker.
-     * 
-     * 
-     *         Current implementation invokes a lot of JAI operations:
-     * 
-     *         "BandSelect" --> "Lookup" --> "BandCombine" --> "Extrema" --> "Binarize" --> "Format" --> "BandSelect" (one more time) --> "Multiply"
-     *         --> "BandMerge".
-     * 
-     *         I would expect more speed and memory efficiency by writing our own JAI operation (PointOp subclass) doing that in one step. It would
-     *         also be more deterministic (our "binarize" method depends on statistics on pixel values) and avoid unwanted side-effect like turning
-     *         black color (RGB = 0,0,0) to transparent one. It would also be easier to maintain I believe.
+     *     <p>Current implementation invokes a lot of JAI operations:
+     *     <p>"BandSelect" --> "Lookup" --> "BandCombine" --> "Extrema" --> "Binarize" --> "Format"
+     *     --> "BandSelect" (one more time) --> "Multiply" --> "BandMerge".
+     *     <p>I would expect more speed and memory efficiency by writing our own JAI operation
+     *     (PointOp subclass) doing that in one step. It would also be more deterministic (our
+     *     "binarize" method depends on statistics on pixel values) and avoid unwanted side-effect
+     *     like turning black color (RGB = 0,0,0) to transparent one. It would also be easier to
+     *     maintain I believe.
      */
     private final ImageWorker maskComponentColorModelByte(final Color transparentColor) {
         assert image.getColorModel() instanceof ComponentColorModel;
         assert image.getSampleModel().getDataType() == DataBuffer.TYPE_BYTE;
         /*
          * Prepares the look up table for the source image. Remember what follows which is taken from the JAI programming guide.
-         * 
+         *
          * "The lookup operation performs a general table lookup on a rendered or renderable image. The destination image is obtained by passing the
          * source image through the lookup table. The source image may be single- or multi-banded of data types byte, ushort, short, or int. The
          * lookup table may be single- or multi-banded of any JAI- supported data types.
-         * 
+         *
          * The destination image must have the same data type as the lookup table, and its number of bands is determined based on the number of bands
          * of the source and the table. If the source is single-banded, the destination has the same number of bands as the lookup table; otherwise,
          * the destination has the same number of bands as the source.
-         * 
+         *
          * If either the source or the table is single-banded and the other one is multibanded, the single band is applied to every band of the
          * multi-banded object. If both are multi-banded, their corresponding bands are matched up."
-         * 
+         *
          * A final annotation, if we have an input image with transparency we just DROP it since we want to re-add it using the supplied color as the
          * mask for transparency.
          */
@@ -39,7 +37,7 @@
         /*
          * In case of a gray color model we can do everything in one step by expanding the color model to get one more band directly which is the
          * alpha band itself.
-         * 
+         *
          * For a multiband image the lookup is applied to each band separately. This means that we cannot control directly the image as a whole but we
          * need first to interact with the single bands then to combine the result into a single band that will provide us with the alpha band.
          */
@@ -69,25 +67,25 @@
             data[transparentColor.getRed()] = 0;
         } else {
             switch (numColorBands) {
-            case 3:
-                Arrays.fill(tableData[2], (byte) 255);
-                tableData[2][transparentColor.getBlue()] = 0; // fall through
+                case 3:
+                    Arrays.fill(tableData[2], (byte) 255);
+                    tableData[2][transparentColor.getBlue()] = 0; // fall through
 
-            case 2:
-                Arrays.fill(tableData[1], (byte) 255);
-                tableData[1][transparentColor.getGreen()] = 0; // fall through
+                case 2:
+                    Arrays.fill(tableData[1], (byte) 255);
+                    tableData[1][transparentColor.getGreen()] = 0; // fall through
 
-            case 1:
-                Arrays.fill(tableData[0], (byte) 255);
-                tableData[0][transparentColor.getRed()] = 0; // fall through
+                case 1:
+                    Arrays.fill(tableData[0], (byte) 255);
+                    tableData[0][transparentColor.getRed()] = 0; // fall through
 
-            case 0:
-                break;
+                case 0:
+                    break;
             }
         }
         // Create a LookupTableJAI object to be used with the "lookup" operator.
-        LookupTable table = LookupTableFactory.create(tableData, image.getSampleModel()
-                .getDataType());
+        LookupTable table =
+                LookupTableFactory.create(tableData, image.getSampleModel().getDataType());
         // Do the lookup operation.
         // we should not transform on color map here
         hints.put(JAI.KEY_TRANSFORM_ON_COLORMAP, Boolean.FALSE);
@@ -97,7 +95,7 @@
         pb.set(table, 0);
         pb.set(roi, 2);
         pb.set(nodata, 3);
-        if(isNoDataNeeded()){
+        if (isNoDataNeeded()) {
             if (background != null && background.length > 0) {
                 pb.set(background[0], 1);
             }
@@ -108,10 +106,10 @@
 
         /*
          * Now that we have performed the lookup operation we have to remember what we stated here above.
-         * 
+         *
          * If the input image is multiband we will get a multiband image as the output of the lookup operation hence we need to perform some form of
          * band combination to get the alpha band out of the lookup image.
-         * 
+         *
          * The way we wanted things to be done is by exploiting the clamping behavior that kicks in when we do sums and the like on pixels and we
          * overcome the maximum value allowed by the DataBufer DataType.
          */
@@ -136,7 +134,7 @@
         pb = new ParameterBlock();
         pb.setSource(image, 0);
         pb.setSource(luImage, 1);
-        pb.set(new Range[] { nodata }, 0);
+        pb.set(new Range[] {nodata}, 0);
         if (isNoDataNeeded()) {
             if (background != null && background.length > 0) {
                 double dest = background[0];

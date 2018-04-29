@@ -17,31 +17,42 @@
 
         final GetFeatureResponse gfr = (GetFeatureResponse) response;
         final GetFeatureParser allFeatures = gfr.getFeatures();
-        
-        //register custom scheme
+
+        // register custom scheme
         if (allFeatures instanceof PullParserFeatureReader) {
-            ((PullParserFeatureReader) allFeatures).setContextCustomizer(new ContextCustomizer() {
-                @Override
-                public void customizeContext(MutablePicoContainer context) {
-                    QName key = new QName("http://www.openplans.org/spearfish", "schemaLocationResolver");
-                    context.registerComponentInstance(key, 
-                            new XSDSchemaLocationResolver() {
+            ((PullParserFeatureReader) allFeatures)
+                    .setContextCustomizer(
+                            new ContextCustomizer() {
                                 @Override
-                                public String resolveSchemaLocation(XSDSchema xsdSchema,
-                                        String namespaceURI, String schemaLocationURI) {
-                                    if (schemaLocationURI.startsWith("DescribeFeatureType")) {
-                                        try {
-                                            return new URL(baseDirectory, schemaLocationURI).toString();
-                                        } catch (MalformedURLException e) {
-                                            return null;
-                                        }
-                                    }
-                                    return schemaLocationURI;
-                                }                
-                    });
-                }
-                
-            });
+                                public void customizeContext(MutablePicoContainer context) {
+                                    QName key =
+                                            new QName(
+                                                    "http://www.openplans.org/spearfish",
+                                                    "schemaLocationResolver");
+                                    context.registerComponentInstance(
+                                            key,
+                                            new XSDSchemaLocationResolver() {
+                                                @Override
+                                                public String resolveSchemaLocation(
+                                                        XSDSchema xsdSchema,
+                                                        String namespaceURI,
+                                                        String schemaLocationURI) {
+                                                    if (schemaLocationURI.startsWith(
+                                                            "DescribeFeatureType")) {
+                                                        try {
+                                                            return new URL(
+                                                                            baseDirectory,
+                                                                            schemaLocationURI)
+                                                                    .toString();
+                                                        } catch (MalformedURLException e) {
+                                                            return null;
+                                                        }
+                                                    }
+                                                    return schemaLocationURI;
+                                                }
+                                            });
+                                }
+                            });
         }
 
         final List<SimpleFeature> originalFeatures = new ArrayList<SimpleFeature>();
@@ -54,12 +65,12 @@
 
         WFSStrategy strategy = getStrategy();
 
-        final Filter serverFiler = ((AbstractWFSStrategy) strategy).splitFilters(typeName,
-                request.getFilter())[0];
+        final Filter serverFiler =
+                ((AbstractWFSStrategy) strategy).splitFilters(typeName, request.getFilter())[0];
 
         final Diff diff = diff(typeName);
 
-        for (Iterator<SimpleFeature> it = originalFeatures.iterator(); it.hasNext();) {
+        for (Iterator<SimpleFeature> it = originalFeatures.iterator(); it.hasNext(); ) {
             if (!serverFiler.evaluate(it.next())) {
                 it.remove();
             }
@@ -71,65 +82,70 @@
         }
 
         final DiffFeatureReader<SimpleFeatureType, SimpleFeature> serverFilteredReader;
-        serverFilteredReader = new DiffFeatureReader<SimpleFeatureType, SimpleFeature>(
-                allFeaturesReader, diff, serverFiler);
-        final GetFeatureParser filteredParser = new GetFeatureParser() {
+        serverFilteredReader =
+                new DiffFeatureReader<SimpleFeatureType, SimpleFeature>(
+                        allFeaturesReader, diff, serverFiler);
+        final GetFeatureParser filteredParser =
+                new GetFeatureParser() {
 
-            @Override
-            public void setGeometryFactory(GeometryFactory geometryFactory) {
-                // TODO Auto-generated method stub
-            }
-
-            @Override
-            public SimpleFeature parse() throws IOException {
-                if (!serverFilteredReader.hasNext()) {
-                    return null;
-                }
-                return serverFilteredReader.next();
-            }
-
-            @Override
-            public int getNumberOfFeatures() {
-                if (-1 != allFeatures.getNumberOfFeatures()) {
-                    // only if the original response included number of features (i.e. the server
-                    // does advertise it)
-
-                    FeatureReader<SimpleFeatureType, SimpleFeature> all = null;
-                    try {
-                        if (originalFeatures.size() > 0) {
-                            all = DataUtilities.reader(originalFeatures);
-                        }
-                        final DiffFeatureReader<SimpleFeatureType, SimpleFeature> serverFiltered;
-                        serverFiltered = new DiffFeatureReader<SimpleFeatureType, SimpleFeature>(
-                                all, diff);
-                        try {
-                            int count = 0;
-                            while (serverFiltered.hasNext()) {
-                                serverFiltered.next();
-                                count++;
-                            }
-                            return count;
-                        } finally {
-                            serverFiltered.close();
-                        }
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        throw new RuntimeException(e);
+                    @Override
+                    public void setGeometryFactory(GeometryFactory geometryFactory) {
+                        // TODO Auto-generated method stub
                     }
-                }
-                return -1;
-            }
 
-            @Override
-            public FeatureType getFeatureType() {
-                return allFeatures.getFeatureType();
-            }
+                    @Override
+                    public SimpleFeature parse() throws IOException {
+                        if (!serverFilteredReader.hasNext()) {
+                            return null;
+                        }
+                        return serverFilteredReader.next();
+                    }
 
-            @Override
-            public void close() throws IOException {
-                serverFilteredReader.close();
-            }
-        };
+                    @Override
+                    public int getNumberOfFeatures() {
+                        if (-1 != allFeatures.getNumberOfFeatures()) {
+                            // only if the original response included number of features (i.e. the
+                            // server
+                            // does advertise it)
+
+                            FeatureReader<SimpleFeatureType, SimpleFeature> all = null;
+                            try {
+                                if (originalFeatures.size() > 0) {
+                                    all = DataUtilities.reader(originalFeatures);
+                                }
+                                final DiffFeatureReader<SimpleFeatureType, SimpleFeature>
+                                        serverFiltered;
+                                serverFiltered =
+                                        new DiffFeatureReader<SimpleFeatureType, SimpleFeature>(
+                                                all, diff);
+                                try {
+                                    int count = 0;
+                                    while (serverFiltered.hasNext()) {
+                                        serverFiltered.next();
+                                        count++;
+                                    }
+                                    return count;
+                                } finally {
+                                    serverFiltered.close();
+                                }
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                                throw new RuntimeException(e);
+                            }
+                        }
+                        return -1;
+                    }
+
+                    @Override
+                    public FeatureType getFeatureType() {
+                        return allFeatures.getFeatureType();
+                    }
+
+                    @Override
+                    public void close() throws IOException {
+                        serverFilteredReader.close();
+                    }
+                };
 
         try {
             return new GetFeatureResponse(request, httpResponse, filteredParser);

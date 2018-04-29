@@ -2,52 +2,56 @@
      * Test two transactions one removing feature, and one adding a feature.
      *
      * @throws IllegalAttributeException
-     * @throws Exception
-     *             DOCUMENT ME!
+     * @throws Exception DOCUMENT ME!
      */
     public void testTransactionIsolation() throws Exception {
-        try(Transaction t1 = new DefaultTransaction();
-            Transaction t2 = new DefaultTransaction()) {
-            
+        try (Transaction t1 = new DefaultTransaction();
+                Transaction t2 = new DefaultTransaction()) {
+
             SimpleFeature feature;
             SimpleFeature[] ORIGINAL = td.roadFeatures;
             SimpleFeature[] REMOVE = new SimpleFeature[ORIGINAL.length - 1];
             SimpleFeature[] ADD = new SimpleFeature[ORIGINAL.length + 1];
             SimpleFeature[] FINAL = new SimpleFeature[ORIGINAL.length];
-            
-            try(FeatureWriter<SimpleFeatureType, SimpleFeature> writer1 = dataStore.getFeatureWriter(tname("road"), td.rd1Filter, t1);
-                    FeatureWriter<SimpleFeatureType, SimpleFeature> writer2 = dataStore.getFeatureWriterAppend(tname("road"), t2)) {
+
+            try (FeatureWriter<SimpleFeatureType, SimpleFeature> writer1 =
+                            dataStore.getFeatureWriter(tname("road"), td.rd1Filter, t1);
+                    FeatureWriter<SimpleFeatureType, SimpleFeature> writer2 =
+                            dataStore.getFeatureWriterAppend(tname("road"), t2)) {
                 int i;
                 int index;
                 index = 0;
-        
+
                 for (i = 0; i < ORIGINAL.length; i++) {
                     feature = ORIGINAL[i];
-        
+
                     if (!feature.getID().equals(td.roadFeatures[0].getID())) {
                         REMOVE[index++] = feature;
                     }
                 }
-        
+
                 for (i = 0; i < ORIGINAL.length; i++) {
                     ADD[i] = ORIGINAL[i];
                 }
-        
+
                 ADD[i] = td.newRoad; // will need to update with Fid from database
-        
+
                 for (i = 0; i < REMOVE.length; i++) {
                     FINAL[i] = REMOVE[i];
                 }
-        
+
                 FINAL[i] = td.newRoad; // will need to update with Fid from database
-        
+
                 // start off with ORIGINAL
-                try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE),
-                        Transaction.AUTO_COMMIT)) {
-                    assertTrue("Sanity check failed: before modification reader didn't match original content",
-                        covers(reader, ORIGINAL));
+                try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                        dataStore.getFeatureReader(
+                                new Query(tname("road"), Filter.INCLUDE),
+                                Transaction.AUTO_COMMIT)) {
+                    assertTrue(
+                            "Sanity check failed: before modification reader didn't match original content",
+                            covers(reader, ORIGINAL));
                 }
-        
+
                 // writer 1 removes road.rd1 on t1
                 // -------------------------------
                 // - tests transaction independence from DataStore
@@ -56,32 +60,40 @@
                     assertEquals(td.roadFeatures[0].getID(), feature.getID());
                     writer1.remove();
                 }
-        
+
                 // still have ORIGINAL and t1 has REMOVE
-                try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE),
-                        Transaction.AUTO_COMMIT)) {
-                    assertTrue("Feature deletion managed to leak out of transaction?", covers(reader, ORIGINAL));
+                try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                        dataStore.getFeatureReader(
+                                new Query(tname("road"), Filter.INCLUDE),
+                                Transaction.AUTO_COMMIT)) {
+                    assertTrue(
+                            "Feature deletion managed to leak out of transaction?",
+                            covers(reader, ORIGINAL));
                 }
-        
-                try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t1)) {
+
+                try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                        dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t1)) {
                     assertTrue(covers(reader, REMOVE));
                 }
-        
+
                 // close writer1
                 // --------------
                 // ensure that modification is left up to transaction commmit
                 writer1.close();
-        
+
                 // We still have ORIGIONAL and t1 has REMOVE
-                try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE),
-                        Transaction.AUTO_COMMIT)) {
+                try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                        dataStore.getFeatureReader(
+                                new Query(tname("road"), Filter.INCLUDE),
+                                Transaction.AUTO_COMMIT)) {
                     assertTrue(covers(reader, ORIGINAL));
                 }
-        
-                try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t1)) {
-                        assertTrue(covers(reader, REMOVE));
+
+                try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                        dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t1)) {
+                    assertTrue(covers(reader, REMOVE));
                 }
-        
+
                 // writer 2 adds road.rd4 on t2
                 // ----------------------------
                 // - tests transaction independence from each other
@@ -89,70 +101,81 @@
                 feature.setAttributes(td.newRoad.getAttributes());
                 writer2.write();
             }
-        
+
             // HACK: ?!? update ADD and FINAL with new FID from database
             //
-            try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t2)) {
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t2)) {
                 td.newRoad = findFeature(reader, aname("name"), "r4");
                 System.out.println("newRoad:" + td.newRoad);
                 ADD[ADD.length - 1] = td.newRoad;
                 FINAL[FINAL.length - 1] = td.newRoad;
             }
-    
+
             // We still have ORIGINAL and t2 has ADD
-            try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE),
-                    Transaction.AUTO_COMMIT)) {
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    dataStore.getFeatureReader(
+                            new Query(tname("road"), Filter.INCLUDE), Transaction.AUTO_COMMIT)) {
                 assertTrue(covers(reader, ORIGINAL));
             }
-    
-            try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t2)) {
+
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t2)) {
                 assertMatched(ADD, reader); // broken due to FID problem
             }
-    
+
             // Still have ORIGIONAL and t2 has ADD
-            try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE),
-                    Transaction.AUTO_COMMIT)) {
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    dataStore.getFeatureReader(
+                            new Query(tname("road"), Filter.INCLUDE), Transaction.AUTO_COMMIT)) {
                 assertTrue(covers(reader, ORIGINAL));
             }
-            try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t2)) {
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t2)) {
                 assertTrue(coversLax(reader, ADD));
             }
-    
+
             // commit t1
             // ---------
             // -ensure that delayed writing of transactions takes place
             //
             t1.commit();
-    
+
             // We now have REMOVE, as does t1 (which has not additional diffs)
             // t2 will have FINAL
-            try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE),
-                    Transaction.AUTO_COMMIT)) {
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    dataStore.getFeatureReader(
+                            new Query(tname("road"), Filter.INCLUDE), Transaction.AUTO_COMMIT)) {
                 assertTrue(covers(reader, REMOVE));
             }
-            try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t1)) {
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t1)) {
                 assertTrue(covers(reader, REMOVE));
             }
-            try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t2)) {
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t2)) {
                 assertTrue(coversLax(reader, FINAL));
             }
-    
+
             // commit t2
             // ---------
             // -ensure that everyone is FINAL at the end of the day
             t2.commit();
-    
+
             // We now have Number( remove one and add one)
-            try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE),
-                    Transaction.AUTO_COMMIT)) {
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    dataStore.getFeatureReader(
+                            new Query(tname("road"), Filter.INCLUDE), Transaction.AUTO_COMMIT)) {
                 assertTrue(coversLax(reader, FINAL));
             }
-    
-            try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t1)) {
+
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t1)) {
                 assertTrue(coversLax(reader, FINAL));
             }
-    
-            try(FeatureReader<SimpleFeatureType, SimpleFeature> reader = dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t2)) {
+
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    dataStore.getFeatureReader(new Query(tname("road"), Filter.INCLUDE), t2)) {
                 assertTrue(coversLax(reader, FINAL));
             }
         }

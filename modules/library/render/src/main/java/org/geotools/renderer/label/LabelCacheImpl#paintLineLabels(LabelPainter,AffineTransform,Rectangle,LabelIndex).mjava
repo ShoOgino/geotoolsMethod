@@ -1,12 +1,18 @@
-    private boolean paintLineLabels(LabelPainter painter, AffineTransform originalTransform,
-            Rectangle displayArea, LabelIndex paintedBounds) throws Exception {
+    private boolean paintLineLabels(
+            LabelPainter painter,
+            AffineTransform originalTransform,
+            Rectangle displayArea,
+            LabelIndex paintedBounds)
+            throws Exception {
         final LabelCacheItem labelItem = painter.getLabel();
-        List<LineString> lines = getLineSetRepresentativeLocation(
-                labelItem.getGeoms(), displayArea, labelItem.removeGroupOverlaps(),
-                labelItem.isPartialsEnabled());
+        List<LineString> lines =
+                getLineSetRepresentativeLocation(
+                        labelItem.getGeoms(),
+                        displayArea,
+                        labelItem.removeGroupOverlaps(),
+                        labelItem.isPartialsEnabled());
 
-        if (lines == null || lines.size() == 0)
-            return false;
+        if (lines == null || lines.size() == 0) return false;
 
         // if we just want to label the longest line, remove the others
         if (!labelItem.labelAllGroup() && lines.size() > 1) {
@@ -18,8 +24,11 @@
         // ... use at least a 2 pixel step, no matter what the label length is
         final double step = painter.getAscent() > 2 ? painter.getAscent() : 2;
         int space = labelItem.getSpaceAround();
-        int haloRadius = Math.round(labelItem.getTextStyle().getHaloFill() != null ? labelItem
-                .getTextStyle().getHaloRadius() : 0);
+        int haloRadius =
+                Math.round(
+                        labelItem.getTextStyle().getHaloFill() != null
+                                ? labelItem.getTextStyle().getHaloRadius()
+                                : 0);
         int extraSpace = space + haloRadius;
         // repetition distance, if any
         int labelDistance = labelItem.getRepeat();
@@ -34,7 +43,7 @@
         int labelCount = 0;
         final int perpendicularOffset = painter.getLabel().getTextStyle().getPerpendicularOffset();
         OffsetCurveBuilder offsetBuilder = null;
-        if(perpendicularOffset != 0) {
+        if (perpendicularOffset != 0) {
             offsetBuilder = new OffsetCurveBuilder(perpendicularOffset, 2);
         }
         for (LineString line : lines) {
@@ -43,8 +52,8 @@
             // orientation
             if (labelItem.isFollowLineEnabled()) {
                 line = decimateLineString(line, step);
-                
-                if(offsetBuilder != null) {
+
+                if (offsetBuilder != null) {
                     // offset the line and replace it
                     line = (LineString) offsetBuilder.offset(line);
                 }
@@ -57,8 +66,7 @@
             // and exit right away, since the lines are sorted from longest to
             // shortest
             if ((!allowOverruns || labelItem.isFollowLineEnabled())
-                    && line.getLength() < textBounds.getWidth())
-                return labelCount > 0;
+                    && line.getLength() < textBounds.getWidth()) return labelCount > 0;
 
             double[] labelPositions = buildLabelPositions(labelDistance, lineStringLength);
 
@@ -68,9 +76,13 @@
             LineStringCursor cursor = new LineStringCursor(line);
             AffineTransform tx = new AffineTransform();
             // Checks if the second to last and last (symmetric to the center) labels are too close
-            // in a linear ring to be painted both. Will verify if the second to last is painted before
+            // in a linear ring to be painted both. Will verify if the second to last is painted
+            // before
             // painting the last one (making sure only one is)
-            boolean mightSkipLastLabel = line.isClosed() && (lineStringLength - ((labelPositions.length - 1) * labelDistance)) < labelDistance;
+            boolean mightSkipLastLabel =
+                    line.isClosed()
+                            && (lineStringLength - ((labelPositions.length - 1) * labelDistance))
+                                    < labelDistance;
             for (int i = 0; i < labelPositions.length; i++) {
                 cursor.moveTo(labelPositions[i]);
                 Coordinate centroid = cursor.getCurrentPosition();
@@ -103,8 +115,12 @@
                         } else {
                             // otherwise use curved bounds, more expensive to
                             // compute
-                            labelEnvelope = getCurvedLabelBounds(cursor, startOrdinate,
-                                    endOrdinate, textBounds.getHeight() / 2);
+                            labelEnvelope =
+                                    getCurvedLabelBounds(
+                                            cursor,
+                                            startOrdinate,
+                                            endOrdinate,
+                                            textBounds.getHeight() / 2);
                         }
                     } else {
                         setupLineTransform(painter, cursor, centroid, tx, false);
@@ -114,17 +130,22 @@
                     // try to paint the label, the condition under which this
                     // happens are complex
                     if ((displayArea.contains(labelEnvelope) || labelItem.isPartialsEnabled())
-                            && !(labelItem.isConflictResolutionEnabled() && paintedBounds.labelsWithinDistance(labelEnvelope, extraSpace))
+                            && !(labelItem.isConflictResolutionEnabled()
+                                    && paintedBounds.labelsWithinDistance(
+                                            labelEnvelope, extraSpace))
                             && !groupLabels.labelsWithinDistance(labelEnvelope, minDistance)) {
                         if (labelItem.isFollowLineEnabled()) {
                             // for curved labels we never paint in case of
                             // overrun
-                            if ((startOrdinate > 0 && endOrdinate <= cursor.getLineStringLength())) {
+                            if ((startOrdinate > 0
+                                    && endOrdinate <= cursor.getLineStringLength())) {
                                 if (maxAngleChange < maxAngleDelta) {
-                                    // if straight segment connecting the start and end ordinate is really close, paint as a straight label
+                                    // if straight segment connecting the start and end ordinate is
+                                    // really close, paint as a straight label
                                     if (maxAngleChange == 0
-                                            || cursor.getMaxDistanceFromStraightLine(startOrdinate,
-                                                    endOrdinate) < painter.getLineHeight() / 2) {
+                                            || cursor.getMaxDistanceFromStraightLine(
+                                                            startOrdinate, endOrdinate)
+                                                    < painter.getLineHeight() / 2) {
                                         painter.paintStraightLabel(tx);
                                     } else {
                                         painter.paintCurvedLabel(cursor);
@@ -135,12 +156,12 @@
                         } else {
                             // for straight labels, check overrun only if
                             // required
-                            if ((allowOverruns || (startOrdinate > 0 && endOrdinate <= cursor
-                                    .getLineStringLength()))) {
+                            if ((allowOverruns
+                                    || (startOrdinate > 0
+                                            && endOrdinate <= cursor.getLineStringLength()))) {
                                 painter.paintStraightLabel(tx);
                                 painted = true;
                             }
-
                         }
                     }
 
@@ -151,19 +172,19 @@
                     if (painted) {
                         labelCount++;
                         groupLabels.addLabel(labelItem, labelEnvelope);
-                        if(labelItem.isConflictResolutionEnabled()) {
-                            if(DEBUG_CACHE_BOUNDS) {
+                        if (labelItem.isConflictResolutionEnabled()) {
+                            if (DEBUG_CACHE_BOUNDS) {
                                 painter.graphics.setStroke(new BasicStroke());
                                 painter.graphics.setColor(Color.RED);
                                 painter.graphics.draw(labelEnvelope);
                             }
                             paintedBounds.addLabel(labelItem, labelEnvelope);
                         }
-                        
+
                         // do not paint the last label on a ring if we have painted its symmetric
                         // one and the residual space at the ends does not guarantee labelDistance
                         // between last and second to last
-                        if((i == labelPositions.length - 2) && painted &&  mightSkipLastLabel) {
+                        if ((i == labelPositions.length - 2) && painted && mightSkipLastLabel) {
                             i++;
                         }
                     } else {

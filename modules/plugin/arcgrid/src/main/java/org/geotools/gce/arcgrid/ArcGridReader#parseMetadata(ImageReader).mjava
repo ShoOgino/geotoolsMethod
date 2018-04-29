@@ -1,47 +1,49 @@
     /**
-     * This method is responsible for building up an envelope according to the
-     * definition of the crs. It assumes that X coordinate on the ascii grid
-     * itself maps to longitude and y coordinate maps to latitude.
-     * 
-     * @param reader
-     *            The {@link ImageReader} to parse.
-     * 
+     * This method is responsible for building up an envelope according to the definition of the
+     * crs. It assumes that X coordinate on the ascii grid itself maps to longitude and y coordinate
+     * maps to latitude.
+     *
+     * @param reader The {@link ImageReader} to parse.
      * @throws MismatchedDimensionException
      */
-    private void parseMetadata(ImageReader reader)
-            throws Exception {
+    private void parseMetadata(ImageReader reader) throws Exception {
 
-            // parse and set layout
-            setLayout(reader);
-            
-                //
-                // Getting metadata
-                //
-                final Object metadata = reader.getImageMetadata(0);
-                if (!(metadata instanceof AsciiGridsImageMetadata)){
-                        throw new DataSourceException(
-                                        "Unexpected error! Metadata are not of the expected class.");
-                }
-            
-                // casting the metadata
-                final AsciiGridsImageMetadata gridMetadata = (AsciiGridsImageMetadata) metadata;
-                
+        // parse and set layout
+        setLayout(reader);
+
+        //
+        // Getting metadata
+        //
+        final Object metadata = reader.getImageMetadata(0);
+        if (!(metadata instanceof AsciiGridsImageMetadata)) {
+            throw new DataSourceException(
+                    "Unexpected error! Metadata are not of the expected class.");
+        }
+
+        // casting the metadata
+        final AsciiGridsImageMetadata gridMetadata = (AsciiGridsImageMetadata) metadata;
+
         // getting metadata
-        final Node root = gridMetadata
-                .getAsTree("it.geosolutions.imageio.plugins.arcgrid.AsciiGridsImageMetadata_1.0");
+        final Node root =
+                gridMetadata.getAsTree(
+                        "it.geosolutions.imageio.plugins.arcgrid.AsciiGridsImageMetadata_1.0");
 
         // getting Grid Properties
         Node child = root.getFirstChild();
         NamedNodeMap attributes = child.getAttributes();
-        final boolean grass = attributes.getNamedItem("GRASS").getNodeValue().equalsIgnoreCase("True");
+        final boolean grass =
+                attributes.getNamedItem("GRASS").getNodeValue().equalsIgnoreCase("True");
 
         // getting Grid Properties
         child = child.getNextSibling();
         attributes = child.getAttributes();
         final int hrWidth = Integer.parseInt(attributes.getNamedItem("nColumns").getNodeValue());
         final int hrHeight = Integer.parseInt(attributes.getNamedItem("nRows").getNodeValue());
-        originalGridRange = new GridEnvelope2D(new Rectangle(0, 0, hrWidth,hrHeight));
-        final boolean pixelIsArea = AsciiGridsImageMetadata.RasterSpaceType.valueOf(attributes.getNamedItem("rasterSpaceType").getNodeValue()).equals(AsciiGridsImageMetadata.RasterSpaceType.PixelIsArea);
+        originalGridRange = new GridEnvelope2D(new Rectangle(0, 0, hrWidth, hrHeight));
+        final boolean pixelIsArea =
+                AsciiGridsImageMetadata.RasterSpaceType.valueOf(
+                                attributes.getNamedItem("rasterSpaceType").getNodeValue())
+                        .equals(AsciiGridsImageMetadata.RasterSpaceType.PixelIsArea);
         if (!grass) {
             inNoData = Double.parseDouble(attributes.getNamedItem("noDataValue").getNodeValue());
         }
@@ -49,14 +51,12 @@
         // getting Envelope Properties
         child = child.getNextSibling();
         attributes = child.getAttributes();
-        final double cellsizeX = Double.parseDouble(attributes.getNamedItem(
-                "cellsizeX").getNodeValue());
-        final double cellsizeY = Double.parseDouble(attributes.getNamedItem(
-                "cellsizeY").getNodeValue());
-        double xll = Double.parseDouble(attributes.getNamedItem("xll")
-                .getNodeValue());
-        double yll = Double.parseDouble(attributes.getNamedItem("yll")
-                .getNodeValue());
+        final double cellsizeX =
+                Double.parseDouble(attributes.getNamedItem("cellsizeX").getNodeValue());
+        final double cellsizeY =
+                Double.parseDouble(attributes.getNamedItem("cellsizeY").getNodeValue());
+        double xll = Double.parseDouble(attributes.getNamedItem("xll").getNodeValue());
+        double yll = Double.parseDouble(attributes.getNamedItem("yll").getNodeValue());
 
         //
         // OGC specifications says that PixelIsArea map a pixel to the corner
@@ -69,12 +69,12 @@
             yll -= correctionY;
         }
 
-        originalEnvelope = new GeneralEnvelope(new double[] { xll, yll },
-                new double[] { xll + (hrWidth * cellsizeX),
-                        yll + (hrHeight * cellsizeY) });
+        originalEnvelope =
+                new GeneralEnvelope(
+                        new double[] {xll, yll},
+                        new double[] {xll + (hrWidth * cellsizeX), yll + (hrHeight * cellsizeY)});
 
         // setting the coordinate reference system for the envelope
         originalEnvelope.setCoordinateReferenceSystem(crs);
-
     }
 

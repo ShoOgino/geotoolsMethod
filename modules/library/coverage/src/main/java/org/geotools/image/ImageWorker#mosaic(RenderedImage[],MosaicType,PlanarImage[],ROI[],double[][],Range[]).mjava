@@ -1,26 +1,42 @@
-    public ImageWorker mosaic(RenderedImage[] images, MosaicType type, PlanarImage[] alphas, ROI[] rois, double[][] thresholds,
+    public ImageWorker mosaic(
+            RenderedImage[] images,
+            MosaicType type,
+            PlanarImage[] alphas,
+            ROI[] rois,
+            double[][] thresholds,
             Range[] nodata) {
         // check if we might be applying a background value that's not in palettes, still assuming
         // the input images have uniform palettes
         double[] background = this.background;
-        if(images != null && images.length > 0) {
+        if (images != null && images.length > 0) {
             ColorModel cmref = images[0].getColorModel();
             Color backgroundColor = getBackgroundColor();
-            if(cmref instanceof IndexColorModel && (cmref.getTransparency() != IndexColorModel.OPAQUE || images[0].getProperty("ROI") instanceof ROI) && backgroundColor != null) {
+            if (cmref instanceof IndexColorModel
+                    && (cmref.getTransparency() != IndexColorModel.OPAQUE
+                            || images[0].getProperty("ROI") instanceof ROI)
+                    && backgroundColor != null) {
                 IndexColorModel icm = (IndexColorModel) cmref;
                 int index = ColorUtilities.getColorIndex(icm, backgroundColor, -1);
                 Color color;
-                if(icm.hasAlpha()) {
+                if (icm.hasAlpha()) {
                     color = new Color(icm.getRed(index), icm.getGreen(index), icm.getBlue(index));
                 } else {
-                    color = new Color(icm.getRed(index), icm.getGreen(index), icm.getBlue(index), icm.getAlpha(index));
+                    color =
+                            new Color(
+                                    icm.getRed(index),
+                                    icm.getGreen(index),
+                                    icm.getBlue(index),
+                                    icm.getAlpha(index));
                 }
-                if(color.equals(backgroundColor)) {
+                if (color.equals(backgroundColor)) {
                     background = new double[] {index};
                 } else {
                     // we have to expand to RGB to apply that value
                     for (int i = 0; i < images.length; i++) {
-                        images[i] = new ImageWorker(images[i]).forceComponentColorModel().getRenderedImage();
+                        images[i] =
+                                new ImageWorker(images[i])
+                                        .forceComponentColorModel()
+                                        .getRenderedImage();
                     }
                 }
             }
@@ -29,10 +45,10 @@
         // ParameterBlock creation
         ParameterBlock pb = new ParameterBlock();
         int srcNum = 0;
-        //pb.addSource(image);
-        if(images != null && images.length > 0){
-            for(int i = 0; i < images.length; i++){
-                if(images[i] != null){
+        // pb.addSource(image);
+        if (images != null && images.length > 0) {
+            for (int i = 0; i < images.length; i++) {
+                if (images[i] != null) {
                     pb.addSource(images[i]);
                     srcNum++;
                 }
@@ -40,13 +56,13 @@
         }
         // Setting ROIs
         ROI[] roisNew = null;
-        if(rois != null && srcNum > 0){
+        if (rois != null && srcNum > 0) {
             roisNew = new ROI[srcNum];
             System.arraycopy(rois, 0, roisNew, 0, rois.length);
         }
         // Setting Alphas
         PlanarImage[] alphasNew = null;
-        if(alphas != null && srcNum > 0){
+        if (alphas != null && srcNum > 0) {
             alphasNew = new PlanarImage[srcNum];
             System.arraycopy(alphas, 0, alphasNew, 0, alphas.length);
         }
@@ -54,12 +70,12 @@
         Range[] nodataNew = null;
         double[] nodataBackground = null;
         boolean noInternalNoData = true;
-        if(nodata != null && srcNum > 0){
+        if (nodata != null && srcNum > 0) {
             nodataNew = new Range[srcNum];
             System.arraycopy(nodata, 0, nodataNew, 0, nodata.length);
         } else {
             nodataNew = new Range[srcNum];
-            for(int i = 0; i < srcNum; i++){
+            for (int i = 0; i < srcNum; i++) {
                 RenderedImage img = pb.getRenderedSource(i);
                 Range nodProp = extractNoDataProperty(img);
                 if (background == null && nodProp != null && nodataBackground == null) {
@@ -70,8 +86,8 @@
                 nodataNew[i] = nodProp;
             }
         }
-        
-        if(noInternalNoData && thresholds != null){
+
+        if (noInternalNoData && thresholds != null) {
             nodataNew = handleMosaicThresholds(thresholds, srcNum);
         }
         // Setting the parameters
@@ -85,8 +101,8 @@
         // Setting the final ROI as union of the older ROIs, assuming
         // we did not apply a background color, in that case, there is no more ROI to
         // care for
-        if(background == null) {
-            if(roisNew != null ) {
+        if (background == null) {
+            if (roisNew != null) {
                 ROI finalROI = mosaicROIs(pb.getSources(), roisNew);
                 setROI(finalROI);
             }

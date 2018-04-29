@@ -1,5 +1,5 @@
-    TexturePaint getTexturePaint(org.geotools.styling.Graphic gr, Object feature,
-            Symbolizer symbolizer) {
+    TexturePaint getTexturePaint(
+            org.geotools.styling.Graphic gr, Object feature, Symbolizer symbolizer) {
         // -1 to have the image use its natural size if none was provided by the
         // user
         double graphicSize = evalToDouble(gr.getSize(), feature, -1);
@@ -9,34 +9,38 @@
         Mark mark = null;
         Shape shape = null;
         for (GraphicalSymbol symbol : gr.graphicalSymbols()) {
-            if(symbol instanceof ExternalGraphic) {
+            if (symbol instanceof ExternalGraphic) {
                 ExternalGraphic eg = (ExternalGraphic) symbol;
                 icon = getIcon(eg, feature, graphicSize);
                 if (icon != null) {
                     break;
-                }    
-            } else if(symbol instanceof Mark) {
+                }
+            } else if (symbol instanceof Mark) {
                 mark = (Mark) symbol;
                 shape = getShape(mark, feature);
-                if(shape != null) {
+                if (shape != null) {
                     break;
                 }
             }
         }
-        
-        if(icon == null && shape == null) {
+
+        if (icon == null && shape == null) {
             return null;
         }
-		
+
         // grab the major vendor options
-        PositionRandomizer randomizer = (PositionRandomizer) voParser.getEnumOption(symbolizer, "random", PositionRandomizer.NONE);
-        
+        PositionRandomizer randomizer =
+                (PositionRandomizer)
+                        voParser.getEnumOption(symbolizer, "random", PositionRandomizer.NONE);
+
         BufferedImage image;
-        if(randomizer != null && randomizer != PositionRandomizer.NONE) {
+        if (randomizer != null && randomizer != PositionRandomizer.NONE) {
             // we pass the mark instead of turning it into an image as an attempt to get
             // a higher quality result, if we turn it into an image and then start moving/rotating
             // it around we're going to antialias it more than once
-            image = randomFillBuilder.buildRandomTilableImage(symbolizer, gr, icon, mark, shape, graphicSize, feature);
+            image =
+                    randomFillBuilder.buildRandomTilableImage(
+                            symbolizer, gr, icon, mark, shape, graphicSize, feature);
         } else {
             int[] margin = voParser.getGraphicMargin(symbolizer, "graphic-margin");
             GraphicStyle2D gs = getGraphicStyle(icon, 1);
@@ -53,30 +57,33 @@
                 image = markToTilableImage(gr, feature, mark, shape);
             }
 
-            if(margin != null) {
+            if (margin != null) {
                 // apply the margin around the image
                 int extraY = margin[0] + margin[2];
                 int extraX = margin[1] + margin[3];
                 int type = image.getType() == 0 ? BufferedImage.TYPE_4BYTE_ABGR : image.getType();
-                BufferedImage imageWithMargin = new BufferedImage(image.getWidth() + extraX, image.getHeight() + extraY, type);
+                BufferedImage imageWithMargin =
+                        new BufferedImage(
+                                image.getWidth() + extraX, image.getHeight() + extraY, type);
                 int tx = margin[1];
                 int ty = margin[0];
                 AffineTransform at = AffineTransform.getTranslateInstance(tx, ty);
                 Graphics2D graphics = imageWithMargin.createGraphics();
                 graphics.drawRenderedImage(image, at);
                 graphics.dispose();
-                
+
                 image = imageWithMargin;
             }
         }
 
         // turn the image into a texture paint
-        Rectangle2D.Double rect = new Rectangle2D.Double(0.0, 0.0, image.getWidth(), image.getHeight());
+        Rectangle2D.Double rect =
+                new Rectangle2D.Double(0.0, 0.0, image.getWidth(), image.getHeight());
         TexturePaint imagePaint = new TexturePaint(image, rect);
-		if (LOGGER.isLoggable(Level.FINER)) {
-			LOGGER.finer("applied TexturePaint " + imagePaint);
-		}
+        if (LOGGER.isLoggable(Level.FINER)) {
+            LOGGER.finer("applied TexturePaint " + imagePaint);
+        }
 
-		return imagePaint;
-	}
+        return imagePaint;
+    }
 

@@ -1,19 +1,21 @@
-    private Node optimizeTree(QuadTree tree, Node node, int level, ShapefileReader reader, IndexFile index) throws StoreException, IOException {
+    private Node optimizeTree(
+            QuadTree tree, Node node, int level, ShapefileReader reader, IndexFile index)
+            throws StoreException, IOException {
         // recurse, with a check to avoid too deep recursion due to odd data that has a
-        if(node.getNumShapeIds() > leafSize && node.getNumSubNodes() == 0 && level < max * 2) {
+        if (node.getNumShapeIds() > leafSize && node.getNumSubNodes() == 0 && level < max * 2) {
             // ok, we need to split this baby further
             int[] shapeIds = node.getShapesId();
             int numShapesId = node.getNumShapeIds();
             node.clean();
-            
+
             // get an estimate on how many more levels we need
             int extraLevels = 2;
             int nodes = 4;
-            while(nodes * leafSize < numShapesId) {
+            while (nodes * leafSize < numShapesId) {
                 extraLevels++;
                 nodes *= 4;
             }
-            
+
             for (int i = 0; i < numShapesId; i++) {
                 final int shapeId = shapeIds[i];
                 int offset = index.getOffsetInBytes(shapeId);
@@ -23,29 +25,29 @@
                 tree.insert(node, shapeId, env, extraLevels);
             }
         }
-        
+
         // pack the arrays to use less memory (the optimization often makes the tree grow)
         node.pack();
-        
-        // recurse 
+
+        // recurse
         for (int i = 0; i < node.getNumSubNodes(); i++) {
             optimizeTree(tree, node.getSubNode(i), level + 1, reader, index);
         }
-        
+
         // prune empty subnodes
-        for (int i = 0; i < node.getNumSubNodes();) {
+        for (int i = 0; i < node.getNumSubNodes(); ) {
             Node child = node.getSubNode(i);
-            if(child != null && child.getNumShapeIds() == 0 && child.getNumSubNodes() == 0) {
+            if (child != null && child.getNumShapeIds() == 0 && child.getNumSubNodes() == 0) {
                 // empty child, we don't need it, clean it up
                 node.removeSubNode(child);
             } else {
                 i++;
             }
         }
-        
+
         // handle degenerate chains, we pop up the nodes to the top by keeping
         // their shape ids _and_ their bounds (as it's the only area that has something)
-        if(node.getNumSubNodes() == 1 && node.getNumShapeIds() == 0) {
+        if (node.getNumSubNodes() == 1 && node.getNumShapeIds() == 0) {
             Node subnode = node.getSubNode(0);
             node.clearSubNodes();
             node.setShapesId(subnode);
@@ -56,8 +58,8 @@
         } else {
             // limit this node area to the effective child area
             Envelope bounds = new Envelope();
-            if(node.getNumShapeIds() > 0) {
-                int[] shapeIds  = node.getShapesId();
+            if (node.getNumShapeIds() > 0) {
+                int[] shapeIds = node.getShapesId();
                 for (int i = 0; i < shapeIds.length; i++) {
                     final int shapeId = shapeIds[i];
                     int offset = index.getOffsetInBytes(shapeId);
@@ -67,25 +69,25 @@
                     bounds.expandToInclude(env);
                 }
             }
-            if(node.getNumSubNodes() > 0) {
+            if (node.getNumSubNodes() > 0) {
                 for (int i = 0; i < node.getNumSubNodes(); i++) {
                     bounds.expandToInclude(node.getSubNode(i).getBounds());
                 }
             }
             node.setBounds(bounds);
-            
+
             // can we shrink?
             int count = node.getNumShapeIds();
             for (int i = 0; i < node.getNumSubNodes(); i++) {
                 Node child = node.getSubNode(i);
-                if(child.getNumSubNodes() > 0) {
+                if (child.getNumSubNodes() > 0) {
                     count = Integer.MAX_VALUE;
                     break;
                 } else {
                     count += child.getNumShapeIds();
                 }
             }
-            if(count < leafSize) {
+            if (count < leafSize) {
                 for (int i = 0; i < node.getNumSubNodes(); i++) {
                     Node child = node.getSubNode(i);
                     int[] shapesId = child.getShapesId();
@@ -96,7 +98,7 @@
                 node.clearSubNodes();
             }
         }
-        
+
         return node;
     }
 

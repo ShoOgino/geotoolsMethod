@@ -1,21 +1,23 @@
     /**
      * Creates an {@link AttributeType} that matches the xsd type definition as much as possible.
-     * <p>
-     * The original type definition given by the {@link XSDTypeDefinition} is kept as AttributeType's metadata stored as a "user data" property using
-     * <code>XSDTypeDefinition.class</code> as key.
-     * </p>
-     * <p>
-     * If it is a complex attribute, it will contain all the properties declared in the <code>typeDefinition</code>, as well as all the properties
-     * declared in its super types.
-     * </p>
-     * TODO: handle the case where the extension mechanism is restriction.
-     * 
+     *
+     * <p>The original type definition given by the {@link XSDTypeDefinition} is kept as
+     * AttributeType's metadata stored as a "user data" property using <code>XSDTypeDefinition.class
+     * </code> as key.
+     *
+     * <p>If it is a complex attribute, it will contain all the properties declared in the <code>
+     * typeDefinition</code>, as well as all the properties declared in its super types. TODO:
+     * handle the case where the extension mechanism is restriction.
+     *
      * @param assignedName
      * @param typeDefinition
      * @return
      */
-    private AttributeType createType(final Name assignedName,
-            final XSDTypeDefinition typeDefinition, CoordinateReferenceSystem crs, boolean anonymous) {
+    private AttributeType createType(
+            final Name assignedName,
+            final XSDTypeDefinition typeDefinition,
+            CoordinateReferenceSystem crs,
+            boolean anonymous) {
 
         AttributeType attType;
         // /////////
@@ -23,8 +25,11 @@
             if (LOGGER.isLoggable(Level.FINE)) {
                 LOGGER.fine("Recursion found for type " + assignedName + ". Proxying it.");
             }
-            attType = createProxiedType(assignedName, typeDefinition, anonymous ? anonTypeRegistry
-                    : typeRegistry);
+            attType =
+                    createProxiedType(
+                            assignedName,
+                            typeDefinition,
+                            anonymous ? anonTypeRegistry : typeRegistry);
             return attType;
         }
         processingTypes.push(assignedName);
@@ -48,34 +53,48 @@
             XSDComplexTypeDefinition complexTypeDef;
             complexTypeDef = (XSDComplexTypeDefinition) typeDefinition;
             boolean includeParents = true;
-            List<XSDElementDeclaration> children = Schemas.getChildElementDeclarations(
-                    typeDefinition, includeParents);
+            List<XSDElementDeclaration> children =
+                    Schemas.getChildElementDeclarations(typeDefinition, includeParents);
 
-            final Collection<PropertyDescriptor> schema = new ArrayList<PropertyDescriptor>(
-                    children.size());
+            final Collection<PropertyDescriptor> schema =
+                    new ArrayList<PropertyDescriptor>(children.size());
 
             XSDElementDeclaration childDecl;
             AttributeDescriptor descriptor;
-            for (Iterator it = children.iterator(); it.hasNext();) {
+            for (Iterator it = children.iterator(); it.hasNext(); ) {
                 childDecl = (XSDElementDeclaration) it.next();
                 try {
                     descriptor = createAttributeDescriptor(complexTypeDef, childDecl, crs);
                 } catch (NoSuchElementException e) {
-                    String msg = "Failed to create descriptor for '"
-                            + childDecl.getTargetNamespace() + "#" + childDecl.getName()
-                            + " from container '" + typeDefinition.getTargetNamespace() + "#"
-                            + typeDefinition.getName() + "'";
+                    String msg =
+                            "Failed to create descriptor for '"
+                                    + childDecl.getTargetNamespace()
+                                    + "#"
+                                    + childDecl.getName()
+                                    + " from container '"
+                                    + typeDefinition.getTargetNamespace()
+                                    + "#"
+                                    + typeDefinition.getName()
+                                    + "'";
                     NoSuchElementException nse = new NoSuchElementException(msg);
                     nse.initCause(e);
                     throw nse;
                 }
                 schema.add(descriptor);
             }
-            
+
             if (includeAttributes) {
                 for (XSDAttributeUse attgcontent : complexTypeDef.getAttributeUses()) {
                     XSDAttributeDeclaration att = attgcontent.getContent();
-                    descriptor = createAttributeDescriptor (getXmlAttributeType(), null, new NameImpl(null, "@" + att.getName()), 0,1, false,null);
+                    descriptor =
+                            createAttributeDescriptor(
+                                    getXmlAttributeType(),
+                                    null,
+                                    new NameImpl(null, "@" + att.getName()),
+                                    0,
+                                    1,
+                                    false,
+                                    null);
                     schema.add(descriptor);
                 }
             }
@@ -88,7 +107,8 @@
                 PropertyDescriptor att = null;
                 for (PropertyDescriptor desc : schema) {
                     if (desc.getName().getLocalPart().equals(elemDecl.getName())
-                            && desc.getName().getNamespaceURI()
+                            && desc.getName()
+                                    .getNamespaceURI()
                                     .equals(elemDecl.getTargetNamespace())) {
                         att = desc;
                         break;
@@ -103,8 +123,15 @@
             boolean isAbstract = false;
             List<Filter> restrictions = Collections.emptyList();
             InternationalString description = null;
-            attType = typeFactory.createAttributeType(assignedName, binding, isIdentifiable,
-                    isAbstract, restrictions, superType, description);
+            attType =
+                    typeFactory.createAttributeType(
+                            assignedName,
+                            binding,
+                            isIdentifiable,
+                            isAbstract,
+                            restrictions,
+                            superType,
+                            description);
         }
 
         attType.getUserData().put(XSDTypeDefinition.class, typeDefinition);

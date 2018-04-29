@@ -1,83 +1,82 @@
-	/**
-	 * Parses an "UNIT" element. This element has the following pattern:
-	 * 
-	 * <blockquote><code>
-	 * UNIT["<name>", <conversion factor> {,<authority>}]
-	 * </code></blockquote>
-	 * 
-	 * @param unit
-	 *            The parent element.
-	 * @param unit
-	 *            The contextual unit. Usually {@link SI#METRE} or
-	 *            {@link SI#RADIAN}.
-	 * @param metadata
-	 * @return The "UNIT" element as an {@link Unit} object.
-	 * 
-	 */
-	private void parseUnit(Unit<?> unit, int model,GeoTiffIIOMetadataEncoder metadata) {
+    /**
+     * Parses an "UNIT" element. This element has the following pattern:
+     *
+     * <blockquote>
+     *
+     * <code>
+     * UNIT["<name>", <conversion factor> {,<authority>}]
+     * </code>
+     *
+     * </blockquote>
+     *
+     * @param unit The parent element.
+     * @param unit The contextual unit. Usually {@link SI#METRE} or {@link SI#RADIAN}.
+     * @param metadata
+     * @return The "UNIT" element as an {@link Unit} object.
+     */
+    private void parseUnit(Unit<?> unit, int model, GeoTiffIIOMetadataEncoder metadata) {
 
-		// user defined UoM
-	        int key1=-1,key2;
-	        switch(model){
-	        case 0:
-	            key1=GeoTiffGCSCodes.GeogAngularUnitsGeoKey;
-                    key2=GeoTiffGCSCodes.GeogAngularUnitSizeGeoKey;
-	            break;
-                case 1:
-                    key1=GeoTiffPCSCodes.ProjLinearUnitsGeoKey;
-                    key2=GeoTiffPCSCodes.ProjLinearUnitSizeGeoKey;
-                    break;
-                case 2:
-                    key1=GeoTiffGCSCodes.GeogLinearUnitsGeoKey;
-                    key2=GeoTiffGCSCodes.GeogLinearUnitSizeGeoKey;
-                    break;
-                default:
-                    throw new IllegalStateException("Unable to map model "+model+" for this unit");
-	        }
-	        unit = Units.autoCorrect(unit); // auto-correct DEGREE_ANGLE and FOOT_SURVEY
-	        
-	        if(unit.equals(SI.METRE)){
-	            metadata.addGeoShortParam(key1, GeoTiffUoMCodes.Linear_Meter);
-	        } else if(unit.equals(USCustomary.FOOT)){
-	            metadata.addGeoShortParam(key1, GeoTiffUoMCodes.Linear_Foot);
-	        } else if(unit.equals(USCustomary.FOOT_SURVEY)){
-                    metadata.addGeoShortParam(key1, GeoTiffUoMCodes.Linear_Foot_US_Survey);
-                } else if(unit.equals(USCustomary.GRADE)){
-                    metadata.addGeoShortParam(key1, GeoTiffUoMCodes.Angular_Grad);
-                } else if(unit.equals(SI.RADIAN)){
-                    metadata.addGeoShortParam(key1, GeoTiffUoMCodes.Angular_Radian);
-                }  else if(unit.equals(NonSI.DEGREE_ANGLE)){
-                    metadata.addGeoShortParam(key1, GeoTiffUoMCodes.Angular_Degree);
-                }  else {
-                    
-                    // custom UoM 
-                    // TODO we could enhance this check to create more units as per geotiff spec
-                    
-                    metadata.addGeoShortParam(key1, GeoTiffConstants.GTUserDefinedGeoKey);
+        // user defined UoM
+        int key1 = -1, key2;
+        switch (model) {
+            case 0:
+                key1 = GeoTiffGCSCodes.GeogAngularUnitsGeoKey;
+                key2 = GeoTiffGCSCodes.GeogAngularUnitSizeGeoKey;
+                break;
+            case 1:
+                key1 = GeoTiffPCSCodes.ProjLinearUnitsGeoKey;
+                key2 = GeoTiffPCSCodes.ProjLinearUnitSizeGeoKey;
+                break;
+            case 2:
+                key1 = GeoTiffGCSCodes.GeogLinearUnitsGeoKey;
+                key2 = GeoTiffGCSCodes.GeogLinearUnitSizeGeoKey;
+                break;
+            default:
+                throw new IllegalStateException("Unable to map model " + model + " for this unit");
+        }
+        unit = Units.autoCorrect(unit); // auto-correct DEGREE_ANGLE and FOOT_SURVEY
 
-                    // preparing the string to write here
+        if (unit.equals(SI.METRE)) {
+            metadata.addGeoShortParam(key1, GeoTiffUoMCodes.Linear_Meter);
+        } else if (unit.equals(USCustomary.FOOT)) {
+            metadata.addGeoShortParam(key1, GeoTiffUoMCodes.Linear_Foot);
+        } else if (unit.equals(USCustomary.FOOT_SURVEY)) {
+            metadata.addGeoShortParam(key1, GeoTiffUoMCodes.Linear_Foot_US_Survey);
+        } else if (unit.equals(USCustomary.GRADE)) {
+            metadata.addGeoShortParam(key1, GeoTiffUoMCodes.Angular_Grad);
+        } else if (unit.equals(SI.RADIAN)) {
+            metadata.addGeoShortParam(key1, GeoTiffUoMCodes.Angular_Radian);
+        } else if (unit.equals(NonSI.DEGREE_ANGLE)) {
+            metadata.addGeoShortParam(key1, GeoTiffUoMCodes.Angular_Degree);
+        } else {
 
-                    // citation
-                    metadata.addGeoAscii(GeoTiffGCSCodes.GeogCitationGeoKey, unit.toString());// unitFormat.labelFor(unit)
+            // custom UoM
+            // TODO we could enhance this check to create more units as per geotiff spec
 
-                    
-                    // Size with respect to base UoM
-                    UnitConverter converter = null;
-                    if (SI.METRE.isCompatible(unit)) {
-                            converter = ((Unit<Length>) unit).getConverterTo(SI.METRE);
-                    } else if (SI.SECOND.isCompatible(unit)) {
-                        converter = ((Unit<Time>) unit).getConverterTo(SI.SECOND);
-                    } else if (SI.RADIAN.isCompatible(unit)) {
-                        if (!AbstractUnit.ONE.equals(unit)) {
-                            converter = ((Unit<Angle>) unit).getConverterTo(SI.RADIAN);
-                        }
-                    }
-            
-                    if (converter != null) {
-                            metadata.addGeoDoubleParam(key2, converter.convert(1));
-                    } else
-                            metadata.addGeoDoubleParam(key2, 1);                    
+            metadata.addGeoShortParam(key1, GeoTiffConstants.GTUserDefinedGeoKey);
+
+            // preparing the string to write here
+
+            // citation
+            metadata.addGeoAscii(
+                    GeoTiffGCSCodes.GeogCitationGeoKey,
+                    unit.toString()); // unitFormat.labelFor(unit)
+
+            // Size with respect to base UoM
+            UnitConverter converter = null;
+            if (SI.METRE.isCompatible(unit)) {
+                converter = ((Unit<Length>) unit).getConverterTo(SI.METRE);
+            } else if (SI.SECOND.isCompatible(unit)) {
+                converter = ((Unit<Time>) unit).getConverterTo(SI.SECOND);
+            } else if (SI.RADIAN.isCompatible(unit)) {
+                if (!AbstractUnit.ONE.equals(unit)) {
+                    converter = ((Unit<Angle>) unit).getConverterTo(SI.RADIAN);
                 }
+            }
 
-	}
+            if (converter != null) {
+                metadata.addGeoDoubleParam(key2, converter.convert(1));
+            } else metadata.addGeoDoubleParam(key2, 1);
+        }
+    }
 

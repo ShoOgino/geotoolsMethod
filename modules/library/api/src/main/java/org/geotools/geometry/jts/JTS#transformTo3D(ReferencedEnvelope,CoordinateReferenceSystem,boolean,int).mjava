@@ -1,20 +1,25 @@
     /**
      * Transform from D up to 3D.
-     * <p>
-     * This method transforms each ordinate into WGS84, manually converts this to WGS84_3D with
+     *
+     * <p>This method transforms each ordinate into WGS84, manually converts this to WGS84_3D with
      * the addition of a Double.NaN, and then transforms to the final 3D position.
-     * 
+     *
      * @param sourceEnvelope
      * @param targetEnvelope
      * @param transform
      * @param npoints
      * @return ReferencedEnvelope3D in targetCRS describing the sourceEnvelope bounds
      * @throws TransformException
-     * @throws FactoryException If operationis unavailable from source CRS to WGS84, to from WGS84_3D to targetCRS
-     * @throws OperationNotFoundException 
-     */ // JTS.transformUp(this, targetCRS, numPointsForTransformation );
-    public static ReferencedEnvelope3D transformTo3D(final ReferencedEnvelope sourceEnvelope,
-            CoordinateReferenceSystem targetCRS, boolean lenient, int npoints)
+     * @throws FactoryException If operationis unavailable from source CRS to WGS84, to from
+     *     WGS84_3D to targetCRS
+     * @throws OperationNotFoundException
+     */
+    // JTS.transformUp(this, targetCRS, numPointsForTransformation );
+    public static ReferencedEnvelope3D transformTo3D(
+            final ReferencedEnvelope sourceEnvelope,
+            CoordinateReferenceSystem targetCRS,
+            boolean lenient,
+            int npoints)
             throws TransformException, OperationNotFoundException, FactoryException {
         final double xmin = sourceEnvelope.getMinX();
         final double xmax = sourceEnvelope.getMaxX();
@@ -23,38 +28,40 @@
         final double scaleX = (xmax - xmin) / npoints;
         final double scaleY = (ymax - ymin) / npoints;
         ReferencedEnvelope3D targetEnvelope = new ReferencedEnvelope3D(targetCRS);
-        
+
         /*
          * Gets a first estimation using an algorithm capable to take singularity in account
          * (North pole, South pole, 180ï¿½ longitude). We will expand this initial box later.
          */
-        CoordinateOperationFactory coordinateOperationFactory = CRS
-                .getCoordinateOperationFactory(lenient);
-        CoordinateOperation operation1 = coordinateOperationFactory.createOperation(
-                sourceEnvelope.getCoordinateReferenceSystem(), DefaultGeographicCRS.WGS84);
+        CoordinateOperationFactory coordinateOperationFactory =
+                CRS.getCoordinateOperationFactory(lenient);
+        CoordinateOperation operation1 =
+                coordinateOperationFactory.createOperation(
+                        sourceEnvelope.getCoordinateReferenceSystem(), DefaultGeographicCRS.WGS84);
         MathTransform transform1 = operation1.getMathTransform();
-        final CoordinateOperation operation2 = coordinateOperationFactory.createOperation(
-                DefaultGeographicCRS.WGS84_3D, targetCRS);
+        final CoordinateOperation operation2 =
+                coordinateOperationFactory.createOperation(
+                        DefaultGeographicCRS.WGS84_3D, targetCRS);
         MathTransform transform2 = operation2.getMathTransform();
 
-        for( int t = 0; t < npoints; t++ ){
+        for (int t = 0; t < npoints; t++) {
             double dx = scaleX * t;
             double dy = scaleY * t;
-            
-            GeneralDirectPosition left = new GeneralDirectPosition( xmin, ymin+dy);
-            DirectPosition pt = transformTo3D( left, transform1, transform2 );
+
+            GeneralDirectPosition left = new GeneralDirectPosition(xmin, ymin + dy);
+            DirectPosition pt = transformTo3D(left, transform1, transform2);
             targetEnvelope.expandToInclude(pt);
-            
-            GeneralDirectPosition top = new GeneralDirectPosition( xmin+dx, ymax);
-            pt = transformTo3D( top, transform1, transform2 );
+
+            GeneralDirectPosition top = new GeneralDirectPosition(xmin + dx, ymax);
+            pt = transformTo3D(top, transform1, transform2);
             targetEnvelope.expandToInclude(pt);
-            
-            GeneralDirectPosition right = new GeneralDirectPosition( xmax, ymax-dy);
-            pt = transformTo3D( right, transform1, transform2 );
+
+            GeneralDirectPosition right = new GeneralDirectPosition(xmax, ymax - dy);
+            pt = transformTo3D(right, transform1, transform2);
             targetEnvelope.expandToInclude(pt);
-            
-            GeneralDirectPosition bottom = new GeneralDirectPosition( xmax-dx, ymin);
-            pt = transformTo3D( bottom, transform1, transform2 );
+
+            GeneralDirectPosition bottom = new GeneralDirectPosition(xmax - dx, ymin);
+            pt = transformTo3D(bottom, transform1, transform2);
             targetEnvelope.expandToInclude(pt);
         }
         return targetEnvelope;

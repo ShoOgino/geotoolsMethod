@@ -1,129 +1,137 @@
-	/**
-	 * Retrieves a grid coverage based on the DEM assoicated to this gtopo
-	 * coverage. The color palette is fixed and there is no possibility for the
-	 * final user to change it.
-	 * 
-	 * @param dim
-	 * @param requestedEnvelope
-	 * @param overviewPolicy 
-	 * 
-	 * @return the GridCoverage object
-	 * 
-	 * @throws DataSourceException
-	 *             if an error occurs
-	 */
-	private GridCoverage2D getGridCoverage(GeneralEnvelope requestedEnvelope,
-			Rectangle dim, OverviewPolicy overviewPolicy) throws IOException {
-		int hrWidth = originalGridRange.getSpan(0);
-		int hrHeight = originalGridRange.getSpan(1);
+    /**
+     * Retrieves a grid coverage based on the DEM assoicated to this gtopo coverage. The color
+     * palette is fixed and there is no possibility for the final user to change it.
+     *
+     * @param dim
+     * @param requestedEnvelope
+     * @param overviewPolicy
+     * @return the GridCoverage object
+     * @throws DataSourceException if an error occurs
+     */
+    private GridCoverage2D getGridCoverage(
+            GeneralEnvelope requestedEnvelope, Rectangle dim, OverviewPolicy overviewPolicy)
+            throws IOException {
+        int hrWidth = originalGridRange.getSpan(0);
+        int hrHeight = originalGridRange.getSpan(1);
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// Setting subsampling factors with some checkings
-		// 1) the subsampling factors cannot be zero
-		// 2) the subsampling factors cannot be such that the w or h are zero
-		//
-		// /////////////////////////////////////////////////////////////////////
-		final ImageReadParam readP = new ImageReadParam();
-		final Integer imageChoice;
-		try {
-			imageChoice = setReadParams(overviewPolicy, readP,
-					requestedEnvelope, dim);
-		} catch (TransformException e) {
-			throw new DataSourceException(e);
-		}
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Setting subsampling factors with some checkings
+        // 1) the subsampling factors cannot be zero
+        // 2) the subsampling factors cannot be such that the w or h are zero
+        //
+        // /////////////////////////////////////////////////////////////////////
+        final ImageReadParam readP = new ImageReadParam();
+        final Integer imageChoice;
+        try {
+            imageChoice = setReadParams(overviewPolicy, readP, requestedEnvelope, dim);
+        } catch (TransformException e) {
+            throw new DataSourceException(e);
+        }
 
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Statistics
+        //
+        // /////////////////////////////////////////////////////////////////////
+        final int max = stats.getMax();
+        final int min = stats.getMin();
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// Statistics
-		//
-		// /////////////////////////////////////////////////////////////////////
-		final int max = stats.getMax();
-		final int min = stats.getMin();
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Preparing to load
+        //
+        // /////////////////////////////////////////////////////////////////////
+        // trying to create a channel to the file to read
+        final File file = URLs.urlToFile(demURL);
+        final ImageInputStream iis = ImageIO.createImageInputStream(file);
+        if (header.getByteOrder().compareToIgnoreCase("M") == 0) {
+            iis.setByteOrder(ByteOrder.BIG_ENDIAN);
+        } else {
+            iis.setByteOrder(ByteOrder.LITTLE_ENDIAN);
+        }
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// Preparing to load
-		//
-		// /////////////////////////////////////////////////////////////////////
-		// trying to create a channel to the file to read
-		final File file = URLs.urlToFile(demURL);
-		final ImageInputStream iis = ImageIO.createImageInputStream(file);
-		if (header.getByteOrder().compareToIgnoreCase("M") == 0) {
-			iis.setByteOrder(ByteOrder.BIG_ENDIAN);
-		} else {
-			iis.setByteOrder(ByteOrder.LITTLE_ENDIAN);
-		}
+        // Prepare temporary colorModel and sample model, needed to build the
+        // RawImageInputStream
+        final ImageLayout layout = getImageLayout();
+        final ImageTypeSpecifier its =
+                new ImageTypeSpecifier(layout.getColorModel(null), layout.getSampleModel(null));
 
-		// Prepare temporary colorModel and sample model, needed to build the
-		// RawImageInputStream
-		final ImageLayout layout = getImageLayout();
-		final ImageTypeSpecifier its = new ImageTypeSpecifier(layout.getColorModel(null), layout.getSampleModel(null));
-		
-		// Finally, build the image input stream
-		final RawImageInputStream raw = new RawImageInputStream(iis, its,
-				new long[] { 0 }, new Dimension[] { new Dimension(hrWidth,
-						hrHeight) });
+        // Finally, build the image input stream
+        final RawImageInputStream raw =
+                new RawImageInputStream(
+                        iis,
+                        its,
+                        new long[] {0},
+                        new Dimension[] {new Dimension(hrWidth, hrHeight)});
 
-		// building the final image layout
-		final ImageLayout il = new ImageLayout(0, 0, hrWidth
-				/ readP.getSourceXSubsampling(), hrHeight
-				/ readP.getSourceYSubsampling(), 0, 0, 
-				layout.getTileWidth(null), 
-				layout.getTileHeight(null), 
-				layout.getSampleModel(null), 
-				layout.getColorModel(null));
+        // building the final image layout
+        final ImageLayout il =
+                new ImageLayout(
+                        0,
+                        0,
+                        hrWidth / readP.getSourceXSubsampling(),
+                        hrHeight / readP.getSourceYSubsampling(),
+                        0,
+                        0,
+                        layout.getTileWidth(null),
+                        layout.getTileHeight(null),
+                        layout.getSampleModel(null),
+                        layout.getColorModel(null));
 
-		// First operator: read the image
-		final RenderingHints hints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT,
-				il);
-		final ParameterBlock pbjImageRead = new ParameterBlock();
-		pbjImageRead.add(raw);
-		pbjImageRead.add(imageChoice);
-		pbjImageRead.add(Boolean.FALSE);
-		pbjImageRead.add(Boolean.FALSE);
-		pbjImageRead.add(Boolean.FALSE);
-		pbjImageRead.add(null);
-		pbjImageRead.add(null);
-		pbjImageRead.add(readP);
-		pbjImageRead.add(imageIOSPI.createReaderInstance());
-		RenderedOp image = JAI.create("ImageRead", pbjImageRead, hints);
+        // First operator: read the image
+        final RenderingHints hints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT, il);
+        final ParameterBlock pbjImageRead = new ParameterBlock();
+        pbjImageRead.add(raw);
+        pbjImageRead.add(imageChoice);
+        pbjImageRead.add(Boolean.FALSE);
+        pbjImageRead.add(Boolean.FALSE);
+        pbjImageRead.add(Boolean.FALSE);
+        pbjImageRead.add(null);
+        pbjImageRead.add(null);
+        pbjImageRead.add(readP);
+        pbjImageRead.add(imageIOSPI.createReaderInstance());
+        RenderedOp image = JAI.create("ImageRead", pbjImageRead, hints);
 
-		// sample dimension for this coverage
-		final GridSampleDimension band = getSampleDimension(max, min);
+        // sample dimension for this coverage
+        final GridSampleDimension band = getSampleDimension(max, min);
 
-		// setting metadata
-		final Map<String,Double> metadata = new HashMap<String,Double>();
-		metadata.put("maximum", Double.valueOf(stats.getMax()));
-		metadata.put("minimum", Double.valueOf(stats.getMin()));
-		metadata.put("mean", Double.valueOf(stats.getAverage()));
-		metadata.put("std_dev", Double.valueOf(stats.getStdDev()));
-		metadata.put("nodata", Double.valueOf(-9999.0));
+        // setting metadata
+        final Map<String, Double> metadata = new HashMap<String, Double>();
+        metadata.put("maximum", Double.valueOf(stats.getMax()));
+        metadata.put("minimum", Double.valueOf(stats.getMin()));
+        metadata.put("mean", Double.valueOf(stats.getAverage()));
+        metadata.put("std_dev", Double.valueOf(stats.getStdDev()));
+        metadata.put("nodata", Double.valueOf(-9999.0));
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// Creating coverage
-		//
-		// /////////////////////////////////////////////////////////////////////
-		// cleaning name
-		String coverageName = (new File(this.coverageName)).getName();
-		final int extension = coverageName.lastIndexOf(".");
-		if (extension != -1) {
-			String ext = coverageName.substring(extension + 1);
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Creating coverage
+        //
+        // /////////////////////////////////////////////////////////////////////
+        // cleaning name
+        String coverageName = (new File(this.coverageName)).getName();
+        final int extension = coverageName.lastIndexOf(".");
+        if (extension != -1) {
+            String ext = coverageName.substring(extension + 1);
 
-			if ((dmext.compareToIgnoreCase(ext) == 0)
-					|| (dhext.compareToIgnoreCase(ext) == 0)
-					|| (srext.compareToIgnoreCase(ext) == 0)
-					|| (shext.compareToIgnoreCase(ext) == 0)
-					|| (stext.compareToIgnoreCase(ext) == 0)) {
-				coverageName = coverageName.substring(0, extension);
-			}
-		}
+            if ((dmext.compareToIgnoreCase(ext) == 0)
+                    || (dhext.compareToIgnoreCase(ext) == 0)
+                    || (srext.compareToIgnoreCase(ext) == 0)
+                    || (shext.compareToIgnoreCase(ext) == 0)
+                    || (stext.compareToIgnoreCase(ext) == 0)) {
+                coverageName = coverageName.substring(0, extension);
+            }
+        }
 
-		// return the coverage
-		return (GridCoverage2D) coverageFactory.create(coverageName, image,
-				new GeneralEnvelope(originalEnvelope),
-				new GridSampleDimension[] { band }, null, metadata);
-	}
+        // return the coverage
+        return (GridCoverage2D)
+                coverageFactory.create(
+                        coverageName,
+                        image,
+                        new GeneralEnvelope(originalEnvelope),
+                        new GridSampleDimension[] {band},
+                        null,
+                        metadata);
+    }
 

@@ -4,41 +4,43 @@
      * @throws ServiceException
      * @throws SAXException
      */
-    public ExecuteProcessResponse(HTTPResponse httpResponse, boolean raw) throws IOException, ServiceException
-    {
+    public ExecuteProcessResponse(HTTPResponse httpResponse, boolean raw)
+            throws IOException, ServiceException {
         super(httpResponse);
 
         InputStream inputStream = null;
-        try
-        {
-            if(!raw) {
+        try {
+            if (!raw) {
                 inputStream = httpResponse.getResponseStream();
                 parseDocumentResponse(inputStream);
             } else {
                 // we need to know if the response was an exception, unfortunately we cannot
                 // make that determination just by looking at the mime type ...
 
-                // could be gml or other stuff, not necessarily a service exception, we need to check if it's an exception or not
+                // could be gml or other stuff, not necessarily a service exception, we need to
+                // check if it's an exception or not
                 rawContentType = httpResponse.getContentType();
-                if(rawContentType.matches(".*/xml.*")) {
+                if (rawContentType.matches(".*/xml.*")) {
                     // make sure we don't throw away info
                     inputStream = new BufferedInputStream(httpResponse.getResponseStream());
                     inputStream.mark(8192);
-                    
+
                     try {
                         XmlPullParser parser = new MXParser();
                         parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, true);
                         parser.setInput(inputStream, "UTF-8");
                         parser.nextTag();
-    
+
                         // get the first tag name
                         String name = parser.getName();
                         inputStream.reset();
-                        if("ServiceException".equals(name) || "ExceptionReport".equals(name) || "ExecuteResponse".equals(name)) {
+                        if ("ServiceException".equals(name)
+                                || "ExceptionReport".equals(name)
+                                || "ExecuteResponse".equals(name)) {
                             parseDocumentResponse(inputStream);
                             return;
                         }
-                    } catch(XmlPullParserException e) {
+                    } catch (XmlPullParserException e) {
                         throw new IOException("Failed to parse the response", e);
                     }
                 } else {
@@ -49,11 +51,8 @@
                 rawResponseStream = inputStream;
                 inputStream = null;
             }
-        }
-        finally
-        {
-            if (inputStream != null)
-            {
+        } finally {
+            if (inputStream != null) {
                 inputStream.close();
             }
         }

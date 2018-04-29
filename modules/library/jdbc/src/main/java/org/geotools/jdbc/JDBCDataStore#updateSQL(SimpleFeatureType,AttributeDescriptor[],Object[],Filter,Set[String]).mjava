@@ -1,10 +1,13 @@
-    /**
-     * Generates an 'UPDATE' sql statement.
-     */
-    protected String updateSQL(SimpleFeatureType featureType, AttributeDescriptor[] attributes,
-        Object[] values, Filter filter, Set<String> pkColumnNames) throws IOException, SQLException {
+    /** Generates an 'UPDATE' sql statement. */
+    protected String updateSQL(
+            SimpleFeatureType featureType,
+            AttributeDescriptor[] attributes,
+            Object[] values,
+            Filter filter,
+            Set<String> pkColumnNames)
+            throws IOException, SQLException {
         BasicSQLDialect dialect = (BasicSQLDialect) getSQLDialect();
-        
+
         StringBuffer sql = new StringBuffer();
         sql.append("UPDATE ");
         encodeTableName(featureType.getTypeName(), sql, null);
@@ -15,15 +18,15 @@
             // skip exposed pk columns, they are read only
             AttributeDescriptor att = attributes[i];
             String attName = att.getLocalName();
-            if(pkColumnNames.contains(attName)) {
+            if (pkColumnNames.contains(attName)) {
                 continue;
             }
 
             // build "colName = value"
             dialect.encodeColumnName(attName, sql);
             sql.append(" = ");
-            
-            if ( Geometry.class.isAssignableFrom( att.getType().getBinding() ) ) {
+
+            if (Geometry.class.isAssignableFrom(att.getType().getBinding())) {
                 try {
                     Geometry g = (Geometry) values[i];
                     int srid = getGeometrySRID(g, att);
@@ -32,19 +35,18 @@
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
+            } else {
+                dialect.encodeValue(values[i], att.getType().getBinding(), sql);
             }
-            else {
-                dialect.encodeValue(values[i], att.getType().getBinding(), sql);    
-            }
-            
+
             sql.append(",");
         }
 
         sql.setLength(sql.length() - 1);
         sql.append(" ");
 
-        if (filter != null  && !Filter.INCLUDE.equals(filter)) {
-            //encode filter
+        if (filter != null && !Filter.INCLUDE.equals(filter)) {
+            // encode filter
             try {
                 FilterToSQL toSQL = createFilterToSQL(featureType);
                 sql.append(" ").append(toSQL.encodeToString(filter));

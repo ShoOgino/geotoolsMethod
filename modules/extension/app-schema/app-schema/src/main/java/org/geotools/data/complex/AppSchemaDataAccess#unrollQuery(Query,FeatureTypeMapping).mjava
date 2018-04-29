@@ -1,9 +1,8 @@
     /**
      * Creates a <code>org.geotools.data.Query</code> that operates over the surrogate DataStore, by
-     * unrolling the <code>org.geotools.filter.Filter</code> contained in the passed
-     * <code>query</code>, and replacing the list of required attributes by the ones of the mapped
-     * FeatureType.
-     * 
+     * unrolling the <code>org.geotools.filter.Filter</code> contained in the passed <code>query
+     * </code>, and replacing the list of required attributes by the ones of the mapped FeatureType.
+     *
      * @param query
      * @param mapping
      * @return
@@ -18,9 +17,12 @@
             Filter unrolledFilter = AppSchemaDataAccess.unrollFilter(complexFilter, mapping);
 
             Object includeProps = query.getHints().get(Query.INCLUDE_MANDATORY_PROPS);
-            List<PropertyName> propNames = getSurrogatePropertyNames(query.getProperties(),
-                    mapping,
-                    includeProps instanceof Boolean && ((Boolean) includeProps).booleanValue());
+            List<PropertyName> propNames =
+                    getSurrogatePropertyNames(
+                            query.getProperties(),
+                            mapping,
+                            includeProps instanceof Boolean
+                                    && ((Boolean) includeProps).booleanValue());
 
             Query newQuery = new Query();
             String name = source.getName().getLocalPart();
@@ -32,18 +34,21 @@
             newQuery.setHandle(query.getHandle());
             newQuery.setMaxFeatures(query.getMaxFeatures());
             newQuery.setStartIndex(query.getStartIndex());
-            
+
             List<SortBy> sort = new ArrayList<SortBy>();
             if (query.getSortBy() != null) {
                 for (SortBy sortBy : query.getSortBy()) {
-                    List<Expression> expressions = unrollProperty(sortBy.getPropertyName(), mapping);
+                    List<Expression> expressions =
+                            unrollProperty(sortBy.getPropertyName(), mapping);
                     for (Expression expr : expressions) {
                         if (expr != null) {
                             FilterAttributeExtractor extractor = new FilterAttributeExtractor();
                             expr.accept(extractor, null);
-        
+
                             for (String att : extractor.getAttributeNameSet()) {
-                                sort.add(new SortByImpl(filterFac.property(att), sortBy.getSortOrder()));
+                                sort.add(
+                                        new SortByImpl(
+                                                filterFac.property(att), sortBy.getSortOrder()));
                             }
                         }
                     }
@@ -53,13 +58,15 @@
             if (query instanceof JoiningQuery) {
                 FilterAttributeExtractor extractor = new FilterAttributeExtractor();
                 mapping.getFeatureIdExpression().accept(extractor, null);
-                
+
                 if (!Expression.NIL.equals(mapping.getFeatureIdExpression())
                         && !(mapping.getFeatureIdExpression() instanceof Literal)
                         && extractor.getAttributeNameSet().isEmpty()) {
-                    // GEOS-5618: getID() and functions in idExpression aren't supported with joining
-                    String ns = mapping.namespaces.getPrefix(mapping.getTargetFeature().getName()
-                            .getNamespaceURI());
+                    // GEOS-5618: getID() and functions in idExpression aren't supported with
+                    // joining
+                    String ns =
+                            mapping.namespaces.getPrefix(
+                                    mapping.getTargetFeature().getName().getNamespaceURI());
                     String separator = mapping.getTargetFeature().getName().getSeparator();
                     String typeName = mapping.getTargetFeature().getLocalName();
                     throw new UnsupportedOperationException(
@@ -71,7 +78,7 @@
                                             + "\nIf this cannot be helped, you can turn off joining in app-schema.properties file.",
                                     mapping.getFeatureIdExpression(), ns, separator, typeName));
                 }
-                
+
                 JoiningQuery jQuery = new JoiningQuery(newQuery);
                 jQuery.setDenormalised(((JoiningQuery) query).isDenormalised());
                 jQuery.setQueryJoins(((JoiningQuery) query).getQueryJoins());
@@ -82,14 +89,12 @@
                     jQuery.addId(att);
                 }
 
-                
                 unrolledQuery = jQuery;
             } else {
                 unrolledQuery = newQuery;
             }
 
             unrolledQuery.setSortBy(sort.toArray(new SortBy[sort.size()]));
-
         }
 
         return unrolledQuery;

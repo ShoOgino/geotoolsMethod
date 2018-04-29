@@ -1,12 +1,13 @@
     /**
      * Transform {@link SymbolMBLayer} to GeoTools FeatureTypeStyle.
-     * <p>
-     * Notes:
-     * </p>
+     *
+     * <p>Notes:
+     *
      * <ul>
      * </ul>
      *
-     * @param styleContext The MBStyle to which this layer belongs, used as a context for things like resolving sprite and glyph names to full urls.
+     * @param styleContext The MBStyle to which this layer belongs, used as a context for things
+     *     like resolving sprite and glyph names to full urls.
      * @return FeatureTypeStyle
      */
     public List<FeatureTypeStyle> transformInternal(MBStyle styleContext) {
@@ -18,7 +19,9 @@
         // Create point or line placement
 
         // Functions not yet supported for symbolPlacement, so try to evaluate or use default.
-        String symbolPlacementVal = transformer.requireLiteral(symbolPlacement(), String.class, "point", "symbol-placement", getId());
+        String symbolPlacementVal =
+                transformer.requireLiteral(
+                        symbolPlacement(), String.class, "point", "symbol-placement", getId());
 
         if ("point".equalsIgnoreCase(symbolPlacementVal.trim())) {
             // Point Placement (default)
@@ -29,7 +32,8 @@
 
             // MapBox text-offset: +y means down
             Displacement textTranslate = textTranslateDisplacement();
-            textTranslate.setDisplacementY(ff.multiply(ff.literal(-1), textTranslate.getDisplacementY()));
+            textTranslate.setDisplacementY(
+                    ff.multiply(ff.literal(-1), textTranslate.getDisplacementY()));
             pointP.setDisplacement(textTranslate);
 
             pointP.setRotation(textRotate());
@@ -51,8 +55,9 @@
         Halo halo = sf.halo(sf.fill(null, textHaloColor(), null), textHaloWidth());
         Fill fill = sf.fill(null, textColor(), textOpacity());
 
-
-        Font font = sb.createFont(ff.literal(""), ff.literal("normal"), ff.literal("normal"), textSize());
+        Font font =
+                sb.createFont(
+                        ff.literal(""), ff.literal("normal"), ff.literal("normal"), textSize());
 
         if (getTextFont() != null) {
             font.getFamily().clear();
@@ -63,7 +68,6 @@
             font.getFamily().clear();
             font.getFamily().add(textFont());
         }
-
 
         // If the textField is a literal string (not a function), then
         // we need to support Mapbox token replacement.
@@ -78,108 +82,152 @@
         }
         textExpression = ff.function("StringTransform", textExpression, textTransform());
 
-        TextSymbolizer2 symbolizer = (TextSymbolizer2) sf.textSymbolizer(getId(),
-                ff.property((String) null), sf.description(Text.text("text"), null), Units.PIXEL,
-                textExpression, font, labelPlacement, halo, fill);
+        TextSymbolizer2 symbolizer =
+                (TextSymbolizer2)
+                        sf.textSymbolizer(
+                                getId(),
+                                ff.property((String) null),
+                                sf.description(Text.text("text"), null),
+                                Units.PIXEL,
+                                textExpression,
+                                font,
+                                labelPlacement,
+                                halo,
+                                fill);
 
-        Number symbolSpacing = transformer.requireLiteral(symbolSpacing(), Number.class, 250,
-                "symbol-spacing", getId());
+        Number symbolSpacing =
+                transformer.requireLiteral(
+                        symbolSpacing(), Number.class, 250, "symbol-spacing", getId());
         symbolizer.getOptions().put("repeat", String.valueOf(symbolSpacing));
 
         // text max angle - only for line placement
         // throw MBFormatException if point placement
-        if(labelPlacement instanceof LinePlacement){
+        if (labelPlacement instanceof LinePlacement) {
             // followLine will be true if line placement, it is an implied default of MBstyles.
             symbolizer.getOptions().put("forceLeftToRight", String.valueOf(textKeepUpright()));
             symbolizer.getOptions().put("followLine", "true");
             symbolizer.getOptions().put("maxAngleDelta", String.valueOf(getTextMaxAngle()));
         } else if (hasTextMaxAngle()) {
-        	throw new MBFormatException("Property text-max-angle requires symbol-placement = line but symbol-placement = " + symbolPlacementVal);
+            throw new MBFormatException(
+                    "Property text-max-angle requires symbol-placement = line but symbol-placement = "
+                            + symbolPlacementVal);
         }
         // conflictResolution
-        // Mapbox allows text overlap and icon overlap separately. GeoTools only has conflictResolution.
-        Boolean textAllowOverlap = transformer.requireLiteral(textAllowOverlap(), Boolean.class, false,
-                "text-allow-overlap", getId());
-        Boolean iconAllowOverlap = transformer.requireLiteral(iconAllowOverlap(), Boolean.class, false,
-                "icon-allow-overlap", getId());
+        // Mapbox allows text overlap and icon overlap separately. GeoTools only has
+        // conflictResolution.
+        Boolean textAllowOverlap =
+                transformer.requireLiteral(
+                        textAllowOverlap(), Boolean.class, false, "text-allow-overlap", getId());
+        Boolean iconAllowOverlap =
+                transformer.requireLiteral(
+                        iconAllowOverlap(), Boolean.class, false, "icon-allow-overlap", getId());
 
-        symbolizer.getOptions().put("conflictResolution",
-                String.valueOf(!(textAllowOverlap || iconAllowOverlap)));
+        symbolizer
+                .getOptions()
+                .put("conflictResolution", String.valueOf(!(textAllowOverlap || iconAllowOverlap)));
 
-        String textFitVal = transformer.requireLiteral(iconTextFit(), String.class, "none", "icon-text-fit", getId()).trim();
+        String textFitVal =
+                transformer
+                        .requireLiteral(
+                                iconTextFit(), String.class, "none", "icon-text-fit", getId())
+                        .trim();
         if ("height".equalsIgnoreCase(textFitVal) || "width".equalsIgnoreCase(textFitVal)) {
-            symbolizer.getOptions().put("graphic-resize",
-                    "stretch");
+            symbolizer.getOptions().put("graphic-resize", "stretch");
         } else if ("both".equalsIgnoreCase(textFitVal)) {
-            symbolizer.getOptions().put("graphic-resize",
-                    "proportional");
+            symbolizer.getOptions().put("graphic-resize", "proportional");
         } else {
             // Default
-            symbolizer.getOptions().put("graphic-resize",
-                    "none");
+            symbolizer.getOptions().put("graphic-resize", "none");
         }
 
-        // MapBox symbol-avoid-edges defaults to false, If true, the symbols will not cross tile edges to avoid
-        // mutual collisions.  This concept is represented by using the Partials option in GeoTools.  The partials
-        // options instructs the renderer to render labels that cross the map extent, which are normally not painted
-        // since there is no guarantee that a map put on the side of the current one (tiled rendering) will contain
-        // the other half of the label. By enabling “partials” the style editor takes responsibility for the other
-        // half being there (maybe because the label points have been placed by hand and are assured not to conflict
+        // MapBox symbol-avoid-edges defaults to false, If true, the symbols will not cross tile
+        // edges to avoid
+        // mutual collisions.  This concept is represented by using the Partials option in GeoTools.
+        //  The partials
+        // options instructs the renderer to render labels that cross the map extent, which are
+        // normally not painted
+        // since there is no guarantee that a map put on the side of the current one (tiled
+        // rendering) will contain
+        // the other half of the label. By enabling “partials” the style editor takes responsibility
+        // for the other
+        // half being there (maybe because the label points have been placed by hand and are assured
+        // not to conflict
         // with each other, at all zoom levels).
         //
         // Based upon the above if symbol-avoid-edges is true we do not need
-        // to add the partials option as the renderer will do this by default. But if symbol-avoid-edges is missing or
+        // to add the partials option as the renderer will do this by default. But if
+        // symbol-avoid-edges is missing or
         // set to false, then we do need to add the partials option set to true.
-        if (!getSymbolAvoidEdges()){
+        if (!getSymbolAvoidEdges()) {
             symbolizer.getOptions().put("partials", "true");
         }
 
-        //Mapbox allows you to sapecify an array of values, one for each side
+        // Mapbox allows you to sapecify an array of values, one for each side
         if (getIconTextFitPadding() != null && !getIconTextFitPadding().isEmpty()) {
-            symbolizer.getOptions().put("graphic-margin",
-                    String.valueOf(getIconTextFitPadding().get(0)));
+            symbolizer
+                    .getOptions()
+                    .put("graphic-margin", String.valueOf(getIconTextFitPadding().get(0)));
         } else {
             symbolizer.getOptions().put("graphic-margin", "0");
         }
 
         // text-padding default value is 2 in mapbox, will override Geoserver defaults
-        if(!hasIconImage() || "point".equalsIgnoreCase(symbolPlacementVal.trim()) || (getTextPadding().doubleValue()) >= (getIconPadding().doubleValue())) { 
+        if (!hasIconImage()
+                || "point".equalsIgnoreCase(symbolPlacementVal.trim())
+                || (getTextPadding().doubleValue()) >= (getIconPadding().doubleValue())) {
             symbolizer.getOptions().put("spaceAround", String.valueOf(getTextPadding()));
         }
         // halo blur
         // layer.textHaloBlur();
 
         // auto wrap
-        // getTextSize defaults to 16, and getTextMaxWidth defaults to 10 
+        // getTextSize defaults to 16, and getTextMaxWidth defaults to 10
         // converts text-max-width(mbstyle) from ems to pixels for autoWrap(sld)
-        // Only supported when text-max-width and text-size are not functions (because vendor options don't take expressions)
+        // Only supported when text-max-width and text-size are not functions (because vendor
+        // options don't take expressions)
         if (hasTextMaxWidth()) {
-            double textMaxWidth = transformer.requireLiteral(textMaxWidth(), Double.class, 10.0, "text-max-width", getId());
-            double textSize = transformer.requireLiteral(textSize(), Double.class, 16.0, "text-size (when text-max-width is specified)", getId());
-            symbolizer.getOptions().put("autoWrap", String.valueOf(textMaxWidth * textSize));             
+            double textMaxWidth =
+                    transformer.requireLiteral(
+                            textMaxWidth(), Double.class, 10.0, "text-max-width", getId());
+            double textSize =
+                    transformer.requireLiteral(
+                            textSize(),
+                            Double.class,
+                            16.0,
+                            "text-size (when text-max-width is specified)",
+                            getId());
+            symbolizer.getOptions().put("autoWrap", String.valueOf(textMaxWidth * textSize));
         }
-
 
         // If the layer has an icon image, add it to our symbolizer
         if (hasIconImage()) {
             // icon-ignore-placement requires an icon-image so we handle this property here.
-            // By default - or icon-ignore-placement: false, MapBox prevents symbols from being visible if they collide
-            // with other icons.  GeoServer only implements this behavior if the vendorOption labelObstacle is set
+            // By default - or icon-ignore-placement: false, MapBox prevents symbols from being
+            // visible if they collide
+            // with other icons.  GeoServer only implements this behavior if the vendorOption
+            // labelObstacle is set
             // to true.
             if (!getIconIgnorePlacement()) {
                 symbolizer.getOptions().put("labelObstacle", "true");
             }
 
-            //Check to see that hasTextField() is true check to see if IconPadding is greater to put to spaceAround
-            if (!hasTextField() || ((getIconPadding().doubleValue()) > (getTextPadding().doubleValue())) && !"point".equalsIgnoreCase(symbolPlacementVal.trim())) {
+            // Check to see that hasTextField() is true check to see if IconPadding is greater to
+            // put to spaceAround
+            if (!hasTextField()
+                    || ((getIconPadding().doubleValue()) > (getTextPadding().doubleValue()))
+                            && !"point".equalsIgnoreCase(symbolPlacementVal.trim())) {
                 symbolizer.getOptions().put("spaceAround", String.valueOf(getIconPadding()));
             }
             // If we have an icon with a Point placement create a PointSymoblizer for the icon.
             // This enables adjusting the text placement without moving the icon.
             if ("point".equalsIgnoreCase(symbolPlacementVal.trim())) {
-                org.geotools.styling.PointSymbolizer pointSymbolizer = sf.pointSymbolizer(getId(),
-                        ff.property((String) null), sf.description(Text.text("text"), null), Units.PIXEL,
-                        getGraphic(transformer, styleContext));
+                org.geotools.styling.PointSymbolizer pointSymbolizer =
+                        sf.pointSymbolizer(
+                                getId(),
+                                ff.property((String) null),
+                                sf.description(Text.text("text"), null),
+                                Units.PIXEL,
+                                getGraphic(transformer, styleContext));
                 symbolizers.add(pointSymbolizer);
             } else {
 
@@ -187,8 +235,10 @@
             }
         }
 
-        // Check that a labelObstacle vendor option hasn't already been placed on the symbolizer and that
-        // textIgnorePlacement is either null or false, if so add it.  If textIgnorePlacement is true, accept default behavior.
+        // Check that a labelObstacle vendor option hasn't already been placed on the symbolizer and
+        // that
+        // textIgnorePlacement is either null or false, if so add it.  If textIgnorePlacement is
+        // true, accept default behavior.
         if (symbolizer.getOptions().get("labelObstacle") == null && !getTextIgnorePlacement()) {
             symbolizer.getOptions().put("labelObstacle", "true");
         }
@@ -198,17 +248,29 @@
 
         // List of opengis rules here (needed for constructor)
         List<org.opengis.style.Rule> rules = new ArrayList<>();
-        Rule rule = sf.rule(getId(), null, null, 0.0, Double.POSITIVE_INFINITY, symbolizers,
-                filter.filter());
+        Rule rule =
+                sf.rule(
+                        getId(),
+                        null,
+                        null,
+                        0.0,
+                        Double.POSITIVE_INFINITY,
+                        symbolizers,
+                        filter.filter());
         rule.setLegendGraphic(new Graphic[0]);
 
         rules.add(rule);
 
-        return Collections.singletonList(sf.featureTypeStyle(getId(),
-                sf.description(Text.text("MBStyle " + getId()),
-                        Text.text("Generated for " + getSourceLayer())),
-                null, // (unused)
-                Collections.emptySet(), filter.semanticTypeIdentifiers(), // we only expect this to be applied to polygons
-                rules));
+        return Collections.singletonList(
+                sf.featureTypeStyle(
+                        getId(),
+                        sf.description(
+                                Text.text("MBStyle " + getId()),
+                                Text.text("Generated for " + getSourceLayer())),
+                        null, // (unused)
+                        Collections.emptySet(),
+                        filter.semanticTypeIdentifiers(), // we only expect this to be applied to
+                        // polygons
+                        rules));
     }
 

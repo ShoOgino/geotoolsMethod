@@ -1,105 +1,104 @@
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see org.geotools.renderer.lite.gridcoverage2d.BaseCoverageProcessingNode#execute()
-	 */
-	protected GridCoverage2D execute() {
-		// preconditions
-		assert this.getSources().size() <= 1;
+    /*
+     * (non-Javadoc)
+     *
+     * @see org.geotools.renderer.lite.gridcoverage2d.BaseCoverageProcessingNode#execute()
+     */
+    protected GridCoverage2D execute() {
+        // preconditions
+        assert this.getSources().size() <= 1;
 
-		// /////////////////////////////////////////////////////////////////////
-		//
-		// Get the sources and see what we got to do. Note that if we have more
-		// than once source we'll use only the first one but we'll
-		//
-		// /////////////////////////////////////////////////////////////////////
-		final List<CoverageProcessingNode> sources = this.getSources();
-		if (sources != null && !sources.isEmpty()) {
-			final GridCoverage2D source = (GridCoverage2D) getSource(0).getOutput();
-			GridCoverageRendererUtilities.ensureSourceNotNull(source, this.getName().toString());
-			GridCoverage2D output = null;
-			if (bandIndex != -1) {
-				// /////////////////////////////////////////////////////////////////////
-				//
-				// We have a valid band index, go ahead and to a band select
-				//
-				// /////////////////////////////////////////////////////////////////////
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Get the sources and see what we got to do. Note that if we have more
+        // than once source we'll use only the first one but we'll
+        //
+        // /////////////////////////////////////////////////////////////////////
+        final List<CoverageProcessingNode> sources = this.getSources();
+        if (sources != null && !sources.isEmpty()) {
+            final GridCoverage2D source = (GridCoverage2D) getSource(0).getOutput();
+            GridCoverageRendererUtilities.ensureSourceNotNull(source, this.getName().toString());
+            GridCoverage2D output = null;
+            if (bandIndex != -1) {
+                // /////////////////////////////////////////////////////////////////////
+                //
+                // We have a valid band index, go ahead and to a band select
+                //
+                // /////////////////////////////////////////////////////////////////////
 
-				// //
-				//
-				// Is the index correct?
-				//
-				// //
-				final int numSampleDimensions = source.getNumSampleDimensions();
-				if (bandIndex < 1 || bandIndex > numSampleDimensions)
-					throw new IllegalArgumentException(
-							Errors.format(ErrorKeys.BAD_BAND_NUMBER_$1,Integer.valueOf(bandIndex)));
+                // //
+                //
+                // Is the index correct?
+                //
+                // //
+                final int numSampleDimensions = source.getNumSampleDimensions();
+                if (bandIndex < 1 || bandIndex > numSampleDimensions)
+                    throw new IllegalArgumentException(
+                            Errors.format(
+                                    ErrorKeys.BAD_BAND_NUMBER_$1, Integer.valueOf(bandIndex)));
 
-				// //
-				//
-				// SHORTCUT
-				//
-				// Are we trying to do a band select on a single band coverage?
-				// Note that we already checked that the index is valid.
-				//
-				// //
-				if (bandIndex == 1 && numSampleDimensions == 1) {
-					output = source;
+                // //
+                //
+                // SHORTCUT
+                //
+                // Are we trying to do a band select on a single band coverage?
+                // Note that we already checked that the index is valid.
+                //
+                // //
+                if (bandIndex == 1 && numSampleDimensions == 1) {
+                    output = source;
 
-				} else {
-					// //
-					//
-					// Do the actual band selection.
-					//
-					// //
-					final CoverageProcessor processor = new CoverageProcessor(
-							this.getHints());
-					// get the source
-					final ParameterValueGroup parameters = processor
-							.getOperation("SelectSampleDimension")
-							.getParameters();
-					parameters.parameter("SampleDimensions").setValue(
-							new int[] { bandIndex - 1 });
-					parameters.parameter("Source").setValue(source);
+                } else {
+                    // //
+                    //
+                    // Do the actual band selection.
+                    //
+                    // //
+                    final CoverageProcessor processor = new CoverageProcessor(this.getHints());
+                    // get the source
+                    final ParameterValueGroup parameters =
+                            processor.getOperation("SelectSampleDimension").getParameters();
+                    parameters.parameter("SampleDimensions").setValue(new int[] {bandIndex - 1});
+                    parameters.parameter("Source").setValue(source);
 
-					// //
-					//
-					// Save the output
-					//
-					// //
-					final Hints hints = new Hints(getHints());
-					final ImageLayout layout = new ImageLayout();
-					final RenderedImage sourceRaster = source
-							.getRenderedImage();
-					final SampleModel oldSM = sourceRaster.getSampleModel();
-					final ColorModel cm = new ComponentColorModel(ColorSpace
-							.getInstance(ColorSpace.CS_GRAY), false, false,
-							Transparency.OPAQUE, oldSM.getDataType());
-					layout.setColorModel(cm);
-					layout.setSampleModel(cm.createCompatibleSampleModel(oldSM
-							.getWidth(), oldSM.getHeight()));
-					hints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
-					output = (GridCoverage2D) new SelectSampleDimension()
-							.doOperation(parameters, hints);
-				}
+                    // //
+                    //
+                    // Save the output
+                    //
+                    // //
+                    final Hints hints = new Hints(getHints());
+                    final ImageLayout layout = new ImageLayout();
+                    final RenderedImage sourceRaster = source.getRenderedImage();
+                    final SampleModel oldSM = sourceRaster.getSampleModel();
+                    final ColorModel cm =
+                            new ComponentColorModel(
+                                    ColorSpace.getInstance(ColorSpace.CS_GRAY),
+                                    false,
+                                    false,
+                                    Transparency.OPAQUE,
+                                    oldSM.getDataType());
+                    layout.setColorModel(cm);
+                    layout.setSampleModel(
+                            cm.createCompatibleSampleModel(oldSM.getWidth(), oldSM.getHeight()));
+                    hints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
+                    output =
+                            (GridCoverage2D)
+                                    new SelectSampleDimension().doOperation(parameters, hints);
+                }
 
-				// postcondition
-				assert output.getNumSampleDimensions() == 1;
-			} else
-				// /////////////////////////////////////////////////////////////////////
-				//
-				// We do not have a valid band index, let's try with a
-				// conservative approach that is, let's forward the source
-				// coverage intact.
-				// TODO better throwing an error?
-				// /////////////////////////////////////////////////////////////////////
-				output = source;
+                // postcondition
+                assert output.getNumSampleDimensions() == 1;
+            } else
+                // /////////////////////////////////////////////////////////////////////
+                //
+                // We do not have a valid band index, let's try with a
+                // conservative approach that is, let's forward the source
+                // coverage intact.
+                // TODO better throwing an error?
+                // /////////////////////////////////////////////////////////////////////
+                output = source;
 
-
-			return output;
-
-		}
-		throw new IllegalStateException("No source was set for this Node.");
-
-	}
+            return output;
+        }
+        throw new IllegalStateException("No source was set for this Node.");
+    }
 

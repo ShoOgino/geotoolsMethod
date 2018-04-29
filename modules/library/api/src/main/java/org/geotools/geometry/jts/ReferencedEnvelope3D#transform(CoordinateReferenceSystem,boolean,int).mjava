@@ -1,67 +1,70 @@
     /**
-     * Transforms the referenced envelope to the specified coordinate reference system
-     * using the specified amount of points.
-     * <p>
-     * This method can handle the case where the envelope contains the North or South pole,
-     * or when it cross the &plusmn;180ï¿½ longitude.
+     * Transforms the referenced envelope to the specified coordinate reference system using the
+     * specified amount of points.
+     *
+     * <p>This method can handle the case where the envelope contains the North or South pole, or
+     * when it cross the &plusmn;180ï¿½ longitude.
      *
      * @param targetCRS The target coordinate reference system.
-     * @param lenient   {@code true} if datum shift should be applied even if there is
-     *                  insuffisient information. Otherwise (if {@code false}), an
-     *                  exception is thrown in such case.
+     * @param lenient {@code true} if datum shift should be applied even if there is insuffisient
+     *     information. Otherwise (if {@code false}), an exception is thrown in such case.
      * @param numPointsForTransformation The number of points to use for sampling the envelope.
      * @return The transformed envelope.
      * @throws FactoryException if the math transform can't be determined.
      * @throws TransformException if at least one coordinate can't be transformed.
-     *
      * @see CRS#transform(CoordinateOperation, org.opengis.geometry.Envelope)
-     *
      */
-    public ReferencedEnvelope transform(final CoordinateReferenceSystem targetCRS,
-        final boolean lenient, final int numPointsForTransformation)
-        throws TransformException, FactoryException {
-    	//TODO: implement 3D behaviour for this method
-    	//falls back on 2D behaviour (3rd coordinate is preserved!)
-    	
-        if( crs == null ){
-            if( isEmpty() ){
+    public ReferencedEnvelope transform(
+            final CoordinateReferenceSystem targetCRS,
+            final boolean lenient,
+            final int numPointsForTransformation)
+            throws TransformException, FactoryException {
+        // TODO: implement 3D behaviour for this method
+        // falls back on 2D behaviour (3rd coordinate is preserved!)
+
+        if (crs == null) {
+            if (isEmpty()) {
                 // We don't have a CRS yet because we are still empty, being empty is
                 // something we can represent in the targetCRS
                 return new ReferencedEnvelope3D(targetCRS);
-            }
-            else {
+            } else {
                 // really this is a the code that created this ReferencedEnvelope
-                throw new NullPointerException("Unable to transform referenced envelope, crs has not yet been provided.");
+                throw new NullPointerException(
+                        "Unable to transform referenced envelope, crs has not yet been provided.");
             }
         }
-        if( getDimension() != targetCRS.getCoordinateSystem().getDimension()){
-            if( lenient ){
-                return JTS.transformTo2D(this, targetCRS, lenient, numPointsForTransformation );
-            }
-            else {
-                throw new MismatchedDimensionException(Errors.format(
-                        ErrorKeys.MISMATCHED_DIMENSION_$3, crs.getName().getCode(),
-                        new Integer(getDimension()), new Integer(targetCRS.getCoordinateSystem().getDimension())));
+        if (getDimension() != targetCRS.getCoordinateSystem().getDimension()) {
+            if (lenient) {
+                return JTS.transformTo2D(this, targetCRS, lenient, numPointsForTransformation);
+            } else {
+                throw new MismatchedDimensionException(
+                        Errors.format(
+                                ErrorKeys.MISMATCHED_DIMENSION_$3,
+                                crs.getName().getCode(),
+                                new Integer(getDimension()),
+                                new Integer(targetCRS.getCoordinateSystem().getDimension())));
             }
         }
         // Gets a first estimation using an algorithm capable to take singularity in account
         // (North pole, South pole, 180ï¿½ longitude). We will expand this initial box later.
-        
-        CoordinateOperationFactory coordinateOperationFactory = CRS.getCoordinateOperationFactory(lenient);
 
-        final CoordinateOperation operation = coordinateOperationFactory.createOperation(crs, targetCRS);
+        CoordinateOperationFactory coordinateOperationFactory =
+                CRS.getCoordinateOperationFactory(lenient);
+
+        final CoordinateOperation operation =
+                coordinateOperationFactory.createOperation(crs, targetCRS);
         final GeneralEnvelope transformed = CRS.transform(operation, this);
         transformed.setCoordinateReferenceSystem(targetCRS);
 
-       // Now expands the box using the usual utility methods.
-        
+        // Now expands the box using the usual utility methods.
+
         final ReferencedEnvelope3D target = new ReferencedEnvelope3D(transformed);
         final MathTransform transform = operation.getMathTransform();
         JTS.transform(this, target, transform, numPointsForTransformation);
-        //smuggle back third coordinate
-        target.expandToInclude(0,0,this.minz);
-        target.expandToInclude(0,0,this.maxz);
-        
+        // smuggle back third coordinate
+        target.expandToInclude(0, 0, this.minz);
+        target.expandToInclude(0, 0, this.maxz);
+
         return target;
     }
 

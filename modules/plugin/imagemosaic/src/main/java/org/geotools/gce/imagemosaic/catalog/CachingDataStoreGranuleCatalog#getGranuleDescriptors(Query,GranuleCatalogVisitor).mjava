@@ -15,14 +15,14 @@
         final Utils.BBOXFilterExtractor bboxExtractor = new Utils.BBOXFilterExtractor();
         q.getFilter().accept(bboxExtractor, null);
         ReferencedEnvelope requestedBBox = bboxExtractor.getBBox();
-        final Geometry intersectionGeometry = requestedBBox != null ? JTS.toGeometry(requestedBBox)
-                : null;
+        final Geometry intersectionGeometry =
+                requestedBBox != null ? JTS.toGeometry(requestedBBox) : null;
 
         // visiting the features from the underlying store
-        try(SimpleFeatureIterator fi = features.features()) {
-            while(fi.hasNext() && !visitor.isVisitComplete()) {
+        try (SimpleFeatureIterator fi = features.features()) {
+            while (fi.hasNext() && !visitor.isVisitComplete()) {
                 final SimpleFeature sf = fi.next();
-                
+
                 GranuleDescriptor granule = null;
 
                 // caching by granule's location
@@ -35,30 +35,41 @@
                         // create the granule descriptor
                         MultiLevelROI footprint = getGranuleFootprint(sf);
                         if (footprint == null || !footprint.isEmpty()) {
-                            // caching only if the footprint is either absent or present and NON-empty
-                            granule = new GranuleDescriptor(sf, adaptee.suggestedFormat,
-                                    adaptee.suggestedRasterSPI, adaptee.suggestedIsSPI,
-                                    adaptee.pathType, adaptee.locationAttribute,
-                                    adaptee.parentLocation, footprint, adaptee.heterogeneous,
-                                    adaptee.hints); // retain hints since this may contain a reader or anything
+                            // caching only if the footprint is either absent or present and
+                            // NON-empty
+                            granule =
+                                    new GranuleDescriptor(
+                                            sf,
+                                            adaptee.suggestedFormat,
+                                            adaptee.suggestedRasterSPI,
+                                            adaptee.suggestedIsSPI,
+                                            adaptee.pathType,
+                                            adaptee.locationAttribute,
+                                            adaptee.parentLocation,
+                                            footprint,
+                                            adaptee.heterogeneous,
+                                            adaptee.hints); // retain hints since this may contain a
+                            // reader or anything
                             descriptorsCache.put(featureId, granule);
                         }
                     } catch (Exception e) {
                         LOGGER.log(Level.FINE, "Skipping invalid granule", e);
                     }
-
                 }
 
                 if (granule != null) {
                     // check ROI inclusion
                     final Geometry footprint = granule.getFootprint();
-                    if (intersectionGeometry == null || footprint == null
+                    if (intersectionGeometry == null
+                            || footprint == null
                             || polygonOverlap(footprint, intersectionGeometry)) {
                         visitor.visit(granule, sf);
                     } else {
                         if (LOGGER.isLoggable(Level.FINE)) {
-                            LOGGER.fine("Skipping granule " + granule
-                                    + "\n since its ROI does not intersect the requested area");
+                            LOGGER.fine(
+                                    "Skipping granule "
+                                            + granule
+                                            + "\n since its ROI does not intersect the requested area");
                         }
                     }
                 }

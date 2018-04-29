@@ -1,141 +1,148 @@
-    private Object readObject(final int fieldOffset, final int fieldNum)
-            throws IOException {
+    private Object readObject(final int fieldOffset, final int fieldNum) throws IOException {
         final char type = fieldTypes[fieldNum];
         final int fieldLen = fieldLengths[fieldNum];
         Object object = null;
         if (fieldLen > 0) {
             switch (type) {
-            // (L)logical (T,t,F,f,Y,y,N,n)
-            case 'l':
-            case 'L':
-                final char c = (char) bytes[fieldOffset];
-                switch (c) {
-                case 't':
-                case 'T':
-                case 'Y':
-                case 'y':
-                    object = Boolean.TRUE;
+                    // (L)logical (T,t,F,f,Y,y,N,n)
+                case 'l':
+                case 'L':
+                    final char c = (char) bytes[fieldOffset];
+                    switch (c) {
+                        case 't':
+                        case 'T':
+                        case 'Y':
+                        case 'y':
+                            object = Boolean.TRUE;
+                            break;
+                        case 'f':
+                        case 'F':
+                        case 'N':
+                        case 'n':
+                            object = Boolean.FALSE;
+                            break;
+                        default:
+                            // 0x20 should be interpreted as null, but we're going to be a bit more
+                            // lax
+                            object = null;
+                    }
                     break;
+                    // (C)character (String)
+                case 'c':
+                case 'C':
+                    // if the string begins with a null terminator, the value is null
+                    if (bytes[fieldOffset] != '\0') {
+                        // remember we need to skip trailing and leading spaces
+                        if (oneBytePerChar) {
+                            object = fastParse(bytes, fieldOffset, fieldLen).trim();
+                        } else {
+                            object =
+                                    new String(bytes, fieldOffset, fieldLen, stringCharset.name())
+                                            .trim();
+                        }
+                    }
+                    break;
+                    // (D)date (Date)
+                case 'd':
+                case 'D':
+                    // If the first 8 characters are '0', this is a null date
+                    for (int i = 0; i < 8; i++) {
+                        if (bytes[fieldOffset + i] != '0') {
+                            try {
+                                String tempString = fastParse(bytes, fieldOffset, 4);
+                                final int tempYear = Integer.parseInt(tempString);
+                                tempString = fastParse(bytes, fieldOffset + 4, 2);
+                                final int tempMonth = Integer.parseInt(tempString) - 1;
+                                tempString = fastParse(bytes, fieldOffset + 6, 2);
+                                final int tempDay = Integer.parseInt(tempString);
+                                calendar.clear();
+                                calendar.set(Calendar.YEAR, tempYear);
+                                calendar.set(Calendar.MONTH, tempMonth);
+                                calendar.set(Calendar.DAY_OF_MONTH, tempDay);
+                                object = calendar.getTime();
+                            } catch (final NumberFormatException nfe) {
+                                // todo: use progresslistener, this isn't a grave error.
+                            }
+                            break;
+                        }
+                    }
+                    break;
+                    // (@) Timestamp (Date)
+                case '@':
+                    try {
+                        // TODO: Find a smarter way to do this.
+                        // timestampBytes = bytes[fieldOffset:fieldOffset+7]
+                        byte[] timestampBytes = {
+                            // Time in millis, after reverse.
+                            bytes[fieldOffset + 7], bytes[fieldOffset + 6], bytes[fieldOffset + 5],
+                                    bytes[fieldOffset + 4],
+                            // Days, after reverse.
+                            bytes[fieldOffset + 3], bytes[fieldOffset + 2], bytes[fieldOffset + 1],
+                                    bytes[fieldOffset]
+                        };
+
+                        ByteArrayInputStream i_bytes = new ByteArrayInputStream(timestampBytes);
+                        DataInputStream i_stream =
+                                new DataInputStream(new BufferedInputStream(i_bytes));
+
+                        int time = i_stream.readInt();
+                        int days = i_stream.readInt();
+
+                        calendar.setTimeInMillis(
+                                days * MILLISECS_PER_DAY
+                                        + DbaseFileHeader.MILLIS_SINCE_4713
+                                        + time);
+
+                        object = calendar.getTime();
+
+                    } catch (final NumberFormatException nfe) {
+                        // todo: use progresslistener, this isn't a grave error.
+                    }
+                    break;
+                    // (N)umeric (Integer, Long or Fallthrough to Double)
+                case 'n':
+                case 'N':
+                    // numbers that begin with '*' are considered null
+                    if (bytes[fieldOffset] == '*') {
+                        break;
+                    } else {
+                        final String string = fastParse(bytes, fieldOffset, fieldLen).trim();
+                        Class clazz = header.getFieldClass(fieldNum);
+                        if (clazz == Integer.class) {
+                            try {
+                                object = Integer.parseInt(string);
+                                break;
+                            } catch (NumberFormatException e) {
+                                // try to parse as long...
+                                clazz = Long.class;
+                            }
+                        }
+                        if (clazz == Long.class) {
+                            try {
+                                object = Long.parseLong(string);
+                                break;
+                            } catch (final NumberFormatException e2) {
+                                // fall through to the floating point number
+                            }
+                        }
+                    }
+                    // do not break, fall through to the 'f' case
+
+                    // (F)loating point number
                 case 'f':
                 case 'F':
-                case 'N':
-                case 'n':
-                    object = Boolean.FALSE;
+                    if (bytes[fieldOffset] != '*') {
+                        try {
+                            object = Double.parseDouble(fastParse(bytes, fieldOffset, fieldLen));
+                        } catch (final NumberFormatException e) {
+                            // okay, now whatever we got was truly indigestible.
+                            object = null;
+                        }
+                    }
                     break;
                 default:
-                    // 0x20 should be interpreted as null, but we're going to be a bit more lax
-                    object = null;
-                }
-                break;
-            // (C)character (String)
-            case 'c':
-            case 'C':
-                // if the string begins with a null terminator, the value is null
-                if (bytes[fieldOffset] != '\0') {
-                    // remember we need to skip trailing and leading spaces
-                    if(oneBytePerChar) {
-                        object = fastParse(bytes, fieldOffset, fieldLen).trim();
-                    } else {
-                        object = new String(bytes, fieldOffset, fieldLen, stringCharset.name()).trim();
-                    }
-                }
-                break;
-            // (D)date (Date)
-            case 'd':
-            case 'D':
-                // If the first 8 characters are '0', this is a null date
-                for (int i = 0; i < 8; i++) {
-                    if (bytes[fieldOffset+i] != '0') {
-                        try {
-                            String tempString = fastParse(bytes,fieldOffset,4); 
-                            final int tempYear = Integer.parseInt(tempString);
-                            tempString =  fastParse(bytes,fieldOffset + 4,2);
-                            final int tempMonth = Integer.parseInt(tempString) - 1;
-                            tempString = fastParse(bytes,fieldOffset + 6,2); 
-                            final int tempDay = Integer.parseInt(tempString);
-                            calendar.clear();
-                            calendar.set(Calendar.YEAR, tempYear);
-                            calendar.set(Calendar.MONTH, tempMonth);
-                            calendar.set(Calendar.DAY_OF_MONTH, tempDay);
-                            object = calendar.getTime();
-                        } catch (final NumberFormatException nfe) {
-                            // todo: use progresslistener, this isn't a grave error.
-                        }
-                        break;
-                    }
-                }
-                break;
-            // (@) Timestamp (Date)
-            case '@':
-                try {      
-                    //TODO: Find a smarter way to do this. 
-                    //timestampBytes = bytes[fieldOffset:fieldOffset+7]
-                    byte[] timestampBytes = {
-                        // Time in millis, after reverse.
-                        bytes[fieldOffset+7], bytes[fieldOffset+6], bytes[fieldOffset+5], bytes[fieldOffset+4],
-                        // Days, after reverse.
-                        bytes[fieldOffset+3], bytes[fieldOffset+2], bytes[fieldOffset+1], bytes[fieldOffset]                    
-                    };
-                       
-                    ByteArrayInputStream i_bytes = new ByteArrayInputStream(timestampBytes);
-                    DataInputStream i_stream = new DataInputStream(new BufferedInputStream(i_bytes));
-
-                    int time = i_stream.readInt();
-                    int days = i_stream.readInt();
-                              
-                    calendar.setTimeInMillis(days * MILLISECS_PER_DAY + DbaseFileHeader.MILLIS_SINCE_4713 + time);
-
-                    object = calendar.getTime();
-
-                } catch (final NumberFormatException nfe) {
-                   // todo: use progresslistener, this isn't a grave error.
-                }
-                break;                
-            // (N)umeric (Integer, Long or Fallthrough to Double)
-            case 'n':
-            case 'N':
-                // numbers that begin with '*' are considered null
-                if (bytes[fieldOffset] == '*') {
-                    break;
-                } else {
-                    final String string = fastParse(bytes,fieldOffset,fieldLen).trim();
-                    Class clazz = header.getFieldClass(fieldNum);
-                    if (clazz == Integer.class) {
-                        try {
-                            object = Integer.parseInt(string);
-                            break;
-                        } catch (NumberFormatException e) {
-                            // try to parse as long... 
-                            clazz = Long.class; 
-                        }
-                    } 
-                    if (clazz == Long.class) {
-                        try {
-                            object = Long.parseLong(string);
-                            break;
-                        } catch (final NumberFormatException e2) {
-                            // fall through to the floating point number
-                        }
-                    }
-                }
-                // do not break, fall through to the 'f' case
-
-            // (F)loating point number
-            case 'f':
-            case 'F': 
-                if (bytes[fieldOffset] != '*') {
-                    try {
-                        object = Double.parseDouble(fastParse(bytes,fieldOffset,fieldLen));
-                    } catch (final NumberFormatException e) {
-                        // okay, now whatever we got was truly indigestible.
-                        object = null;
-                    }
-                }
-                break;
-            default:
-                throw new IOException("Invalid field type : " + type);
+                    throw new IOException("Invalid field type : " + type);
             }
-
         }
         return object;
     }

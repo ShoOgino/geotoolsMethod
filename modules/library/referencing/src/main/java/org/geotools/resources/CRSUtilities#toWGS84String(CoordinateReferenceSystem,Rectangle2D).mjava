@@ -1,18 +1,15 @@
     /**
-     * Returns a character string for the specified geographic area. The string will have the
-     * form "45°00.00'N-50°00.00'N 30°00.00'E-40°00.00'E". If a map projection is required in
-     * order to obtain this representation, it will be automatically applied.  This string is
-     * mostly used for debugging purpose.
+     * Returns a character string for the specified geographic area. The string will have the form
+     * "45°00.00'N-50°00.00'N 30°00.00'E-40°00.00'E". If a map projection is required in order to
+     * obtain this representation, it will be automatically applied. This string is mostly used for
+     * debugging purpose.
      *
-     * @param  crs The coordinate reference system of the bounding box.
-     * @param  bounds The bounding box to format.
+     * @param crs The coordinate reference system of the bounding box.
+     * @param bounds The bounding box to format.
      * @return The bounding box formatted as a string.
-     *
-     * @todo Move this method as a static method in {@link org.geotools.referencing.CRS}.
-     *       Or yet better: move formatting code in {@code GeographicBoundingBox.toString()}
-     *       method, and move the transformation code into {@code GeographicBoundingBox}
-     *       constructor.
-     *
+     * @todo Move this method as a static method in {@link org.geotools.referencing.CRS}. Or yet
+     *     better: move formatting code in {@code GeographicBoundingBox.toString()} method, and move
+     *     the transformation code into {@code GeographicBoundingBox} constructor.
      * @todo Do not requires specifically WGS 84, using {@link #getStandardGeographicCRS}.
      */
     public static String toWGS84String(CoordinateReferenceSystem crs, Rectangle2D bounds) {
@@ -20,25 +17,28 @@
         final StringBuffer buffer = new StringBuffer();
         final CoordinateReferenceSystem crs2D = CRS.getHorizontalCRS(crs);
         if (crs2D == null) {
-            exception = new UnsupportedOperationException(Errors.format(
-                    ErrorKeys.CANT_SEPARATE_CRS_$1, crs.getName()));
-        } else try {
-            if (!CRS.equalsIgnoreMetadata(DefaultGeographicCRS.WGS84, crs2D)) {
-                final CoordinateOperation op = ReferencingFactoryFinder.getCoordinateOperationFactory(null)
-                        .createOperation(crs2D, DefaultGeographicCRS.WGS84);
-                bounds = CRS.transform(op, bounds, null);
+            exception =
+                    new UnsupportedOperationException(
+                            Errors.format(ErrorKeys.CANT_SEPARATE_CRS_$1, crs.getName()));
+        } else
+            try {
+                if (!CRS.equalsIgnoreMetadata(DefaultGeographicCRS.WGS84, crs2D)) {
+                    final CoordinateOperation op =
+                            ReferencingFactoryFinder.getCoordinateOperationFactory(null)
+                                    .createOperation(crs2D, DefaultGeographicCRS.WGS84);
+                    bounds = CRS.transform(op, bounds, null);
+                }
+                final AngleFormat fmt = new AngleFormat("DD°MM.m'");
+                fmt.format(new Latitude(bounds.getMinY()), buffer, null).append('-');
+                fmt.format(new Latitude(bounds.getMaxY()), buffer, null).append(' ');
+                fmt.format(new Longitude(bounds.getMinX()), buffer, null).append('-');
+                fmt.format(new Longitude(bounds.getMaxX()), buffer, null);
+                return buffer.toString();
+            } catch (TransformException e) {
+                exception = e;
+            } catch (FactoryException e) {
+                exception = e;
             }
-            final AngleFormat fmt = new AngleFormat("DD°MM.m'");
-            fmt.format(new  Latitude(bounds.getMinY()), buffer, null).append('-');
-            fmt.format(new  Latitude(bounds.getMaxY()), buffer, null).append(' ');
-            fmt.format(new Longitude(bounds.getMinX()), buffer, null).append('-');
-            fmt.format(new Longitude(bounds.getMaxX()), buffer, null);
-            return buffer.toString();
-        } catch (TransformException e) {
-            exception = e;
-        } catch (FactoryException e) {
-            exception = e;
-        }
         buffer.append(Classes.getShortClassName(exception));
         final String message = exception.getLocalizedMessage();
         if (message != null) {

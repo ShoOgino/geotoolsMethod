@@ -1,17 +1,16 @@
     /**
      * Turns a xml type definition into a geotools feature type.
      *
-     * @param element
-     *            The element declaration.
-     * @param bwFactory
-     *            The binding walker factory.
-     * @param crs
-     *            The coordinate reference system to use on this feature type.
-     *
+     * @param element The element declaration.
+     * @param bwFactory The binding walker factory.
+     * @param crs The coordinate reference system to use on this feature type.
      * @return The corresponding geotools feature type.
      */
-    public static SimpleFeatureType featureType(XSDElementDeclaration element,
-        BindingWalkerFactory bwFactory, CoordinateReferenceSystem crs) throws Exception {
+    public static SimpleFeatureType featureType(
+            XSDElementDeclaration element,
+            BindingWalkerFactory bwFactory,
+            CoordinateReferenceSystem crs)
+            throws Exception {
         SimpleFeatureTypeBuilder ftBuilder = new SimpleFeatureTypeBuilder();
         ftBuilder.setName(element.getName());
         ftBuilder.setNamespaceURI(element.getTargetNamespace());
@@ -20,7 +19,7 @@
         // actual xml schema type
         List children = Schemas.getChildElementParticles(element.getType(), true);
 
-        for (Iterator itr = children.iterator(); itr.hasNext();) {
+        for (Iterator itr = children.iterator(); itr.hasNext(); ) {
             XSDParticle particle = (XSDParticle) itr.next();
             XSDElementDeclaration property = (XSDElementDeclaration) particle.getContent();
 
@@ -29,18 +28,22 @@
             }
 
             final ArrayList bindings = new ArrayList();
-            BindingWalker.Visitor visitor = new BindingWalker.Visitor() {
-                    public void visit(Binding binding) {
-                        bindings.add(binding);
-                    }
-                };
+            BindingWalker.Visitor visitor =
+                    new BindingWalker.Visitor() {
+                        public void visit(Binding binding) {
+                            bindings.add(binding);
+                        }
+                    };
 
             bwFactory.walk(property, visitor);
 
             if (bindings.isEmpty()) {
                 // could not find a binding, use the defaults
-                LOGGER.fine( "Could not find binding for " + property.getQName() + ", using XSAnyTypeBinding." );
-                bindings.add( new XSAnyTypeBinding() );
+                LOGGER.fine(
+                        "Could not find binding for "
+                                + property.getQName()
+                                + ", using XSAnyTypeBinding.");
+                bindings.add(new XSAnyTypeBinding());
             }
 
             // get the last binding in the chain to execute
@@ -55,7 +58,7 @@
             int min = particle.getMinOccurs();
             int max = particle.getMaxOccurs();
 
-            //check for uninitialized values
+            // check for uninitialized values
             if (min == -1) {
                 min = 0;
             }
@@ -72,12 +75,12 @@
             // create the type
             ftBuilder.minOccurs(min).maxOccurs(max).add(property.getName(), theClass);
 
-            //set the default geometry explicitly. Note we're comparing the GML namespace
-            //with String.startsWith to catch up on the GML 3.2 namespace too, which is hacky.
+            // set the default geometry explicitly. Note we're comparing the GML namespace
+            // with String.startsWith to catch up on the GML 3.2 namespace too, which is hacky.
             final String propNamespace = property.getTargetNamespace();
             if (Geometry.class.isAssignableFrom(theClass)
                     && (propNamespace == null || !propNamespace.startsWith(GML.NAMESPACE))) {
-                //only set if non-gml, we do this because of "gml:location", 
+                // only set if non-gml, we do this because of "gml:location",
                 // we dont want that to be the default if the user has another
                 // geometry attribute
                 if (ftBuilder.getDefaultGeometry() == null) {

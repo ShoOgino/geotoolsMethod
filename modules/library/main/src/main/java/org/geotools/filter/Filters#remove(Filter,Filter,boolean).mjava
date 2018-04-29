@@ -1,112 +1,112 @@
     /**
-     * Removes the targetFilter from the baseFilter if the baseFilter is a group filter (And or Or).  See
-     * {@link #removeFilter(org.opengis.filter.Filter, org.opengis.filter.Filter)} for details, except this method
-     * includes the option to not recurse into child filters.
+     * Removes the targetFilter from the baseFilter if the baseFilter is a group filter (And or Or).
+     * See {@link #removeFilter(org.opengis.filter.Filter, org.opengis.filter.Filter)} for details,
+     * except this method includes the option to not recurse into child filters.
+     *
      * @param baseFilter
      * @param targetFilter
-     * @param recurse true if the method should descend into child group filters looking for the target
+     * @param recurse true if the method should descend into child group filters looking for the
+     *     target
      * @return
      */
     public Filter remove(Filter baseFilter, final Filter targetFilter, boolean recurse) {
-        if (baseFilter == null){
-            //return null if nothing to start with
+        if (baseFilter == null) {
+            // return null if nothing to start with
             return baseFilter;
         }
-        if (targetFilter == null){
-            //similarly, just return the existing one if the target is null
+        if (targetFilter == null) {
+            // similarly, just return the existing one if the target is null
             return baseFilter;
         }
-        if (baseFilter.equals(targetFilter)){
-            //if they are the same filter, return Filter.INCLUDE to signify no filters left
+        if (baseFilter.equals(targetFilter)) {
+            // if they are the same filter, return Filter.INCLUDE to signify no filters left
             return Filter.INCLUDE;
         }
-        if( !(baseFilter instanceof BinaryLogicOperator)){
+        if (!(baseFilter instanceof BinaryLogicOperator)) {
             return baseFilter; // nothing to traverse
         }
         if (recurse) {
-            DuplicatingFilterVisitor remove = new DuplicatingFilterVisitor() {
-                public Object visit(Or filter, Object extraData) {
-                    List<Filter> newChildren = children(filter, targetFilter, extraData);
-                    if (newChildren.isEmpty()) {
-                        // every time you remove a filter from an Or
-                        // expression you get less stuff, so removing the last is ...
-                        return Filter.EXCLUDE;
-                    } else if (newChildren.size() == 1) {
-                        return newChildren.get(0);
-                    } else {
-                        return getFactory(extraData).or(newChildren);
-                    }
-                }
-                public Object visit(And filter, Object extraData) {
-                    List<Filter> newChildren = children(filter, targetFilter, extraData);
-                    if (newChildren.isEmpty()) {
-                        // every time you remove a filter from an And
-                        // filter you get more stuff, so removing the last is ...
-                        return Filter.INCLUDE;
-                    } else if (newChildren.size() == 1) {
-                        return newChildren.get(0);
-                    } else {
-                        return getFactory(extraData).and(newChildren);
-                    }
-                }
-                private List<Filter> children(BinaryLogicOperator filter,
-                        final Filter targetFilter, Object extraData) {
-                    List<Filter> children = filter.getChildren();
-                    List<Filter> newChildren = new ArrayList<Filter>();
-                    for (Iterator<Filter> iter = children.iterator(); iter.hasNext();) {
-                        Filter child = iter.next();
-                        if( targetFilter.equals(child)){
-                            continue; // skip this one
+            DuplicatingFilterVisitor remove =
+                    new DuplicatingFilterVisitor() {
+                        public Object visit(Or filter, Object extraData) {
+                            List<Filter> newChildren = children(filter, targetFilter, extraData);
+                            if (newChildren.isEmpty()) {
+                                // every time you remove a filter from an Or
+                                // expression you get less stuff, so removing the last is ...
+                                return Filter.EXCLUDE;
+                            } else if (newChildren.size() == 1) {
+                                return newChildren.get(0);
+                            } else {
+                                return getFactory(extraData).or(newChildren);
+                            }
                         }
-                        if (child != null) {
-                            Filter newChild = (Filter) child.accept(this, extraData);
-                            newChildren.add(newChild);
+
+                        public Object visit(And filter, Object extraData) {
+                            List<Filter> newChildren = children(filter, targetFilter, extraData);
+                            if (newChildren.isEmpty()) {
+                                // every time you remove a filter from an And
+                                // filter you get more stuff, so removing the last is ...
+                                return Filter.INCLUDE;
+                            } else if (newChildren.size() == 1) {
+                                return newChildren.get(0);
+                            } else {
+                                return getFactory(extraData).and(newChildren);
+                            }
                         }
-                    }
-                    return newChildren;
-                }
-            };
+
+                        private List<Filter> children(
+                                BinaryLogicOperator filter,
+                                final Filter targetFilter,
+                                Object extraData) {
+                            List<Filter> children = filter.getChildren();
+                            List<Filter> newChildren = new ArrayList<Filter>();
+                            for (Iterator<Filter> iter = children.iterator(); iter.hasNext(); ) {
+                                Filter child = iter.next();
+                                if (targetFilter.equals(child)) {
+                                    continue; // skip this one
+                                }
+                                if (child != null) {
+                                    Filter newChild = (Filter) child.accept(this, extraData);
+                                    newChildren.add(newChild);
+                                }
+                            }
+                            return newChildren;
+                        }
+                    };
             return (Filter) baseFilter.accept(remove, ff);
-        }
-        else {
+        } else {
             BinaryLogicOperator blo = (BinaryLogicOperator) baseFilter;
             List<Filter> children = blo.getChildren();
-            if (children == null ){
+            if (children == null) {
                 children = Collections.emptyList();
             }
-            
-            List<Filter> copy = new ArrayList<Filter>( children.size() );
-            for( Filter filter : children ){
-                if( targetFilter.equals(filter) ){
+
+            List<Filter> copy = new ArrayList<Filter>(children.size());
+            for (Filter filter : children) {
+                if (targetFilter.equals(filter)) {
                     continue; // skip this one
                 }
-                copy.add( filter );
+                copy.add(filter);
             }
-            if( copy.isEmpty() ){
-                if( baseFilter instanceof And){
+            if (copy.isEmpty()) {
+                if (baseFilter instanceof And) {
                     // every time you remove a filter from an And
                     // filter you get more stuff, so removing the last is ...
                     return Filter.INCLUDE;
-                }
-                else if( baseFilter instanceof Or){
+                } else if (baseFilter instanceof Or) {
                     // every time you remove a filter from an Or
                     // expression you get less stuff, so removing the last is ...
                     return Filter.EXCLUDE;
-                }
-                else {
+                } else {
                     return Filter.EXCLUDE;
                 }
-            }
-            else if (copy.size() == 1){
-                return copy.get(0); 
-            }
-            else if (baseFilter instanceof And){
-                return ff.and( children );
-            }
-            else if (baseFilter instanceof Or){
-                return ff.or( children );
-            }
-            else {
+            } else if (copy.size() == 1) {
+                return copy.get(0);
+            } else if (baseFilter instanceof And) {
+                return ff.and(children);
+            } else if (baseFilter instanceof Or) {
+                return ff.or(children);
+            } else {
                 return Filter.INCLUDE;
             }
         }

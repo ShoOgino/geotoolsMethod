@@ -1,5 +1,6 @@
     /**
-     * This methods collects the granules from their eventual multithreaded processing and turn them into a {@link MosaicInputs} object.
+     * This methods collects the granules from their eventual multithreaded processing and turn them
+     * into a {@link MosaicInputs} object.
      *
      * @return a {@link MosaicInputs} ready to be mosaicked.
      */
@@ -24,30 +25,34 @@
                 final GranuleDescriptor.GranuleLoadingResult result = future.get();
                 if (result == null) {
                     if (LOGGER.isLoggable(Level.FINE)) {
-                        LOGGER.log(Level.FINE, "Unable to load the raster for granule with request "
-                                + rasterLayerResponse.getRequest().toString());
+                        LOGGER.log(
+                                Level.FINE,
+                                "Unable to load the raster for granule with request "
+                                        + rasterLayerResponse.getRequest().toString());
                     }
                     continue;
                 }
                 final RenderedImage loadedImage = result.getRaster();
                 if (loadedImage == null) {
                     if (LOGGER.isLoggable(Level.FINE)) {
-                        LOGGER.log(Level.FINE,
+                        LOGGER.log(
+                                Level.FINE,
                                 "Unable to load the raster for granuleDescriptor "
-                                        + result.getGranuleUrl() + " with request "
+                                        + result.getGranuleUrl()
+                                        + " with request "
                                         + rasterLayerResponse.getRequest().toString());
                     }
                     continue;
                 }
-                
+
                 // perform excess granule removal in case multithreaded loading is enabled
-                if(isMultithreadedLoadingEnabled()) {
+                if (isMultithreadedLoadingEnabled()) {
                     ROIExcessGranuleRemover remover = rasterLayerResponse.getExcessGranuleRemover();
-                    if(remover != null) {
-                        if(remover.isRenderingAreaComplete()) {
+                    if (remover != null) {
+                        if (remover.isRenderingAreaComplete()) {
                             break;
                         }
-                        if(!remover.addGranule(result)) {
+                        if (!remover.addGranule(result)) {
                             // skip this granule
                             continue;
                         }
@@ -77,8 +82,13 @@
                     // for data type other than byte and ushort. With float and double
                     // it can cut off a large par of the dynamic.
                     //
-                    sourceThreshold = new double[][] { { CoverageUtilities
-                            .getMosaicThreshold(loadedImage.getSampleModel().getDataType()) } };
+                    sourceThreshold =
+                            new double[][] {
+                                {
+                                    CoverageUtilities.getMosaicThreshold(
+                                            loadedImage.getSampleModel().getDataType())
+                                }
+                            };
                 }
 
                 // moving on
@@ -105,19 +115,20 @@
 
                 // add to the mosaic collection, with preprocessing
                 // TODO pluggable mechanism for processing (artifacts,etc...)
-                MosaicElement input = preProcessGranuleRaster(loadedImage, result,
-                        fileCanonicalPath);
+                MosaicElement input =
+                        preProcessGranuleRaster(loadedImage, result, fileCanonicalPath);
                 returnValues.add(input);
 
             } catch (Exception e) {
                 if (LOGGER.isLoggable(Level.INFO)) {
-                    LOGGER.info("Adding to mosaic failed, original request was "
-                            + rasterLayerResponse.getRequest());
+                    LOGGER.info(
+                            "Adding to mosaic failed, original request was "
+                                    + rasterLayerResponse.getRequest());
                 }
                 throw new IOException(e);
             }
         }
-        
+
         // collect paths
         rasterLayerResponse.setGranulesPaths(
                 paths.length() > 1 ? paths.substring(0, paths.length() - 1) : "");

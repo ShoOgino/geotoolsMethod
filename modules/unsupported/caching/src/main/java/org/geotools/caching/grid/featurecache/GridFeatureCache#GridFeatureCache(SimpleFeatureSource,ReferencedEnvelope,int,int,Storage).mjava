@@ -1,40 +1,48 @@
     /**
      * Creates a new grid feature cache.
-     * @param fs            FeatureStore from which to cache features
-     * @param env           The size of the feature cache; once defined features outside this bounds cannot be added to the featurestore/cache
-     * @param gridsize  	number of tiles in the index
-     * @param capacity       maximum number of features to cache
-     * @param store         the cache storage
+     *
+     * @param fs FeatureStore from which to cache features
+     * @param env The size of the feature cache; once defined features outside this bounds cannot be
+     *     added to the featurestore/cache
+     * @param gridsize number of tiles in the index
+     * @param capacity maximum number of features to cache
+     * @param store the cache storage
      */
-    public GridFeatureCache(SimpleFeatureSource fs, ReferencedEnvelope env, int gridsize, int capacity, Storage store){
+    public GridFeatureCache(
+            SimpleFeatureSource fs,
+            ReferencedEnvelope env,
+            int gridsize,
+            int capacity,
+            Storage store) {
         super(fs);
         tracker = new GridSpatialIndex(CacheUtil.convert(env), gridsize, store, capacity);
         this.capacity = capacity;
 
-        //lets compare the feature type in the store to the feature type of the current feature source
-        //if they differ we need to  clear the cache as the features have changed.
-        if (store.getFeatureTypes().size() == 0){
+        // lets compare the feature type in the store to the feature type of the current feature
+        // source
+        // if they differ we need to  clear the cache as the features have changed.
+        if (store.getFeatureTypes().size() == 0) {
             store.addFeatureType(fs.getSchema());
-        }else if (store.getFeatureTypes().size() ==1){
-            SimpleFeatureType sft = (SimpleFeatureType)store.getFeatureTypes().iterator().next();
-            if (!sft.equals(fs.getSchema()) && fs.getSchema() != null){
+        } else if (store.getFeatureTypes().size() == 1) {
+            SimpleFeatureType sft = (SimpleFeatureType) store.getFeatureTypes().iterator().next();
+            if (!sft.equals(fs.getSchema()) && fs.getSchema() != null) {
                 tracker.clear();
                 store.clearFeatureTypes();
                 store.addFeatureType(fs.getSchema());
             }
-        }else{
-            //we have multiple feature types; really this shouldn't happen
+        } else {
+            // we have multiple feature types; really this shouldn't happen
             tracker.clear();
             store.clearFeatureTypes();
             store.addFeatureType(fs.getSchema());
         }
-        
-        //setup bounds
-        if (env != null && !env.equals(store.getBounds())){
+
+        // setup bounds
+        if (env != null && !env.equals(store.getBounds())) {
             store.setBounds(env);
         }
-        
-        //flush cache here to write to disk
+
+        // flush cache here to write to disk
         tracker.flush();
     }
 

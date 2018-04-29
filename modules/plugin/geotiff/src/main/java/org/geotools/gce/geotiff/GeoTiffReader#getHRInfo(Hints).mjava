@@ -1,6 +1,6 @@
     /**
      * Collect georeferencing information about this geotiff.
-     * 
+     *
      * @param hints
      * @throws DataSourceException
      */
@@ -26,7 +26,7 @@
             final IIOMetadata iioMetadata = reader.getImageMetadata(0);
             final GeoTiffIIOMetadataDecoder metadata = new GeoTiffIIOMetadataDecoder(iioMetadata);
             gtcs = new GeoTiffMetadata2CRSAdapter(hints);
-            
+
             // //
             //
             // get the CRS INFO
@@ -38,33 +38,32 @@
                 if (LOGGER.isLoggable(Level.FINE))
                     LOGGER.log(Level.FINE, "Using forced coordinate reference system");
             } else {
-            	
-            	// check external prj first
-            	crs = getCRS(source);
-                                
-            	// now, if we did not want to override the inner CRS or we did not have any external PRJ at hand
-            	// let's look inside the geotiff
-                if (!OVERRIDE_INNER_CRS || crs==null){
-                	if(metadata.hasGeoKey()&& gtcs != null){
-                	    crs = gtcs.createCoordinateSystem(metadata);
-                	}
+
+                // check external prj first
+                crs = getCRS(source);
+
+                // now, if we did not want to override the inner CRS or we did not have any external
+                // PRJ at hand
+                // let's look inside the geotiff
+                if (!OVERRIDE_INNER_CRS || crs == null) {
+                    if (metadata.hasGeoKey() && gtcs != null) {
+                        crs = gtcs.createCoordinateSystem(metadata);
+                    }
                 }
-
-
             }
 
-            // 
+            //
             // No data
             //
-            if (metadata.hasNoData()){
+            if (metadata.hasNoData()) {
                 noData = metadata.getNoData();
             }
-            
-            // 
+
+            //
             // parse and set layout
-            // 
+            //
             setLayout(reader);
-            
+
             //
             // parse TIFF StreamMetadata
             //
@@ -82,41 +81,47 @@
                 hasMaskOvrProvider = true;
             } else if (dtLayout != null && dtLayout.getExternalMasks() != null) {
                 String path = dtLayout.getExternalMasks().getAbsolutePath();
-                maskOvrProvider = new MaskOverviewProvider(dtLayout, new File(path.substring(0,
-                        path.length() - 4)));
+                maskOvrProvider =
+                        new MaskOverviewProvider(
+                                dtLayout, new File(path.substring(0, path.length() - 4)));
                 hasMaskOvrProvider = true;
             }
-            
+
             // //
             //
             // get the dimension of the hr image and build the model as well as
             // computing the resolution
             // //
-            numOverviews = hasMaskOvrProvider ? maskOvrProvider.getNumOverviews() : dtLayout.getNumInternalOverviews();
+            numOverviews =
+                    hasMaskOvrProvider
+                            ? maskOvrProvider.getNumOverviews()
+                            : dtLayout.getNumInternalOverviews();
             int hrWidth = reader.getWidth(0);
             int hrHeight = reader.getHeight(0);
             final Rectangle actualDim = new Rectangle(0, 0, hrWidth, hrHeight);
             originalGridRange = new GridEnvelope2D(actualDim);
 
-            if (gtcs != null&& metadata!=null&& (metadata.hasModelTrasformation()||(metadata.hasPixelScales()&&metadata.hasTiePoints()))) {
+            if (gtcs != null
+                    && metadata != null
+                    && (metadata.hasModelTrasformation()
+                            || (metadata.hasPixelScales() && metadata.hasTiePoints()))) {
                 this.raster2Model = GeoTiffMetadata2CRSAdapter.getRasterToModel(metadata);
             } else {
-            	// world file
+                // world file
                 this.raster2Model = parseWorldFile(source);
-                
+
                 // now world file --> mapinfo?
                 if (raster2Model == null) {
                     MapInfoFileReader mifReader = parseMapInfoFile(source);
-                    if(mifReader!=null){
+                    if (mifReader != null) {
                         raster2Model = mifReader.getTransform();
                         crs = mifReader.getCRS();
                     }
-
                 }
             }
-            
-            if (crs == null){
-                if(LOGGER.isLoggable(Level.WARNING)){
+
+            if (crs == null) {
+                if (LOGGER.isLoggable(Level.WARNING)) {
                     LOGGER.warning("Coordinate Reference System is not available");
                 }
                 crs = AbstractGridFormat.getDefaultCRS();
@@ -130,20 +135,23 @@
                     raster2Model = ProjectiveTransform.create(new AffineTransform());
                     crs = AbstractGridFormat.getDefaultCRS();
                 } else {
-                    throw new DataSourceException("Raster to Model Transformation is not available");
+                    throw new DataSourceException(
+                            "Raster to Model Transformation is not available");
                 }
             }
 
             // create envelope using corner transformation
-            final AffineTransform tempTransform = new AffineTransform(
-                    (AffineTransform) raster2Model);
+            final AffineTransform tempTransform =
+                    new AffineTransform((AffineTransform) raster2Model);
             tempTransform.concatenate(CoverageUtilities.CENTER_TO_CORNER);
-            originalEnvelope = CRS.transform(ProjectiveTransform.create(tempTransform),
-                    new GeneralEnvelope(actualDim));
+            originalEnvelope =
+                    CRS.transform(
+                            ProjectiveTransform.create(tempTransform),
+                            new GeneralEnvelope(actualDim));
             originalEnvelope.setCoordinateReferenceSystem(crs);
 
             // ///
-            // 
+            //
             // setting the higher resolution available for this coverage
             //
             // ///
@@ -153,8 +161,10 @@
 
             // External Overview management
             if (maskOvrProvider != null) {
-                extOvrImgChoice = maskOvrProvider.getNumExternalOverviews() > 0 ? maskOvrProvider
-                        .getNumInternalOverviews() + 1 : -1;
+                extOvrImgChoice =
+                        maskOvrProvider.getNumExternalOverviews() > 0
+                                ? maskOvrProvider.getNumInternalOverviews() + 1
+                                : -1;
             } else {
                 File extOvrFile = dtLayout.getExternalOverviews();
                 if (extOvrFile != null && extOvrFile.exists()) {
@@ -162,17 +172,17 @@
                     ovrSource = extOvrFile;
                     ovrInStreamSPI = ImageIOExt.getImageInputStreamSPI(extOvrFile);
                     ovrReader = READER_SPI.createReaderInstance();
-                    ovrStream = ovrInStreamSPI.createInputStreamInstance(extOvrFile,
-                            ImageIO.getUseCache(), ImageIO.getCacheDirectory());
+                    ovrStream =
+                            ovrInStreamSPI.createInputStreamInstance(
+                                    extOvrFile, ImageIO.getUseCache(), ImageIO.getCacheDirectory());
                     ovrReader.setInput(ovrStream);
                     // this includes the real image as this is a image index, we need to add one.
                     extOvrImgChoice = numOverviews + 1;
                     numOverviews = numOverviews + dtLayout.getNumExternalOverviews();
-                    if (numOverviews < extOvrImgChoice)
-                        extOvrImgChoice = -1;
+                    if (numOverviews < extOvrImgChoice) extOvrImgChoice = -1;
                 }
             }
-            
+
             // //
             //
             // get information for the successive images
@@ -182,13 +192,13 @@
                 overViewResolutions = new double[numOverviews][2];
                 // Internal overviews start at 1, so lastInternalOverview matches numOverviews if no
                 // external.
-                int firstExternalOverview = extOvrImgChoice == -1 ? numOverviews
-                        : extOvrImgChoice - 1;
+                int firstExternalOverview =
+                        extOvrImgChoice == -1 ? numOverviews : extOvrImgChoice - 1;
                 double spanRes0 = highestRes[0] * this.originalGridRange.getSpan(0);
                 double spanRes1 = highestRes[1] * this.originalGridRange.getSpan(1);
                 if (maskOvrProvider != null) {
-                    overViewResolutions = maskOvrProvider
-                            .getOverviewResolutions(spanRes0, spanRes1);
+                    overViewResolutions =
+                            maskOvrProvider.getOverviewResolutions(spanRes0, spanRes1);
                 } else {
 
                     for (int i = 0; i < firstExternalOverview; i++) {
@@ -199,14 +209,13 @@
                         overViewResolutions[i][1] = spanRes1 / reader.getHeight(index);
                     }
                     for (int i = firstExternalOverview; i < numOverviews; i++) {
-                        overViewResolutions[i][0] = spanRes0
-                                / ovrReader.getWidth(i - firstExternalOverview);
-                        overViewResolutions[i][1] = spanRes1
-                                / ovrReader.getHeight(i - firstExternalOverview);
+                        overViewResolutions[i][0] =
+                                spanRes0 / ovrReader.getWidth(i - firstExternalOverview);
+                        overViewResolutions[i][1] =
+                                spanRes1 / ovrReader.getHeight(i - firstExternalOverview);
                     }
                 }
-            } else
-                overViewResolutions = null;
+            } else overViewResolutions = null;
         } catch (Throwable e) {
             throw new DataSourceException(e);
         } finally {
@@ -215,7 +224,7 @@
                     reader.dispose();
                 } catch (Throwable t) {
                 }
-                
+
             if (ovrReader != null)
                 try {
                     ovrReader.dispose();
@@ -233,7 +242,6 @@
                     inStream.reset();
                 } catch (Throwable t) {
                 }
-
         }
     }
 

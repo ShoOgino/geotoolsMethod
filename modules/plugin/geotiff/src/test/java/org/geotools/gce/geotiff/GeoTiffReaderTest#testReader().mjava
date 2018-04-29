@@ -1,98 +1,96 @@
     /**
      * Test for reading geotiff files
-     * 
+     *
      * @throws IllegalArgumentException
      * @throws IOException
      * @throws NoSuchAuthorityCodeException
      */
     @Test
     public void testReader() throws Exception {
-    
-    	final File baseDirectory = TestData.file(GeoTiffReaderTest.class, ".");
-    	final File writeDirectory =new File(baseDirectory,Long.toString(System.currentTimeMillis()));
-    	writeDirectory.mkdir();
-    	final File files[] = baseDirectory.listFiles();
-    	final int numFiles = files.length;
-    	final AbstractGridFormat format = new GeoTiffFormat();
-    	for (int i = 0; i < numFiles; i++) {
-    		StringBuilder buffer = new StringBuilder();
-    		final String path = files[i].getAbsolutePath().toLowerCase();
-    		if (!path.endsWith("tif") && !path.endsWith("tiff")||path.contains("no_crs"))
-    			continue;
-    
-    		buffer.append(files[i].getAbsolutePath()).append("\n");
-    		Object o;
-    		if (i % 2 == 0)
-    			// testing file
-    			o = files[i];
-    		else
-    			// testing url
-    			o = files[i].toURI().toURL();
-    		if (format.accepts(o)) {
-    			buffer.append("ACCEPTED").append("\n");
-    
-    			// getting a reader
-    			GeoTiffReader reader = new GeoTiffReader(o, new Hints(Hints.FORCE_LONGITUDE_FIRST_AXIS_ORDER, Boolean.TRUE));
-    			if (reader != null) {
-    
-    				// reading the coverage
-    			        final GridCoverage2D coverage = reader.read(null);
-    
-    				// Crs and envelope
-    				if (TestData.isInteractiveTest()) {
-    					buffer.append("CRS: ").append(
-    							coverage.getCoordinateReferenceSystem2D()
-    									.toWKT()).append("\n");
-    					buffer.append("GG: ").append(
-    							coverage.getGridGeometry().toString()).append("\n");
-    				}
-    				// display metadata
-    				if (org.geotools.TestData.isExtensiveTest()) {
-    					IIOMetadataDumper iIOMetadataDumper = new IIOMetadataDumper(
-    							reader.getMetadata()
-    									.getRootNode());
-    					buffer.append("TIFF metadata: ").append(
-    							iIOMetadataDumper.getMetadata()).append("\n");
-    				}
-    				
-    				// layout checks
-    				final ImageLayout layout = reader.getImageLayout();
-    				assertNotNull(layout);
-    				assertNotNull(layout.getColorModel(null));
-    				assertNotNull(layout.getSampleModel(null));
-    				assertEquals(0,layout.getMinX(null));
-    				assertEquals(0,layout.getMinY(null));
-    				assertTrue(layout.getWidth(null) > 0);
-    				assertTrue(layout.getHeight(null) > 0);
-    				assertEquals(0,layout.getTileGridXOffset(null));
-    				assertEquals(0,layout.getTileGridYOffset(null));
-    				assertTrue(layout.getTileHeight(null) > 0);
-    				assertTrue(layout.getTileWidth(null) > 0);
-    				
-    				
-    				// showing it
-    				if (TestData.isInteractiveTest()){
-    				    coverage.show();
-    				}
-    				else {
-    				    PlanarImage.wrapRenderedImage(coverage.getRenderedImage()).getTiles();
-    				}
-    				
+
+        final File baseDirectory = TestData.file(GeoTiffReaderTest.class, ".");
+        final File writeDirectory =
+                new File(baseDirectory, Long.toString(System.currentTimeMillis()));
+        writeDirectory.mkdir();
+        final File files[] = baseDirectory.listFiles();
+        final int numFiles = files.length;
+        final AbstractGridFormat format = new GeoTiffFormat();
+        for (int i = 0; i < numFiles; i++) {
+            StringBuilder buffer = new StringBuilder();
+            final String path = files[i].getAbsolutePath().toLowerCase();
+            if (!path.endsWith("tif") && !path.endsWith("tiff") || path.contains("no_crs"))
+                continue;
+
+            buffer.append(files[i].getAbsolutePath()).append("\n");
+            Object o;
+            if (i % 2 == 0)
+                // testing file
+                o = files[i];
+            else
+                // testing url
+                o = files[i].toURI().toURL();
+            if (format.accepts(o)) {
+                buffer.append("ACCEPTED").append("\n");
+
+                // getting a reader
+                GeoTiffReader reader =
+                        new GeoTiffReader(
+                                o, new Hints(Hints.FORCE_LONGITUDE_FIRST_AXIS_ORDER, Boolean.TRUE));
+                if (reader != null) {
+
+                    // reading the coverage
+                    final GridCoverage2D coverage = reader.read(null);
+
+                    // Crs and envelope
+                    if (TestData.isInteractiveTest()) {
+                        buffer.append("CRS: ")
+                                .append(coverage.getCoordinateReferenceSystem2D().toWKT())
+                                .append("\n");
+                        buffer.append("GG: ")
+                                .append(coverage.getGridGeometry().toString())
+                                .append("\n");
+                    }
+                    // display metadata
+                    if (org.geotools.TestData.isExtensiveTest()) {
+                        IIOMetadataDumper iIOMetadataDumper =
+                                new IIOMetadataDumper(reader.getMetadata().getRootNode());
+                        buffer.append("TIFF metadata: ")
+                                .append(iIOMetadataDumper.getMetadata())
+                                .append("\n");
+                    }
+
+                    // layout checks
+                    final ImageLayout layout = reader.getImageLayout();
+                    assertNotNull(layout);
+                    assertNotNull(layout.getColorModel(null));
+                    assertNotNull(layout.getSampleModel(null));
+                    assertEquals(0, layout.getMinX(null));
+                    assertEquals(0, layout.getMinY(null));
+                    assertTrue(layout.getWidth(null) > 0);
+                    assertTrue(layout.getHeight(null) > 0);
+                    assertEquals(0, layout.getTileGridXOffset(null));
+                    assertEquals(0, layout.getTileGridYOffset(null));
+                    assertTrue(layout.getTileHeight(null) > 0);
+                    assertTrue(layout.getTileWidth(null) > 0);
+
+                    // showing it
+                    if (TestData.isInteractiveTest()) {
+                        coverage.show();
+                    } else {
+                        PlanarImage.wrapRenderedImage(coverage.getRenderedImage()).getTiles();
+                    }
+
                     if (reader.getGroundControlPoints() != null) {
                         // we cannot write GCPs yet
                         continue;
                     }
 
-    				// write and read back
-    				writeAndReadBackCheck(coverage, format, writeDirectory, o);
-    			}
-    
-    		} else
-    			buffer.append("NOT ACCEPTED").append("\n");
-    		if (TestData.isInteractiveTest())
-    			LOGGER.info(buffer.toString());
-    
-    	}
-    
+                    // write and read back
+                    writeAndReadBackCheck(coverage, format, writeDirectory, o);
+                }
+
+            } else buffer.append("NOT ACCEPTED").append("\n");
+            if (TestData.isInteractiveTest()) LOGGER.info(buffer.toString());
+        }
     }
 

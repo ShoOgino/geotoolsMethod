@@ -1,18 +1,18 @@
     /**
-     * Tests the {@link OverviewsController} with support for different
-     * resolutions/different number of overviews.
-     * 
-     * world_a.tif => Pixel Size = (0.833333333333333,-0.833333333333333); 4 overviews 
-     * world_b.tif => Pixel Size = (1.406250000000000,-1.406250000000000); 2 overviews 
-     * 
+     * Tests the {@link OverviewsController} with support for different resolutions/different number
+     * of overviews.
+     *
+     * <p>world_a.tif => Pixel Size = (0.833333333333333,-0.833333333333333); 4 overviews
+     * world_b.tif => Pixel Size = (1.406250000000000,-1.406250000000000); 2 overviews
+     *
      * @throws IOException
      * @throws MismatchedDimensionException
      * @throws FactoryException
-     * @throws TransformException 
+     * @throws TransformException
      */
     @Test
-    public void testHeterogeneousGranules() throws IOException,
-            MismatchedDimensionException, FactoryException, TransformException {
+    public void testHeterogeneousGranules()
+            throws IOException, MismatchedDimensionException, FactoryException, TransformException {
 
         final CoordinateReferenceSystem WGS84 = CRS.decode("EPSG:4326", true);
         final ReferencedEnvelope TEST_BBOX_A = new ReferencedEnvelope(-180, 0, -90, 90, WGS84);
@@ -26,11 +26,13 @@
         // //
         final Hints hints = new Hints(Hints.DEFAULT_COORDINATE_REFERENCE_SYSTEM, WGS84);
         hints.put(Hints.FORCE_LONGITUDE_FIRST_AXIS_ORDER, true);
-        final AbstractGridFormat format = (AbstractGridFormat) GridFormatFinder.findFormat(heterogeneousGranulesURL, hints);
+        final AbstractGridFormat format =
+                (AbstractGridFormat) GridFormatFinder.findFormat(heterogeneousGranulesURL, hints);
         Assert.assertNotNull(format);
         Assert.assertFalse("UknownFormat", format instanceof UnknownFormat);
 
-        final ImageMosaicReader reader = (ImageMosaicReader) format.getReader(heterogeneousGranulesURL, hints);
+        final ImageMosaicReader reader =
+                (ImageMosaicReader) format.getReader(heterogeneousGranulesURL, hints);
         Assert.assertNotNull(reader);
 
         final String name = reader.getGridCoverageNames()[0];
@@ -40,7 +42,7 @@
 
         // //
         //
-        // Initialize granules related variables 
+        // Initialize granules related variables
         //
         // //
         final File g1File = new File(URLs.urlToFile(heterogeneousGranulesURL), "world_a.tif");
@@ -49,11 +51,31 @@
         final ImageReadParam readParamsG2 = new ImageReadParam();
         int imageIndexG1 = 0;
         int imageIndexG2 = 0;
-        
-        final GranuleDescriptor granuleDescriptor1 = new GranuleDescriptor(g1File.getAbsolutePath(),
-                TEST_BBOX_A, null, spi, null, (MultiLevelROI) null, -1, true, false, hints);
-        final GranuleDescriptor granuleDescriptor2 = new GranuleDescriptor(g2File.getAbsolutePath(),
-                TEST_BBOX_B, null, spi, null, (MultiLevelROI) null, -1, true, false, hints);
+
+        final GranuleDescriptor granuleDescriptor1 =
+                new GranuleDescriptor(
+                        g1File.getAbsolutePath(),
+                        TEST_BBOX_A,
+                        null,
+                        spi,
+                        null,
+                        (MultiLevelROI) null,
+                        -1,
+                        true,
+                        false,
+                        hints);
+        final GranuleDescriptor granuleDescriptor2 =
+                new GranuleDescriptor(
+                        g2File.getAbsolutePath(),
+                        TEST_BBOX_B,
+                        null,
+                        spi,
+                        null,
+                        (MultiLevelROI) null,
+                        -1,
+                        true,
+                        false,
+                        hints);
         assertNotNull(granuleDescriptor1.toString());
         assertNotNull(granuleDescriptor2.toString());
 
@@ -67,12 +89,21 @@
         // //
         final GeneralEnvelope envelope = reader.getOriginalEnvelope();
         final GridEnvelope originalRange = reader.getOriginalGridRange();
-        final Rectangle rasterArea = new Rectangle(0, 0, (int) Math.ceil(originalRange.getSpan(0) / 9.0), (int) Math.ceil(originalRange.getSpan(1) / 9.0));
+        final Rectangle rasterArea =
+                new Rectangle(
+                        0,
+                        0,
+                        (int) Math.ceil(originalRange.getSpan(0) / 9.0),
+                        (int) Math.ceil(originalRange.getSpan(1) / 9.0));
         final GridEnvelope2D range = new GridEnvelope2D(rasterArea);
         final GridToEnvelopeMapper geMapper = new GridToEnvelopeMapper(range, envelope);
         geMapper.setPixelAnchor(PixelInCell.CELL_CENTER);
         final AffineTransform gridToWorld = geMapper.createAffineTransform();
-        final double requestedResolution[] = new double[]{XAffineTransform.getScaleX0(gridToWorld), XAffineTransform.getScaleY0(gridToWorld)}; 
+        final double requestedResolution[] =
+                new double[] {
+                    XAffineTransform.getScaleX0(gridToWorld),
+                    XAffineTransform.getScaleY0(gridToWorld)
+                };
 
         TestSet at = null;
         if (nOv == 4 && Math.abs(hRes[0][0] - 0.833333333333) <= THRESHOLD) {
@@ -82,18 +113,40 @@
         } else {
             return;
         }
-        
+
         // //
         //
         // Starting OverviewsController tests
         //
         // //
-        final OverviewPolicy[] ovPolicies = new OverviewPolicy[]{OverviewPolicy.QUALITY, OverviewPolicy.SPEED, OverviewPolicy.NEAREST, OverviewPolicy.IGNORE};
-        for (int i = 0; i < ovPolicies.length; i++){
-            OverviewPolicy ovPolicy = ovPolicies[i]; 
+        final OverviewPolicy[] ovPolicies =
+                new OverviewPolicy[] {
+                    OverviewPolicy.QUALITY,
+                    OverviewPolicy.SPEED,
+                    OverviewPolicy.NEAREST,
+                    OverviewPolicy.IGNORE
+                };
+        for (int i = 0; i < ovPolicies.length; i++) {
+            OverviewPolicy ovPolicy = ovPolicies[i];
             LOGGER.info("Testing with OverviewPolicy = " + ovPolicy.toString());
-            imageIndexG1 = ReadParamsController.setReadParams(requestedResolution, ovPolicy, DecimationPolicy.ALLOW, readParamsG1, rasterManager, ovControllerG1, null);
-            imageIndexG2 = ReadParamsController.setReadParams(requestedResolution, ovPolicy, DecimationPolicy.ALLOW, readParamsG2, rasterManager, ovControllerG2, null);
+            imageIndexG1 =
+                    ReadParamsController.setReadParams(
+                            requestedResolution,
+                            ovPolicy,
+                            DecimationPolicy.ALLOW,
+                            readParamsG1,
+                            rasterManager,
+                            ovControllerG1,
+                            null);
+            imageIndexG2 =
+                    ReadParamsController.setReadParams(
+                            requestedResolution,
+                            ovPolicy,
+                            DecimationPolicy.ALLOW,
+                            readParamsG2,
+                            rasterManager,
+                            ovControllerG2,
+                            null);
             assertSame(at.ot[i].g1.imageIndex, imageIndexG1);
             assertSame(at.ot[i].g2.imageIndex, imageIndexG2);
             assertSame(at.ot[i].g1.ssx, readParamsG1.getSourceXSubsampling());

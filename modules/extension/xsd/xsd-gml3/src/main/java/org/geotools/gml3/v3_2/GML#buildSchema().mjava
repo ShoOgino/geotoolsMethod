@@ -2,34 +2,46 @@
      * Instead of building the XSDSchema using the declared dependencies, handle cyclic dependencies
      * by loading all the schemas in the GML 3.2 suite at once by forcing use of a resolver. This
      * all-in-one XSDSchema is later shared by the other XSD implementations in the suite.
-     * 
+     *
      * @see org.geotools.xml.XSD#buildSchema()
      */
     @Override
     protected XSDSchema buildSchema() throws IOException {
-        schema = Schemas.parse(getSchemaLocation(), Collections.EMPTY_LIST,
-                Collections.singletonList(new XSDSchemaLocationResolver() {
-                    public String resolveSchemaLocation(XSDSchema xsdSchema, String namespaceURI,
-                            String schemaLocationURI) {
-                        try {
-                            URI contextUri = new URI(xsdSchema.getSchemaLocation());
-                            if (contextUri.isOpaque()) {
-                                // probably a jar:file: URL, which is opaque and thus not
-                                // supported by URI.resolve()
-                                URL contextUrl = new URL(xsdSchema.getSchemaLocation());
-                                return (new URL(contextUrl, schemaLocationURI)).toString();
-                            } else {
-                                return contextUri.resolve(schemaLocationURI).toString();
-                            }
-                        } catch (URISyntaxException e) {
-                            throw new RuntimeException(e);
-                        } catch (MalformedURLException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-                }));
+        schema =
+                Schemas.parse(
+                        getSchemaLocation(),
+                        Collections.EMPTY_LIST,
+                        Collections.singletonList(
+                                new XSDSchemaLocationResolver() {
+                                    public String resolveSchemaLocation(
+                                            XSDSchema xsdSchema,
+                                            String namespaceURI,
+                                            String schemaLocationURI) {
+                                        try {
+                                            URI contextUri = new URI(xsdSchema.getSchemaLocation());
+                                            if (contextUri.isOpaque()) {
+                                                // probably a jar:file: URL, which is opaque and
+                                                // thus not
+                                                // supported by URI.resolve()
+                                                URL contextUrl =
+                                                        new URL(xsdSchema.getSchemaLocation());
+                                                return (new URL(contextUrl, schemaLocationURI))
+                                                        .toString();
+                                            } else {
+                                                return contextUri
+                                                        .resolve(schemaLocationURI)
+                                                        .toString();
+                                            }
+                                        } catch (URISyntaxException e) {
+                                            throw new RuntimeException(e);
+                                        } catch (MalformedURLException e) {
+                                            throw new RuntimeException(e);
+                                        }
+                                    }
+                                }));
         // leak prevention
-        schema.resolveElementDeclaration(NAMESPACE, "_Feature").eAdapters()
+        schema.resolveElementDeclaration(NAMESPACE, "_Feature")
+                .eAdapters()
                 .add(new SubstitutionGroupLeakPreventer());
         schema.eAdapters().add(new ReferencingDirectiveLeakPreventer());
         return schema;

@@ -1,5 +1,9 @@
-    private void init(final ReadableByteChannel dbfChannel, final boolean useMemoryMappedBuffer,
-            final Charset charset, final TimeZone timeZone) throws IOException {
+    private void init(
+            final ReadableByteChannel dbfChannel,
+            final boolean useMemoryMappedBuffer,
+            final Charset charset,
+            final TimeZone timeZone)
+            throws IOException {
         this.channel = dbfChannel;
         this.stringCharset = charset == null ? Charset.defaultCharset() : charset;
         TimeZone calTimeZone = timeZone == null ? TimeZone.getDefault() : timeZone;
@@ -14,32 +18,34 @@
         // if we have a FileChannel, lets map it
         if (channel instanceof FileChannel && this.useMemoryMappedBuffer) {
             final FileChannel fc = (FileChannel) channel;
-            if((fc.size() - fc.position()) < (long) Integer.MAX_VALUE) {
+            if ((fc.size() - fc.position()) < (long) Integer.MAX_VALUE) {
                 buffer = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
             } else {
                 buffer = fc.map(FileChannel.MapMode.READ_ONLY, 0, Integer.MAX_VALUE);
             }
             buffer.position((int) fc.position());
             header.readHeader(buffer);
-            
+
             this.currentOffset = 0;
         } else {
             // Force useMemoryMappedBuffer to false
             this.useMemoryMappedBuffer = false;
             header.readHeader(channel, charset);
             // Some other type of channel
-            // size the buffer so that we can read 4 records at a time (and make the buffer cacheable)
-            //int size = (int) Math.pow(2, Math.ceil(Math.log(header.getRecordLength()) / Math.log(2)));
+            // size the buffer so that we can read 4 records at a time (and make the buffer
+            // cacheable)
+            // int size = (int) Math.pow(2, Math.ceil(Math.log(header.getRecordLength()) /
+            // Math.log(2)));
             buffer = NIOUtilities.allocate(header.getRecordLength());
             // fill it and reset
             fill(buffer, channel);
             buffer.flip();
             this.currentOffset = header.getHeaderLength();
         }
-        
+
         // The entire file is in little endian
         buffer.order(ByteOrder.LITTLE_ENDIAN);
-        
+
         // Set up some buffers and lookups for efficiency
         fieldTypes = new char[header.getNumFields()];
         fieldLengths = new int[header.getNumFields()];
@@ -47,16 +53,14 @@
         for (int i = 0, ii = header.getNumFields(); i < ii; i++) {
             fieldTypes[i] = header.getFieldType(i);
             fieldLengths[i] = header.getFieldLength(i);
-            if(i > 0)
-                fieldOffsets[i] = fieldOffsets[i -1] + header.getFieldLength(i - 1);
+            if (i > 0) fieldOffsets[i] = fieldOffsets[i - 1] + header.getFieldLength(i - 1);
         }
         bytes = new byte[header.getRecordLength() - 1];
-        
 
         // check if we working with a latin-1 char Charset
         final String cname = stringCharset.name();
         oneBytePerChar = "ISO-8859-1".equals(cname) || "US-ASCII".equals(cname);
-        
+
         row = new Row();
     }
 

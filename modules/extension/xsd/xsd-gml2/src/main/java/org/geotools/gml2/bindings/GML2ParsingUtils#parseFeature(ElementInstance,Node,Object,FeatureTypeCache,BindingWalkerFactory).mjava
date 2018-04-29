@@ -1,37 +1,40 @@
     /**
-     * Utility method to implement Binding.parse for a binding which parses
-     * into A feature.
+     * Utility method to implement Binding.parse for a binding which parses into A feature.
      *
      * @param instance The instance being parsed.
      * @param node The parse tree.
      * @param value The value from the last binding in the chain.
      * @param ftCache The feature type cache.
      * @param bwFactory Binding walker factory.
-     *
      * @return A feature type.
      */
-    public static SimpleFeature parseFeature(ElementInstance instance, Node node, Object value,
-        FeatureTypeCache ftCache, BindingWalkerFactory bwFactory)
-        throws Exception {
-        //get the definition of the element
+    public static SimpleFeature parseFeature(
+            ElementInstance instance,
+            Node node,
+            Object value,
+            FeatureTypeCache ftCache,
+            BindingWalkerFactory bwFactory)
+            throws Exception {
+        // get the definition of the element
         XSDElementDeclaration decl = instance.getElementDeclaration();
 
-        //special case, if the declaration is abstract it is probably "_Feautre" 
-        // which means we are parsing an element which could not be found in the 
-        // schema, so instead of using the element declaration to build the 
+        // special case, if the declaration is abstract it is probably "_Feautre"
+        // which means we are parsing an element which could not be found in the
+        // schema, so instead of using the element declaration to build the
         // type, just use the node given to us
         SimpleFeatureType sfType = null;
         FeatureType fType = null;
-        
+
         if (!decl.isAbstract()) {
-            //first look in cache
+            // first look in cache
             fType = ftCache.get(new NameImpl(decl.getTargetNamespace(), decl.getName()));
 
             if (fType == null || fType instanceof SimpleFeatureType) {
                 sfType = (SimpleFeatureType) fType;
             } else {
                 // TODO: support parsing of non-simple GML features
-                throw new UnsupportedOperationException("Parsing of non-simple GML features not yet supported.");
+                throw new UnsupportedOperationException(
+                        "Parsing of non-simple GML features not yet supported.");
             }
 
             if (sfType == null) {
@@ -39,42 +42,47 @@
                 CoordinateReferenceSystem crs = null;
                 if (node.hasChild("boundedBy") && node.getChild("boundedBy").hasChild("Box")) {
                     crs = crs(node.getChild("boundedBy").getChild("Box"));
-                } else if (node.hasChild("boundedBy") && node.getChild("boundedBy").hasChild("Envelope")) {
+                } else if (node.hasChild("boundedBy")
+                        && node.getChild("boundedBy").hasChild("Envelope")) {
                     crs = crs(node.getChild("boundedBy").getChild("Envelope"));
                 }
 
-                //build from element declaration
+                // build from element declaration
                 sfType = GML2ParsingUtils.featureType(decl, bwFactory, crs);
                 ftCache.put(sfType);
             }
         } else {
             // first look in cache
-            fType = ftCache.get(new NameImpl(node.getComponent().getNamespace(), node
-                    .getComponent().getName()));
+            fType =
+                    ftCache.get(
+                            new NameImpl(
+                                    node.getComponent().getNamespace(),
+                                    node.getComponent().getName()));
 
             if (fType == null || fType instanceof SimpleFeatureType) {
                 sfType = (SimpleFeatureType) fType;
             } else {
                 // TODO: support parsing of non-simple GML features
-                throw new UnsupportedOperationException("Parsing of non-simple GML features not yet supported.");
+                throw new UnsupportedOperationException(
+                        "Parsing of non-simple GML features not yet supported.");
             }
 
             if (sfType == null) {
-                //build from node
+                // build from node
                 sfType = GML2ParsingUtils.featureType(node);
                 ftCache.put(sfType);
             }
         }
 
-        //fid
+        // fid
         String fid = (String) node.getAttributeValue("fid");
 
         if (fid == null) {
-            //look for id
+            // look for id
             fid = (String) node.getAttributeValue("id");
         }
 
-        //create feature
+        // create feature
         return GML2ParsingUtils.feature(sfType, fid, node);
     }
 

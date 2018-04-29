@@ -1,18 +1,19 @@
     /**
      * Inserts two data rows, creating weak geometries and short clobs.
-     * 
+     *
      * @throws ParseException
      */
-    private void insertData(final SeLayer layer, final ISession session,
-            final SeColumnDefinition[] colDefs) throws Exception {
+    private void insertData(
+            final SeLayer layer, final ISession session, final SeColumnDefinition[] colDefs)
+            throws Exception {
         WKTReader reader = new WKTReader();
         Geometry[] geoms = new Geometry[2];
         geoms[0] = reader.read("POINT(0 0)");
         geoms[1] = reader.read("POINT(0 0)");
 
         final byte[][] strings = new byte[2][];
-        strings[0] = new byte[] { 0x00, 0x48, 0x00, 0x65, 0x00, 0x6C, 0x00, 0x6C, 0x00, 0x6F };
-        strings[1] = new byte[] { 0x00, 0x57, 0x00, 0x6F, 0x00, 0x72, 0x00, 0x6C, 0x00, 0x64 };
+        strings[0] = new byte[] {0x00, 0x48, 0x00, 0x65, 0x00, 0x6C, 0x00, 0x6C, 0x00, 0x6F};
+        strings[1] = new byte[] {0x00, 0x57, 0x00, 0x6F, 0x00, 0x72, 0x00, 0x6C, 0x00, 0x64};
 
         final SeCoordinateReference coordref = layer.getCoordRef();
         final SeShape shapes[] = new SeShape[2];
@@ -38,33 +39,33 @@
         }
         columns[colDefs.length - 1] = "SHAPE"; // Shape column
 
-        Command<Void> insertDataCmd = new Command<Void>() {
-            @Override
-            public Void execute(ISession session, SeConnection connection) throws SeException,
-                    IOException {
+        Command<Void> insertDataCmd =
+                new Command<Void>() {
+                    @Override
+                    public Void execute(ISession session, SeConnection connection)
+                            throws SeException, IOException {
 
-                SeInsert insert = new SeInsert(connection);
-                insert.intoTable(layer.getName(), columns);
-                insert.setWriteMode(true);
+                        SeInsert insert = new SeInsert(connection);
+                        insert.intoTable(layer.getName(), columns);
+                        insert.setWriteMode(true);
 
-                try {
-                    for (int i = 0; i < shapes.length; i++) {
-                        SeRow row = insert.getRowToSet();
-                        row.setClob(0, new ByteArrayInputStream(strings[i]));
+                        try {
+                            for (int i = 0; i < shapes.length; i++) {
+                                SeRow row = insert.getRowToSet();
+                                row.setClob(0, new ByteArrayInputStream(strings[i]));
 
-                        SeShape seShape = shapes[i];
-                        row.setShape(tempTableColumns.length - 1, seShape);
+                                SeShape seShape = shapes[i];
+                                row.setShape(tempTableColumns.length - 1, seShape);
 
-                        insert.execute();
+                                insert.execute();
+                            }
+                        } finally {
+                            insert.close();
+                        }
+                        return null;
                     }
-                } finally {
-                    insert.close();
-                }
-                return null;
-            }
-        };
+                };
 
         session.issue(insertDataCmd);
-
     } // End method insertData
 

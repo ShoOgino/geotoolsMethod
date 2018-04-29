@@ -1,55 +1,61 @@
     @Override
     public Class<?> getMapping(ResultSet columnMetaData, Connection cx) throws SQLException {
-        //the sqlite jdbc driver maps geometry type to varchar, so do a lookup
+        // the sqlite jdbc driver maps geometry type to varchar, so do a lookup
         // in the geometry_columns table
-        String tbl = columnMetaData.getString( "TABLE_NAME");
-        String col = columnMetaData.getString( "COLUMN_NAME");
-        
-        String sql = "SELECT type FROM geometry_columns " + 
-            "WHERE f_table_name = '" + tbl + "' " + 
-            "AND f_geometry_column = '" + col + "'";
-        LOGGER.fine( sql );
-        
+        String tbl = columnMetaData.getString("TABLE_NAME");
+        String col = columnMetaData.getString("COLUMN_NAME");
+
+        String sql =
+                "SELECT type FROM geometry_columns "
+                        + "WHERE f_table_name = '"
+                        + tbl
+                        + "' "
+                        + "AND f_geometry_column = '"
+                        + col
+                        + "'";
+        LOGGER.fine(sql);
+
         Statement st = cx.createStatement();
         try {
-            ResultSet rs = st.executeQuery( sql );
+            ResultSet rs = st.executeQuery(sql);
             try {
-                if ( rs.next() ) {
-                    String type = rs.getString( "type" );
-                    return Geometries.getForName( type ).getBinding();
+                if (rs.next()) {
+                    String type = rs.getString("type");
+                    return Geometries.getForName(type).getBinding();
                 }
-            }
-            finally {
-                dataStore.closeSafe( rs ); 
+            } finally {
+                dataStore.closeSafe(rs);
             }
 
             // check geometry columns views
-            sql = "SELECT b.type FROM views_geometry_columns a, geometry_columns b " +
-                    "WHERE a.f_table_name = b.f_table_name " +
-                    "AND a.f_geometry_column = b.f_geometry_column " +
-                    "AND a.view_name = '" + tbl + "' " +
-                    "AND a.view_geometry = '" + col + "'";
-            LOGGER.fine( sql );
+            sql =
+                    "SELECT b.type FROM views_geometry_columns a, geometry_columns b "
+                            + "WHERE a.f_table_name = b.f_table_name "
+                            + "AND a.f_geometry_column = b.f_geometry_column "
+                            + "AND a.view_name = '"
+                            + tbl
+                            + "' "
+                            + "AND a.view_geometry = '"
+                            + col
+                            + "'";
+            LOGGER.fine(sql);
             try {
                 rs = st.executeQuery(sql);
                 try {
                     if (rs.next()) {
-                        String type = rs.getString( "type" );
-                        return Geometries.getForName( type ).getBinding();
+                        String type = rs.getString("type");
+                        return Geometries.getForName(type).getBinding();
                     }
-                }
-                finally {
+                } finally {
                     dataStore.closeSafe(rs);
                 }
-            }
-            catch(SQLException e) {
+            } catch (SQLException e) {
                 LOGGER.log(Level.FINEST, "error querying views_geometry_columns", e);
             }
+        } finally {
+            dataStore.closeSafe(st);
         }
-        finally {
-            dataStore.closeSafe( st );
-        }
-        
+
         return null;
     }
 

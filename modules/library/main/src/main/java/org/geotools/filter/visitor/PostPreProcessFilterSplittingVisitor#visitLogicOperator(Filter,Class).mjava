@@ -1,94 +1,91 @@
-	    private void visitLogicOperator(Filter filter, Class filterInterface) {
-	        if( original==null )
-	        	original=filter;
+    private void visitLogicOperator(Filter filter, Class filterInterface) {
+        if (original == null) original = filter;
 
-	        if (!fcs.supports(filterInterface)) {
-	                        postStack.push(filter);
-	                    return;
-	                }
+        if (!fcs.supports(filterInterface)) {
+            postStack.push(filter);
+            return;
+        }
 
-            int i = postStack.size();
-            int j = preStack.size();
-	        if (filter instanceof Not) {
-                
-	            if (((Not)filter).getFilter() != null) {
-	                Filter next = ((Not)filter).getFilter();
-					next.accept(this, null);
-	                
-	                if (i < postStack.size()) {
-	                	// since and can split filter into both pre and post parts
-	                	// the parts have to be combined since ~(A^B) == ~A | ~B
-	                	// combining is easy since filter==combined result however both post and pre stacks
-	                	// must be cleared since both may have components of the filter
-	                	popToSize(postStack,i);
-	                	popToSize(preStack, j);
-	                	postStack.push(filter);
-	                }else{ 
-	                	popToSize(preStack,j);
-                        preStack.push(filter);
-	                }
-	            }
-	        } else {
-	            if (filter instanceof Or) {
-	                Filter orReplacement;
-	
-	                try {
-	                    orReplacement = translateOr((Or)filter);
-	                    orReplacement.accept(this, null);
-	                } catch (IllegalFilterException e) {
-	                	popToSize(preStack,j);
-	                	postStack.push(filter);
-	                    return;
-	                }
-	                if( postStack.size()>i ){
-	                	popToSize(postStack,i);
-	                	postStack.push(filter);
+        int i = postStack.size();
+        int j = preStack.size();
+        if (filter instanceof Not) {
 
-	                	return;
-	                }
+            if (((Not) filter).getFilter() != null) {
+                Filter next = ((Not) filter).getFilter();
+                next.accept(this, null);
 
-	                preStack.pop();
-                	preStack.push(filter);
-	            } else {
-                    // it's an AND
-                    Iterator it = ((And)filter).getChildren().iterator();
-                    
-	                while (it.hasNext()) {
-	                    Filter next = (Filter) it.next();
-						next.accept(this, null);
-	                }
-	
-	                //combine the unsupported and add to the top
-	                if (i < postStack.size()) {
-	                    if (filter instanceof And) {
-	                        Filter f = (Filter) postStack.pop();
-	
-	                        while (postStack.size() > i)
-	                            f= ff.and(f, (Filter) postStack.pop());
-	
-	                        postStack.push(f);
-	                        
-	                        if(j<preStack.size()){
-	                        	f = (Filter)preStack.pop();
-	                        	
-		                        while (preStack.size() > j)
-		                            f=ff.and(f, (Filter) preStack.pop());
-		                        preStack.push(f);
-	                        }
-	                    } else {
-                            logger.warning(
-	                            "LogicFilter found which is not 'and, or, not");
+                if (i < postStack.size()) {
+                    // since and can split filter into both pre and post parts
+                    // the parts have to be combined since ~(A^B) == ~A | ~B
+                    // combining is easy since filter==combined result however both post and pre
+                    // stacks
+                    // must be cleared since both may have components of the filter
+                    popToSize(postStack, i);
+                    popToSize(preStack, j);
+                    postStack.push(filter);
+                } else {
+                    popToSize(preStack, j);
+                    preStack.push(filter);
+                }
+            }
+        } else {
+            if (filter instanceof Or) {
+                Filter orReplacement;
 
-                            popToSize(postStack, i);
-                            popToSize(preStack, j);
-	
-	                        postStack.push(filter);
-	                    }
-	                } else {
-	                	popToSize(preStack,j);
-                        preStack.push(filter);              
-	                }
-	            }
-	        }
-	    }
+                try {
+                    orReplacement = translateOr((Or) filter);
+                    orReplacement.accept(this, null);
+                } catch (IllegalFilterException e) {
+                    popToSize(preStack, j);
+                    postStack.push(filter);
+                    return;
+                }
+                if (postStack.size() > i) {
+                    popToSize(postStack, i);
+                    postStack.push(filter);
+
+                    return;
+                }
+
+                preStack.pop();
+                preStack.push(filter);
+            } else {
+                // it's an AND
+                Iterator it = ((And) filter).getChildren().iterator();
+
+                while (it.hasNext()) {
+                    Filter next = (Filter) it.next();
+                    next.accept(this, null);
+                }
+
+                // combine the unsupported and add to the top
+                if (i < postStack.size()) {
+                    if (filter instanceof And) {
+                        Filter f = (Filter) postStack.pop();
+
+                        while (postStack.size() > i) f = ff.and(f, (Filter) postStack.pop());
+
+                        postStack.push(f);
+
+                        if (j < preStack.size()) {
+                            f = (Filter) preStack.pop();
+
+                            while (preStack.size() > j) f = ff.and(f, (Filter) preStack.pop());
+                            preStack.push(f);
+                        }
+                    } else {
+                        logger.warning("LogicFilter found which is not 'and, or, not");
+
+                        popToSize(postStack, i);
+                        popToSize(preStack, j);
+
+                        postStack.push(filter);
+                    }
+                } else {
+                    popToSize(preStack, j);
+                    preStack.push(filter);
+                }
+            }
+        }
+    }
 
