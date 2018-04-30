@@ -1,0 +1,43 @@
+    /**
+     * Intersects a ROI with a ROI geometry, with fallback on GeometrySnapper if a TopologyException
+     * occurs
+     *
+     * @param roi
+     * @param roiGeometry
+     * @param hints
+     * @return
+     */
+    public static ROI roiIntersect(ROI roi, ROIGeometry roiGeometry, RenderingHints hints) {
+        try {
+            roi = roi.intersect(roiGeometry);
+        } catch (TopologyException tpe) {
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.log(
+                        Level.FINE,
+                        "Topology Exception occurred while producing the intersecting ROI"
+                                + "\nTrying with a GeometrySnapper approach. "
+                                + tpe.getLocalizedMessage());
+            }
+
+            Geometry g = roiGeometry.getAsGeometry();
+            boolean isValid = g.isValid();
+            // Try intersection with a GeometrySnapper approach
+            if (!isValid) {
+                double tol = GeometrySnapper.computeOverlaySnapTolerance(g);
+                g = new GeometrySnapper(g).snapTo(g, tol).buffer(0);
+                roiGeometry = new ROIGeometry(g, setupJAIHints(hints));
+                roi = roi.intersect(roiGeometry);
+            } else if (roi instanceof ROIGeometry) {
+                g = ((ROIGeometry) roi).getAsGeometry();
+                isValid = g.isValid();
+                if (!isValid) {
+                    double tol = GeometrySnapper.computeOverlaySnapTolerance(g);
+                    g = new GeometrySnapper(g).snapTo(g, tol).buffer(0);
+                    roi = new ROIGeometry(g, setupJAIHints(hints));
+                    roi = roi.intersect(roiGeometry);
+                }
+            }
+        }
+        return roi;
+    }
+

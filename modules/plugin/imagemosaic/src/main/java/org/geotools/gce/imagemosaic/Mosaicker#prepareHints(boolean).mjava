@@ -25,27 +25,24 @@
         }
 
         // look for additional hints for caching and tile scheduling
-        if (rasterLayerResponse.getHints() != null && !rasterLayerResponse.getHints().isEmpty()) {
-
-            // TileCache
-            TileCache tc = Utils.getTileCacheHint(rasterLayerResponse.getHints());
-            if (tc != null) {
-                localHints.add(new RenderingHints(JAI.KEY_TILE_CACHE, tc));
-            }
+        Hints responseHints = rasterLayerResponse.getHints();
+        if (responseHints != null && !responseHints.isEmpty()) {
 
             // BorderExtender
             localHints.add(ImageUtilities.BORDER_EXTENDER_HINTS); // default
-            BorderExtender be = Utils.getBorderExtenderHint(rasterLayerResponse.getHints());
+            BorderExtender be = Utils.getBorderExtenderHint(responseHints);
             if (be != null) {
                 localHints.add(new RenderingHints(JAI.KEY_BORDER_EXTENDER, be));
             }
 
-            // TileScheduler
-            TileScheduler tileScheduler =
-                    Utils.getTileSchedulerHint(rasterLayerResponse.getHints());
-            if (tileScheduler != null) {
-                localHints.add(new RenderingHints(JAI.KEY_TILE_SCHEDULER, tileScheduler));
+            Hints jaiHints = Utils.setupJAIHints(responseHints);
+            if (jaiHints != null && !jaiHints.isEmpty()) {
+                localHints.add(jaiHints);
             }
+        }
+        if (rasterLayerResponse.getGeometryMask() != null
+                && rasterLayerResponse.isSetRoiProperty()) {
+            localHints.add(new RenderingHints(ImageWorker.FORCE_MOSAIC_ROI_PROPERTY, true));
         }
         return localHints;
     }

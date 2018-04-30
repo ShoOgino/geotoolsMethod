@@ -24,8 +24,9 @@
         }
 
         // === prepare hints
+        final RenderingHints responseHints = rasterLayerResponse.getHints();
         final RenderingHints localHints = prepareHints(useFinalImageLayout);
-
+        ROIGeometry rasterMask = getRasterMask();
         //
         // SPECIAL CASE
         // 1 single tile, we try not do a mosaic.
@@ -38,14 +39,15 @@
             }
             PAMDataset pamDataset = in.pamDataset;
 
-            // the roi is exactly equal to the image
             ROI roi = in.roi;
             if (roi != null) {
                 Rectangle bounds = Utils.toRectangle(roi.getAsShape());
                 if (bounds != null) {
                     RenderedImage mosaic = in.source;
                     Rectangle imageBounds = PlanarImage.wrapRenderedImage(mosaic).getBounds();
-                    if (imageBounds.equals(bounds)) {
+
+                    // the roi is exactly equal to the image
+                    if (imageBounds.equals(bounds) && rasterMask == null) {
 
                         // do we need to crop? (image is bigger than requested?)
                         if (!rasterLayerResponse.getRasterBounds().contains(imageBounds)) {
@@ -170,10 +172,29 @@
 
         Object property = mosaic.getProperty("ROI");
         ROI overallROI = (property instanceof ROI) ? (ROI) property : null;
+
+        if (rasterMask != null) {
+            if (overallROI == null) {
+                overallROI = rasterMask;
+            } else {
+                overallROI = Utils.roiIntersect(overallROI, rasterMask, responseHints);
+            }
+            // Adding globalRoi to the output
+            RenderedOp rop = (RenderedOp) mosaic;
+
+            assert overallROI != null;
+            rop.setProperty("ROI", overallROI);
+        }
+
+        FootprintBehavior footprintBehavior = rasterLayerResponse.getFootprintBehavior();
+        if (footprintBehavior == FootprintBehavior.None && rasterMask != null) {
+            // We need masking anyway so let's force the postProcessing with
+            // the footprint behavior
+            double[] bg = rasterLayerResponse.getBackgroundValues();
+            footprintBehavior = bg != null ? FootprintBehavior.Cut : FootprintBehavior.Transparent;
+        }
         final RenderedImage postProcessed =
-                rasterLayerResponse
-                        .getFootprintBehavior()
-                        .postProcessMosaic(mosaic, overallROI, localHints);
+                footprintBehavior.postProcessMosaic(mosaic, overallROI, localHints);
 
         // prepare for next step
         if (hasAlpha || doInputTransparency) {

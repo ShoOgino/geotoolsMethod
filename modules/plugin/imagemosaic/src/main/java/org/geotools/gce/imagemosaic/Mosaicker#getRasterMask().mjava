@@ -1,0 +1,37 @@
+    /** Extract the geometry mask as a raster mask if available */
+    private ROIGeometry getRasterMask() throws IOException {
+        Geometry geometryMask = rasterLayerResponse.getGeometryMask();
+        ROIGeometry rasterMask = null;
+        if (geometryMask != null) {
+            if (rasterLayerResponse.isHeterogeneousCRS()) {
+                LOGGER.warning(
+                        "Geometry Mask is not currently supported with heterogeneous CRS mosaics. Ignoring it");
+                return null;
+            }
+            Geometry mappedMask = null;
+            try {
+                // Convert the geometryMask in raster space
+                mappedMask =
+                        JTS.transform(
+                                geometryMask, rasterLayerResponse.getFinalWorldToGridCorner());
+            } catch (MismatchedDimensionException | TransformException e) {
+                throw new IOException(
+                        "Exception occurred while transforming the provided geometryMask", e);
+            }
+            double maskingBuffer = rasterLayerResponse.getMaskingBufferPixels();
+            if (maskingBuffer > 0) {
+                // Apply buffering staying in the mask bbox
+                Geometry mappedMaskBox = mappedMask.getEnvelope();
+                // JTS operations may be expensive. Decimate it
+                mappedMask = Utils.decimate(mappedMask);
+                mappedMask = mappedMask.buffer(maskingBuffer);
+                mappedMaskBox = mappedMaskBox.buffer(maskingBuffer);
+                mappedMask = mappedMask.intersection(mappedMaskBox);
+            }
+            rasterMask =
+                    new ROIGeometry(
+                            mappedMask, Utils.setupJAIHints(rasterLayerResponse.getHints()));
+        }
+        return rasterMask;
+    }
+
