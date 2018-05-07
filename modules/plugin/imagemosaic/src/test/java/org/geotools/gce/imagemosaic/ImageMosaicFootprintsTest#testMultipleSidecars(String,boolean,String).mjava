@@ -1,0 +1,79 @@
+    private void testMultipleSidecars(
+            String loaderClassName, boolean overviewsInRasterSpace, String overviewsSuffixFormat)
+            throws Exception {
+
+        TemporaryFolder folder = new TemporaryFolder();
+        folder.create();
+        File multiWkbs = folder.getRoot();
+        FileUtils.copyDirectory(TestData.file(this, "footprint_wkbs"), multiWkbs);
+        Properties p = new Properties();
+        p.put(
+                MultiLevelROIProviderFactory.SOURCE_PROPERTY,
+                MultiLevelROIProviderFactory.TYPE_MULTIPLE_SIDECAR);
+        p.put(
+                MultiLevelROIGeometryOverviewsProvider.OVERVIEWS_SUFFIX_FORMAT_KEY,
+                overviewsSuffixFormat);
+        p.put(
+                MultiLevelROIGeometryOverviewsProvider.OVERVIEWS_ROI_IN_RASTER_SPACE_KEY,
+                Boolean.toString(overviewsInRasterSpace));
+        p.put(MultiLevelROIGeometryOverviewsProvider.FOOTPRINT_LOADER_SPI, loaderClassName);
+        FileOutputStream fos = null;
+        try {
+            fos = new FileOutputStream(new File(multiWkbs, "footprints.properties"));
+            p.store(fos, null);
+        } finally {
+            IOUtils.closeQuietly(fos);
+        }
+
+        ImageMosaicFormat format = new ImageMosaicFormat();
+        ImageMosaicReader reader = format.getReader(multiWkbs);
+
+        // limit yourself to reading just a bit of it
+        final ParameterValue<GridGeometry2D> gg =
+                AbstractGridFormat.READ_GRIDGEOMETRY2D.createValue();
+        final GeneralEnvelope envelope = reader.getOriginalEnvelope();
+        final Dimension dim = new Dimension();
+
+        // Apply some scaling and some crop
+        final double scalingFactorX = 1 / 5d;
+        final double scalingFactorY = 1 / 5d;
+        final double spanRatioX = 8 / 9d;
+        final double spanRatioY = 5 / 6d;
+        dim.setSize(
+                reader.getOriginalGridRange().getSpan(0) * (scalingFactorX * spanRatioX),
+                reader.getOriginalGridRange().getSpan(1) * (scalingFactorY * spanRatioY));
+        final Rectangle rasterArea = ((GridEnvelope2D) reader.getOriginalGridRange());
+        rasterArea.setSize(dim);
+        final GridEnvelope2D range = new GridEnvelope2D(rasterArea);
+        double maxX = envelope.getMaximum(0);
+        double minY = envelope.getMinimum(1);
+        double minX = maxX - envelope.getSpan(0) * (spanRatioX);
+        double maxY = minY + envelope.getSpan(1) * (spanRatioY);
+
+        final GeneralEnvelope env2 =
+                new GeneralEnvelope(new double[] {minX, minY}, new double[] {maxX, maxY});
+        env2.setCoordinateReferenceSystem(envelope.getCoordinateReferenceSystem());
+        gg.setValue(new GridGeometry2D(range, env2));
+
+        ParameterValue<String> footprintManagement =
+                AbstractGridFormat.FOOTPRINT_BEHAVIOR.createValue();
+        footprintManagement.setValue(FootprintBehavior.Transparent.name());
+        GridCoverage2D coverage =
+                reader.read(new GeneralParameterValue[] {footprintManagement, gg});
+
+        byte[] pixel = new byte[4];
+
+        // Checking some pixels out of the footprint are transparent
+        coverage.evaluate(new DirectPosition2D(-89, 34), pixel);
+        assertEquals(0, pixel[3]);
+
+        coverage.evaluate(new DirectPosition2D(43, -13), pixel);
+        assertEquals(0, pixel[3]);
+
+        coverage.evaluate(new DirectPosition2D(131, 10), pixel);
+        assertEquals(0, pixel[3]);
+
+        coverage.evaluate(new DirectPosition2D(145, 0), pixel);
+        assertEquals(0, pixel[3]);
+    }
+

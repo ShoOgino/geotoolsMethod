@@ -1,0 +1,73 @@
+    public ROIGeometry getTransformedROI(
+            AffineTransform at,
+            int imageIndex,
+            Rectangle imgBounds,
+            ImageReadParam params,
+            ReadType readType) {
+        if (empty) {
+            return null;
+        }
+        if (at == null) {
+            at = new AffineTransform();
+        }
+        ROIGeometry roiGeometry = roiCache.get(at);
+        if (roiGeometry == null) {
+            Geometry rescaled;
+            boolean useOverviews = imageIndex != 0 && numOverviews > 0;
+            rescaled =
+                    (Geometry)
+                            (useOverviews
+                                    ? multilevelFootprints.get(imageIndex - 1).clone()
+                                    : originalFootprint.clone());
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine("Using footprint's overview: " + useOverviews);
+            }
+            AffineTransformation geometryAT = null;
+            if (useOverviews && overviewsRoiInRasterSpace) {
+                Rectangle sourceRegion = params.getSourceRegion();
+                final double xScale = (imgBounds.getWidth() / sourceRegion.getWidth() * 1.0);
+                final double yScale = (imgBounds.getHeight() / sourceRegion.getHeight() * 1.0);
+
+                // Need to align the Overview's geometry to the read area (sourceRegion offset)
+                geometryAT = new AffineTransformation(1, 0, -sourceRegion.x, 0, 1, -sourceRegion.y);
+                // Need to scale it if the requested extent was different with respect to the
+                // returned extent
+                geometryAT.scale(xScale, yScale);
+
+                // rescale the geometry to align it with the read portion
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.fine(
+                            "Adapting overview's geometry to current image, using transformation: "
+                                    + geometryAT.toString());
+                }
+
+                rescaled.apply(geometryAT);
+
+            } else {
+                geometryAT =
+                        new AffineTransformation(
+                                at.getScaleX(),
+                                at.getShearX(),
+                                at.getTranslateX(),
+                                at.getShearY(),
+                                at.getScaleY(),
+                                at.getTranslateY());
+                rescaled.apply(geometryAT);
+            }
+
+            if (!rescaled.isEmpty()) {
+
+                // the geometry is likely to have way more precision than needed, simplify it
+                // so that the error is significantly less than one pixel
+                Geometry simplified = TopologyPreservingSimplifier.simplify(rescaled, 0.333);
+                // build a ROI geometry optimized for rectangle clipping
+                roiGeometry = new FastClipROIGeometry(simplified, hints);
+                roiCache.put(at, roiGeometry);
+            } else {
+                return null;
+            }
+        }
+
+        return roiGeometry;
+    }
+
