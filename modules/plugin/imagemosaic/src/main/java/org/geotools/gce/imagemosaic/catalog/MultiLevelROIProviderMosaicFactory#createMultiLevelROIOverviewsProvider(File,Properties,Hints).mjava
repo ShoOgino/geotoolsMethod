@@ -1,0 +1,67 @@
+    /** Create a {@link MultiLevelROIGeometryOverviewsProvider} based on specified properties */
+    private static MultiLevelROIProvider createMultiLevelROIOverviewsProvider(
+            File mosaicFolder, Properties properties, Hints hints) {
+
+        // Getting the footprint loader SPI
+        String footprintLoaderSpi =
+                (String)
+                        properties.get(MultiLevelROIGeometryOverviewsProvider.FOOTPRINT_LOADER_SPI);
+        if (footprintLoaderSpi == null) {
+            throw new IllegalArgumentException(
+                    MultiLevelROIGeometryOverviewsProvider.FOOTPRINT_LOADER_SPI
+                            + " property should be specified");
+        }
+
+        // Getting the footprint loader SPI for overviews (it may be null).
+        String overviewsFootprintLoaderSpi =
+                (String)
+                        properties.get(
+                                MultiLevelROIGeometryOverviewsProvider
+                                        .OVERVIEWS_FOOTPRINT_LOADER_SPI);
+
+        // Get the overviews suffix String format
+        String overviewsSuffixFormat =
+                (String)
+                        properties.getProperty(
+                                MultiLevelROIGeometryOverviewsProvider.OVERVIEWS_SUFFIX_FORMAT_KEY,
+                                MultiLevelROIGeometryOverviewsProvider
+                                        .DEFAULT_OVERVIEWS_SUFFIX_FORMAT);
+
+        // Whether overviewsROI are provided in raster space (or model space)
+        String overviewsRoiInRasterSpaceString =
+                (String)
+                        properties.getProperty(
+                                MultiLevelROIGeometryOverviewsProvider
+                                        .OVERVIEWS_ROI_IN_RASTER_SPACE_KEY);
+        boolean overviewsRoiInRasterSpace =
+                overviewsRoiInRasterSpaceString != null
+                        ? Boolean.parseBoolean(overviewsRoiInRasterSpaceString)
+                        : MultiLevelROIGeometryOverviewsProvider
+                                .DEFAULT_OVERVIEWS_ROI_IN_RASTER_SPACE;
+
+        FootprintLoaderSpi spi = null;
+        try {
+            spi = (FootprintLoaderSpi) Class.forName(footprintLoaderSpi).newInstance();
+            FootprintLoader footprintLoader = spi.createLoader();
+            FootprintLoader overviewsFootprintLoader = footprintLoader;
+
+            if (overviewsFootprintLoaderSpi != null) {
+                // Use dedicate LoaderSPI for overviews
+                spi = (FootprintLoaderSpi) Class.forName(overviewsFootprintLoaderSpi).newInstance();
+                overviewsFootprintLoader = spi.createLoader();
+            }
+
+            return new MultiLevelROIGeometryOverviewsProvider(
+                    mosaicFolder,
+                    overviewsSuffixFormat,
+                    MultiLevelROIGeometryOverviewsProvider.LOOK_FOR_OVERVIEWS,
+                    footprintLoader,
+                    overviewsFootprintLoader,
+                    overviewsRoiInRasterSpace,
+                    hints);
+        } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
+            throw new IllegalArgumentException(
+                    "Exception occurred while creating FootprintLoader", e);
+        }
+    }
+
