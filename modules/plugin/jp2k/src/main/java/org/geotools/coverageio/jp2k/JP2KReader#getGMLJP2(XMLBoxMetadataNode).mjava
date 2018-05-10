@@ -1,0 +1,87 @@
+    private void getGMLJP2(XMLBoxMetadataNode xmlBox)
+            throws IOException, ParserConfigurationException, SAXException,
+                    XPathExpressionException, FactoryException, TransformException {
+
+        DocumentBuilder b = DocumentBuilderFactory.newInstance().newDocumentBuilder();
+        String xml = xmlBox.getXml();
+        Document doc = b.parse(new ByteArrayInputStream(xml.getBytes()));
+
+        // this is a bit lax, locates the first RectifiedGrid in the GML and then
+        // parses it. GDAL is doing the same.
+        XPath xpath = XPathFactory.newInstance().newXPath();
+        Node rectifiedGrid =
+                getNode(xpath, doc.getDocumentElement(), "//*[local-name() = 'RectifiedGrid']");
+        if (rectifiedGrid == null) {
+            LOGGER.log(
+                    FINE, "Failed to parse GML georeferencing, could not locate a RectifiedGrid");
+            return;
+        }
+
+        // locate origin and offsets
+        String pointOriginPath = "//*[local-name() = 'origin']/*[local-name() = 'Point']";
+        Node originNode = getNode(xpath, rectifiedGrid, pointOriginPath);
+        Node offsetVector1 = getNode(xpath, rectifiedGrid, "//*[local-name() = 'offsetVector'][1]");
+        Node offsetVector2 = getNode(xpath, rectifiedGrid, "//*[local-name() = 'offsetVector'][2]");
+
+        if (originNode == null) {
+            LOGGER.log(FINE, "Failed to parse GML georeferencing, could not locate origin node");
+            return;
+        }
+        if (offsetVector1 == null || offsetVector2 == null) {
+            LOGGER.log(
+                    FINE,
+                    "Failed to parse GML georeferencing, could not locate required offset vectors");
+            return;
+        }
+
+        // locate the srsName
+        Node srsNameAttribute = originNode.getAttributes().getNamedItem("srsName");
+        if (srsNameAttribute == null) {
+            // try to get it from the feature collection bounds
+            String srsPath =
+                    "//*[local-name() = 'boundedBy']"
+                            + "/*[local-name() = 'Envelope']"
+                            + "/@srsName]";
+            srsNameAttribute = getNode(xpath, doc.getDocumentElement(), srsPath);
+        }
+        if (srsNameAttribute == null) {
+            // try to get it from the rectified grid element
+            srsNameAttribute = getNode(xpath, rectifiedGrid, "@srsName");
+        }
+        if (srsNameAttribute != null) {
+            CoordinateReferenceSystem crs = CRS.decode(srsNameAttribute.getNodeValue());
+            this.crs = crs;
+        }
+
+        Point2D origin = parsePoint(xpath, originNode);
+        double[] off1 = parseOrdinates(offsetVector1, "\\s+");
+        double[] off2 = parseOrdinates(offsetVector2, "\\s+");
+        if (off1 == null || off2 == null || origin == null) {
+            LOGGER.log(
+                    FINE, "Missing offsets or origin, cannot build raster to world transformation");
+            return;
+        }
+
+        AffineTransform at = null;
+        if (CRS.getAxisOrder(this.crs) == CRS.AxisOrder.NORTH_EAST) {
+            // flip it if possible
+            Integer epsgCode = CRS.lookupEpsgCode(crs, false);
+            if (epsgCode != null) {
+                CoordinateReferenceSystem flipped = CRS.decode("EPSG:" + epsgCode, true);
+                this.crs = flipped;
+            }
+            at =
+                    new AffineTransform(
+                            off1[1], off1[0], off2[1], off2[0], origin.getY(), origin.getX());
+        } else {
+            at =
+                    new AffineTransform(
+                            off1[0], off1[1], off2[0], off2[1], origin.getX(), origin.getY());
+        }
+        this.raster2Model = new AffineTransform2D(at);
+
+        final AffineTransform tempTransform = new AffineTransform((AffineTransform) raster2Model);
+        tempTransform.translate(-0.5, -0.5);
+        setEnvelopeFromTransform(tempTransform);
+    }
+
