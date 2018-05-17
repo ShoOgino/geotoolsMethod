@@ -1,0 +1,29 @@
+    /**
+     * Helper method that tests that mappings files obtained through an hTTP request are correctly
+     * handled, as well the included types and schemas.
+     */
+    private void testHttpMapping(String mappingFileName) throws Exception {
+        // instantiate a store for the mapping file
+        AppSchemaDataAccess store = buildAppSchemaDataStore(mappingFileName);
+        // check that a stations type is available
+        assertThat(store.getTypeNames().length, is(1));
+        Name name = new NameImpl("http://www.stations.org/1.0", "Station");
+        assertThat(store.getTypeNames()[0], is(name));
+        // read the complex features
+        FeatureIterator iterator = store.getFeatureSource(name).getFeatures().features();
+        List<Feature> features = new ArrayList<>();
+        while (iterator.hasNext()) {
+            features.add(iterator.next());
+        }
+        // three stations should be available
+        assertThat(features.size(), is(3));
+        for (Feature feature : features) {
+            // check that each station has at least a measurement
+            Name measurements = new NameImpl("http://www.stations.org/1.0", "measurements");
+            Property property = feature.getProperty(measurements);
+            assertThat(property.getValue(), instanceOf(List.class));
+            List values = (List) property.getValue();
+            assertThat(values.size() > 0, is(true));
+        }
+    }
+
