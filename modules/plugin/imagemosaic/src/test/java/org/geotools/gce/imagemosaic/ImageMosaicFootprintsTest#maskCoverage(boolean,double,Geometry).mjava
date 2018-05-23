@@ -1,0 +1,128 @@
+    private void maskCoverage(boolean footprint, double buffer, Geometry geometryMask)
+            throws Exception {
+        TemporaryFolder folder = new TemporaryFolder();
+        folder.create();
+        File multiWkts = folder.getRoot();
+        FileUtils.copyDirectory(TestData.file(this, "footprint_wkts"), multiWkts);
+
+        // Setting up granules footprint properties
+        Properties p = new Properties();
+        p.put(
+                MultiLevelROIProviderFactory.SOURCE_PROPERTY,
+                MultiLevelROIProviderFactory.TYPE_MULTIPLE_SIDECAR);
+        FileOutputStream fos = null;
+        try {
+            fos = new FileOutputStream(new File(multiWkts, "footprints.properties"));
+            p.store(fos, null);
+        } finally {
+            IOUtils.closeQuietly(fos);
+        }
+
+        ImageMosaicFormat format = new ImageMosaicFormat();
+        ImageMosaicReader reader = null;
+        GridCoverage2D coverage = null;
+        try {
+            reader = format.getReader(multiWkts);
+            AffineTransform2D g2w =
+                    (AffineTransform2D) reader.getOriginalGridToWorld(PixelInCell.CELL_CENTER);
+            double xScale = g2w.getScaleX();
+
+            boolean useBuffer = !Double.isNaN(buffer);
+
+            // Setup the intersection mask
+            Geometry intersectingMask =
+                    useBuffer ? geometryMask.buffer(buffer * xScale) : geometryMask;
+            Geometry unionGeometry = null;
+            if (footprint) {
+                Geometry leftGeometry = readWktGeometry("r1c1.wkt");
+                Geometry rightGeometry = readWktGeometry("r1c2.wkt");
+                unionGeometry = leftGeometry.union(rightGeometry);
+            } else {
+                unionGeometry =
+                        JTS.toGeometry(new ReferencedEnvelope(reader.getOriginalEnvelope()));
+            }
+            Geometry maskedGeometry = unionGeometry.intersection(intersectingMask);
+            double inputMaskArea = maskedGeometry.getArea();
+
+            List<GeneralParameterValue> paramList = new ArrayList<GeneralParameterValue>();
+
+            // Setup reading params
+            // FOOTPRINT
+            if (footprint) {
+                ParameterValue<String> footprintManagement =
+                        AbstractGridFormat.FOOTPRINT_BEHAVIOR.createValue();
+                footprintManagement.setValue(FootprintBehavior.Transparent.name());
+                paramList.add(footprintManagement);
+            }
+
+            // MASKING
+            ParameterValue<Geometry> maskParam = ImageMosaicFormat.GEOMETRY_MASK.createValue();
+            maskParam.setValue(geometryMask);
+            paramList.add(maskParam);
+
+            // SETROI
+            ParameterValue<Boolean> setRoiParam = ImageMosaicFormat.SET_ROI_PROPERTY.createValue();
+            setRoiParam.setValue(true);
+            paramList.add(setRoiParam);
+
+            // BUFFER
+            if (useBuffer) {
+                ParameterValue<Double> maskingBuffer =
+                        ImageMosaicFormat.MASKING_BUFFER_PIXELS.createValue();
+                maskingBuffer.setValue(buffer);
+                paramList.add(maskingBuffer);
+            }
+
+            GeneralParameterValue[] params = new GeneralParameterValue[paramList.size()];
+            params = paramList.toArray(params);
+
+            coverage = reader.read(params);
+            RenderedImage image = coverage.getRenderedImage();
+            if (DEBUG) {
+                RenderedImageBrowser.showChain(image);
+                // wait for an input key so you can check the image
+                System.in.read();
+            }
+            // Extract the resulting mask as ROI property of the resulting coverage
+            ROIGeometry roi = (ROIGeometry) image.getProperty("ROI");
+
+            // Transform the ROI to model space
+            MathTransform2D tx =
+                    coverage.getGridGeometry()
+                            .getCRSToGrid2D(PixelOrientation.UPPER_LEFT)
+                            .inverse();
+            Geometry roiGeometry = roi.getAsGeometry();
+            double tolerance = 0.1d;
+            if (geometryMask != this.geometryMask) {
+                final int numPoints = roiGeometry.getNumPoints();
+                // Check that decimation occurred
+                assertTrue(numPoints < 1000);
+
+                // Allows some more area check tolerance due to densification + decimation
+                tolerance = 2d;
+            }
+
+            Geometry coverageGeometry = JTS.transform(roiGeometry, tx);
+            double coverageMaskArea = coverageGeometry.getArea();
+
+            // Make sure the mask matches by doing area check and subtractions area check
+            Geometry aMinusB = EnhancedPrecisionOp.difference(coverageGeometry, maskedGeometry);
+            Geometry bMinusA = EnhancedPrecisionOp.difference(maskedGeometry, coverageGeometry);
+
+            assertEquals(inputMaskArea, coverageMaskArea, tolerance);
+            assertEquals(0, aMinusB.getArea(), tolerance);
+            assertEquals(0, bMinusA.getArea(), tolerance);
+        } finally {
+            if (coverage != null) {
+                coverage.dispose(true);
+            }
+            if (reader != null) {
+                try {
+                    reader.dispose();
+                } catch (Exception e) {
+                    // Does Nothing
+                }
+            }
+        }
+    }
+
