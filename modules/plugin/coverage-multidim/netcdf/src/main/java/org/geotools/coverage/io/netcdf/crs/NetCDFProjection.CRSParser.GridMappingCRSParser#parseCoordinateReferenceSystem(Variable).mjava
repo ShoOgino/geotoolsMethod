@@ -1,0 +1,34 @@
+            @Override
+            public CoordinateReferenceSystem parseCoordinateReferenceSystem(Variable var)
+                    throws FactoryException {
+
+                String mappingName = attribute.getStringValue();
+                String projectionName = getProjectionName(mappingName, var);
+
+                // Getting the proper projection and set the projection parameters
+                NetCDFProjection projection = supportedProjections.get(projectionName);
+                if (projection == null) {
+                    if (LOGGER.isLoggable(Level.FINE)) {
+                        LOGGER.fine("Unsupported grid_mapping_name: " + projectionName);
+                    }
+                    return null;
+                }
+                String ogcName = projection.getOGCName();
+
+                // The OGC projection parameters
+                ParameterValueGroup netcdfParameters =
+                        ProjectionBuilder.getDefaultparameters(ogcName);
+
+                // Get the OGC to NetCDF projection parameters
+                Map<String, String> paramsMapping = projection.getParameters();
+                Set<String> keys = paramsMapping.keySet();
+                for (String ogcParameterKey : keys) {
+                    handleParam(paramsMapping, netcdfParameters, ogcParameterKey, var);
+                }
+
+                return ProjectionBuilder.buildCRS(
+                        Collections.singletonMap(NetCDFUtilities.NAME, projectionName),
+                        projection.getOgcParameters(netcdfParameters),
+                        buildEllipsoid(var, SI.METRE));
+            }
+
