@@ -1,5 +1,8 @@
-    @Test
-    public void testHarvestListSingleFile() throws Exception {
+    private void checkSingleFileHarvest(
+            Consumer<File> mosaicDirSetup,
+            Function<File, String> expectedLocation1,
+            Function<File, String> expectedLocation2)
+            throws IOException, FactoryException {
         File source = URLs.urlToFile(timeURL);
         File testDataDir = TestData.file(this, ".");
         File directory1 = new File(testDataDir, "singleHarvest1");
@@ -19,7 +22,7 @@
                 FileUtils.listFiles(directory1, new RegexFileFilter("time_geotiff.*"), null)) {
             assertTrue(file.delete());
         }
-        // move month 5 to another dir, we'll harvet it later
+        // move month 5 to another dir, we'll harvest it later
         String monthFiveName = "world.200405.3x5400x2700.tiff";
         File monthFive = new File(directory1, monthFiveName);
         if (directory2.exists()) {
@@ -29,9 +32,12 @@
         File renamed = new File(directory2, monthFiveName);
         assertTrue(monthFive.renameTo(renamed));
 
+        // setup the mosaic directory with extra files, if needed
+        mosaicDirSetup.accept(directory1);
+
         // Create a List of Files containing only the directory to harvest and check if the Reader
         // reads it as a Directory
-        List<File> files = new ArrayList<File>();
+        List<File> files = new ArrayList<>();
         files.add(renamed);
 
         // ok, let's create a mosaic with a single granule and check its times
@@ -71,15 +77,13 @@
             try {
                 assertTrue(fi.hasNext());
                 SimpleFeature f = fi.next();
-                assertEquals("world.200402.3x5400x2700.tiff", f.getAttribute("location"));
+
+                assertEquals(expectedLocation1.apply(directory1), f.getAttribute("location"));
                 assertEquals(
                         "2004-02-01T00:00:00.000Z",
                         ConvertersHack.convert(f.getAttribute("time"), String.class));
                 f = fi.next();
-                String expected =
-                        "../singleHarvest2/world.200405.3x5400x2700.tiff"
-                                .replace('/', File.separatorChar);
-                assertEquals(expected, f.getAttribute("location"));
+                assertEquals(expectedLocation2.apply(directory2), f.getAttribute("location"));
                 assertEquals(
                         "2004-05-01T00:00:00.000Z",
                         ConvertersHack.convert(f.getAttribute("time"), String.class));
