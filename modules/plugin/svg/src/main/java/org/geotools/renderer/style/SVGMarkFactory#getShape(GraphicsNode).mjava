@@ -1,0 +1,33 @@
+    private Shape getShape(GraphicsNode node) {
+        if (!node.isVisible()) {
+            return null;
+        }
+        Shape result = null;
+        if (node instanceof ShapeNode) {
+            result = ((ShapeNode) node).getShape();
+        } else if (node instanceof CompositeGraphicsNode) {
+            CompositeGraphicsNode composite = (CompositeGraphicsNode) node;
+            for (Object object : composite.getChildren()) {
+                Shape subShape = getShape((GraphicsNode) object);
+                if (subShape != null) {
+                    if (result == null) {
+                        result = subShape;
+                    } else {
+                        // accumulate in new GeneralPath, to avoid contaminating the original shape,
+                        // in case it was a GeneralPath to start with
+                        GeneralPath gp = new GeneralPath();
+                        gp.append(result.getPathIterator(new AffineTransform()), false);
+                        gp.append(subShape.getPathIterator(new AffineTransform()), false);
+                        result = gp;
+                    }
+                }
+            }
+        }
+        AffineTransform transform = node.getTransform();
+        if (result != null && transform != null && !transform.isIdentity()) {
+            result = new TransformedShape(result, transform);
+        }
+
+        return result;
+    }
+
