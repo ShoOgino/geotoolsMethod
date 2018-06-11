@@ -22,7 +22,7 @@
         }
 
         sql.append(" FROM ");
-        encodeTableName(featureType.getTypeName(), sql, query.getHints());
+        encodeTableName(featureType.getTypeName(), sql, setKeepWhereClausePlaceHolderHint(query));
 
         // encode the filter
         PreparedFilterToSQL toSQL = null;
@@ -31,7 +31,17 @@
             // encode filter
             try {
                 toSQL = createPreparedFilterToSQL(featureType);
-                sql.append(" ").append(toSQL.encodeToString(filter));
+                int whereClauseIndex = sql.indexOf(WHERE_CLAUSE_PLACE_HOLDER);
+                if (whereClauseIndex != -1) {
+                    toSQL.setInline(true);
+                    sql.replace(
+                            whereClauseIndex,
+                            whereClauseIndex + WHERE_CLAUSE_PLACE_HOLDER_LENGTH,
+                            "AND " + toSQL.encodeToString(filter));
+                    toSQL.setInline(false);
+                } else {
+                    sql.append(toSQL.encodeToString(filter));
+                }
             } catch (FilterToSQLException e) {
                 throw new RuntimeException(e);
             }
