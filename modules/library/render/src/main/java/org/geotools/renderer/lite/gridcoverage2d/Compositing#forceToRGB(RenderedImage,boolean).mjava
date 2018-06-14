@@ -1,0 +1,31 @@
+    /**
+     * BlendCompositing requires the images to be composed are RGB
+     *
+     * @param finalImage
+     * @return
+     */
+    public static RenderedImage forceToRGB(RenderedImage finalImage, boolean asByte) {
+        if (finalImage != null) {
+            SampleModel sm = finalImage.getSampleModel();
+            final int sampleSize = sm.getSampleSize(0);
+            ImageWorker iw = new ImageWorker(finalImage);
+            if (sampleSize > 8 && asByte) {
+                iw = iw.rescaleToBytes();
+                finalImage = iw.getRenderedImage();
+            }
+            ColorModel cm = finalImage.getColorModel();
+            int numComponents = cm.getNumComponents();
+            if (!(cm instanceof ComponentColorModel) || numComponents < 3) {
+                if (cm instanceof IndexColorModel) {
+                    iw = iw.forceComponentColorModel();
+                } else {
+                    iw = iw.bandMerge(3);
+                }
+                // We need to go to RGB for Blending
+                iw = iw.forceColorSpaceRGB();
+                finalImage = iw.getRenderedImage();
+            }
+        }
+        return finalImage;
+    }
+

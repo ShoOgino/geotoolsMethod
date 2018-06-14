@@ -1,0 +1,67 @@
+    /**
+     * Compose this {@link Compositing} element with the source GridCoverage.
+     *
+     * @param source
+     * @param factory
+     * @return
+     */
+    public GridCoverage2D composeGridCoverage(GridCoverage2D source, GridCoverageFactory factory) {
+        if (compositingImage != null) {
+            // Make sure to transform the compositingImage to RGB
+            RenderedImage applyImage = forceToRGB((RenderedImage) compositingImage, true);
+            RenderedImage sourceImage = forceToRGB(source.getRenderedImage(), true);
+
+            // TODO: Setup a JAI operation to do the composition without need
+            // to use Graphics2D which requires a BufferedImage which loads all data
+            // in memory
+            BufferedImage composedImage =
+                    PlanarImage.wrapRenderedImage(sourceImage).getAsBufferedImage();
+
+            // prepare for composition
+            Graphics2D graphics = (Graphics2D) composedImage.createGraphics();
+            graphics.setComposite(composite);
+
+            // BufferedImage always have minX,minY = 0,0
+            final int minX = sourceImage.getMinX();
+            final int minY = sourceImage.getMinY();
+            AffineTransform transform = IDENTITY;
+            boolean translate = false;
+            if (minX != 0 || minY != 0) {
+                // I'm going to draw a RenderedImage on the BufferedImage source which has (0,0)
+                // origin.
+                transform = AffineTransform2D.getTranslateInstance(-minX, -minY);
+                translate = true;
+            }
+            graphics.drawRenderedImage(applyImage, transform);
+            int numBands = composedImage.getSampleModel().getNumBands();
+            GridSampleDimension[] sd = new GridSampleDimension[numBands];
+            for (int i = 0; i < numBands; i++) {
+                sd[i] =
+                        new GridSampleDimension(
+                                TypeMap.getColorInterpretation(composedImage.getColorModel(), i)
+                                        .name());
+            }
+            RenderedImage gridCoverageImage = composedImage;
+            if (translate) {
+                AffineTransform tx = AffineTransform2D.getTranslateInstance(minX, minY);
+                ImageWorker worker =
+                        new ImageWorker(composedImage)
+                                .affine(
+                                        tx,
+                                        Interpolation.getInstance(Interpolation.INTERP_NEAREST),
+                                        null);
+                gridCoverageImage = worker.getRenderedImage();
+                gridCoverageImage.getMinX();
+            }
+            // Return an updatedGridCoverage with composed image
+            return factory.create(
+                    source.getName().toString(),
+                    gridCoverageImage,
+                    (GridGeometry2D) source.getGridGeometry(),
+                    sd,
+                    new GridCoverage[] {source},
+                    source.getProperties());
+        }
+        return source;
+    }
+
