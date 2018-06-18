@@ -3,32 +3,35 @@
         CacheEntryKey entryKey = (CacheEntryKey) key;
         int nBytes;
         byte[] buffer = new byte[cacheBlockSize];
-        S3ObjectInputStream stream =
+        try (S3Object object =
                 this.initStream(
                         (long) entryKey.getBlock() * (long) this.cacheBlockSize,
                         entryKey.getBucket(),
                         entryKey.getKey(),
                         entryKey.getBlockSize(),
-                        connector.getS3Client());
-        if (stream == null) {
-            throw new RuntimeException("Unable to instantiate S3 stream. See logs for details.");
-        }
-        int readLength = this.cacheBlockSize;
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        while (readLength > 0) {
-            nBytes = stream.read(buffer, 0, readLength);
+                        connector.getS3Client())) {
+            if (object == null) {
+                throw new RuntimeException(
+                        "Unable to instantiate S3 stream. See logs for details.");
+            }
+            int readLength = this.cacheBlockSize;
 
-            if (nBytes > 0) {
-                out.write(buffer, 0, nBytes);
-                readLength -= nBytes;
-            } else {
-                break;
+            try (InputStream stream = object.getObjectContent()) {
+                try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                    while (readLength > 0) {
+                        nBytes = stream.read(buffer, 0, readLength);
+
+                        if (nBytes > 0) {
+                            out.write(buffer, 0, nBytes);
+                            readLength -= nBytes;
+                        } else {
+                            break;
+                        }
+                    }
+                    val = out.toByteArray();
+                }
             }
         }
-
-        val = out.toByteArray();
-        out.close();
-        stream.close();
 
         return val;
     }
