@@ -1,0 +1,36 @@
+    /**
+     * Removes all the data indexed in the target Apache Solr core. If the index contains more than
+     * 25 documents the operation is aborted.
+     *
+     * @param client HTTP Apache Solr client, the client should should be already pointing at the
+     *     correct core
+     */
+    public static void cleanIndex(HttpSolrClient client) {
+        // get the number of documents indexed in the target core
+        SolrQuery query = new SolrQuery("*:*");
+        // don't return any results
+        query.setRows(0);
+        long indexed;
+        try {
+            // get the number of results that match the query
+            indexed = client.query(query).getResults().getNumFound();
+        } catch (Exception exception) {
+            throw new RuntimeException(
+                    "Error counting the number of document indexed int he Apache Solr target core.",
+                    exception);
+        }
+        if (indexed > 25) {
+            // we have problem, this doesn't looks like a test Apache Solr core
+            throw new RuntimeException(
+                    "The target core contains more than 25 documents, "
+                            + "please double check the correct core is used and manually delete all documents.");
+        }
+        try {
+            // remove all the index stations data
+            client.deleteByQuery("*:*");
+            client.commit();
+        } catch (Exception exception) {
+            throw new RuntimeException("Error removing Apache Solr indexed data.", exception);
+        }
+    }
+
