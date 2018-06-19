@@ -1,0 +1,21 @@
+    @Override
+    @SuppressWarnings("unchecked")
+    public DataAccess<? extends FeatureType, ? extends Feature> buildDataStore(
+            SourceDataStore dataStoreConfig, AppSchemaDataAccessDTO appSchemaConfig) {
+        if (!(dataStoreConfig instanceof ComplexDataStoreConfig)) {
+            // not an Apache Solr feature type mapping
+            return null;
+        }
+        ComplexDataStoreConfig complexDataStoreConfig = (ComplexDataStoreConfig) dataStoreConfig;
+        IndexesConfig indexesConfig = complexDataStoreConfig.getIndexesConfig();
+        // specify the index attributes we are interested in based on the App-Schema mappings file
+        for (TypeMapping mapping : (Set<TypeMapping>) appSchemaConfig.getTypeMappings()) {
+            // get all the attributes names used in the feature type mapping
+            Set<String> attributes = extractAttributesNames(mapping);
+            indexesConfig.addAttributes(mapping.getSourceTypeName(), attributes);
+        }
+        // build the Apache Solr store
+        return new SolrDataStore(
+                complexDataStoreConfig.getUrl(), new SingleLayerMapper(), indexesConfig);
+    }
+

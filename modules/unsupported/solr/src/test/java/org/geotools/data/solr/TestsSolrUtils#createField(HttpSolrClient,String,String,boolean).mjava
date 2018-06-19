@@ -1,0 +1,29 @@
+    /**
+     * Helper method that creates a new field in the target index schema.
+     *
+     * @param client the HTTP Solr client
+     * @param name the field name
+     * @param type the field type
+     * @param multiValued TRUE if the type is multi valued, otherwise FALSE
+     */
+    public static void createField(
+            HttpSolrClient client, String name, String type, boolean multiValued) {
+        Map<String, Object> field = new HashMap<>();
+        field.put("name", name);
+        field.put("type", type);
+        field.put("multiValued", multiValued ? "true" : "false");
+        // try to create the field
+        Response addResponse = runSolrRequest(client, new SchemaRequest.AddField(field));
+        if (!addResponse.hasErrors()) {
+            // no errors, which means that the field was correctly created
+            return;
+        }
+        // something bad happen, let's assume that a field with the same name already exists
+        Response replaceResponse = runSolrRequest(client, new SchemaRequest.ReplaceField(field));
+        if (replaceResponse.hasErrors()) {
+            // trying to replace the field definition failed, let's throw an exception with all the
+            // messages errors
+            Response.throwIfNeeded(addResponse, replaceResponse);
+        }
+    }
+
