@@ -1,0 +1,31 @@
+        @Override
+        public GeneralParameterValue[] customizeReadParams(
+                Map<String, Object> input,
+                GridCoverageReader reader,
+                GeneralParameterValue[] params) {
+            Method customizeReadParamsMethod =
+                    lookupCustomizeReadParams(targetObject, this.method.getName());
+
+            if (customizeReadParamsMethod == null) {
+                return params;
+            }
+
+            try {
+                Object[] args = buildProcessArguments(customizeReadParamsMethod, input, null, true);
+                args[args.length - 2] = reader;
+                args[args.length - 1] = params;
+
+                return (GeneralParameterValue[])
+                        customizeReadParamsMethod.invoke(targetObject, args);
+            } catch (IllegalAccessException e) {
+                throw new ProcessException(e);
+            } catch (InvocationTargetException e) {
+                Throwable t = e.getTargetException();
+                if (t instanceof ProcessException) {
+                    throw ((ProcessException) t);
+                } else {
+                    throw new ProcessException(t);
+                }
+            }
+        }
+
