@@ -1,0 +1,25 @@
+    /** Test data source creation when <code>java.io.tmpdir</code> contains spaces. */
+    @Test
+    public void testTmpWithSpaces() throws Exception {
+        final String JAVA_IO_TMPDIR_PROPERTY = "java.io.tmpdir";
+        String oldTmpDir = System.getProperty(JAVA_IO_TMPDIR_PROPERTY);
+        File tmpDir = new File("target/tmp with spaces");
+        FileUtils.deleteQuietly(tmpDir);
+        tmpDir.mkdirs();
+        try {
+            System.setProperty(JAVA_IO_TMPDIR_PROPERTY, tmpDir.getPath());
+            // force data source re-creation
+            factory.dispose();
+            assertNotNull(factory.createCoordinateReferenceSystem("EPSG:4326"));
+            String creationMarker =
+                    String.format(
+                            "Geotools/Databases/HSQL/v%s/EPSG_creation_marker.txt",
+                            ThreadedHsqlEpsgFactory.VERSION);
+            assertTrue((new File(tmpDir, creationMarker)).exists());
+        } finally {
+            System.setProperty(JAVA_IO_TMPDIR_PROPERTY, oldTmpDir);
+            factory.dispose();
+            FileUtils.deleteQuietly(tmpDir);
+        }
+    }
+
