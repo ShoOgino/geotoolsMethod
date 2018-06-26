@@ -1,0 +1,46 @@
+    /**
+     * Returns the source bands used, or null the bands indexes cannot be computed (e.g., they
+     * depend on script variables)
+     *
+     * @param script
+     * @param sourceNames
+     * @return
+     * @throws JiffleException
+     */
+    private int[] getTransformationBands(String script, String[] sourceNames)
+            throws JiffleException {
+        // a rendering transformation only uses a single input
+        String sourceName = "src";
+        if (sourceNames != null && sourceNames.length > 0) {
+            sourceName = sourceNames[0];
+        }
+
+        // get the reading positions
+        Set<GetSourceValue> positions = Jiffle.getReadPositions(script, Arrays.asList(sourceName));
+        if (positions.isEmpty()) {
+            return null;
+        }
+        // extract the bands, bail out if a band is specified through an expression
+        Set<Integer> bands = new HashSet<>();
+        for (GetSourceValue position : positions) {
+            Band band = position.getPos().getBand();
+            Expression index = band.getIndex();
+            if (index == null) {
+                bands.add(0);
+            } else if (index instanceof ScalarLiteral) {
+                bands.add(Integer.valueOf(((ScalarLiteral) band.getIndex()).getValue()));
+            } else {
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.log(
+                            Level.FINE,
+                            "Cannot determine read bands, the source read spec use an expression "
+                                    + "for the band, not a literal: "
+                                    + position);
+                }
+                return null;
+            }
+        }
+
+        return bands.stream().mapToInt(b -> b).sorted().toArray();
+    }
+

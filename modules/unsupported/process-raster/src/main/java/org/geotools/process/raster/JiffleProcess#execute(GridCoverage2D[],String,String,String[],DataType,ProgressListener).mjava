@@ -1,0 +1,83 @@
+    /**
+     * Executes a Jiffle raster algebra. Check the {@link DescribeParameter} annotations for a
+     * description of the various arguments
+     *
+     * @param progressListener
+     * @return
+     * @throws ProcessException
+     */
+    @DescribeResult(name = OUT_RESULT, description = "The map algebra output")
+    public GridCoverage execute(
+            @DescribeParameter(name = IN_COVERAGE, description = "Source raster(s)")
+                    GridCoverage2D[] coverages,
+            @DescribeParameter(
+                        name = IN_SCRIPT,
+                        description = "The script performing the map algebra, in Jiffle language"
+                    )
+                    String script,
+            @DescribeParameter(
+                        name = IN_DEST_NAME,
+                        description =
+                                "Name of the output, as used in the script (defaults to 'dest' if not specified)",
+                        min = 0
+                    )
+                    String destName,
+            @DescribeParameter(
+                        name = IN_SOURCE_NAME,
+                        description =
+                                "Name of the inputs, as used in the script (default to src, src1, src2, ... if not specified)",
+                        min = 0
+                    )
+                    String[] sourceNames,
+            @DescribeParameter(
+                        name = IN_OUTPUT_TYPE,
+                        description =
+                                "Output data type, BYTE, USHORT, SHORT, INT, FLOAT, DOUBLE. Defaults to DOUBLE if not specified",
+                        min = 0
+                    )
+                    DataType dataType,
+            ProgressListener progressListener)
+            throws ProcessException, JiffleException {
+        if (coverages.length == 0) {
+            // we could remove this limit, but a few extra input parameters are needed (output
+            // raster size and output envelope, with CRS)
+            throw new IllegalArgumentException("Need at least one coverage in input");
+        }
+        // prepare the input rendered images
+        RenderedImage[] sources = new RenderedImage[coverages.length];
+        GridCoverage2D reference = coverages[0];
+        sources[0] = reference.getRenderedImage();
+        for (int i = 1; i < sources.length; i++) {
+            GridCoverage2D coverage = coverages[i];
+            double[] nodata = CoverageUtilities.getBackgroundValues(coverage);
+            ROI roi = CoverageUtilities.getROIProperty(coverage);
+            sources[i] =
+                    GridCoverage2DRIA.create(
+                            coverage, reference, nodata, GeoTools.getDefaultHints(), roi);
+        }
+
+        // in case we have optimized out band selection, need to remap the band access
+        BandTransform[] bandTransforms = null;
+        if (sources.length == 1) {
+            BandTransform bt =
+                    getRenderingTransformationBandTransform(script, sourceNames, sources[0]);
+            bandTransforms = new BandTransform[] {bt};
+        }
+
+        Integer awtDataType = dataType == null ? null : dataType.getDataType();
+        RenderedOp result =
+                JiffleDescriptor.create(
+                        sources,
+                        sourceNames,
+                        destName,
+                        script,
+                        null,
+                        awtDataType,
+                        null,
+                        bandTransforms,
+                        GeoTools.getDefaultHints());
+
+        GridCoverageFactory factory = new GridCoverageFactory(GeoTools.getDefaultHints());
+        return factory.create("jiffle", result, reference.getEnvelope());
+    }
+
