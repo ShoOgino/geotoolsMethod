@@ -1,0 +1,33 @@
+    @Test
+    public void testNdviTransformation() throws Exception {
+        JAIExt.initJAIEXT(true, true);
+
+        File file = TestData.file(this, "s2_13bands.tif");
+
+        GeoTiffReader reader = new GeoTiffReader(file);
+
+        StyleFactory factory = CommonFactoryFinder.getStyleFactory(null);
+
+        java.net.URL styleURL = TestData.getResource(this, "ndvi.sld");
+        SLDParser stylereader = new SLDParser(factory, styleURL);
+        Style style = stylereader.readXML()[0];
+
+        MapContent mc = new MapContent();
+        mc.addLayer(new GridReaderLayer(reader, style));
+
+        StreamingRenderer renderer = new StreamingRenderer();
+        renderer.setMapContent(mc);
+        BufferedImage bi = new BufferedImage(256, 256, BufferedImage.TYPE_4BYTE_ABGR);
+        Graphics2D graphics = bi.createGraphics();
+        renderer.paint(
+                graphics,
+                new Rectangle(bi.getWidth(), bi.getHeight()),
+                ReferencedEnvelope.reference(reader.getOriginalEnvelope()));
+        graphics.dispose();
+
+        File expected =
+                new File(
+                        "src/test/resources/org/geotools/process/raster/test-data/ndvi-expected.png");
+        ImageAssert.assertEquals(expected, bi, 0);
+    }
+
