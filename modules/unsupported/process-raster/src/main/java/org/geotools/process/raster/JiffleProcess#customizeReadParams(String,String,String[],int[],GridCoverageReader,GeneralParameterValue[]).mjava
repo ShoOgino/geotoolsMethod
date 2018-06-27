@@ -1,0 +1,74 @@
+    /**
+     * This is called by the renderer to optimize the read, if possible, we'll customize the band
+     * reading so that we read only what we know will be used by the script. At the time of writing,
+     * this works only if band positions in the script are literals.
+     */
+    public GeneralParameterValue[] customizeReadParams(
+            @DescribeParameter(
+                        name = IN_SCRIPT,
+                        description = "The script performing the map algebra, in Jiffle language"
+                    )
+                    String script,
+            @DescribeParameter(
+                        name = IN_DEST_NAME,
+                        description =
+                                "Name of the output, as used in the script (defaults to 'dest' if not specified)",
+                        min = 0
+                    )
+                    String destName,
+            @DescribeParameter(
+                        name = IN_SOURCE_NAME,
+                        description =
+                                "Name of the inputs, as used in the script (default to src, src1, src2, ... if not specified)",
+                        min = 0
+                    )
+                    String[] sourceNames,
+            @DescribeParameter(
+                        name = TX_BANDS,
+                        description = "Bands read by the transformation",
+                        min = 0
+                    )
+                    int[] usedBands,
+            GridCoverageReader reader,
+            GeneralParameterValue[] params) {
+        try {
+            // do we have a band selection parameter in the input?
+            ParameterValueGroup readerParams = reader.getFormat().getReadParameters();
+            ParameterValue<?> bands =
+                    readerParams.parameter(AbstractGridFormat.BANDS.getName(null));
+            if (bands == null) {
+                LOGGER.log(Level.FINE, "The reader does not support band selection, reading all");
+                return params;
+            }
+
+            // cannot do anything if we cannot access the sample model
+            if (!(reader instanceof GridCoverage2DReader)) {
+                LOGGER.log(Level.FINE, "The reader is not a 2D one, reading all bands");
+                return params;
+            }
+            GridCoverage2DReader r2d = (GridCoverage2DReader) reader;
+            ImageLayout layout = r2d.getImageLayout();
+            if (layout == null || layout.getSampleModel(null) == null) {
+                LOGGER.log(Level.FINE, "Cannot determine the reader bands, reading them all");
+                return params;
+            }
+            SampleModel sampleModel = layout.getSampleModel(null);
+
+            // are we using less bands than available in the reader?
+            if (usedBands == null) {
+                usedBands = getTransformationBands(script, sourceNames);
+            }
+            if (usedBands == null || usedBands.length >= sampleModel.getNumBands()) {
+                return params;
+            }
+
+            return mergeBandParam(params, usedBands);
+        } catch (Exception e) {
+            LOGGER.log(
+                    Level.INFO,
+                    "Failed to determine if we can read less bands based on the Jiffle script, continuing reading all source bands",
+                    e);
+            return params;
+        }
+    }
+
