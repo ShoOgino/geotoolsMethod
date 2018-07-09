@@ -1,0 +1,32 @@
+    private RenderedImage performShadedRelief(
+            ImageWorker intensityWorker, GridCoverage2D source, Hints hints) {
+        RenderedImage ri = source.getRenderedImage();
+        MathTransform g2w = source.getGridGeometry().getGridToCRS();
+        AffineTransform af = (AffineTransform) g2w;
+        CoordinateReferenceSystem crs = source.getCoordinateReferenceSystem();
+        Unit<?> unit = crs.getCoordinateSystem().getAxis(0).getUnit();
+        boolean isMeter = unit.isCompatible(SI.METRE);
+        double resX = af.getScaleX();
+        double resY = af.getScaleY();
+
+        double[] destNoData = intensityWorker.getDestinationNoData();
+        double destinationNoData = destNoData != null ? destNoData[0] : 0;
+
+        RenderedOp finalImage =
+                ShadedReliefDescriptor.create(
+                        ri,
+                        intensityWorker.getROI(),
+                        intensityWorker.getNoData(),
+                        destinationNoData,
+                        resX,
+                        resY,
+                        reliefFactor,
+                        isMeter ? 1 : ShadedReliefDescriptor.DEFAULT_SCALE,
+                        ShadedReliefDescriptor.DEFAULT_ALTITUDE,
+                        ShadedReliefDescriptor.DEFAULT_AZIMUTH,
+                        ShadedReliefAlgorithm.ZEVENBERGEN_THORNE_COMBINED,
+                        hints);
+        intensityWorker.setImage(finalImage);
+        return finalImage;
+    }
+
