@@ -1,0 +1,132 @@
+    @SuppressWarnings("unchecked")
+    protected GridCoverage2D execute() {
+        final Hints hints = getHints();
+
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Get the sources and see what we got to do. Note that if we have more
+        // than one source we'll use only the first one
+        //
+        // /////////////////////////////////////////////////////////////////////
+        final List<CoverageProcessingNode> sources = this.getSources();
+        if (sources != null && !sources.isEmpty()) {
+            CoverageProcessingNode nodeSource = getSource(0);
+
+            CoverageProcessingNode colorMapNode = null;
+            if (nodeSource != null
+                    && nodeSource instanceof ColorMapNode
+                    && ((ColorMapNode) nodeSource).getType() != ColorMapNode.TYPE_NONE) {
+
+                // If colormap is present, ShadedRelief need to be computed on previous source
+                colorMapNode = nodeSource;
+                nodeSource = nodeSource.getSource(0);
+            }
+
+            final GridCoverage2D source = (GridCoverage2D) nodeSource.getOutput();
+            GridCoverageRendererUtilities.ensureSourceNotNull(source, this.getName().toString());
+
+            final RenderedImage sourceImage = source.getRenderedImage();
+
+            // /////////////////////////////////////////////////////////////////////
+            //
+            // PREPARATION
+            //
+            // /////////////////////////////////////////////////////////////////////
+
+            // //
+            //
+            // Get the ROI and NoData from the input coverage
+            //
+            // //
+
+            ROI roi = CoverageUtilities.getROIProperty(source);
+            NoDataContainer noDataContainer = CoverageUtilities.getNoDataProperty(source);
+            Range nodata = noDataContainer != null ? noDataContainer.getAsRange() : null;
+
+            // //
+            //
+            // Get the source image and if necessary convert it to use a
+            // ComponentColorModel. This way we are sure we will have a
+            // visible image most part of the time.
+            //
+            // //
+            ImageWorker worker =
+                    new ImageWorker(sourceImage)
+                            .setROI(roi)
+                            .setNoData(nodata)
+                            .setRenderingHints(hints)
+                            .forceComponentColorModel();
+
+            final int numbands = worker.getNumBands();
+
+            if (numbands > 1) {
+                throw new IllegalArgumentException(
+                        "ShadedRelief can only be applied to single band images");
+            }
+
+            performShadedRelief(worker, source, hints);
+
+            // /////////////////////////////////////////////////////////////////////
+            //
+            // OUTPUT
+            //
+            // /////////////////////////////////////////////////////////////////////
+            final int numSourceBands = source.getNumSampleDimensions();
+            RenderedImage finalImage = worker.getRenderedImage();
+
+            final int numActualBands = finalImage.getSampleModel().getNumBands();
+            final GridCoverageFactory factory = getCoverageFactory();
+            final HashMap<Object, Object> props = new HashMap<>();
+            if (source.getProperties() != null) {
+                props.putAll(source.getProperties());
+            }
+            // Setting ROI and NODATA
+            //            if (worker.getNoData() != null) {
+            //                props.put(NoDataContainer.GC_NODATA, new
+            // NoDataContainer(worker.getNoData()));
+            //            }
+            if (worker.getROI() != null) {
+                props.put("GC_ROI", worker.getROI());
+            }
+
+            final GridSampleDimension sd[];
+            if (numActualBands == numSourceBands) {
+                sd = source.getSampleDimensions();
+            } else {
+                sd = new GridSampleDimension[numActualBands];
+                for (int i = 0; i < numActualBands; i++)
+                    sd[i] = (GridSampleDimension) source.getSampleDimension(0);
+            }
+
+            GridCoverage2D output =
+                    factory.create(
+                            "sr_coverage" + source.getName(),
+                            finalImage,
+                            (GridGeometry2D) source.getGridGeometry(),
+                            sd,
+                            new GridCoverage[] {source},
+                            props);
+
+            if (colorMapNode != null) {
+                GridCoverage2D mapCoverage = (GridCoverage2D) colorMapNode.getOutput();
+                if (!brightnessOnly) {
+                    // When brigthnessOnly is set to true I have to prepare a separated
+                    // image to be applied to the rendering and return the previous source's
+                    // output as output
+                    props.put(GridCoverageRenderer.KEY_COMPOSITING, new Compositing(finalImage));
+                    output =
+                            factory.create(
+                                    "sr_coverage" + source.getName().toString(),
+                                    mapCoverage.getRenderedImage(),
+                                    (GridGeometry2D) source.getGridGeometry(),
+                                    output.getSampleDimensions(),
+                                    new GridCoverage[] {output},
+                                    props);
+                }
+            }
+            return output;
+        }
+        throw new IllegalStateException(
+                Errors.format(ErrorKeys.SOURCE_CANT_BE_NULL_$1, this.getName().toString()));
+    }
+

@@ -1,4 +1,7 @@
-    private void paintImage(final Graphics2D graphics, RenderedImage inputImage) {
+    private void paintImage(
+            final Graphics2D graphics,
+            RenderedImage inputImage,
+            final RasterSymbolizer symbolizer) {
         final RenderingHints oldHints = graphics.getRenderingHints();
         graphics.setRenderingHints(this.hints);
 
@@ -17,10 +20,18 @@
                 writeRenderedImage(transparentImage, "final");
             }
 
-            // force solid alpha, the transparency has already been
-            // dealt with in the image preparation, and we have to make
-            // sure previous vector rendering code did not leave a non solid alpha
-            graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER));
+            final boolean multiply =
+                    symbolizer.getShadedRelief() != null
+                            && symbolizer.getShadedRelief().isBrightnessOnly();
+            if (multiply) {
+                graphics.setComposite(BlendComposite.getInstance(BlendingMode.MULTIPLY, 1f));
+                transparentImage = Compositing.forceToRGB(transparentImage, true);
+            } else {
+                // force solid alpha, the transparency has already been
+                // dealt with in the image preparation, and we have to make
+                // sure previous vector rendering code did not leave a non solid alpha
+                graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER));
+            }
 
             // //
             // Drawing the Image
