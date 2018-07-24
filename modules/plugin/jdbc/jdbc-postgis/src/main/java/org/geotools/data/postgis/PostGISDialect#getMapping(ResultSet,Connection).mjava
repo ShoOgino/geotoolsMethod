@@ -2,49 +2,30 @@
     public Class<?> getMapping(ResultSet columnMetaData, Connection cx) throws SQLException {
 
         String typeName = columnMetaData.getString("TYPE_NAME");
+        int dataType = columnMetaData.getInt("DATA_TYPE");
 
-        if ("uuid".equalsIgnoreCase(typeName)) {
-            return UUID.class;
-        }
+        if (dataType == Types.ARRAY && typeName.length() > 1) {
+            // type_name starts with an underscore and then provides the type of data in the array
+            typeName = typeName.substring(1);
+            Class<?> arrayContentType = getMappingInternal(columnMetaData, cx, typeName);
+            // if we did not find it with the above procedure, consult the type to class map
+            // (should contain mappings for all basic java types)
+            if (arrayContentType == null) {
+                arrayContentType = SIMPLE_TYPE_TO_CLASS_MAP.get(typeName.toUpperCase());
+            }
 
-        if ("citext".equalsIgnoreCase(typeName)) {
-            return String.class;
-        }
+            if (arrayContentType != null) {
+                try {
+                    return Class.forName("[L" + arrayContentType.getName() + ";");
+                } catch (ClassNotFoundException e) {
+                    LOGGER.log(Level.WARNING, "Failed to create Java equivalent of array class", e);
+                    return null;
+                }
+            }
 
-        if (BIGDATE_UDT.equalsIgnoreCase(typeName)) {
-            return BigDate.class;
-        }
-
-        if (HStore.TYPENAME.equalsIgnoreCase(typeName)) {
-            return HStore.class;
-        }
-
-        if ("json".equalsIgnoreCase(typeName) || "jsonb".equalsIgnoreCase(typeName)) {
-            return String.class;
-        }
-
-        String gType = null;
-        if ("geometry".equalsIgnoreCase(typeName)) {
-            gType = lookupGeometryType(columnMetaData, cx, "geometry_columns", "f_geometry_column");
-        } else if ("geography".equalsIgnoreCase(typeName)) {
-            gType =
-                    lookupGeometryType(
-                            columnMetaData, cx, "geography_columns", "f_geography_column");
-        } else {
             return null;
         }
 
-        // decode the type into
-        if (gType == null) {
-            // it's either a generic geography or geometry not registered in the medatata tables
-            return Geometry.class;
-        } else {
-            Class geometryClass = TYPE_TO_CLASS_MAP.get(gType.toUpperCase());
-            if (geometryClass == null) {
-                geometryClass = Geometry.class;
-            }
-
-            return geometryClass;
-        }
+        return getMappingInternal(columnMetaData, cx, typeName);
     }
 
