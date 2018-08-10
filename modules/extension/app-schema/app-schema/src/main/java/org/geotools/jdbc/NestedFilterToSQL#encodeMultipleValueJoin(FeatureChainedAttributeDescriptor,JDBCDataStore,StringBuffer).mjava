@@ -1,0 +1,31 @@
+    private void encodeMultipleValueJoin(
+            FeatureChainedAttributeDescriptor nestedAttribute,
+            JDBCDataStore store,
+            StringBuffer sql) {
+        FeatureTypeMapping featureMapping = nestedAttribute.getFeatureTypeOwningAttribute();
+        AttributeMapping mapping =
+                featureMapping.getAttributeMapping(nestedAttribute.getAttributePath());
+        if (mapping == null
+                || !mapping.isMultiValued()
+                || !(mapping.getMultipleValue() instanceof JdbcMultipleValue)) {
+            return;
+        }
+        JdbcMultipleValue multipleValue = (JdbcMultipleValue) mapping.getMultipleValue();
+        sql.append(" LEFT JOIN ");
+        String alias = String.valueOf(multipleValue.getId());
+        try {
+            store.encodeAliasedTableName(multipleValue.getTargetTable(), sql, null, alias);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        sql.append(" ON ");
+        store.dialect.encodeColumnName(nestedAttribute.getLastLink().getAlias(), sql);
+        sql.append(".");
+        store.dialect.encodeColumnName(multipleValue.getSourceColumn(), sql);
+        sql.append(" = ");
+        store.dialect.encodeTableName(alias, sql);
+        sql.append(".");
+        store.dialect.encodeColumnName(multipleValue.getTargetColumn(), sql);
+        sql.append(" ");
+    }
+
