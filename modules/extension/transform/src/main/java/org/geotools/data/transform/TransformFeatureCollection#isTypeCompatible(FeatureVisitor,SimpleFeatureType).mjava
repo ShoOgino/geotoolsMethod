@@ -1,0 +1,36 @@
+    /**
+     * Checks if the visitor is accessing only properties available in the specified feature type,
+     * checks if the target schema contains transformed attributes or as a special case, if it's a
+     * count visitor accessing no properties at all
+     *
+     * @param visitor
+     * @param featureType
+     * @return
+     */
+    protected boolean isTypeCompatible(FeatureVisitor visitor, SimpleFeatureType featureType) {
+        if (visitor instanceof CountVisitor) {
+            // pass through if the CountVisitor has been recognized
+            return true;
+        } else if (visitor instanceof FeatureAttributeVisitor) {
+            // pass through if the target schema contains all the necessary attributes
+            FilterAttributeExtractor extractor = new FilterAttributeExtractor(featureType);
+            for (Expression e : ((FeatureAttributeVisitor) visitor).getExpressions()) {
+                e.accept(extractor, null);
+            }
+            List<String> attNames = new ArrayList<>();
+
+            for (PropertyName pname : extractor.getPropertyNameSet()) {
+                AttributeDescriptor att = (AttributeDescriptor) pname.evaluate(featureType);
+                if (att == null) {
+                    return false;
+                }
+                attNames.add(pname.getPropertyName());
+            }
+            // pass through if the target schema doesn't contain transformed attributes
+            if (transformer.getOriginalNames(attNames).size() == attNames.size()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
