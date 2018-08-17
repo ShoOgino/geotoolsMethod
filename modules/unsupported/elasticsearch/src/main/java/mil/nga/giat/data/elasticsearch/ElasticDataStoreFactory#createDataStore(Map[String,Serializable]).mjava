@@ -1,34 +1,9 @@
     @Override
     public DataStore createDataStore(Map<String, Serializable> params) throws IOException {
-        final String searchHost = (String) getValue(HOSTNAME, params);
-        final Integer hostPort = (Integer) getValue(HOSTPORT, params);
         final String indexName = (String) INDEX_NAME.lookUp(params);
         final String arrayEncoding = (String) getValue(ARRAY_ENCODING, params);
-        final Boolean sslEnabled = (Boolean) getValue(SSL_ENABLED, params);
-        final Boolean sslRejectUnauthorized = (Boolean) getValue(SSL_REJECT_UNAUTHORIZED, params);
 
-        final String scheme = sslEnabled ? "https" : "http";
-        final RestClientBuilder builder = RestClient.builder(new HttpHost(searchHost, hostPort, scheme));
-
-        if (sslEnabled) {
-            builder.setHttpClientConfigCallback(new RestClientBuilder.HttpClientConfigCallback() {
-                @Override
-                public HttpAsyncClientBuilder customizeHttpClient(HttpAsyncClientBuilder httpClientBuilder) {
-                    httpClientBuilder.useSystemProperties();
-                    if (!sslRejectUnauthorized) {
-                        httpClientBuilder.setSSLHostnameVerifier((host,session) -> true);
-                        try {
-                            httpClientBuilder.setSSLContext(SSLContextBuilder.create().loadTrustMaterial((chain,authType) -> true).build());
-                        } catch (KeyManagementException | NoSuchAlgorithmException | KeyStoreException e) {
-                            throw new UncheckedIOException(new IOException("Unable to create SSLContext", e));
-                        }
-                    }
-                    return httpClientBuilder;
-                }
-            });
-        }
-
-        final ElasticDataStore dataStore = new ElasticDataStore(builder.build(), indexName);
+        final ElasticDataStore dataStore = new ElasticDataStore(createRestClient(params), indexName);
         dataStore.setDefaultMaxFeatures((Integer) getValue(DEFAULT_MAX_FEATURES, params));
         dataStore.setSourceFilteringEnabled((Boolean) getValue(SOURCE_FILTERING_ENABLED, params));
         dataStore.setScrollEnabled((Boolean)getValue(SCROLL_ENABLED, params));
