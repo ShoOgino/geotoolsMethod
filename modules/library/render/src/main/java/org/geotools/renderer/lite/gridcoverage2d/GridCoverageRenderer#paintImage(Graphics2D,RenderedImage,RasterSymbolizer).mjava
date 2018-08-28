@@ -1,0 +1,133 @@
+    private void paintImage(
+            final Graphics2D graphics,
+            RenderedImage inputImage,
+            final RasterSymbolizer symbolizer) {
+        final RenderingHints oldHints = graphics.getRenderingHints();
+        graphics.setRenderingHints(this.hints);
+
+        // nothing to do if the input image is null
+        if (inputImage == null) {
+            return;
+        }
+
+        // force transparency on NODATA and ROI
+        RenderedImage transparentImage =
+                new ImageWorker(inputImage).prepareForRendering().getRenderedImage();
+
+        try {
+            // debug
+            if (DEBUG) {
+                writeRenderedImage(transparentImage, "final");
+            }
+
+            final boolean multiply =
+                    symbolizer.getShadedRelief() != null
+                            && symbolizer.getShadedRelief().isBrightnessOnly();
+            if (multiply) {
+                graphics.setComposite(BlendComposite.getInstance(BlendingMode.MULTIPLY, 1f));
+                transparentImage = Compositing.forceToRGB(transparentImage, true);
+            } else {
+                // force solid alpha, the transparency has already been
+                // dealt with in the image preparation, and we have to make
+                // sure previous vector rendering code did not leave a non solid alpha
+                graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER));
+            }
+
+            // //
+            // Drawing the Image
+            // //
+            graphics.drawRenderedImage(transparentImage, GridCoverageRenderer.IDENTITY);
+
+        } catch (Throwable t) {
+            try {
+                // log the error
+                if (LOGGER.isLoggable(Level.FINE))
+                    LOGGER.log(Level.FINE, t.getLocalizedMessage(), t);
+
+                // /////////////////////////////////////////////////////////////
+                // this is a workaround for a bug in Java2D, we need to convert
+                // the image to component color model to make it work just fine.
+                // /////////////////////////////////////////////////////////////
+                if (t instanceof IllegalArgumentException) {
+                    if (DEBUG) {
+                        writeRenderedImage(transparentImage, "preWORKAROUND1");
+                    }
+                    final RenderedImage componentImage =
+                            new ImageWorker(transparentImage)
+                                    .forceComponentColorModel(true)
+                                    .getRenderedImage();
+
+                    if (DEBUG) {
+                        writeRenderedImage(componentImage, "WORKAROUND1");
+                    }
+                    graphics.drawRenderedImage(componentImage, GridCoverageRenderer.IDENTITY);
+
+                } else if (t instanceof ImagingOpException)
+                // /////////////////////////////////////////////////////////////
+                // this is a workaround for a bug in Java2D
+                // (see bug 4723021
+                // http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=4723021).
+                //
+                // AffineTransformOp.filter throws a
+                // java.awt.image.ImagingOpException: Unable to tranform src
+                // image when a PixelInterleavedSampleModel is used.
+                //
+                // CUSTOMER WORKAROUND :
+                // draw the BufferedImage into a buffered image of type ARGB
+                // then perform the affine transform. THIS OPERATION WASTES
+                // RESOURCES BY PERFORMING AN ALLOCATION OF MEMORY AND A COPY ON
+                // LARGE IMAGES.
+                // /////////////////////////////////////////////////////////////
+                {
+                    BufferedImage buf =
+                            transparentImage.getColorModel().hasAlpha()
+                                    ? new BufferedImage(
+                                            transparentImage.getWidth(),
+                                            transparentImage.getHeight(),
+                                            BufferedImage.TYPE_4BYTE_ABGR)
+                                    : new BufferedImage(
+                                            transparentImage.getWidth(),
+                                            transparentImage.getHeight(),
+                                            BufferedImage.TYPE_3BYTE_BGR);
+                    if (DEBUG) {
+                        writeRenderedImage(buf, "preWORKAROUND2");
+                    }
+                    final Graphics2D g = (Graphics2D) buf.getGraphics();
+                    final int translationX = transparentImage.getMinX(),
+                            translationY = transparentImage.getMinY();
+                    g.drawRenderedImage(
+                            transparentImage,
+                            AffineTransform.getTranslateInstance(-translationX, -translationY));
+                    g.dispose();
+                    if (DEBUG) {
+                        writeRenderedImage(buf, "WORKAROUND2");
+                    }
+                    GridCoverageRenderer.IDENTITY.concatenate(
+                            AffineTransform.getTranslateInstance(translationX, translationY));
+                    graphics.drawImage(buf, GridCoverageRenderer.IDENTITY, null);
+                    // release
+                    buf.flush();
+                    buf = null;
+                } else
+                // log the error
+                if (LOGGER.isLoggable(Level.WARNING))
+                    LOGGER.log(
+                            Level.WARNING,
+                            "Unable to renderer this raster, no workaround found",
+                            t);
+
+            } catch (Throwable t1) {
+                // if the workaround fails again, there is really nothing to do
+                // :-(
+                LOGGER.log(Level.WARNING, t1.getLocalizedMessage(), t1);
+            } finally {
+                // ///////////////////////////////////////////////////////////////////
+                //
+                // Restore old hints
+                //
+                // ///////////////////////////////////////////////////////////////////
+                graphics.setRenderingHints(oldHints);
+            }
+        }
+    }
+

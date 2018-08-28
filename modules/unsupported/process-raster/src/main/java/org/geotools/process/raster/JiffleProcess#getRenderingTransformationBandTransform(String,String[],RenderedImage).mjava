@@ -1,0 +1,28 @@
+    private BandTransform getRenderingTransformationBandTransform(
+            String script, String[] sourceNames, RenderedImage source) throws JiffleException {
+        // were we able to determine which bands are needed?
+        int[] scriptBands = getTransformationBands(script, sourceNames);
+        if (scriptBands == null) {
+            return null;
+        }
+
+        // is there a mismatch between the available bands and the ones used in the script?
+        // if so assume bands mapping has taken place in the RT
+        int maxReadBand = Arrays.stream(scriptBands).max().getAsInt();
+        // build the mapping as a lookup table
+        final int[] map = new int[maxReadBand + 1];
+        boolean mapRequired = false;
+        for (int i = 0; i < scriptBands.length; i++) {
+            int scriptBand = scriptBands[i];
+            map[scriptBand] = i;
+            mapRequired |= scriptBand != i;
+        }
+
+        if (!mapRequired) {
+            return null;
+        }
+
+        // perform a simple mapping using the above lookup table
+        return (x, y, scriptBand) -> map[scriptBand];
+    }
+

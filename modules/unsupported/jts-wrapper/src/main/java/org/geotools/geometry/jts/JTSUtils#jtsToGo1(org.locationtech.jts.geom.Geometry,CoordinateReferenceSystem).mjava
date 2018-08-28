@@ -1,0 +1,76 @@
+    /** Creates a 19107 primitive geometry from the given JTS geometry. */
+    public static Geometry jtsToGo1(
+            final org.locationtech.jts.geom.Geometry jtsGeom, final CoordinateReferenceSystem crs) {
+
+        Hints hints = new Hints(Hints.CRS, crs);
+        PrimitiveFactory pf = GeometryFactoryFinder.getPrimitiveFactory(hints);
+        GeometryFactory gf = GeometryFactoryFinder.getGeometryFactory(hints);
+
+        String geomType = jtsGeom.getGeometryType();
+        if (geomType.equalsIgnoreCase("Point")) {
+            org.locationtech.jts.geom.Point jtsPoint = (org.locationtech.jts.geom.Point) jtsGeom;
+            DirectPosition dp = pointToDirectPosition(jtsPoint, crs);
+            Point result = pf.createPoint(dp);
+            return result;
+
+        } else if (geomType.equalsIgnoreCase("LineString")) {
+            org.locationtech.jts.geom.LineString jtsLineString =
+                    (org.locationtech.jts.geom.LineString) jtsGeom;
+            int numPoints = jtsLineString.getNumPoints();
+            LineString ls = gf.createLineString(new ArrayList());
+            List pointList = ls.getControlPoints();
+            for (int i = 0; i < numPoints; i++) {
+                pointList.add(coordinateToDirectPosition(jtsLineString.getCoordinateN(i), crs));
+            }
+            ArrayList segments = new ArrayList();
+            segments.add(ls);
+            Curve result = pf.createCurve(segments);
+            return result;
+
+        } else if (geomType.equalsIgnoreCase("LinearRing")) {
+            Ring result = linearRingToRing((org.locationtech.jts.geom.LinearRing) jtsGeom, crs);
+            return result;
+
+        } else if (geomType.equalsIgnoreCase("Polygon")) {
+            org.locationtech.jts.geom.Polygon jtsPolygon =
+                    (org.locationtech.jts.geom.Polygon) jtsGeom;
+            Ring externalRing =
+                    linearRingToRing(
+                            (org.locationtech.jts.geom.LinearRing) jtsPolygon.getExteriorRing(),
+                            crs);
+            int n = jtsPolygon.getNumInteriorRing();
+            ArrayList internalRings = new ArrayList();
+            for (int i = 0; i < n; i++) {
+                internalRings.add(
+                        linearRingToRing(
+                                (org.locationtech.jts.geom.LinearRing)
+                                        jtsPolygon.getInteriorRingN(i),
+                                crs));
+            }
+            SurfaceBoundary boundary = pf.createSurfaceBoundary(externalRing, internalRings);
+            Polygon polygon = gf.createPolygon(boundary);
+            ArrayList patches = new ArrayList();
+            patches.add(polygon);
+            PolyhedralSurface result = gf.createPolyhedralSurface(patches);
+            return result;
+
+        } else if (geomType.equalsIgnoreCase("GeometryCollection")
+                || geomType.equalsIgnoreCase("MultiPoint")
+                || geomType.equalsIgnoreCase("MultiLineString")
+                || geomType.equalsIgnoreCase("MultiPolygon")) {
+            org.locationtech.jts.geom.GeometryCollection jtsCollection =
+                    (org.locationtech.jts.geom.GeometryCollection) jtsGeom;
+            int n = jtsCollection.getNumGeometries();
+            MultiPrimitive result = gf.createMultiPrimitive();
+            Set elements = result.getElements();
+            for (int i = 0; i < n; i++) {
+                // result.getElements().add(jtsToGo1(jtsCollection.getGeometryN(i), crs));
+                elements.add(jtsToGo1(jtsCollection.getGeometryN(i), crs));
+            }
+            return result;
+
+        } else {
+            throw new IllegalArgumentException("Unsupported geometry type: " + geomType);
+        }
+    }
+

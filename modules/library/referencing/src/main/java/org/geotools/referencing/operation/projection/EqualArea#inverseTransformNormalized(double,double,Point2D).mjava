@@ -1,0 +1,43 @@
+    @Override
+    protected Point2D inverseTransformNormalized(double x, double y, Point2D ptDst)
+            throws ProjectionException {
+        double yc, tol, y2, y6, f, fder;
+
+        /* make sure y is inside valid range */
+        if (y > MAX_Y) {
+            y = MAX_Y;
+        } else if (y < -MAX_Y) {
+            y = -MAX_Y;
+        }
+
+        yc = y;
+
+        for (int i = MAX_ITER; ; ) {
+            /* Newton-Raphson */
+            y2 = yc * yc;
+            y6 = y2 * y2 * y2;
+            f = yc * (A1 + A2 * y2 + y6 * (A3 + A4 * y2)) - y;
+            fder = A1 + 3 * A2 * y2 + y6 * (7 * A3 + 9 * A4 * y2);
+            tol = f / fder;
+            yc -= tol;
+            if (Math.abs(tol) < EPSILON) {
+                break;
+            }
+            if (--i < 0) {
+                throw new ProjectionException(ErrorKeys.NO_CONVERGENCE);
+            }
+        }
+
+        y2 = yc * yc;
+        y6 = y2 * y2 * y2;
+
+        double lam = M * x * (A1 + 3 * A2 * y2 + y6 * (7 * A3 + 9 * A4 * y2)) / cos(yc);
+        double phi = asin(sin(yc) / M);
+
+        if (ptDst != null) {
+            ptDst.setLocation(lam, phi);
+            return ptDst;
+        }
+        return new Point2D.Double(lam, phi);
+    }
+
