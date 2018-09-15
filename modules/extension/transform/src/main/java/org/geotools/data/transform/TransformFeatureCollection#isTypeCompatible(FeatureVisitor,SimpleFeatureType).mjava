@@ -12,24 +12,25 @@
             // pass through if the CountVisitor has been recognized
             return true;
         } else if (visitor instanceof FeatureAttributeVisitor) {
-            // pass through if the target schema contains all the necessary attributes
-            FilterAttributeExtractor extractor = new FilterAttributeExtractor(featureType);
+            // allow passing down if the properties requested are not computed not renamed,
+            // thus can be passed to the delegate collection as is
             for (Expression e : ((FeatureAttributeVisitor) visitor).getExpressions()) {
-                e.accept(extractor, null);
-            }
-            List<String> attNames = new ArrayList<>();
-
-            for (PropertyName pname : extractor.getPropertyNameSet()) {
-                AttributeDescriptor att = (AttributeDescriptor) pname.evaluate(featureType);
-                if (att == null) {
+                if (!(e instanceof PropertyName)) {
                     return false;
                 }
-                attNames.add(pname.getPropertyName());
+                PropertyName externalName = (PropertyName) e;
+                Expression attributeExpression =
+                        transformer.getExpression(externalName.getPropertyName());
+                if (!(attributeExpression instanceof PropertyName)) {
+                    return false;
+                }
+                if (!((PropertyName) attributeExpression)
+                        .getPropertyName()
+                        .equals(externalName.getPropertyName())) {
+                    return false;
+                }
             }
-            // pass through if the target schema doesn't contain transformed attributes
-            if (transformer.getOriginalNames(attNames).size() == attNames.size()) {
-                return true;
-            }
+            return true;
         }
         return false;
     }
