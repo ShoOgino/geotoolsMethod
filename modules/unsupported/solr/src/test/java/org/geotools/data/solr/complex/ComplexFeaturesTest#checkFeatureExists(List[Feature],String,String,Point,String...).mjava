@@ -1,0 +1,44 @@
+    /**
+     * Helper method that checks if a feature exists in the provided features list, if the feature
+     * is found its attributes are compared for equality with the provided ones.
+     */
+    private Feature checkFeatureExists(
+            List<Feature> features, String id, String name, Point position, String... tags) {
+        for (Feature feature : features) {
+            if (feature.getIdentifier().getID().equals(id)) {
+                // check the station name
+                Property nameProperty = feature.getProperty(STATION_NAME);
+                assertThat(nameProperty, notNullValue());
+                assertThat(nameProperty.getValue(), notNullValue());
+                assertThat(nameProperty.getValue(), instanceOf(String.class));
+                // check the station geometry
+                assertThat(feature.getDefaultGeometryProperty(), notNullValue());
+                Object geometryValue = feature.getDefaultGeometryProperty().getValue();
+                assertThat(geometryValue, notNullValue());
+                assertThat(geometryValue, instanceOf(Point.class));
+                assertThat(geometryValue, is(position));
+                // check that we got the correct tags
+                Collection<Property> tagProperties = feature.getProperties(STATION_TAG);
+                assertThat(tagProperties.size(), is(tags.length));
+                for (Property tagProperty : tagProperties) {
+                    // extract the tag value
+                    assertThat(tagProperty, notNullValue());
+                    Object tagValue = tagProperty.getValue();
+                    assertThat(tagValue, notNullValue());
+                    assertThat(tagValue, instanceOf(String.class));
+                    // check that is a valid one
+                    int index = Arrays.binarySearch(tags, tagValue);
+                    assertThat(index >= 0, is(true));
+                    assertThat(tags[index], is(tagValue));
+                }
+                for (String tag : tags) {}
+
+                // feature found, we are done
+                return feature;
+            }
+        }
+        // feature not found
+        fail("Feature not found");
+        return null;
+    }
+
