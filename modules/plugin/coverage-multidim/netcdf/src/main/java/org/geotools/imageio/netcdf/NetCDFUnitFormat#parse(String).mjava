@@ -1,0 +1,31 @@
+    /** Parses a unit applying the configured set of replacements and aliases */
+    public static Unit<?> parse(String spec) {
+        // apply blind replacements
+        boolean replaced = false;
+        for (Map.Entry<String, String> entry : REPLACEMENTS.entrySet()) {
+            // was it a full replacement or a partial one?
+            replaced = spec.equals(entry.getKey());
+            spec = spec.replace(entry.getKey(), entry.getValue());
+            if (replaced) {
+                break;
+            }
+        }
+
+        // if not recognized as a hard replacement, massage the unit spec to match the unit libs
+        // expectations
+        if (!replaced) {
+            for (Map.Entry<String, String> entry : CONTENT_REPLACEMENTS.entrySet()) {
+                spec = spec.replace(entry.getKey(), entry.getValue());
+            }
+        }
+
+        // do a normal parse, catch and rethrow because the default exception message does not
+        // even say what was being parsed
+        try {
+            return FORMAT.parse(spec);
+        } catch (ParserException e) {
+            throw new ParserException(
+                    "Failed to parse " + spec, e.getParsedString(), e.getPosition());
+        }
+    }
+
