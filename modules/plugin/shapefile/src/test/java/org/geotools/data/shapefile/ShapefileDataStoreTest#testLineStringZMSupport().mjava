@@ -1,0 +1,41 @@
+    /** Tests measures (M) values on shp output for LineString type */
+    @Test
+    public void testLineStringZMSupport() throws Exception {
+        // create feature type
+        SimpleFeatureType type =
+                DataUtilities.createType(
+                        "junk", "a:LineString,b:java.math.BigDecimal,c:java.math.BigInteger");
+        DefaultFeatureCollection features = new DefaultFeatureCollection();
+
+        BigInteger bigInteger = new BigInteger("1234567890123456789");
+        BigDecimal bigDecimal = new BigDecimal(bigInteger, 2);
+
+        SimpleFeatureBuilder build = new SimpleFeatureBuilder(type);
+        GeometryFactory gf = new GeometryFactory();
+        build.add(
+                gf.createMultiLineString(
+                        new LineString[] {
+                            gf.createLineString(
+                                    new CoordinateXYZM[] {
+                                        new CoordinateXYZM(1, -1, 1, 1),
+                                        new CoordinateXYZM(2, 0, 1, 2),
+                                        new CoordinateXYZM(3, 1, 1, 2)
+                                    })
+                        }));
+        build.add(bigDecimal);
+        build.add(bigInteger);
+
+        SimpleFeature feature = build.buildFeature(null);
+        features.add(feature);
+
+        // store features
+        File tmpFile = getTempFile();
+        tmpFile.createNewFile();
+        ShapefileDataStore s = new ShapefileDataStore(tmpFile.toURI().toURL());
+        writeFeatures(s, features);
+        File expected =
+                new File(getClass().getResource("test-data/measure/multilinezm.shp").toURI());
+        // compare byte stream produced in shp file
+        assertTrue(FileUtils.contentEquals(tmpFile, expected));
+    }
+
