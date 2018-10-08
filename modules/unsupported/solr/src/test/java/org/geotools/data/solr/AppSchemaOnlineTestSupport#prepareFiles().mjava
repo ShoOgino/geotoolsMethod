@@ -1,0 +1,26 @@
+    protected void prepareFiles() throws Exception {
+        // copy *.xsd
+        copyTestData(this.xsdFileName, tempDir);
+
+        // Modify datasource and copy xml
+        File xmlFile = URLs.urlToFile(this.getClass().getResource(testData + xmlFileName));
+        Document doc =
+                DocumentBuilderFactory.newInstance()
+                        .newDocumentBuilder()
+                        .parse(new InputSource(new FileInputStream(xmlFile)));
+        Node solrDs = doc.getElementsByTagName("SolrDataStore").item(0);
+        NodeList dsChilds = solrDs.getChildNodes();
+        for (int i = 0; i < dsChilds.getLength(); i++) {
+            Node achild = dsChilds.item(i);
+            if (achild.getNodeName().equals("url")) {
+                achild.setTextContent(getSolrCoreURL());
+            }
+        }
+        // write new xml file:
+        TransformerFactory transformerFactory = TransformerFactory.newInstance();
+        Transformer transformer = transformerFactory.newTransformer();
+        DOMSource source = new DOMSource(doc);
+        StreamResult result = new StreamResult(new File(tempDir.getPath() + "/" + xmlFileName));
+        transformer.transform(source, result);
+    }
+

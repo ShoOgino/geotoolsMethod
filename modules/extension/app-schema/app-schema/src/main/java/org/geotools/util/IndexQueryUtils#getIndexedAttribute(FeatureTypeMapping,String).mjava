@@ -1,0 +1,34 @@
+    public static AttributeMapping getIndexedAttribute(FeatureTypeMapping mapping, String xpath) {
+        AttributeMapping atm = mapping.getAttributeMapping(xpath);
+        if (atm != null && StringUtils.isNotEmpty(atm.getIndexField())) {
+            return atm;
+        }
+
+        // XPathUtil
+        // Search on Nested Attributes
+        //        StepList rootStepList =
+        //                XPath.rootElementSteps(mapping.getTargetFeature(),
+        // mapping.getNamespaces());
+        StepList stepList = XPath.steps(mapping.getTargetFeature(), xpath, mapping.getNamespaces());
+        String relXpath = stepList.toString();
+        for (NestedAttributeMapping nm : mapping.getNestedMappings()) {
+            String nestedXpath = nm.getTargetXPath().toString();
+            if (relXpath.startsWith(nestedXpath)) {
+                String subXpath = relXpath.substring(nestedXpath.length() + 1, relXpath.length());
+                FeatureTypeMapping ft = null;
+                // nm.getNestedFeatureType(null);
+                try {
+                    ft = nm.getFeatureTypeMapping(null);
+                } catch (IOException e) {
+                    Logger.getLogger(IndexQueryUtils.class.getName()).log(Level.FINE, null, e);
+                }
+                if (ft != null && StringUtils.isNotBlank(subXpath)) {
+                    AttributeMapping at = getIndexedAttribute(ft, subXpath);
+                    if (at != null && StringUtils.isNotBlank(at.getIndexField())) return at;
+                }
+            }
+        }
+        // nothing found
+        return null;
+    }
+
