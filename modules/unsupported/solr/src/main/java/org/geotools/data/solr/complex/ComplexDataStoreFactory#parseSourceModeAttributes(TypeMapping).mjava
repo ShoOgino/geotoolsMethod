@@ -1,0 +1,37 @@
+    private Set<String> parseSourceModeAttributes(TypeMapping mapping) {
+        Set<String> attributes = new HashSet<>();
+        ((List<AttributeMapping>) mapping.getAttributeMappings())
+                .forEach(
+                        attributeMapping -> {
+                            // mapped attributes
+                            Expression expression =
+                                    parseExpression(attributeMapping.getSourceExpression());
+                            attributes.addAll(extractAttributesNames(expression));
+                            if (attributeMapping.getMultipleValue() instanceof SolrMultipleValue) {
+                                expression =
+                                        ((SolrMultipleValue) attributeMapping.getMultipleValue())
+                                                .getExpression();
+                                attributes.addAll(extractAttributesNames(expression));
+                            }
+                            // mapped identifiers
+                            expression =
+                                    parseExpression(attributeMapping.getIdentifierExpression());
+                            attributes.addAll(extractAttributesNames(expression));
+                            // mapped client properties
+                            attributes.addAll(
+                                    (Set<String>)
+                                            attributeMapping
+                                                    .getClientProperties()
+                                                    .values()
+                                                    .stream()
+                                                    .flatMap(
+                                                            value ->
+                                                                    extractAttributesNames(
+                                                                                    parseExpression(
+                                                                                            value))
+                                                                            .stream())
+                                                    .collect(Collectors.toSet()));
+                        });
+        return attributes;
+    }
+

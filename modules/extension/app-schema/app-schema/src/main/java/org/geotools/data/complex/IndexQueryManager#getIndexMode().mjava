@@ -1,0 +1,28 @@
+    /**
+     * Returns the IndexMode usage mode to use for current Query
+     *
+     * <p>QueryIndexMode.ALL: if all filter and sort attributes are indexed QueryIndexMode.PARTIAL:
+     * if at least one filter attribute is indexed, all sort attributes indexed QueryIndexMode.NONE:
+     * If no one of previous conditions are accomplished
+     *
+     * @return QueryIndexMode
+     */
+    public QueryIndexCoverage getIndexMode() {
+        if (query.equals(Query.ALL)
+                || query.equals(Query.FIDS)
+                || query.getFilter().equals(Filter.INCLUDE)) return QueryIndexCoverage.NONE;
+        // Filter match:
+        List<String> filterAttributes = IndexQueryUtils.getAttributesOnFilter(query.getFilter());
+        int filterMatchCount =
+                (int) filterAttributes.stream().filter(attr -> hasIndex(attr)).count();
+        // Sort match:
+        List<String> sortAttributes = IndexQueryUtils.getAttributesOnSort(query);
+        int sortMatchCount = (int) sortAttributes.stream().filter(attr -> hasIndex(attr)).count();
+        // Query mode rules:
+        if (filterAttributes.size() == filterMatchCount && sortAttributes.size() == sortMatchCount)
+            return QueryIndexCoverage.ALL;
+        if (filterMatchCount > 0 && sortAttributes.size() == sortMatchCount)
+            return QueryIndexCoverage.PARTIAL;
+        return QueryIndexCoverage.NONE;
+    }
+
