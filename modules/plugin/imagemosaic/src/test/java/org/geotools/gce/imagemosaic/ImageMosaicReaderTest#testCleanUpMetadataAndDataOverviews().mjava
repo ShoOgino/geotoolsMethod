@@ -1,0 +1,26 @@
+    @Test
+    public void testCleanUpMetadataAndDataOverviews() throws Exception {
+        // copy the data and get the reader
+        URL hetero_s2_ovr = TestData.url(this, "hetero_s2_ovr");
+        File directory = setupTestDirectory(this, hetero_s2_ovr, "hetero_s2_ovr_clean");
+        ImageMosaicReader reader = getReader(directory);
+
+        // collect the existing files matching the removal criteria
+        FileFilter fileFilter = f -> f.getName().startsWith("g1");
+        FileFilter notFileFilter = f -> !fileFilter.accept(f) && !f.getName().endsWith(".qix");
+        File[] existingFiles = directory.listFiles(fileFilter);
+        assertThat(existingFiles, arrayWithSize(2));
+        int otherFilesCount = directory.listFiles(notFileFilter).length;
+
+        GranuleStore store =
+                (GranuleStore) reader.getGranules(reader.getGridCoverageNames()[0], false);
+        Hints hints = new Hints(Hints.GRANULE_REMOVAL_POLICY, GranuleRemovalPolicy.ALL);
+        int removed = store.removeGranules(FF.like(FF.property("location"), "*g1*"), hints);
+        assertEquals(1, removed);
+
+        // collect again, files should have been removed
+        File[] existingFilesPastCleanup = directory.listFiles(fileFilter);
+        assertThat(existingFilesPastCleanup, Matchers.emptyArray());
+        assertEquals(otherFilesCount, directory.listFiles(notFileFilter).length);
+    }
+

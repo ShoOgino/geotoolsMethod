@@ -1,0 +1,44 @@
+    @Override
+    public int removeGranules(Filter filter, Hints hints) {
+        GranuleRemovalPolicy policy =
+                Optional.ofNullable(hints)
+                        .map(h -> (GranuleRemovalPolicy) h.get(Hints.GRANULE_REMOVAL_POLICY))
+                        .orElse(GranuleRemovalPolicy.NONE);
+
+        int removed = 0;
+        try {
+            if (policy == GranuleRemovalPolicy.NONE) {
+                // easy case, just remove the granules from the catalog
+                removed = delegate.removeGranules(filter, hints);
+            } else {
+                // harder case, we need to remove metadata and eventually data, but only
+                // if there are no more references to the files in the mosaic
+
+                // collect affected granules
+                Map<String, Integer> countsByFilter = countGranulesMatching(filter, manager);
+                if (countsByFilter.isEmpty()) {
+                    return 0;
+                }
+                Map<String, Integer> countsByLocation =
+                        countGranulesMatchingLocations(countsByFilter.keySet());
+                Set<String> removedLocations =
+                        getRemovedLocations(countsByFilter, countsByLocation);
+
+                // apply the purge policy as needed
+                boolean deleteData = policy == GranuleRemovalPolicy.ALL;
+                Filter removedLocationsFilter = buildLocationsFilter(manager, removedLocations);
+                manager.getGranuleCatalog()
+                        .getGranuleDescriptors(
+                                new Query(manager.getTypeName(), removedLocationsFilter),
+                                new FileRemovingGranuleVisitor(deleteData));
+
+                // do the removal inside the catalog
+                removed = delegate.removeGranules(filter);
+            }
+        } catch (IOException e) {
+            LOGGER.log(Level.WARNING, "Failed to perform cleanup", e);
+        }
+
+        return removed;
+    }
+

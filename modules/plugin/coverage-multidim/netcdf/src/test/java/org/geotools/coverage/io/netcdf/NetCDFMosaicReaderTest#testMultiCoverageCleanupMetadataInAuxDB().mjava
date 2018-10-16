@@ -1,0 +1,60 @@
+    /** Cleanup granules metadata, fully */
+    @Test
+    public void testMultiCoverageCleanupMetadataInAuxDB() throws Exception {
+        String folder = "poliaux-db-meta";
+        Hints hints = new Hints(Hints.GRANULE_REMOVAL_POLICY, GranuleRemovalPolicy.METADATA);
+
+        // clean up the netcdf aux database folder
+        File netcdfAux = new File("target/clean-test");
+        FileUtils.deleteQuietly(netcdfAux);
+
+        File testDir = tempFolder.newFolder(folder);
+        URL testUrl = URLs.fileToUrl(testDir);
+        FileUtils.copyDirectory(TestData.file(this, "poliaux"), testDir);
+        ImageMosaicReader reader = null;
+        PropertyIsLike locationFilter = FF.like(FF.property("location"), "*Poli1*");
+        try {
+            reader = new ImageMosaicReader(testUrl);
+            assertNotNull(reader);
+            // read and dispose the coverages to make sure sidecars are created
+            reader.read("NO2", NO_DEFERRED_LOADING_PARAMS).dispose(true);
+            reader.read("O3", NO_DEFERRED_LOADING_PARAMS).dispose(true);
+
+            FileFilter no2_20130101_filter = f -> f.getName().contains("Poli1");
+            File[] fileBefore = testDir.listFiles(no2_20130101_filter);
+            assertEquals(2, fileBefore.length);
+
+            // remove granule from NO2
+            GranuleStore no2store = (GranuleStore) reader.getGranules("NO2", false);
+            int no2removed = no2store.removeGranules(locationFilter, hints);
+            assertEquals(2, no2removed);
+
+            // the poli1 file has not been removed, the other variable is still referencing it
+            File[] filePartialRemoval = testDir.listFiles(no2_20130101_filter);
+            assertEquals(2, filePartialRemoval.length);
+
+            // now to the same from 03
+            GranuleStore o3store = (GranuleStore) reader.getGranules("O3", false);
+            int o3removed = o3store.removeGranules(locationFilter, hints);
+            assertEquals(2, o3removed);
+
+            // the poli1 file is left, the metadata is gone
+            File[] fileFullRemoval = testDir.listFiles(no2_20130101_filter);
+            assertThat(fileFullRemoval, Matchers.arrayWithSize(1));
+            assertEquals(fileFullRemoval[0].getName(), "Poli1.nc");
+        } finally {
+            if (reader != null) {
+                reader.dispose();
+            }
+        }
+
+        // check that the NetCDF database has been cleaned too
+        Properties connectionParams = new Properties();
+        try (FileReader fr = new FileReader(new File(testDir, "netcdf_datastore.properties"))) {
+            connectionParams.load(fr);
+        }
+        JDBCDataStore store = new H2DataStoreFactory().createDataStore(connectionParams);
+        assertEquals(0, store.getFeatureSource("NO2").getFeatures(locationFilter).size());
+        assertEquals(0, store.getFeatureSource("O3").getFeatures(locationFilter).size());
+    }
+

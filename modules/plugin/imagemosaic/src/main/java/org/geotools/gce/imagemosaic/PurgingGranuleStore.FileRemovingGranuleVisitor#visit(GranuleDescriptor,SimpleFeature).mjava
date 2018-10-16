@@ -1,0 +1,57 @@
+        @Override
+        public void visit(GranuleDescriptor granule, SimpleFeature feature) {
+            AbstractGridCoverage2DReader reader = granule.getReader();
+            try {
+                File granuleFile = URLs.urlToFile(granule.getGranuleUrl());
+                // check common sidecars not handled by the readers
+                if (granuleFile != null) {
+                    // check the common sidecars that are not format specific too
+                    // ... overviews (it preserves the original full name and adds // .ovr)
+                    removeFile(
+                            new File(granuleFile.getParentFile(), granuleFile.getName() + ".ovr"));
+                    // ... footprints
+                    List<File> footprintFiles =
+                            manager.getGranuleCatalog().getFootprintFiles(feature);
+                    footprintFiles.forEach(this::removeFile);
+                }
+                // now to to ther real "content"
+                if (reader instanceof StructuredGridCoverage2DReader) {
+                    // only structured have a way to remove data and metadata
+                    ((StructuredGridCoverage2DReader) reader).delete(mDeleteData);
+                }
+                if (mDeleteData) {
+                    List<File> filesToRemove = new ArrayList<>();
+                    // if we are removing data, get to the list of files and remove
+                    ServiceInfo info = reader.getInfo();
+                    // see if the reader can provide a full list of us
+                    if (info instanceof FileServiceInfo) {
+                        try (CloseableIterator<FileGroupProvider.FileGroup> it =
+                                ((FileServiceInfo) info).getFiles(Query.ALL)) {
+                            filesToRemove.addAll(getFilesToRemove(it));
+                        }
+                    }
+                    // last chance, check if the granule URL is a file and remove it
+                    // (might well be a S3 link, in which case we don't have supporting
+                    // logic to actually do the removal yet)
+                    if (granuleFile != null) {
+                        // main file
+                        filesToRemove.add(granuleFile);
+                    }
+                    // now close the reader or deletion won't work on Windows
+                    reader.dispose();
+                    for (File file : filesToRemove) {
+                        removeFile(file);
+                    }
+                }
+            } catch (IOException e) {
+                LOGGER.log(
+                        Level.WARNING,
+                        "Failed to perform cleanup for granule " + granule.getGranuleUrl(),
+                        e);
+            } finally {
+                if (reader != null) {
+                    reader.dispose();
+                }
+            }
+        }
+
