@@ -1,0 +1,76 @@
+    @Override
+    protected SimpleFeatureType buildFeatureType() throws IOException {
+        SimpleFeatureTypeBuilder tb = new SimpleFeatureTypeBuilder();
+        tb.setName(entry.getName());
+        tb.setCRS(dataStore.getProjection());
+        Row header = sheet.getRow(dataStore.getHeaderRowIndex());
+        Row data = sheet.getRow(dataStore.getHeaderRowIndex() + 1);
+        Row nextData = sheet.getRow(dataStore.getHeaderRowIndex() + 2);
+        boolean latColGood = false;
+        boolean lonColGood = false;
+        for (int i = header.getFirstCellNum(); i < header.getLastCellNum(); i++) {
+            // go through and guess data type from cell types!
+            Cell cell = data.getCell(i);
+            String name = header.getCell(i).getStringCellValue().trim();
+            CellValue value = evaluator.evaluate(cell);
+            int type = value.getCellType();
+
+            Class<?> clazz = null;
+            if (latCol == i) {
+                // check it's a number
+                if (type == Cell.CELL_TYPE_NUMERIC) {
+                    latColGood = true;
+                }
+            } else if (lonCol == i) {
+                // check it's a number
+                if (type == Cell.CELL_TYPE_NUMERIC) {
+                    lonColGood = true;
+                }
+            } else {
+                switch (type) {
+                    case Cell.CELL_TYPE_NUMERIC:
+                        if (HSSFDateUtil.isCellDateFormatted(cell)) {
+                            if (value.getNumberValue() < 1.0) {
+                                clazz = Time.class;
+                            } else if (Math.floor(cell.getNumericCellValue())
+                                    == Math.ceil(cell.getNumericCellValue())) {
+                                // midnight or just a date
+                                // check the next row
+                                Cell cell2 = nextData.getCell(i);
+                                if (Math.floor(cell2.getNumericCellValue())
+                                        == Math.ceil(cell2.getNumericCellValue())) {
+                                    // probably a simple date
+                                    clazz = java.sql.Date.class;
+                                } else {
+                                    // actual date/time element
+                                    clazz = java.util.Date.class;
+                                }
+                            } else {
+                                // actual date/time element
+                                clazz = java.util.Date.class;
+                            }
+                        } else {
+                            clazz = Double.class;
+                        }
+                        break;
+                    case Cell.CELL_TYPE_STRING:
+                        clazz = String.class;
+                        break;
+                    case Cell.CELL_TYPE_BOOLEAN:
+                        clazz = Boolean.class;
+                        break;
+                }
+                // System.out.println(name + ":" + clazz);
+                tb.add(name, clazz);
+            }
+        }
+        if (latColGood && lonColGood) {
+            tb.add("the_geom", Point.class);
+        } else {
+            throw new IOException("failed to find a Lat and Lon column");
+        }
+        // build the type (it is immutable and cannot be modified)
+        final SimpleFeatureType SCHEMA = tb.buildFeatureType();
+        return SCHEMA;
+    }
+
