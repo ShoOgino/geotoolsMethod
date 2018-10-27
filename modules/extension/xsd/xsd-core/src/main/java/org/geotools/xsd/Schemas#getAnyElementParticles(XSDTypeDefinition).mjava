@@ -1,0 +1,45 @@
+    /**
+     * Returns a list of all xs:any element particles that correspond to element declarations of the
+     * specified type.
+     *
+     * @param type The type.
+     * @return A list of {@link XSDParticle}.
+     */
+    public static final List getAnyElementParticles(XSDTypeDefinition type) {
+        final HashSet contents = new HashSet();
+        final ArrayList particles = new ArrayList();
+        TypeWalker.Visitor visitor =
+                new TypeWalker.Visitor() {
+                    public boolean visit(XSDTypeDefinition type) {
+                        // simple types doesn't have children
+                        if (type instanceof XSDSimpleTypeDefinition) {
+                            return true;
+                        }
+
+                        XSDComplexTypeDefinition cType = (XSDComplexTypeDefinition) type;
+
+                        ElementVisitor visitor =
+                                new ElementVisitor() {
+                                    public void visit(XSDParticle particle) {
+                                        XSDWildcard element = (XSDWildcard) particle.getContent();
+
+                                        // make sure unique
+                                        if (!contents.contains(element)) {
+                                            contents.add(element);
+                                            particles.add(particle);
+                                        }
+                                    }
+                                };
+
+                        visitAnyElements(cType, visitor);
+
+                        return true;
+                    }
+                };
+
+        // just visit this type
+        visitor.visit(type);
+
+        return new ArrayList(particles);
+    }
+

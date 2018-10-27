@@ -1,0 +1,40 @@
+    /**
+     * Remove all references to a schema It is important to call this method for every dynamic
+     * schema created that is not needed anymore, because references in the static schema's will
+     * otherwise keep it alive forever
+     *
+     * @param schema to be flushed
+     */
+    public static final void dispose(XSDSchema schema) {
+        for (XSDSchemaContent content : schema.getContents()) {
+            if (content instanceof XSDSchemaDirective) {
+                XSDSchemaDirective directive = (XSDSchemaDirective) content;
+                XSDSchema resolvedSchema = directive.getResolvedSchema();
+
+                if (resolvedSchema != null) {
+                    synchronized (Schemas.class) {
+                        synchronized (resolvedSchema.eAdapters()) {
+                            resolvedSchema.getReferencingDirectives().remove(directive);
+                            for (XSDElementDeclaration dec :
+                                    resolvedSchema.getElementDeclarations()) {
+                                if (dec == null) {
+                                    continue;
+                                }
+                                List<XSDElementDeclaration> toRemove =
+                                        new ArrayList<XSDElementDeclaration>();
+                                for (XSDElementDeclaration subs : dec.getSubstitutionGroup()) {
+                                    if (subs != null
+                                            && subs.getContainer() != null
+                                            && subs.getContainer().equals(schema)) {
+                                        toRemove.add(subs);
+                                    }
+                                }
+                                dec.getSubstitutionGroup().removeAll(toRemove);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
