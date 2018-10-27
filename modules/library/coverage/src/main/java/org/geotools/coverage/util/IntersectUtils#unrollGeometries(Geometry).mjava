@@ -1,0 +1,50 @@
+    /**
+     * Flatten all first-level (i.e. non recursively) bundles (GeometryCollections and
+     * MultiPolygons) into a GeometryCollection. <br>
+     * Valid structures:
+     *
+     * <UL>
+     *   <LI>null -> null
+     *   <LI>Polygon -> Polygon
+     *   <LI>MultiPolygon -> GeometryCollection of Polygons
+     *   <LI>GeometryCollection holding Polygons and MultiPolygons -> GeometryCollection of Polygons
+     * </UL>
+     *
+     * @throws IllegalArgumentException when encountering illegal Geometries; message is the
+     *     Geometry class name.
+     * @param geometry
+     * @return
+     */
+    public static Geometry unrollGeometries(Geometry geometry) throws IllegalArgumentException {
+
+        if (geometry == null) return null;
+
+        if (geometry instanceof org.locationtech.jts.geom.Polygon) {
+            return geometry;
+
+        } else if (geometry instanceof MultiPolygon) {
+
+            MultiPolygon mp = (MultiPolygon) geometry;
+            return geometry.getFactory()
+                    .createMultiPolygon(unrollGeometries(mp).toArray(new Polygon[0]));
+
+        } else if (geometry instanceof GeometryCollection) {
+            List<org.locationtech.jts.geom.Polygon> ret = new ArrayList<Polygon>();
+
+            GeometryCollection gc = (GeometryCollection) geometry;
+            for (int i = 0; i < gc.getNumGeometries(); i++) {
+                Geometry g = gc.getGeometryN(i);
+                if (g instanceof org.locationtech.jts.geom.Polygon) {
+                    ret.add((org.locationtech.jts.geom.Polygon) g);
+                } else if (g instanceof MultiPolygon) {
+                    ret.addAll(unrollGeometries((MultiPolygon) g));
+                } else {
+                    throw new IllegalArgumentException(g.getClass().toString());
+                }
+            }
+            return geometry.getFactory().createMultiPolygon(ret.toArray(new Polygon[0]));
+        } else {
+            throw new IllegalArgumentException(geometry.getClass().toString());
+        }
+    }
+

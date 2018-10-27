@@ -1,0 +1,70 @@
+    /**
+     * Computes a new {@link ImageLayout} which is the intersection of the specified {@code
+     * ImageLayout} and all {@code RenderedImage}s in the supplied list. If the {@link
+     * ImageLayout#getMinX minX}, {@link ImageLayout#getMinY minY}, {@link ImageLayout#getWidth
+     * width} and {@link ImageLayout#getHeight height} properties are not defined in the {@code
+     * layout}, then they will be inherited from the <strong>first</strong> source for consistency
+     * with {@link OpImage} constructor.
+     *
+     * @param layout The original layout. This object will not be modified.
+     * @param sources The list of sources {@link RenderedImage}.
+     * @return A new {@code ImageLayout}, or the original {@code layout} if no change was needed.
+     */
+    public static ImageLayout createIntersection(
+            final ImageLayout layout, final List<RenderedImage> sources) {
+        ImageLayout result = layout;
+        if (result == null) {
+            result = new ImageLayout();
+        }
+        final int n = sources.size();
+        if (n != 0) {
+            // If layout is not set, OpImage uses the layout of the *first*
+            // source image according OpImage constructor javadoc.
+            RenderedImage source = sources.get(0);
+            int minXL = result.getMinX(source);
+            int minYL = result.getMinY(source);
+            int maxXL = result.getWidth(source) + minXL;
+            int maxYL = result.getHeight(source) + minYL;
+            for (int i = 0; i < n; i++) {
+                source = sources.get(i);
+                final int minX = source.getMinX();
+                final int minY = source.getMinY();
+                final int maxX = source.getWidth() + minX;
+                final int maxY = source.getHeight() + minY;
+                int mask = 0;
+                if (minXL < minX) mask |= (1 | 4); // set minX and width
+                if (minYL < minY) mask |= (2 | 8); // set minY and height
+                if (maxXL > maxX) mask |= (4); // Set width
+                if (maxYL > maxY) mask |= (8); // Set height
+                if (mask != 0) {
+                    if (layout == result) {
+                        result = (ImageLayout) layout.clone();
+                    }
+                    if ((mask & 1) != 0) result.setMinX(minXL = minX);
+                    if ((mask & 2) != 0) result.setMinY(minYL = minY);
+                    if ((mask & 4) != 0) result.setWidth((maxXL = maxX) - minXL);
+                    if ((mask & 8) != 0) result.setHeight((maxYL = maxY) - minYL);
+                }
+            }
+            // If the bounds changed, adjust the tile size.
+            if (result != layout) {
+                source = sources.get(0);
+                if (result.isValid(ImageLayout.TILE_WIDTH_MASK)) {
+                    final int oldSize = result.getTileWidth(source);
+                    final int newSize = toTileSize(result.getWidth(source), oldSize);
+                    if (oldSize != newSize) {
+                        result.setTileWidth(newSize);
+                    }
+                }
+                if (result.isValid(ImageLayout.TILE_HEIGHT_MASK)) {
+                    final int oldSize = result.getTileHeight(source);
+                    final int newSize = toTileSize(result.getHeight(source), oldSize);
+                    if (oldSize != newSize) {
+                        result.setTileHeight(newSize);
+                    }
+                }
+            }
+        }
+        return result;
+    }
+

@@ -1,0 +1,56 @@
+    /**
+     * Allow to dispose this image, as well as the related image sources, readers, stream, ROI.
+     *
+     * @param inputImage the image to be disposed.
+     */
+    public static void disposeImage(RenderedImage inputImage) {
+        if (inputImage != null) {
+            if (inputImage instanceof PlanarImage) {
+                PlanarImage planarImage = (PlanarImage) inputImage;
+
+                final int nSources = planarImage.getNumSources();
+                if (nSources > 0) {
+                    for (int k = 0; k < nSources; k++) {
+                        Object source = null;
+                        try {
+                            source = planarImage.getSourceObject(k);
+                        } catch (ArrayIndexOutOfBoundsException e) {
+                            // Ignore
+                        }
+                        if (source != null) {
+                            if (source instanceof PlanarImage) {
+                                disposeImage((PlanarImage) source);
+                            } else if (source instanceof BufferedImage) {
+                                ((BufferedImage) source).flush();
+                                source = null;
+                            }
+                        }
+                    }
+                } else {
+                    // Trying disposing the reader
+                    Object imageReader =
+                            inputImage.getProperty(ImageReadDescriptor.PROPERTY_NAME_IMAGE_READER);
+                    if ((imageReader != null) && (imageReader instanceof ImageReader)) {
+                        final ImageReader reader = (ImageReader) imageReader;
+                        final ImageInputStream stream = (ImageInputStream) reader.getInput();
+                        try {
+                            stream.close();
+                        } catch (Throwable e) {
+                            // swallow this
+                        }
+                        try {
+                            reader.dispose();
+                        } catch (Throwable e) {
+                            // swallow this
+                        }
+                    }
+                }
+
+                disposeSinglePlanarImage(planarImage);
+            } else if (inputImage instanceof BufferedImage) {
+                ((BufferedImage) inputImage).flush();
+                inputImage = null;
+            }
+        }
+    }
+

@@ -1,0 +1,37 @@
+    /**
+     * Returns the most transparent pixel in the specified color model. If many colors has the same
+     * alpha value, than the darkest one is returned. This method never returns a negative value (0
+     * is returned if the color model has no colors).
+     *
+     * @param colors The color model in which to look for a transparent color.
+     * @return The index of a transparent color, or 0.
+     */
+    public static int getTransparentPixel(final IndexColorModel colors) {
+        int index = colors.getTransparentPixel();
+        if (index < 0) {
+            index = 0;
+            int alpha = Integer.MAX_VALUE;
+            float delta = Float.POSITIVE_INFINITY;
+            final ColorSpace space = colors.getColorSpace();
+            final float[] RGB = new float[3];
+            final float[] BLACK = XYZtoLAB(space.toCIEXYZ(RGB)); // Black in Lab color space.
+            assert BLACK != RGB;
+            for (int i = colors.getMapSize(); --i >= 0; ) {
+                final int a = colors.getAlpha(i);
+                if (a <= alpha) {
+                    RGB[0] = colors.getRed(i) / 255f;
+                    RGB[1] = colors.getGreen(i) / 255f;
+                    RGB[2] = colors.getBlue(i) / 255f;
+                    final float d = colorDistance(XYZtoLAB(space.toCIEXYZ(RGB)), BLACK);
+                    assert d >= 0 : i; // Check mostly for NaN value
+                    if (a < alpha || d < delta) {
+                        alpha = a;
+                        delta = d;
+                        index = i;
+                    }
+                }
+            }
+        }
+        return index;
+    }
+
