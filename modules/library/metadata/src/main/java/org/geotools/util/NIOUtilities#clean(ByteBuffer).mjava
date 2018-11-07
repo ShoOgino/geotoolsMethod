@@ -1,0 +1,52 @@
+    /**
+     * Really closes a {@code MappedByteBuffer} without the need to wait for garbage collection. Any
+     * problems with closing a buffer on Windows (the problem child in this case) will be logged as
+     * {@code SEVERE} to the logger of the package name. To force logging of errors, set the System
+     * property "org.geotools.io.debugBuffer" to "true".
+     *
+     * <p>Starting from Java 9 the underlying Java runtime issue got fixed, so the method returns
+     * immediately in that case, without forcing any cleaning by reflection on a non exposed API
+     *
+     * @param buffer The buffer to close.
+     * @return true if the operation was successful, false otherwise.
+     * @see java.nio.MappedByteBuffer
+     */
+    public static boolean clean(final ByteBuffer buffer) {
+        // the issue was fixed in Java 9+, and Java 8 too from a given point, but testing
+        // the minor version is annoying
+        if (buffer == null
+                || !buffer.isDirect()
+                || SystemUtils.isJavaVersionAtLeast(JavaVersion.JAVA_9)) {
+            return true;
+        }
+
+        Boolean b =
+                AccessController.doPrivileged(
+                        new PrivilegedAction<Boolean>() {
+                            public Boolean run() {
+                                Boolean success = Boolean.FALSE;
+                                try {
+                                    Method getCleanerMethod = getCleanerMethod(buffer);
+                                    if (getCleanerMethod != null) {
+                                        Object cleaner =
+                                                getCleanerMethod.invoke(buffer, (Object[]) null);
+                                        if (cleaner != null) {
+                                            Method clean =
+                                                    cleaner.getClass()
+                                                            .getMethod("clean", (Class[]) null);
+                                            clean.invoke(cleaner, (Object[]) null);
+                                            success = Boolean.TRUE;
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    // This really is a show stopper on windows
+                                    if (isLoggable()) {
+                                        log(e, buffer);
+                                    }
+                                }
+                                return success;
+                            }
+                        });
+        return b.booleanValue();
+    }
+
