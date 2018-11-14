@@ -1,14 +1,17 @@
-    private Object visit(FilterFunction_pgNearest filter, Object extraData) {
+    public Object visit(
+            FilterFunction_pgNearest filter, Object extraData, NearestHelperContext ctx) {
+        SQLDialect pgDialect = ctx.getPgDialect();
         Expression geometryExp = getParameter(filter, 0, true);
         Expression numNearest = getParameter(filter, 1, true);
         try {
-            List<PrimaryKeyColumn> pkColumns = getPrimaryKey().getColumns();
+            List<PrimaryKeyColumn> pkColumns = delegate.getPrimaryKey().getColumns();
             if (pkColumns == null || pkColumns.size() == 0) {
                 throw new UnsupportedOperationException(
                         "Unsupported usage of Postgis Nearest Operator: table with no primary key");
             }
 
-            String pkColumnsAsString = getPrimaryKeyColumnsAsCommaSeparatedList(pkColumns);
+            String pkColumnsAsString =
+                    getPrimaryKeyColumnsAsCommaSeparatedList(pkColumns, pgDialect);
             StringBuffer sb = new StringBuffer();
             sb.append(" (")
                     .append(pkColumnsAsString)
@@ -16,19 +19,20 @@
                     .append(" in (select ")
                     .append(pkColumnsAsString)
                     .append(" from ");
-            if (getDatabaseSchema() != null) {
-                pgDialect.encodeSchemaName(getDatabaseSchema(), sb);
+            if (delegate.getDatabaseSchema() != null) {
+                pgDialect.encodeSchemaName(delegate.getDatabaseSchema(), sb);
                 sb.append(".");
             }
-            pgDialect.encodeTableName(getPrimaryKey().getTableName(), sb);
+            pgDialect.encodeTableName(delegate.getPrimaryKey().getTableName(), sb);
             sb.append(" order by ");
             // geometry column name
             pgDialect.encodeColumnName(
-                    null, featureType.getGeometryDescriptor().getLocalName(), sb);
+                    null, delegate.getFeatureType().getGeometryDescriptor().getLocalName(), sb);
             sb.append(" <-> ");
             // reference geometry
-            Geometry geomValue = (Geometry) evaluateLiteral((Literal) geometryExp, Geometry.class);
-            bufferGeom(geomValue, sb);
+            Geometry geomValue =
+                    (Geometry) delegate.evaluateLiteral((Literal) geometryExp, Geometry.class);
+            ctx.encodeGeometryValue.accept(geomValue, sb);
 
             // num of features
             sb.append(" limit ");

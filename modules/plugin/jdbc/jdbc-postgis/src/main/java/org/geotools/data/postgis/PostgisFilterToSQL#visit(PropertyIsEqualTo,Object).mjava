@@ -1,7 +1,23 @@
     public Object visit(PropertyIsEqualTo filter, Object extraData) {
-        Optional<FilterFunction_pgNearest> nearestOpt = getNearestFilter(filter);
-        if (nearestOpt.isPresent()) {
-            return visit(nearestOpt.get(), extraData);
+        helper.out = out;
+        FilterFunction_pgNearest nearest = helper.getNearestFilter(filter);
+        if (nearest != null) {
+            return helper.visit(
+                    nearest,
+                    extraData,
+                    new FilterToSqlHelper.NearestHelperContext(
+                            pgDialect,
+                            (a, b) -> {
+                                try {
+                                    pgDialect.encodeGeometryValue(
+                                            a,
+                                            helper.getFeatureTypeGeometryDimension(),
+                                            helper.getFeatureTypeGeometrySRID(),
+                                            b);
+                                } catch (IOException e) {
+                                    throw new RuntimeException(e);
+                                }
+                            }));
         } else {
             return super.visit(filter, extraData);
         }
