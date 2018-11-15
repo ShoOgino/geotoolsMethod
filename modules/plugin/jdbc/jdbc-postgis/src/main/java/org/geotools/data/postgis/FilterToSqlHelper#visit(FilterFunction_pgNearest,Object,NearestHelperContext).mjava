@@ -1,0 +1,49 @@
+    public Object visit(
+            FilterFunction_pgNearest filter, Object extraData, NearestHelperContext ctx) {
+        SQLDialect pgDialect = ctx.getPgDialect();
+        Expression geometryExp = getParameter(filter, 0, true);
+        Expression numNearest = getParameter(filter, 1, true);
+        try {
+            List<PrimaryKeyColumn> pkColumns = delegate.getPrimaryKey().getColumns();
+            if (pkColumns == null || pkColumns.size() == 0) {
+                throw new UnsupportedOperationException(
+                        "Unsupported usage of Postgis Nearest Operator: table with no primary key");
+            }
+
+            String pkColumnsAsString =
+                    getPrimaryKeyColumnsAsCommaSeparatedList(pkColumns, pgDialect);
+            StringBuffer sb = new StringBuffer();
+            sb.append(" (")
+                    .append(pkColumnsAsString)
+                    .append(")")
+                    .append(" in (select ")
+                    .append(pkColumnsAsString)
+                    .append(" from ");
+            if (delegate.getDatabaseSchema() != null) {
+                pgDialect.encodeSchemaName(delegate.getDatabaseSchema(), sb);
+                sb.append(".");
+            }
+            pgDialect.encodeTableName(delegate.getPrimaryKey().getTableName(), sb);
+            sb.append(" order by ");
+            // geometry column name
+            pgDialect.encodeColumnName(
+                    null, delegate.getFeatureType().getGeometryDescriptor().getLocalName(), sb);
+            sb.append(" <-> ");
+            // reference geometry
+            Geometry geomValue =
+                    (Geometry) delegate.evaluateLiteral((Literal) geometryExp, Geometry.class);
+            ctx.encodeGeometryValue.accept(geomValue, sb);
+
+            // num of features
+            sb.append(" limit ");
+            int numFeatures = numNearest.evaluate(null, Number.class).intValue();
+            sb.append(numFeatures);
+            sb.append(")");
+
+            out.write(sb.toString());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return extraData;
+    }
+
