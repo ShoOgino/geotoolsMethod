@@ -1,0 +1,69 @@
+    /**
+     * Fast lane mosaicker, basically builds an OpImage that returns translated versions of the
+     * source images, without actually copying pixels around
+     */
+    private OpImage mosaicUniformImages(List<ImageInTile> sources) {
+        // compute bounds
+        int minx = sources.stream().mapToInt(it -> it.posx).min().getAsInt();
+        int maxx = sources.stream().mapToInt(it -> it.posx + it.image.getWidth()).max().getAsInt();
+        int miny = sources.stream().mapToInt(it -> it.posy).min().getAsInt();
+        int maxy = sources.stream().mapToInt(it -> it.posy + it.image.getHeight()).max().getAsInt();
+        int width = maxx - minx;
+        int height = maxy - miny;
+
+        // compute layout
+        List<BufferedImage> sourceImages =
+                sources.stream().map(it -> it.image).collect(Collectors.toList());
+        ImageLayout il = new ImageLayout(sourceImages.get(0));
+        il.setMinX(minx);
+        il.setWidth(width);
+        il.setHeight(height);
+        il.setMinY(miny);
+        il.setTileWidth(sourceImages.get(0).getWidth());
+        il.setTileHeight(sourceImages.get(0).getHeight());
+
+        // simple
+        RenderingHints hints = new Hints(JAI.getDefaultInstance().getRenderingHints());
+        hints.putAll(GeoTools.getDefaultHints());
+        return new OpImage(new Vector(sourceImages), il, hints, false) {
+
+            @Override
+            public Raster computeTile(int tileX, int tileY) {
+                int posx = tileX * tileWidth + tileGridXOffset;
+                int posy = tileY * tileHeight + tileGridYOffset;
+                ImageInTile candidate =
+                        sources.stream()
+                                .filter(it -> it.posx == posx && it.posy == posy)
+                                .findFirst()
+                                .orElse(null);
+                if (candidate != null) {
+                    return candidate.image.getData().createTranslatedChild(posx, posy);
+                }
+
+                // not inside the available grid, build a white cell then
+                WritableRaster dest =
+                        createWritableRaster(
+                                sampleModel, new Point(tileXToX(tileX), tileYToY(tileY)));
+                BufferedImage bi = new BufferedImage(getColorModel(), dest, false, null);
+                Graphics2D g2D = (Graphics2D) bi.getGraphics();
+                g2D.setColor(Color.WHITE);
+                g2D.fillRect(0, 0, bi.getWidth(), bi.getHeight());
+                g2D.dispose();
+
+                return dest;
+            }
+
+            @Override
+            public Rectangle mapSourceRect(Rectangle sourceRect, int sourceIndex) {
+                // should not really be used
+                return sourceRect;
+            }
+
+            @Override
+            public Rectangle mapDestRect(Rectangle destRect, int sourceIndex) {
+                // should not really be used
+                return destRect;
+            }
+        };
+    }
+

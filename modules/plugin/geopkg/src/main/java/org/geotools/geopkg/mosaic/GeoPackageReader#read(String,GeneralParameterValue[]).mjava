@@ -97,13 +97,6 @@
             rightTile = tileBoundsCalculator.getRightTile();
             topTile = tileBoundsCalculator.getTopTile();
         } else {
-            TileBoundsCalculator tileBoundsCalculator =
-                    new TileBoundsCalculator(entryBounds, resX, resY, offsetX, offsetY).invoke();
-            leftTile = tileBoundsCalculator.getLeftTile();
-            bottomTile = tileBoundsCalculator.getBottomTile();
-            rightTile = tileBoundsCalculator.getRightTile();
-            topTile = tileBoundsCalculator.getTopTile();
-
             final double minX = entryBounds.getMinX();
             final double maxX = entryBounds.getMaxX();
             final double minY = entryBounds.getMinY();
@@ -135,8 +128,7 @@
              * RGBA. GDAL in particular defaults to generate a mix of PNG and JPEG to generate the
              * slow and large PNG format only when transparency is actually needed
              */
-            List<RenderedImage> sources = new ArrayList<>();
-            ImageWorker iw = new ImageWorker();
+            List<ImageInTile> sources = new ArrayList<>();
             TileImageReader tileReader = new TileImageReader();
 
             while (it.hasNext()) {
@@ -157,17 +149,9 @@
 
                 BufferedImage tileImage = tileReader.read(tile.getData());
 
-                iw.setImage(tileImage);
                 int posx = (tile.getColumn() - leftTile) * DEFAULT_TILE_SIZE;
                 int posy = (tile.getRow() - topTile) * DEFAULT_TILE_SIZE;
-                if (posx != 0 || posy != 0) {
-                    iw.translate(
-                            posx, posy, Interpolation.getInstance(Interpolation.INTERP_NEAREST));
-                    RenderedImage translated = iw.getRenderedImage();
-                    sources.add(translated);
-                } else {
-                    sources.add(tileImage);
-                }
+                sources.add(new ImageInTile(tileImage, posx, posy));
             }
             it.close();
 
@@ -176,23 +160,9 @@
                 return null;
             } else if (sources.size() == 1) {
                 // one tile
-                image = sources.get(0);
+                image = sources.get(0).image;
             } else {
-                // at the time of writing, only JAI-EXT mosaic can handle a mix of different
-                // color models, we need to use it explicitly
-                final ParameterBlockJAI pb =
-                        new ParameterBlockJAI(new it.geosolutions.jaiext.mosaic.MosaicDescriptor());
-                sources.forEach(s -> pb.addSource(s));
-                pb.setParameter("mosaicType", MosaicDescriptor.MOSAIC_TYPE_OVERLAY);
-                pb.setParameter("sourceAlpha", null);
-                pb.setParameter("sourceROI", null);
-                pb.setParameter("sourceThreshold", null);
-                pb.setParameter("backgroundValues", new double[] {0});
-                pb.setParameter("nodata", null);
-
-                RenderingHints hints = new Hints(JAI.getDefaultInstance().getRenderingHints());
-                hints.putAll(GeoTools.getDefaultHints());
-                image = new MosaicRIF().create(pb, hints);
+                image = mosaicImages(sources);
             }
         }
         return coverageFactory.create(entry.getTableName(), image, resultEnvelope);
