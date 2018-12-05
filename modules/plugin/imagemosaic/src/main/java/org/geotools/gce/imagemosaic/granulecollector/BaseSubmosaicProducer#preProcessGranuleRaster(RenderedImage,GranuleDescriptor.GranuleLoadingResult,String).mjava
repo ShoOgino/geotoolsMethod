@@ -84,16 +84,19 @@
         // ROI
         //
         // we need to add its roi in order to avoid problems with the mosaics sources overlapping
-        final Rectangle bounds = PlanarImage.wrapRenderedImage(granule).getBounds();
-        Geometry mask =
-                JTS.toGeometry(
-                        new Envelope(
-                                bounds.getMinX(),
-                                bounds.getMaxX(),
-                                bounds.getMinY(),
-                                bounds.getMaxY()));
-        ROI imageROI = new ROIGeometry(mask);
-        if (rasterLayerResponse.getFootprintBehavior().handleFootprints()) {
+        ROI imageROI = null;
+        if (rasterLayerResponse.getFootprintBehavior().handleFootprints()
+                || rasterLayerResponse.isHeterogeneousCRS()
+                || !JAIExt.isJAIExtOperation("Mosaic")) {
+            final Rectangle bounds = PlanarImage.wrapRenderedImage(granule).getBounds();
+            Geometry mask =
+                    JTS.toGeometry(
+                            new Envelope(
+                                    bounds.getMinX(),
+                                    bounds.getMaxX(),
+                                    bounds.getMinY(),
+                                    bounds.getMaxY()));
+            imageROI = new ROIGeometry(mask);
 
             // get the real footprint
             final ROI footprint = result.getFootprint();
@@ -104,6 +107,9 @@
                     imageROI = imageROI.intersect(footprint);
                 }
             }
+        }
+
+        if (rasterLayerResponse.getFootprintBehavior().handleFootprints()) {
 
             // ARTIFACTS FILTERING
             if (rasterLayerResponse.getDefaultArtifactsFilterThreshold() != Integer.MIN_VALUE
