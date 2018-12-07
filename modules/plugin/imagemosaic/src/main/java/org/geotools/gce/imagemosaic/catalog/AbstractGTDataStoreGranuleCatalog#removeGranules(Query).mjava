@@ -2,29 +2,34 @@
     public int removeGranules(Query query) {
         Utilities.ensureNonNull("query", query);
         query = mergeHints(query);
-        final Lock lock = rwLock.writeLock();
+        // check if the index has been cleared
+        checkStore();
+        String typeName = query.getTypeName();
+        SimpleFeatureStore fs = null;
         try {
-            lock.lock();
-            // check if the index has been cleared
-            checkStore();
-            String typeName = query.getTypeName();
-            SimpleFeatureStore fs = null;
+            // create a writer that appends this features
+            fs = (SimpleFeatureStore) getTileIndexStore().getFeatureSource(typeName);
+            Transaction t = new DefaultTransaction();
+            fs.setTransaction(t);
+            boolean rollback = true;
             try {
-                // create a writer that appends this features
-                fs = (SimpleFeatureStore) getTileIndexStore().getFeatureSource(typeName);
                 final int retVal = fs.getFeatures(query).size(); // ensures we get a value
                 fs.removeFeatures(query.getFilter());
+                t.commit();
+                rollback = false;
 
                 return retVal;
-
-            } catch (Throwable e) {
-                if (LOGGER.isLoggable(Level.SEVERE))
-                    LOGGER.log(Level.SEVERE, e.getLocalizedMessage(), e);
-                return -1;
+            } finally {
+                if (rollback) {
+                    t.rollback();
+                }
+                t.close();
             }
-            // do your thing
-        } finally {
-            lock.unlock();
+
+        } catch (Throwable e) {
+            if (LOGGER.isLoggable(Level.SEVERE))
+                LOGGER.log(Level.SEVERE, e.getLocalizedMessage(), e);
+            return -1;
         }
     }
 
