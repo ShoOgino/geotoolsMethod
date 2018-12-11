@@ -1,9 +1,9 @@
-    private BoundingBox clamp(BoundingBox bounds) {
-        // In geographic CRS', HANA will reject any points outside the "normalized" range, which is
-        // (in radian) [-PI;PI] for longitude and
-        // [-PI/2;PI/2] for latitude. As GeoTools seems to expect that larger bounding boxes should
-        // be allowed and should not wrap-around, we clamp
-        // the bounding boxes for geographic CRS' here.
+    private BoundingBox clamp(BoundingBox bounds, double allowedExcessFactor) {
+        // In geographic CRS', HANA will reject any points outside the "normalized"
+        // range, which is (in radian) [-PI;PI] for longitude and [-PI/2;PI/2] for
+        // latitude. As GeoTools seems to expect that larger bounding boxes should
+        // be allowed and should not wrap-around, we clamp the bounding boxes for
+        // geographic CRS' here.
 
         CoordinateReferenceSystem crs = bounds.getCoordinateReferenceSystem();
         if (crs == null) {
@@ -21,6 +21,9 @@
         UnitConverter uc1 = su1.getConverterTo(u1);
         double minx = uc1.convert(-Math.PI);
         double maxx = uc1.convert(Math.PI);
+        double spanx = maxx - minx;
+        minx -= allowedExcessFactor * spanx;
+        maxx += allowedExcessFactor * spanx;
 
         @SuppressWarnings("unchecked")
         Unit<Length> u2 = (Unit<Length>) hcrs.getCoordinateSystem().getAxis(1).getUnit();
@@ -28,6 +31,9 @@
         UnitConverter uc2 = su2.getConverterTo(u2);
         double miny = uc2.convert(-0.5 * Math.PI);
         double maxy = uc2.convert(0.5 * Math.PI);
+        double spany = maxy - miny;
+        miny -= allowedExcessFactor * spany;
+        maxy += allowedExcessFactor * spany;
 
         double x1 = Math.min(maxx, Math.max(minx, bounds.getMinX()));
         double y1 = Math.min(maxy, Math.max(miny, bounds.getMinY()));
