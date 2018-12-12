@@ -5,28 +5,22 @@
      * @return
      */
     public List<CssRule> expandNested(RulesCombiner combiner) {
-        if (nestedRules.isEmpty()) {
+        if (nestedRules == null || nestedRules.isEmpty()) {
             return Collections.singletonList(this);
         } else {
-            Stream<CssRule> nestedRulesStream =
-                    nestedRules
-                            .stream()
-                            .flatMap(
-                                    r -> {
-                                        return r.expandNested(combiner)
-                                                .stream()
-                                                .map(
-                                                        sr -> {
-                                                            CssRule combined =
-                                                                    combiner.combineRules(
-                                                                            Arrays.asList(
-                                                                                    this, sr));
-                                                            combined.setComment(sr.getComment());
-                                                            combined.setAncestry(null);
-                                                            return combined;
-                                                        });
-                                    });
-            return Stream.concat(Stream.of(this), nestedRulesStream).collect(Collectors.toList());
+            List<CssRule> result = new ArrayList<>();
+            result.add(this);
+            for (CssRule nestedRule : nestedRules) {
+                // combine with parent's properties and selectors
+                CssRule combined = combiner.combineRules(Arrays.asList(this, nestedRule));
+                combined.setComment(nestedRule.getComment());
+                combined.setAncestry(null);
+                combined.nestedRules = nestedRule.nestedRules;
+
+                final List<CssRule> nestedCombined = combined.expandNested(combiner);
+                result.addAll(nestedCombined);
+            }
+            return result;
         }
     }
 

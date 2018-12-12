@@ -1,0 +1,39 @@
+    /**
+     * Flattens pure pseudo-selector sub-rules into the main rule, as properties
+     *
+     * @return
+     */
+    public CssRule flattenPseudoSelectors() {
+        if (nestedRules == null || nestedRules.isEmpty()) {
+            return this;
+        }
+        List<CssRule> residual = new ArrayList<>();
+        List<CssRule> pseudoRules = new ArrayList<>();
+        for (CssRule nested : nestedRules) {
+            final CssRule flattened = nested.flattenPseudoSelectors();
+            final Selector removed =
+                    (Selector) flattened.getSelector().accept(new PseudoClassRemover());
+            if (Selector.ACCEPT.equals(removed)) {
+                CssRule cleaned = new CssRule(removed, flattened.properties, flattened.comment);
+                cleaned.nestedRules = flattened.nestedRules;
+                pseudoRules.add(cleaned);
+            } else {
+                CssRule cleaned = new CssRule(removed, flattened.properties, flattened.comment);
+                cleaned.nestedRules = flattened.nestedRules;
+                residual.add(cleaned);
+            }
+        }
+
+        if (!pseudoRules.isEmpty()) {
+            pseudoRules.add(0, this);
+            final CssRule combined =
+                    new RulesCombiner(new SimplifyingFilterVisitor()).combineRules(pseudoRules);
+            combined.nestedRules = residual;
+            return combined;
+        } else {
+            final CssRule combined = new CssRule(this.selector, this.properties, this.comment);
+            combined.nestedRules = residual;
+            return combined;
+        }
+    }
+
