@@ -2,15 +2,28 @@
             BBOX filter, PropertyName property, Literal geometry, Object extraData) {
         try {
             property.accept(this, extraData);
-            out.write(".ST_IntersectsRectPlanar(");
-            BoundingBox bbox = clamp(filter.getBounds());
-            Coordinate ll = new Coordinate(bbox.getMinX(), bbox.getMinY());
-            Coordinate ur = new Coordinate(bbox.getMaxX(), bbox.getMaxY());
-            GeometryFactory factory = new GeometryFactory();
-            visitGeometry(factory.createPoint(ll));
-            out.write(", ");
-            visitGeometry(factory.createPoint(ur));
-            out.write(") = 1");
+            if (hanaVersion.getVersion() > 1) {
+                BoundingBox bbox = clamp(filter.getBounds(), 0.0);
+                writeIntersectsRectArguments("ST_IntersectsRectPlanar", bbox);
+            } else {
+                CoordinateReferenceSystem hcrs = getHorizontalCRS(filter.getBounds());
+                if ((hcrs instanceof GeographicCRS)
+                        && (currentSRID != null)
+                        && (currentSRID <= FLAT_OFFSET)) {
+                    currentSRID += FLAT_OFFSET;
+                    try {
+                        String function =
+                                "ST_SRID(" + Integer.toString(currentSRID) + ").ST_IntersectsRect";
+                        BoundingBox bbox = clamp(filter.getBounds(), 0.5);
+                        writeIntersectsRectArguments(function, bbox);
+                    } finally {
+                        currentSRID -= FLAT_OFFSET;
+                    }
+                } else {
+                    BoundingBox bbox = filter.getBounds();
+                    writeIntersectsRectArguments("ST_IntersectsRect", bbox);
+                }
+            }
             if (filter instanceof BBOX3D) {
                 BBOX3D filter3d = (BBOX3D) filter;
                 BoundingBox3D bbox3d = filter3d.getBounds();
