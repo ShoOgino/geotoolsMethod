@@ -5,7 +5,13 @@
      */
     public static void disposeSinglePlanarImage(PlanarImage planarImage) {
         // Looking for an ROI image and disposing it too
-        final Object roi = planarImage.getProperty("ROI");
+        Object roi = null;
+        try {
+            roi = planarImage.getProperty("ROI");
+        } catch (NullPointerException npe) {
+            // for some reason, chained cleanup may have already cleaned (and null) some images
+            // let's ignore it
+        }
         if ((roi != null)
                 && ((ROI.class.equals(roi.getClass()) || (roi instanceof RenderedImage)))) {
             if (roi instanceof ROI) {
@@ -24,11 +30,12 @@
         }
 
         try {
-            if (planarImage instanceof RenderedImageAdapter) {
-                cleanField(planarImage, "theImage");
-            }
+            // Check extended class first
             if (planarImage instanceof WritableRenderedImageAdapter) {
                 cleanField(planarImage, "theWritableImage");
+                cleanField(planarImage, "theImage", true);
+            } else if (planarImage instanceof RenderedImageAdapter) {
+                cleanField(planarImage, "theImage");
             }
         } catch (NoSuchFieldException | IllegalAccessException e) {
             // fine, we tried
