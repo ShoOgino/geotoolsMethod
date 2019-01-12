@@ -1,0 +1,30 @@
+    private SimpleFeatureStore getTargetFeatureStore(
+            SimpleFeatureType sourceSchema, DataStore targetStore, String coverage)
+            throws IOException {
+        // do we have to create it?
+        List<String> existingTypeNames = Arrays.asList(targetStore.getTypeNames());
+        if (!existingTypeNames.contains(coverage)) {
+            synchronized (coverage) {
+                existingTypeNames = Arrays.asList(targetStore.getTypeNames());
+                if (!existingTypeNames.contains(coverage)) {
+                    final SimpleFeatureType schema = buildTargetSchema(sourceSchema);
+                    targetStore.createSchema(schema);
+                    // create indexes if we can
+                    if (targetStore instanceof JDBCDataStore) {
+                        ((JDBCDataStore) targetStore)
+                                .createIndex(
+                                        new Index(
+                                                schema.getTypeName(),
+                                                schema.getTypeName() + "_loc_idx",
+                                                true,
+                                                "location",
+                                                CoverageSlicesCatalog.IMAGE_INDEX_ATTR));
+                    }
+                }
+            }
+        }
+        // TODO: handle Oracle casing issue?
+
+        return (SimpleFeatureStore) targetStore.getFeatureSource(coverage);
+    }
+

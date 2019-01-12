@@ -1,0 +1,58 @@
+    Void migrateNetcdf(
+            String path,
+            String[] coverages,
+            DataStore targetStore,
+            LogWriter netcdfWriter,
+            LogWriter h2Writer)
+            throws IOException, JAXBException, NoSuchAlgorithmException {
+        final AncillaryFileManager provider =
+                new AncillaryFileManager(new File(path), null) {
+                    @Override
+                    protected void initIndexer() {
+                        // do not init, we just need to return the info
+                    }
+                };
+        final DataStoreConfiguration config = provider.getDatastoreConfiguration();
+        if (!(config.getDatastoreSpi() instanceof H2DataStoreFactory)) {
+            throw new MigrationException(
+                    "The NetCDF index datastore is not a H2, but "
+                            + config.getDatastoreSpi()
+                            + ", the migration was not designed to handle that case");
+        }
+        final DataStore sourceDataStore =
+                config.getDatastoreSpi().createDataStore(config.getParams());
+        final Set<String> typeNames = new HashSet<>(Arrays.asList(sourceDataStore.getTypeNames()));
+        Transaction t = new DefaultTransaction();
+        try {
+            // shuffle coverages to avoid all threads accumulating on the same coverage
+            List<String> shuffledCoverages = new ArrayList<>(Arrays.asList(coverages));
+            Collections.shuffle(shuffledCoverages);
+            for (String coverage : shuffledCoverages) {
+                // in case of one coverage per file, not all files contain all coverages
+                if (typeNames.contains(coverage)) {
+                    LOGGER.info("Migrating " + path + ":" + coverage);
+                    final SimpleFeatureSource source = sourceDataStore.getFeatureSource(coverage);
+                    final SimpleFeatureStore store =
+                            getTargetFeatureStore(source.getSchema(), targetStore, coverage);
+                    SimpleFeatureCollection indexWithLocation =
+                            new LocationFeatureCollection(
+                                    source.getFeatures(), path, store.getSchema());
+                    store.setTransaction(t);
+                    store.addFeatures(indexWithLocation);
+                    LOGGER.info("Migration for " + path + ":" + coverage + " succesfull");
+                }
+            }
+            t.commit();
+            netcdfWriter.addLines(path);
+            h2Writer.addLines(collectH2Files(config));
+        } finally {
+            t.close();
+            if (sourceDataStore != null) {
+                sourceDataStore.dispose();
+            }
+        }
+
+        // just to make this compatible with Callable<Void>
+        return null;
+    }
+
