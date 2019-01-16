@@ -1,0 +1,77 @@
+    /**
+     * Constructor
+     *
+     * @param cCoverage the owning coverage
+     * @param cName the name of the class
+     * @param cDirectoryName the directory containing the class
+     * @param cNamespace the namespace to create features with.  If null then
+     *        a default from VPFLibrary.DEFAULTNAMESPACE is assigned.
+     * @throws SchemaException For problems making one of the feature classes as a FeatureType.
+     */
+    public VPFFeatureClass(VPFCoverage cCoverage, String cName,
+        String cDirectoryName, URI cNamespace) throws SchemaException{
+        coverage = cCoverage;
+        directoryName = cDirectoryName;
+        typeName = cName;
+        if (cNamespace == null) {
+            namespace = VPFLibrary.DEFAULT_NAMESPACE;
+        } else {
+            namespace = cNamespace;
+        }
+	    
+
+        String fcsFileName = directoryName + File.separator + TABLE_FCS;
+
+        try {
+            VPFFile fcsFile = (VPFFile) VPFFileFactory.getInstance().getFile(fcsFileName);
+            Iterator<SimpleFeature> iter = fcsFile.readAllRows().iterator();
+
+            while (iter.hasNext()) {
+                SimpleFeature feature = (SimpleFeature) iter.next();
+                String featureClassName = feature.getAttribute("feature_class")
+                                                 .toString().trim();
+
+                if (typeName.equals(featureClassName)) {
+                    addFCS(feature);
+                }
+            }
+
+            // Deal with the geometry column
+            Iterator<VPFColumn> iter2 = columns.iterator();
+            VPFColumn column;
+            String geometryName = null;
+            AttributeDescriptor geometryColumn = null;
+
+            while (iter2.hasNext()) {
+                column = (VPFColumn) iter2.next();
+                if( column == null ) continue;
+                if( column.isGeometry() ){
+                    geometryName = column.getName();
+                    break;
+                }
+            }
+
+            SimpleFeatureType superType = null;
+            // if it's a text geometry feature type add annotation as a super type
+            if (textTypeFeature) {
+                superType = AnnotationFeatureType.ANNOTATION;
+            }
+            
+            SimpleFeatureTypeBuilder b = new SimpleFeatureTypeBuilder();
+            b.setName(cName);
+            b.setNamespaceURI(namespace);
+            b.setSuperType(superType);
+            for( VPFColumn col : columns ){
+                if( col == null ) continue;
+                b.add( col.getDescriptor() );
+            }
+            b.setDefaultGeometry(geometryName);
+            
+            featureType = b.buildFeatureType();
+        } catch (IOException exp) {
+            //We've already searched the FCS file once successfully
+            //So this should never happen
+            exp.printStackTrace();
+        }
+    }
+
