@@ -1,0 +1,30 @@
+    /**
+     * Finds the mapping attribute matching the provided property name and gets its source
+     * expression or id expression. This method will navigate the feature type mapping in all its
+     * extend, including the nested mappings.
+     */
+    private Expression findPropertyExpression(
+            FeatureTypeMapping featureTypeMapping, PropertyName propertyName) {
+        // gets the property name steps, i.e. XML path parcels
+        XPathUtil.StepList propertySteps = buildPropertySteps(featureTypeMapping, propertyName);
+        // fidn the attribute mapping matching the provided proeprty name
+        AttributeMapping attributeMapping =
+                findAttributeMapping(featureTypeMapping, propertyName, propertySteps);
+        if (attributeMapping == null) {
+            // no attribute found we are done
+            return null;
+        }
+        // let's check if we have a nested attribute
+        if (attributeMapping instanceof MongoNestedMapping) {
+            // delegate the expression finding to MongoDB nested expression factories
+            return CustomImplementationsFinder.find(
+                    featureTypeMapping, propertySteps, (NestedAttributeMapping) attributeMapping);
+        }
+        // let's see if we have a source expression
+        Expression expression = attributeMapping.getSourceExpression();
+        // if the source expression let's try the identifier expression
+        return expression == null || expression == Expression.NIL
+                ? attributeMapping.getIdentifierExpression()
+                : expression;
+    }
+
