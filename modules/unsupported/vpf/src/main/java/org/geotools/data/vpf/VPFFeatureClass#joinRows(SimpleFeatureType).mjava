@@ -1,0 +1,101 @@
+    private synchronized SimpleFeature joinRows(SimpleFeatureType featureType) {
+
+        Iterator<Map.Entry<String, ColumnSet>> itr = columnSet.entrySet().iterator();
+        Map.Entry<String, ColumnSet> first = itr.next();
+
+        if (first == null) return null;
+
+        ColumnSet cs = first.getValue();
+        VPFFile rootTable = cs != null ? cs.table : null;
+        if (rootTable == null) return null;
+
+        SimpleFeature row = null;
+        try {
+            row = rootTable.readFeature();
+        } catch (Exception e) {
+            row = null;
+        }
+        if (row == null) return null;
+
+        cs.currRow = row;
+
+        Object fid = row.getAttribute("id");
+
+        String featureId = fid != null ? fid.toString() : UUID.randomUUID().toString();
+
+        Iterator<Map.Entry<String, TableRelation>> ritr = relations.entrySet().iterator();
+
+        while (ritr.hasNext()) {
+
+            Map.Entry<String, TableRelation> next = ritr.next();
+
+            TableRelation tr = next.getValue();
+
+            String joinTableName = tr.tableName;
+            String joinTableKeyName = tr.tableKeyName;
+            ColumnSet jcs = tr.colSet;
+            if (jcs == null) continue;
+            VPFFile joinTable = jcs.table;
+
+            jcs.currRow = null;
+
+            String foreignTableName = tr.joinTableName;
+            String foreignTableKeyName = tr.joinTableKeyName;
+            ColumnSet fcs = tr.joinColSet;
+            if (fcs == null || fcs.currRow == null) continue;
+
+            VPFFile foreignTable = fcs.table;
+            if (foreignTable == null) continue;
+
+            Object foreignKeyValue = fcs.currRow.getAttribute(foreignTableKeyName);
+
+            if (foreignKeyValue == null) continue;
+
+            SimpleFeature jrow = null;
+
+            if (jcs.isGeometryTable && jcs.geometryFactory != null) {
+
+                Geometry geometry = null;
+                try {
+                    geometry = jcs.geometryFactory.buildGeometry(this, fcs.currRow);
+                } catch (Exception e) {
+                    geometry = null;
+                    e.printStackTrace();
+                }
+                jcs.geometry = geometry;
+
+            } else if (joinTable != null) {
+
+                joinTable.reset();
+
+                try {
+                    while (joinTable.hasNext()) {
+                        SimpleFeature nrow = joinTable.readFeature();
+                        if (nrow == null) break;
+                        Object joinKeyValue = nrow.getAttribute(joinTableKeyName);
+                        if (joinKeyValue == null) break;
+
+                        if (Objects.equals(foreignKeyValue, joinKeyValue)) {
+                            jrow = nrow;
+                            break;
+                        }
+                    }
+                } catch (Exception e) {
+                    jrow = null;
+                }
+            }
+            jcs.currRow = jrow;
+
+            // if (jrow == null) continue;
+            /*SimpleFeature jrow = null;
+            try {
+                jrow = joinTable.readFeature();
+            } catch (Exception e) {
+                jrow = null;
+            }
+            if (jrow == null) continue; */
+        }
+
+        return combineColumnSets(featureId, featureType);
+    }
+

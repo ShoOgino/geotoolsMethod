@@ -5,12 +5,41 @@
      * @return a <code>byte[]</code> value
      * @throws IOException if an error occurs
      */
-    protected byte[] readNumber(int cnt) throws IOException {
+    protected synchronized byte[] readNumber(int cnt) throws IOException {
         byte[] dataBytes = new byte[cnt];
-        inputStream.readFully(dataBytes);
 
-        if (byteOrder == LITTLE_ENDIAN_ORDER) {
-            dataBytes = DataUtils.toBigEndian(dataBytes);
+        boolean exception = false;
+        boolean debug = false;
+
+        EOFException e2 = null;
+
+        try {
+            inputStream.readFully(dataBytes);
+
+            if (byteOrder == LITTLE_ENDIAN_ORDER) {
+                dataBytes = DataUtils.toBigEndian(dataBytes);
+            }
+        } catch (EOFException e) {
+            exception = true;
+            debug = true;
+            e2 = e;
+        }
+
+        if (debug) {
+            Integer recordSize = getRecordSize();
+            Long streamLength = inputStream.length();
+            Long filePointer = inputStream.getFilePointer();
+            Integer icnt = cnt;
+
+            System.out.println("************** EOFException");
+            System.out.println("cnt: " + icnt);
+            System.out.println("recordSize: " + recordSize);
+            System.out.println("streamLength: " + streamLength);
+            System.out.println("filePointer: " + filePointer);
+        }
+
+        if (exception) {
+            throw e2;
         }
 
         return dataBytes;

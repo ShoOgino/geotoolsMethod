@@ -3,40 +3,93 @@
      *
      * @param row The FCS table row
      */
-    private void addFCS(SimpleFeature row) // throws IOException
+    private synchronized void addFCS(SimpleFeature row) // throws IOException
             {
         String table1 = row.getAttribute("table1").toString().toUpperCase();
         String table1Key = row.getAttribute("table1_key").toString();
         String table2 = row.getAttribute("table2").toString().toUpperCase();
         String table2Key = row.getAttribute("table2_key").toString();
 
+        if (this.debug) {
+            System.out.println("++++++++ addFCS");
+            System.out.println("table1: " + table1 + " key: " + table1Key);
+            System.out.println("table2: " + table2 + " key: " + table2Key);
+        }
+
         try {
             VPFFile vpfFile1 =
                     VPFFileFactory.getInstance()
                             .getFile(directoryName.concat(File.separator).concat(table1));
-            addFileToTable(vpfFile1);
+            // addFileToTable(vpfFile1);
+
+            if (!columnSet.containsKey(table1)) {
+                ColumnSet cs = new ColumnSet();
+                cs.setTable(table1, vpfFile1);
+                columnSet.put(table1, cs);
+            }
+
+            ColumnSet cs1 = columnSet.get(table1);
 
             VPFFile vpfFile2 = null;
             VPFColumn joinColumn1 = vpfFile1.getColumn(table1Key);
-            VPFColumn joinColumn2;
+            VPFColumn joinColumn2 = null;
+            VPFColumn geometryColumn = null;
+            boolean isGeometryTable = false;
 
             try {
-                vpfFile2 =
-                        VPFFileFactory.getInstance()
-                                .getFile(directoryName.concat(File.separator).concat(table2));
-                addFileToTable(vpfFile2);
-                joinColumn2 = vpfFile2.getColumn(table2Key);
+
+                if (table2.equalsIgnoreCase(FACE_PRIMITIVE)) {
+                    geometryColumn = buildGeometryColumn(table2);
+                    joinColumn2 = null;
+                    isGeometryTable = true;
+                } else {
+                    vpfFile2 =
+                            VPFFileFactory.getInstance()
+                                    .getFile(directoryName.concat(File.separator).concat(table2));
+                    // addFileToTable(vpfFile2);
+                    joinColumn2 = vpfFile2.getColumn(table2Key);
+                }
             } catch (IOException exc) {
-                fileList.add(null);
+                vpfFile2 = null;
+                joinColumn2 = null;
+                isGeometryTable = true;
+                // fileList.add(null);
                 // We need to add a geometry column
-                joinColumn2 = buildGeometryColumn(table2);
+                geometryColumn = buildGeometryColumn(table2);
+            }
+
+            if (!columnSet.containsKey(table2)) {
+                ColumnSet cs = new ColumnSet();
+
+                VPFGeometryFactory geometryFactory = isGeometryTable ? this.geometryFactory : null;
+
+                cs.setTable(table2, vpfFile2);
+                cs.setGeometry(isGeometryTable, geometryFactory, geometryColumn);
+
+                columnSet.put(table2, cs);
+            }
+
+            ColumnSet cs2 = columnSet.get(table2);
+
+            String relName = table1 + "_" + table1Key + "_" + table2 + "_" + table2Key;
+            String relName2 = table2 + "_" + table2Key + "_" + table1 + "_" + table1Key;
+
+            if (!relations.containsKey(relName) && !relations.containsKey(relName2)) {
+                TableRelation tr = new TableRelation();
+
+                tr.setTable(table2, cs2, table2Key, joinColumn2);
+                tr.setJoinTable(table1, cs1, table1Key, joinColumn1);
+
+                relations.put(relName, tr);
             }
 
             // FCS's that are the inverse of existing ones are not needed
             // But we should never get this far
+            /*
             if (!joinList.contains(new ColumnPair(joinColumn2, joinColumn1))) {
                 joinList.add(new ColumnPair(joinColumn1, joinColumn2));
             }
+            */
         } catch (IOException exc) {
             // File was not present
             // which means it is for a geometry table

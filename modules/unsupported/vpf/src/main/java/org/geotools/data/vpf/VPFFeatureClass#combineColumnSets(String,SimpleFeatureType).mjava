@@ -1,0 +1,40 @@
+    private synchronized SimpleFeature combineColumnSets(
+            String featureId, SimpleFeatureType featureType) {
+
+        Iterator<Map.Entry<String, ColumnSet>> itr = columnSet.entrySet().iterator();
+
+        Geometry geometry = null;
+
+        List<Object> vlist = new ArrayList<Object>();
+
+        List<AttributeDescriptor> attributes = featureType.getAttributeDescriptors();
+
+        while (itr.hasNext()) {
+            Map.Entry<String, ColumnSet> next = itr.next();
+            ColumnSet cs = next.getValue();
+            if (cs.isGeometryTable) {
+                geometry = cs.geometry;
+                vlist.add(null);
+            } else {
+                SimpleFeature row = cs.currRow;
+                Integer attrCount = row != null ? row.getAttributeCount() : null;
+                int colCount = cs.colNames.size();
+                for (int inx = 0; inx < colCount; inx++) {
+                    String colName = cs.colNames.get(inx);
+                    if (vlist.size() > 0 && colName.equalsIgnoreCase("id")) continue;
+                    Object value = row != null ? row.getAttribute(colName) : null;
+                    vlist.add(value);
+                }
+            }
+        }
+
+        // VPFFeatureType.debugFeatureType(this.featureType);
+        // VPFFeatureType.debugFeatureType(featureType);
+
+        SimpleFeature feature = SimpleFeatureBuilder.build(featureType, vlist, featureId);
+        if (geometry != null) {
+            feature.setDefaultGeometry(geometry);
+        }
+        return feature;
+    }
+
