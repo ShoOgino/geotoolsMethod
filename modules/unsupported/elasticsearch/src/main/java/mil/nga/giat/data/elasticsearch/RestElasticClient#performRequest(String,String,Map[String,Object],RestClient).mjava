@@ -1,0 +1,32 @@
+    Response performRequest(String method, String path, Map<String,Object> requestBody, RestClient rc) throws IOException {
+        final byte[] data = this.mapper.writeValueAsBytes(requestBody);
+        final HttpEntity entity = new ByteArrayEntity(data, ContentType.APPLICATION_JSON);
+        if (LOGGER.isLoggable(Level.FINE)) {
+            LOGGER.fine("Method: " + method);
+            LOGGER.fine("Path: " + path);
+            LOGGER.fine("RequestBody: " + requestBody);
+        }
+
+        Response response = null;
+        if (rc == this.proxyClient) {
+            final SecurityContext ctx = SecurityContextHolder.getContext();
+            final Authentication auth = ctx.getAuthentication();
+            if (auth == null) {
+                throw new IllegalStateException(String.format("Authentication could not be determined!"));
+            }
+            if (!auth.isAuthenticated()) {
+                throw new IllegalStateException(String.format("User is not authenticated: %s", auth.getName()));
+            }
+            final Header proxy = new BasicHeader(RUN_AS, auth.getName());
+            LOGGER.fine("Performing proxy request for: " + auth.getName());
+            response = rc.performRequest(method, path, Collections.<String, String> emptyMap(), entity, proxy);
+        } else {
+            LOGGER.fine("Performing admin request.");
+            response = rc.performRequest(method, path, Collections.<String, String> emptyMap(), entity);
+        }
+        if (response.getStatusLine().getStatusCode() >= 400) {
+            throw new IOException("Error executing request: " + response.getStatusLine().getReasonPhrase());
+        }
+        return response;
+    }
+

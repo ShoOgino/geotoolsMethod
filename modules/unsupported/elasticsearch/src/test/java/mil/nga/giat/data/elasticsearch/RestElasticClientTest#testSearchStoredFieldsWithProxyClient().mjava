@@ -1,0 +1,19 @@
+    @Test
+    public void testSearchStoredFieldsWithProxyClient() throws IOException {
+        ArgumentMatcher<BasicHeader> runAsHeaderMatcher = new RunAsHeaderMatcher("runAsTest");
+        final Response mockResponse2 = mock(Response.class);
+        final HttpEntity mockEntity2 = mock(HttpEntity.class);
+        when(mockResponse2.getEntity()).thenReturn(mockEntity2);
+        when(mockResponse2.getStatusLine()).thenReturn(mockStatusLine);
+        byte[] data = "{\"version\": {\"number\": \"2.4.4\"}}".getBytes();
+        final InputStream inputStream = new ByteArrayInputStream(data);
+        when(mockEntity2.getContent()).thenReturn(inputStream);
+        when(mockRestClient.performRequest(eq("GET"), eq("/"), anyMap(), any(HttpEntity.class))).thenReturn(mockResponse2);
+        ArgumentMatcher<ByteArrayEntity> matcher = new JsonByteArrayEntityMatcher("{\"fields\":[\"obj1\"]}".getBytes());
+        when(mockProxyRestClient.performRequest(eq("POST"), eq("/status_s/active/_search"), anyMap(), argThat(matcher), argThat(runAsHeaderMatcher))).thenReturn(mockResponse);
+
+        ElasticRequest request = new ElasticRequest();
+        request.addField("obj1");
+        clientWithProxy.search("status_s", "active", request);
+    }
+
