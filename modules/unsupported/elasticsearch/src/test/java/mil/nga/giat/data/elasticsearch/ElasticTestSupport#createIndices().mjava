@@ -1,9 +1,7 @@
-    protected void createIndices() throws IOException {
+    private void createIndices() throws IOException {
         // create index and add mappings
         Map<String,Object> settings = new HashMap<>();
         settings.put("settings", ImmutableMap.of("number_of_shards", numShards, "number_of_replicas", numReplicas));
-        Map<String,Object> mappings = new HashMap<>();
-        settings.put("mappings", mappings);
         final String filename;
         if (client.getVersion() < 5) {
             filename = LEGACY_ACTIVE_MAPPINGS_FILE;
@@ -12,15 +10,25 @@
         } else {
             filename = ACTIVE_MAPPINGS_FILE;
         }
-        try (Scanner s = new Scanner(ClassLoader.getSystemResourceAsStream(filename))) {
-            s.useDelimiter("\\A");
-            Map<String,Object> source = mapReader.readValue(s.next());
-            mappings.put(TYPE_NAME, source);
+        final InputStream resource = ClassLoader.getSystemResourceAsStream(filename);
+        if (resource != null) {
+            try (Scanner s = new Scanner(resource)) {
+                s.useDelimiter("\\A");
+                Map<String, Object> source = mapReader.readValue(s.next());
+                if (client.getVersion() < 7) {
+                    Map<String,Object> mappings = new HashMap<>();
+                    mappings.put(TYPE_NAME, source);
+                    settings.put("mappings", mappings);
+                } else {
+                    settings.put("mappings", source);
+                }
+            }
         }
-        client.performRequest("PUT", "/" + indexName, settings);
+        performRequest("PUT", "/" + indexName, settings);
 
         // add alias
-        Map<String,Object> aliases = ImmutableMap.of("actions", ImmutableList.of(ImmutableMap.of("index", indexName, "alias", indexName + "_alias")));
-        client.performRequest("PUT", "/_alias", aliases);
+        Map<String,Object> aliases = ImmutableMap.of("actions",
+                ImmutableList.of(ImmutableMap.of("index", indexName, "alias", indexName + "_alias")));
+        performRequest("PUT", "/_alias", aliases);
     }
 

@@ -1,30 +1,27 @@
-    void visitComparisonSpatialOperator(BinarySpatialOperator filter, PropertyName property, Literal geometry,
-            boolean swapped, Object extraData) throws IOException {
+    private void visitComparisonSpatialOperator(BinarySpatialOperator filter, PropertyName property, Literal geometry,
+                                                boolean swapped, Object extraData) {
 
         // if geography case, sanitize geometry first
-        this.geometry = geometry;
-        if(isCurrentGeography()) {
-            this.geometry = clipToWorld(geometry);
-        }
+        Literal geometry1 = clipToWorld(geometry);
 
-        visitBinarySpatialOperator(filter, (Expression)property, (Expression)this.geometry, swapped, extraData);
+        //noinspection RedundantCast
+        visitBinarySpatialOperator(filter, (Expression)property, (Expression) geometry1, swapped, extraData);
 
         // if geography case, sanitize geometry first
-        if(isCurrentGeography()) {
-            if(isWorld(this.geometry)) {
-                // nothing to filter in this case
+        if(isWorld(geometry1)) {
+            // nothing to filter in this case
+            delegate.queryBuilder = MATCH_ALL;
+            return;
+        } else if(isEmpty(geometry1)) {
+            if(!(filter instanceof Disjoint)) {
+                delegate.queryBuilder = ImmutableMap.of("bool", ImmutableMap.of("must_not", MATCH_ALL));
+            } else {
                 delegate.queryBuilder = MATCH_ALL;
-                return;
-            } else if(isEmpty(this.geometry)) {
-                if(!(filter instanceof Disjoint)) {
-                    delegate.queryBuilder = ImmutableMap.of("bool", ImmutableMap.of("must_not", MATCH_ALL));
-                } else {
-                    delegate.queryBuilder = MATCH_ALL;
-                }
-                return;
             }
+            return;
         }
 
-        visitBinarySpatialOperator(filter, (Expression)property, (Expression)this.geometry, swapped, extraData);
+        //noinspection RedundantCast
+        visitBinarySpatialOperator(filter, (Expression)property, (Expression) geometry1, swapped, extraData);
     }
 

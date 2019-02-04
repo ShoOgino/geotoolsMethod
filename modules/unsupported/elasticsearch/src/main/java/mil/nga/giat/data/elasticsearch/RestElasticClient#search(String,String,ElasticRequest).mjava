@@ -1,6 +1,10 @@
     @Override
     public ElasticResponse search(String searchIndices, String type, ElasticRequest request) throws IOException {
-        final StringBuilder pathBuilder = new StringBuilder("/" + searchIndices + "/" + type + "/_search");
+        final StringBuilder pathBuilder = new StringBuilder("/" + searchIndices);
+        if (getVersion() < 7) {
+            pathBuilder.append("/" + type);
+        }
+        pathBuilder.append("/_search");
 
         final Map<String,Object> requestBody = new HashMap<>();
 
@@ -13,7 +17,7 @@
         }
 
         if (request.getScroll() != null) {
-            pathBuilder.append("?scroll=" + request.getScroll() + "s");
+            pathBuilder.append("?scroll=").append(request.getScroll()).append("s");
         }
 
         final List<String> sourceIncludes = request.getSourceIncludes();
@@ -38,10 +42,6 @@
 
         if (request.getAggregations() != null) {
             requestBody.put("aggregations", request.getAggregations());
-        }
-
-        if (LOGGER.isLoggable(Level.FINE)) {
-            LOGGER.fine("Elasticsearch request:\n" + this.mapper.writerWithDefaultPrettyPrinter().writeValueAsString(requestBody));
         }
 
         return parseResponse(performRequest("POST", pathBuilder.toString(), requestBody));

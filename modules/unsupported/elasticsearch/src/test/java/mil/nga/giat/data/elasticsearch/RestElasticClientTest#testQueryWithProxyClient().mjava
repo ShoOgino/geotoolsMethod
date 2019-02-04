@@ -1,13 +1,12 @@
     @Test
     public void testQueryWithProxyClient() throws IOException {
-        ArgumentMatcher<BasicHeader> runAsHeaderMatcher = new RunAsHeaderMatcher("runAsTest");
         final Map<String,Object> query = ImmutableMap.of("term", ImmutableMap.of("obj1", "value1"));
-        final byte[] data = new ObjectMapper().writeValueAsBytes(ImmutableMap.of("query", query));
-        ArgumentMatcher<ByteArrayEntity> matcher = new JsonByteArrayEntityMatcher(data);
-        when(mockProxyRestClient.performRequest(eq("POST"), eq("/status_s/active/_search"), anyMap(), argThat(matcher), argThat(runAsHeaderMatcher))).thenReturn(mockResponse);
+        final String data = new ObjectMapper().writeValueAsString(ImmutableMap.of("query", query));
+        final RequestMatcher matcher = new RequestMatcher("POST", "/status_s/_search", data, "runAsTest");
+        when(mockProxyRestClient.performRequest(argThat(matcher))).thenReturn(mockResponse);
 
         ElasticRequest request = new ElasticRequest();
         request.setQuery(query);
-        clientWithProxy.search("status_s", "active", request);
+        proxyClient.search("status_s", "active", request);
     }
 
