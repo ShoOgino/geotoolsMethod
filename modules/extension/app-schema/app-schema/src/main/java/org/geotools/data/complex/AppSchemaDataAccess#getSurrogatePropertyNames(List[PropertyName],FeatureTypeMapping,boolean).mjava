@@ -9,11 +9,21 @@
             List<PropertyName> requestedProperties,
             FeatureTypeMapping mapping,
             boolean includeMandatory) {
-        List<PropertyName> propNames = null;
+        List<PropertyName> propNames = new ArrayList<>();
         final AttributeDescriptor targetDescriptor = mapping.getTargetFeature();
         if (requestedProperties != null && requestedProperties.size() > 0) {
             requestedProperties = new ArrayList<PropertyName>(requestedProperties);
             Set<PropertyName> requestedSurrogateProperties = new HashSet<PropertyName>();
+            // extension point allowing stores to contribute properties
+            for (CustomSourceDataStore extension : CustomSourceDataStore.loadExtensions()) {
+                // ask the extension for surrogate properties
+                List<PropertyName> contributedProperties =
+                        extension.getSurrogatePropertyNames(requestedProperties, mapping);
+                if (contributedProperties != null) {
+                    // we got some surrogate properties, let's store them
+                    propNames.addAll(contributedProperties);
+                }
+            }
             // add all surrogate attributes involved in mapping of the requested
             // target schema attributes
             List<AttributeMapping> attMappings = mapping.getAttributeMappings();
@@ -126,8 +136,9 @@
                 }
             }
 
-            propNames = new ArrayList<PropertyName>(requestedSurrogateProperties);
+            propNames.addAll(requestedSurrogateProperties);
         }
-        return propNames;
+        // App-Schema business code expects a NULL if no properties
+        return propNames.isEmpty() ? null : propNames;
     }
 

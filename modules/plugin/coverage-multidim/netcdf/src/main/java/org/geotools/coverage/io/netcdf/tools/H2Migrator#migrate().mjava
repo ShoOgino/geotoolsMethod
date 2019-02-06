@@ -1,0 +1,57 @@
+    public void migrate() throws Exception {
+        ExecutorService executorService =
+                Executors.newFixedThreadPool(configuration.getConcurrency());
+        DataStore targetStore =
+                H2MigrateConfiguration.getDataStore(configuration.getTargetStoreConfiguration());
+        File logDirectory = configuration.getLogDirectory();
+        try (LogWriter netcdfWriter = new LogWriter(new File(logDirectory, "migrated.txt"));
+                LogWriter h2Writer = new LogWriter(new File(logDirectory, "h2.txt"))) {
+            // just to force an actual connection and verify it works
+            targetStore.getTypeNames();
+
+            // collect file paths via reader (TODO: implement direct store alternative for EO case)
+            LinkedHashSet<String> filePaths = new LinkedHashSet<>();
+            final String[] coverages;
+            if (configuration.getSourceStoreConfiguration() != null) {
+                coverages = getFilesFromStore(filePaths);
+            } else {
+                coverages = getFilesFromReader(filePaths);
+            }
+
+            // run the migration file by file
+            Map<String, Future> futures = new HashMap<>();
+            for (String path : filePaths) {
+                futures.put(
+                        path,
+                        executorService.submit(
+                                () ->
+                                        migrateNetcdf(
+                                                path,
+                                                coverages,
+                                                targetStore,
+                                                netcdfWriter,
+                                                h2Writer)));
+            }
+            for (Map.Entry<String, Future> entry : futures.entrySet()) {
+                try {
+                    entry.getValue().get();
+                } catch (Exception e) {
+                    if (configuration.isFailureIgnored()) {
+                        LOGGER.log(Level.WARNING, "Failed to migrate file: " + entry.getKey(), e);
+                    } else {
+                        throw new MigrationException(
+                                "Failed to migrate file: " + entry.getKey(), e);
+                    }
+                }
+            }
+
+            // create the store properties and update the indexer
+            updateMosaicConfiguration(coverages);
+
+            LOGGER.info("Migration complete with success!");
+        } finally {
+            executorService.shutdown();
+            if (targetStore != null) targetStore.dispose();
+        }
+    }
+
