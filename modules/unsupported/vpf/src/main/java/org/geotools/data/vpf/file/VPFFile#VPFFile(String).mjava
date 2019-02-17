@@ -1,0 +1,47 @@
+    /**
+     * Constructor.
+     *
+     * @param cPathName The path to this file
+     * @throws IOException if the path or the file are invalid
+     * @throws SchemaException if the contained feature type can not be constructed
+     */
+    public VPFFile(String cPathName) throws IOException, SchemaException {
+        pathName = cPathName;
+        inputStream = new RandomAccessFile(cPathName, ACCESS_MODE);
+        readHeader();
+
+        VPFColumn column = null;
+        String geometryName = null;
+
+        Iterator<VPFColumn> iter = columns.iterator();
+        while (iter.hasNext()) {
+            column = (VPFColumn) iter.next();
+
+            if (column.isGeometry()) {
+                geometryName = column.getName();
+                break;
+            }
+        }
+
+        SimpleFeatureType superType = null;
+        // if it's a text geometry feature type add annotation as a super type
+        if (pathName.endsWith(TEXT_PRIMITIVE)) {
+            superType = AnnotationFeatureType.ANNOTATION;
+        }
+
+        SimpleFeatureTypeBuilder b = new SimpleFeatureTypeBuilder();
+        b.setName(cPathName);
+        b.setDescription(Text.text(description));
+        b.setNamespaceURI("VPF");
+        b.setSuperType(superType);
+        if (columns != null) {
+            for (VPFColumn ad : columns) {
+                b.add(ad.getDescriptor());
+            }
+        }
+        b.setDefaultGeometry(geometryName);
+        featureType = b.buildFeatureType();
+
+        featureType.getUserData().put(VPFFile.class, this);
+    }
+

@@ -1,0 +1,80 @@
+    /**
+     * Determines the coverages contained by this library
+     *
+     * @throws IOException
+     * @throws SchemaException For problems making one of the feature classes as a FeatureType.
+     */
+    private void setCoverages() throws IOException, SchemaException {
+        VPFCoverage coverage;
+        SimpleFeature feature;
+        String directoryName;
+
+        boolean debug = VPFLogger.isLoggable(Level.FINEST);
+
+        if (debug) {
+            VPFLogger.log("+++++++++++++ setCoverages: " + directory);
+        }
+
+        // I'd like to know why this if is here...
+        if (!directory.getName().equals("RFERENCE")) {
+            String vpfTableName = new File(directory, COVERAGE_ATTRIBUTE_TABLE).toString();
+            VPFFile vpfFile = VPFFileFactory.getInstance().getFile(vpfTableName);
+            if (debug) {
+                VPFLogger.log("vpfTableName: " + vpfTableName);
+                VPFLogger.log("vpfRootPathName: " + vpfFile.getPathName());
+            }
+
+            //            TableInputStream vpfTable = new TableInputStream(vpfTableName);
+            Iterator iter = vpfFile.readAllRows().iterator();
+            while (iter.hasNext()) {
+                feature = (SimpleFeature) iter.next();
+                directoryName = directory.getPath();
+                coverage = new VPFCoverage(this, feature, directoryName, namespace);
+                coverages.add(coverage);
+                String coverageName = coverage.getName();
+                // Find the Tileref coverage, if any
+                if (coverageName.equalsIgnoreCase("TILEREF")) {
+                    createTilingSchema(coverage);
+                }
+
+                if (debug) {
+                    VPFLogger.log("---------- coverageName: " + coverageName);
+                    VPFLogger.log(coverage.getPathName());
+                    VPFLogger.log(coverage.getDescription());
+                }
+
+                List featureTypes = coverage.getFeatureTypes();
+
+                for (int ift = 0; ift < featureTypes.size(); ift++) {
+                    VPFFeatureType featureType = (VPFFeatureType) featureTypes.get(ift);
+                    VPFFeatureClass featureClass = featureType.getFeatureClass();
+                    String featureTypeName = featureType.getTypeName();
+                    if (debug) {
+                        VPFLogger.log(">>>>>featureType: " + featureTypeName);
+                        VPFLogger.log("     directory:   " + featureType.getDirectoryName());
+                        VPFLogger.log("     fc type  :   " + featureClass.getFCTypeName());
+                    }
+
+                    typeMap.put(featureTypeName, featureType);
+
+                    List fileList = featureClass.getFileList();
+
+                    if (debug) {
+                        VPFLogger.log("   file count :   " + fileList.size());
+                    }
+
+                    for (int ifl = 0; ifl < fileList.size(); ifl++) {
+                        VPFFile vpfClassFile = (VPFFile) fileList.get(ifl);
+                        if (debug) {
+                            if (vpfClassFile == null) {
+                                VPFLogger.log("null");
+                            } else {
+                                VPFLogger.log(vpfClassFile.getPathName());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
