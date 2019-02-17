@@ -12,21 +12,18 @@
      */
     @Override
     public CoordinateReferenceSystem createCRS(int srid, Connection cx) throws SQLException {
-
-        PreparedStatement ps = cx.prepareStatement(SELECT_CRS_WKT);
-        ps.setInt(1, srid);
-        ResultSet rs = ps.executeQuery();
         String org = null, wkt = null;
         int orgid = 0;
-
-        if (rs.next()) {
-            wkt = rs.getString(1);
-            org = rs.getString(2);
-            orgid = rs.getInt(3);
+        try (PreparedStatement ps = cx.prepareStatement(SELECT_CRS_WKT)) {
+            ps.setInt(1, srid);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    wkt = rs.getString(1);
+                    org = rs.getString(2);
+                    orgid = rs.getInt(3);
+                }
+            }
         }
-        ps.close();
-        rs.close();
-
         if (orgid != 0 && org != null) {
             try {
                 return CRS.decode(org + ":" + orgid);

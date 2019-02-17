@@ -22,33 +22,30 @@
             return;
         }
 
-        PreparedStatement ps = con.prepareStatement(srsSelect);
+        try (PreparedStatement ps = con.prepareStatement(srsSelect)) {
+            if (schema != null) {
+                ps.setString(1, schema);
+                ps.setString(2, spatialTableName);
+                ps.setString(3, config.getGeomAttributeNameInSpatialTable());
+            } else {
+                ps.setString(1, spatialTableName);
+                ps.setString(2, config.getGeomAttributeNameInSpatialTable());
+            }
 
-        if (schema != null) {
-            ps.setString(1, schema);
-            ps.setString(2, spatialTableName);
-            ps.setString(3, config.getGeomAttributeNameInSpatialTable());
-        } else {
-            ps.setString(1, spatialTableName);
-            ps.setString(2, config.getGeomAttributeNameInSpatialTable());
+            try (ResultSet resultSet = ps.executeQuery()) {
+                if (resultSet.next()) {
+                    srs = resultSet.getInt(1);
+                } else {
+                    String msg =
+                            srsSelect
+                                    + " has no result for "
+                                    + ((schema != null) ? (schema + ",") : "")
+                                    + spatialTableName
+                                    + ","
+                                    + config.getGeomAttributeNameInSpatialTable();
+                    throw new IOException(msg);
+                }
+            }
         }
-
-        ResultSet resultSet = ps.executeQuery();
-
-        if (resultSet.next()) {
-            srs = resultSet.getInt(1);
-        } else {
-            String msg =
-                    srsSelect
-                            + " has no result for "
-                            + ((schema != null) ? (schema + ",") : "")
-                            + spatialTableName
-                            + ","
-                            + config.getGeomAttributeNameInSpatialTable();
-            throw new IOException(msg);
-        }
-
-        resultSet.close();
-        ps.close();
     }
 
