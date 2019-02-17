@@ -14,26 +14,27 @@
                 String srsName = null;
                 Integer srsId = (Integer) gDescr.getUserData().get(JDBCDataStore.JDBC_NATIVE_SRID);
                 if (srsId != null) {
-                    PreparedStatement ps1 = cx.prepareStatement(SELECT_SRS_NAME_FROM_ID);
-                    ps1.setInt(1, srsId);
-                    ResultSet rs = ps1.executeQuery();
-                    if (rs.next()) srsName = rs.getString(1);
-                    rs.close();
-                    ps1.close();
+                    try (PreparedStatement ps1 = cx.prepareStatement(SELECT_SRS_NAME_FROM_ID)) {
+                        ps1.setInt(1, srsId);
+                        try (ResultSet rs = ps1.executeQuery()) {
+                            if (rs.next()) srsName = rs.getString(1);
+                        }
+                    }
                 }
                 if (srsName == null && gDescr.getCoordinateReferenceSystem() != null) {
                     for (ReferenceIdentifier ident :
                             gDescr.getCoordinateReferenceSystem().getIdentifiers()) {
-                        PreparedStatement ps1 = cx.prepareStatement(SELECT_SRS_NAME_FROM_ORG);
-                        ps1.setString(1, ident.getCodeSpace());
-                        ps1.setInt(2, Integer.valueOf(ident.getCode()));
-                        ResultSet rs = ps1.executeQuery();
-                        if (rs.next()) {
-                            srsName = rs.getString(1);
-                            srsId = rs.getInt(2);
+                        try (PreparedStatement ps1 =
+                                cx.prepareStatement(SELECT_SRS_NAME_FROM_ORG)) {
+                            ps1.setString(1, ident.getCodeSpace());
+                            ps1.setInt(2, Integer.valueOf(ident.getCode()));
+                            try (ResultSet rs = ps1.executeQuery()) {
+                                if (rs.next()) {
+                                    srsName = rs.getString(1);
+                                    srsId = rs.getInt(2);
+                                }
+                            }
                         }
-                        rs.close();
-                        ps1.close();
                         if (srsName != null) break;
                     }
                 }

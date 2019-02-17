@@ -26,30 +26,32 @@
                                     + " FROM [Unit of Measure]"
                                     + " WHERE UOM_CODE = ?");
             stmt.setInt(1, Integer.parseInt(primaryKey));
-            final ResultSet result = stmt.executeQuery();
-            while (result.next()) {
-                final int source = getInt(result, 1, code);
-                final double b = result.getDouble(2);
-                final double c = result.getDouble(3);
-                final int target = getInt(result, 4, code);
-                final Unit<?> base = getUnit(target);
-                if (base == null) {
-                    throw noSuchAuthorityCode(Unit.class, String.valueOf(target));
-                }
-                Unit<?> unit = getUnit(source);
-                if (unit == null) {
-                    // TODO: check unit consistency here.
-                    if (b != 0 && c != 0) {
-                        unit = (b == c) ? base : base.multiply(b / c);
-                        unit = Units.autoCorrect(unit); // auto-correct DEGREE_ANGLE and FOOT_SURVEY
-                    } else {
-                        // TODO: provide a localized message.
-                        throw new FactoryException("Unsupported unit: " + code);
+            try (ResultSet result = stmt.executeQuery()) {
+                while (result.next()) {
+                    final int source = getInt(result, 1, code);
+                    final double b = result.getDouble(2);
+                    final double c = result.getDouble(3);
+                    final int target = getInt(result, 4, code);
+                    final Unit<?> base = getUnit(target);
+                    if (base == null) {
+                        throw noSuchAuthorityCode(Unit.class, String.valueOf(target));
                     }
+                    Unit<?> unit = getUnit(source);
+                    if (unit == null) {
+                        // TODO: check unit consistency here.
+                        if (b != 0 && c != 0) {
+                            unit = (b == c) ? base : base.multiply(b / c);
+                            unit =
+                                    Units.autoCorrect(
+                                            unit); // auto-correct DEGREE_ANGLE and FOOT_SURVEY
+                        } else {
+                            // TODO: provide a localized message.
+                            throw new FactoryException("Unsupported unit: " + code);
+                        }
+                    }
+                    returnValue = ensureSingleton(unit, returnValue, code);
                 }
-                returnValue = ensureSingleton(unit, returnValue, code);
             }
-            result.close();
         } catch (SQLException exception) {
             throw databaseFailure(Unit.class, code, exception);
         }

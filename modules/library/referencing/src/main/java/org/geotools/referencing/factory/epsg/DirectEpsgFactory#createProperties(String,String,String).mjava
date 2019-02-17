@@ -39,27 +39,27 @@
                                 + " [Naming System].NAMING_SYSTEM_CODE"
                                 + " WHERE OBJECT_CODE = ?");
         stmt.setString(1, code);
-        final ResultSet result = stmt.executeQuery();
-        while (result.next()) {
-            final String scope = result.getString(1);
-            final String local = getString(result, 2, code);
-            final GenericName generic;
-            if (scope == null) {
-                generic = new LocalName(local);
-            } else {
-                LocalName cached = scopes.get(scope);
-                if (cached == null) {
-                    cached = new LocalName(scope);
-                    scopes.put(scope, cached);
+        try (ResultSet result = stmt.executeQuery()) {
+            while (result.next()) {
+                final String scope = result.getString(1);
+                final String local = getString(result, 2, code);
+                final GenericName generic;
+                if (scope == null) {
+                    generic = new LocalName(local);
+                } else {
+                    LocalName cached = scopes.get(scope);
+                    if (cached == null) {
+                        cached = new LocalName(scope);
+                        scopes.put(scope, cached);
+                    }
+                    generic = new ScopedName(cached, local);
                 }
-                generic = new ScopedName(cached, local);
+                if (alias == null) {
+                    alias = new ArrayList<GenericName>();
+                }
+                alias.add(generic);
             }
-            if (alias == null) {
-                alias = new ArrayList<GenericName>();
-            }
-            alias.add(generic);
         }
-        result.close();
         if (alias != null) {
             properties.put(
                     IdentifiedObject.ALIAS_KEY, alias.toArray(new GenericName[alias.size()]));
