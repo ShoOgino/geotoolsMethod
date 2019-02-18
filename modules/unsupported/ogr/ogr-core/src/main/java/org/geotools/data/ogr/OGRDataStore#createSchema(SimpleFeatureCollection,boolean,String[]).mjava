@@ -15,13 +15,13 @@
     public void createSchema(
             SimpleFeatureCollection data, boolean approximateFields, String[] options)
             throws IOException {
-        Object dataSource = null;
+        OGRDataSource dataSource = null;
         Object layer = null;
         SimpleFeatureType schema = data.getSchema();
         SimpleFeatureIterator features;
         try {
             // either open datasource, or try creating one
-            dataSource = openOrCreateDataSource(options, dataSource);
+            dataSource = dataSourcePool.openOrCreateDataSource(options);
 
             FeatureTypeMapper mapper = new FeatureTypeMapper(ogr);
 
@@ -29,7 +29,7 @@
             layer = createNewLayer(schema, dataSource, options, mapper);
 
             // check the ability to create fields
-            Object driver = ogr.DataSourceGetDriver(dataSource);
+            Object driver = dataSource.getDriver();
             String driverName = ogr.DriverGetName(driver);
             ogr.DriverRelease(driver);
             if (!driverName.equalsIgnoreCase("georss")
@@ -119,7 +119,7 @@
                 ogr.LayerRelease(layer);
             }
             if (dataSource != null) {
-                ogr.DataSourceRelease(dataSource);
+                dataSource.close();
             }
         }
     }
