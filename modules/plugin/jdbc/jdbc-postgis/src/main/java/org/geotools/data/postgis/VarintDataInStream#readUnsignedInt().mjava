@@ -1,0 +1,32 @@
+    /** Reads an un-signed varinteger */
+    public int readUnsignedInt() throws IOException {
+        // try to read the first without initializing the loop (for short values, which we expect)
+        stream.read(buf1);
+        byte b = buf1[0];
+        if ((b & 0x80) == 0) {
+            return b;
+        }
+
+        // loop up to 32 bits
+        int val = b & 0x7f;
+        int shift = 7;
+        for (; shift < 32; shift += 7) {
+            stream.read(buf1);
+            b = buf1[0];
+            val = val | (b & 0x7f) << shift;
+            if ((b & 0x80) == 0) {
+                return val;
+            }
+        }
+        // read possible extra bytes, but ignore them
+        for (; shift < 64; shift += 7) {
+            stream.read(buf1);
+            b = buf1[0];
+            if ((b & 0x80) == 0) {
+                return val;
+            }
+        }
+
+        throw new IllegalArgumentException("Invalid varint found, used more than 64 bits");
+    }
+

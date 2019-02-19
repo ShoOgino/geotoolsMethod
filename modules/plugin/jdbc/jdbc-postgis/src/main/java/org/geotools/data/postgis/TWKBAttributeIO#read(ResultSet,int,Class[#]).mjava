@@ -1,0 +1,19 @@
+    /** @see org.geotools.data.jdbc.attributeio.AttributeIO#read(ResultSet, int) */
+    public Object read(ResultSet rs, int columnIndex, Class<?> binding) throws IOException {
+        try {
+            byte bytes[] = rs.getBytes(columnIndex);
+            if (bytes == null) // ie. its a null column -> return a null geometry!
+            return null;
+
+            // the TWKB encoding collapses geometries into points and encodes them as such,
+            // causing an inefficient converted to be called later down the road, handle
+            // this case in a special way to ensure better performance
+            Geometry g = wkb2Geometry(Base64.decode(bytes));
+            g = adaptToBinding(g, binding);
+
+            return g;
+        } catch (SQLException e) {
+            throw new DataSourceException("SQL exception occurred while reading the geometry.", e);
+        }
+    }
+
