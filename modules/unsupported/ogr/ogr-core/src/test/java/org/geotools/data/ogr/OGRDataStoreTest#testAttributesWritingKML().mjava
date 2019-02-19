@@ -1,13 +1,23 @@
     public void testAttributesWritingKML() throws Exception {
         if (!ogrSupports("KML")) {
-            // System.out.println("Skipping KML writing test as OGR was not built to support it");
+            LOGGER.warning("Skipping KML writing test as OGR was not built to support it");
+            return;
         }
         SimpleFeatureCollection features = createFeatureCollection();
         File tmpFile = getTempFile("test-kml", ".kml");
         tmpFile.delete();
         OGRDataStore s = createDataStore(tmpFile.getAbsolutePath(), "KML");
         s.createSchema(features, true, null);
-        assertEquals(1, s.getTypeNames().length);
+        try {
+            assertEquals(1, s.getTypeNames().length);
+        } catch (IOException e) {
+            if (e.getMessage().startsWith("OGR could not open")) {
+                LOGGER.log(Level.WARNING, "OGR is missing some support library, test skipped", e);
+                return;
+            } else {
+                throw e;
+            }
+        }
         SimpleFeatureCollection fc = s.getFeatureSource("junk").getFeatures();
         assertEquals(features.size(), fc.size());
         // Read

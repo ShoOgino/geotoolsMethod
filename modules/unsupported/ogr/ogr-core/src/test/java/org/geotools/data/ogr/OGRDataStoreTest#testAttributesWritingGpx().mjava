@@ -1,6 +1,7 @@
     public void testAttributesWritingGpx() throws Exception {
         if (!ogrSupports("GPX")) {
-            // System.out.println("Skipping GPX writing test as OGR was not built to support it");
+            LOGGER.warning("Skipping GPX writing test as OGR was not built to support it");
+            return;
         }
         SimpleFeatureCollection features = createFeatureCollection();
         File tmpFile = getTempFile("test-gpx", ".gpx");
@@ -8,7 +9,16 @@
         OGRDataStore s = createDataStore(tmpFile.getAbsolutePath(), "GPX");
         s.createSchema(features, true, new String[] {"GPX_USE_EXTENSIONS=YES"});
         // waypoints, routes, tracks, route_points, track_points
-        assertEquals(5, s.getTypeNames().length);
+        try {
+            assertEquals(5, s.getTypeNames().length);
+        } catch (IOException e) {
+            if (e.getMessage().startsWith("OGR could not open")) {
+                LOGGER.log(Level.WARNING, "OGR is missing some support library, test skipped", e);
+                return;
+            } else {
+                throw e;
+            }
+        }
         SimpleFeatureCollection fc = s.getFeatureSource("waypoints").getFeatures();
         assertEquals(features.size(), fc.size());
         // Read
