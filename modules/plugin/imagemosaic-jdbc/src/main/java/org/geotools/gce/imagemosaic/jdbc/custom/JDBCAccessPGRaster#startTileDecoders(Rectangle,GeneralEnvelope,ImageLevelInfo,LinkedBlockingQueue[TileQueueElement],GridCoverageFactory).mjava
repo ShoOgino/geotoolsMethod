@@ -31,62 +31,60 @@
 
         try {
             con = getConnection();
+            try (PreparedStatement s = con.prepareStatement(gridStatement)) {
+                WKBWriter w = new WKBWriter();
+                byte[] bytes = w.write(polyFromEnvelope(requestEnvelope));
+                s.setBytes(1, bytes);
+                s.setInt(2, levelInfo.getSrsId());
 
-            PreparedStatement s = con.prepareStatement(gridStatement);
-            WKBWriter w = new WKBWriter();
-            byte[] bytes = w.write(polyFromEnvelope(requestEnvelope));
-            s.setBytes(1, bytes);
-            s.setInt(2, levelInfo.getSrsId());
+                try (ResultSet r = s.executeQuery()) {
+                    while (r.next()) {
+                        // byte[] tileBytes = getTileBytes(r,2);
+                        byte[] tileBytes = r.getBytes(2);
+                        byte[] envBytes = r.getBytes(1);
+                        WKBReader reader = new WKBReader();
+                        Geometry g;
+                        try {
+                            g = reader.read(envBytes);
+                        } catch (ParseException e) {
+                            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                            throw new IOException(e);
+                        }
+                        Envelope env = g.getEnvelopeInternal();
+                        Rectangle2D tmp =
+                                new Rectangle2D.Double(
+                                        env.getMinX(),
+                                        env.getMinY(),
+                                        env.getWidth(),
+                                        env.getHeight());
+                        GeneralEnvelope tileGeneralEnvelope = new GeneralEnvelope(tmp);
+                        tileGeneralEnvelope.setCoordinateReferenceSystem(
+                                requestEnvelope.getCoordinateReferenceSystem());
 
-            ResultSet r = s.executeQuery();
-
-            while (r.next()) {
-                // byte[] tileBytes = getTileBytes(r,2);
-                byte[] tileBytes = r.getBytes(2);
-                byte[] envBytes = r.getBytes(1);
-                WKBReader reader = new WKBReader();
-                Geometry g;
-                try {
-                    g = reader.read(envBytes);
-                } catch (ParseException e) {
-                    LOGGER.log(Level.SEVERE, e.getMessage(), e);
-                    throw new IOException(e);
+                        ImageDecoderThread thread =
+                                new ImageDecoderThread(
+                                        tileBytes,
+                                        "",
+                                        tileGeneralEnvelope,
+                                        pixelDimension,
+                                        requestEnvelope,
+                                        levelInfo,
+                                        tileQueue,
+                                        getConfig());
+                        // thread.start();
+                        threads.add(thread);
+                        pool.execute(thread);
+                    }
                 }
-                Envelope env = g.getEnvelopeInternal();
-                Rectangle2D tmp =
-                        new Rectangle2D.Double(
-                                env.getMinX(), env.getMinY(), env.getWidth(), env.getHeight());
-                GeneralEnvelope tileGeneralEnvelope = new GeneralEnvelope(tmp);
-                tileGeneralEnvelope.setCoordinateReferenceSystem(
-                        requestEnvelope.getCoordinateReferenceSystem());
-
-                ImageDecoderThread thread =
-                        new ImageDecoderThread(
-                                tileBytes,
-                                "",
-                                tileGeneralEnvelope,
-                                pixelDimension,
-                                requestEnvelope,
-                                levelInfo,
-                                tileQueue,
-                                getConfig());
-                // thread.start();
-                threads.add(thread);
-                pool.execute(thread);
             }
-
-            r.close();
-            s.close();
-
-            con.close();
         } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+            throw new IOException(e);
+        } finally {
             try {
                 con.close();
             } catch (SQLException e1) {
             }
-
-            LOGGER.log(Level.SEVERE, e.getMessage(), e);
-            throw new IOException(e);
         }
 
         if (LOGGER.isLoggable(Level.INFO))

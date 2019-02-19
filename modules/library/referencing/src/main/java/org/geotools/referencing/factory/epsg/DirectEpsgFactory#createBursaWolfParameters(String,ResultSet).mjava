@@ -49,18 +49,18 @@
                                 + "     ELSE (360 - AREA_WEST_BOUND_LON - AREA_EAST_BOUND_LON) END) DESC,"
                                 + " CO.COORD_OP_CODE DESC"); // GEOT-846 fix
         stmt.setInt(1, Integer.parseInt(code));
-        ResultSet result = stmt.executeQuery();
         List<Object> bwInfos = null;
-        while (result.next()) {
-            final String operation = getString(result, 1, code);
-            final int method = getInt(result, 2, code);
-            final String datum = getString(result, 3, code);
-            if (bwInfos == null) {
-                bwInfos = new ArrayList<Object>();
+        try (ResultSet result = stmt.executeQuery()) {
+            while (result.next()) {
+                final String operation = getString(result, 1, code);
+                final int method = getInt(result, 2, code);
+                final String datum = getString(result, 3, code);
+                if (bwInfos == null) {
+                    bwInfos = new ArrayList<Object>();
+                }
+                bwInfos.add(new BursaWolfInfo(operation, method, datum));
             }
-            bwInfos.add(new BursaWolfInfo(operation, method, datum));
         }
-        result.close();
         if (bwInfos == null) {
             // Don't close the connection here.
             return null;
@@ -112,15 +112,15 @@
             final BursaWolfParameters parameters = new BursaWolfParameters(datum);
             stmt.setInt(1, Integer.parseInt(info.operation));
             stmt.setInt(2, info.method);
-            result = stmt.executeQuery();
-            while (result.next()) {
-                setBursaWolfParameter(
-                        parameters,
-                        getInt(result, 1, info.operation),
-                        getDouble(result, 2, info.operation),
-                        buffered.createUnit(getString(result, 3, info.operation)));
+            try (ResultSet result = stmt.executeQuery()) {
+                while (result.next()) {
+                    setBursaWolfParameter(
+                            parameters,
+                            getInt(result, 1, info.operation),
+                            getDouble(result, 2, info.operation),
+                            buffered.createUnit(getString(result, 3, info.operation)));
+                }
             }
-            result.close();
             if (info.method == ROTATION_FRAME_CODE) {
                 // Coordinate frame rotation (9607): same as 9606,
                 // except for the sign of rotation parameters.
