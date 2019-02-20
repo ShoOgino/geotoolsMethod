@@ -15,12 +15,6 @@
                 cleanup = true;
             }
 
-            // extract the post filter
-            Filter postFilter = null;
-            if (!filterTx.isFilterFullySupported()) {
-                postFilter = filterTx.getPostFilter();
-            }
-
             // prepare the target schema
             SimpleFeatureType sourceSchema = getSchema();
             SimpleFeatureType querySchema = sourceSchema;
@@ -29,13 +23,14 @@
             if (properties != null && properties.length > 0) {
                 targetSchema = SimpleFeatureTypeBuilder.retype(sourceSchema, properties);
                 querySchema = targetSchema;
-                // if we have a post filter we have to include in the queried features also the
-                // attribute needed to evaluate the post-filter
-                if (postFilter != null) {
+                // if we have a filter we have to include in the queried features also the
+                // attribute needed to evaluate both the pre-filter and post-filter (the pre-filter
+                // evaluation just does not work when using setIgnoredFields down in this method)
+                if (query.getFilter() != Filter.INCLUDE) {
                     Set<String> queriedAttributes = new HashSet<String>(Arrays.asList(properties));
                     FilterAttributeExtractor extraAttributeExtractor =
                             new FilterAttributeExtractor();
-                    postFilter.accept(extraAttributeExtractor, null);
+                    query.getFilter().accept(extraAttributeExtractor, null);
                     Set<String> extraAttributeSet =
                             new HashSet<String>(extraAttributeExtractor.getAttributeNameSet());
                     extraAttributeSet.removeAll(queriedAttributes);
@@ -44,9 +39,7 @@
                                 new String[properties.length + extraAttributeSet.size()];
                         System.arraycopy(properties, 0, queryProperties, 0, properties.length);
                         String[] extraAttributes =
-                                (String[])
-                                        extraAttributeSet.toArray(
-                                                new String[extraAttributeSet.size()]);
+                                extraAttributeSet.toArray(new String[extraAttributeSet.size()]);
                         System.arraycopy(
                                 extraAttributes,
                                 0,
@@ -65,9 +58,9 @@
                 if (query.getSortBy() == null || query.getSortBy().length == 0) {
                     layer = dataSource.getLayerByName(getSchema().getTypeName());
                     setLayerFilters(layer, filterTx);
-                }
-                // build the layer query and execute it
-                else {
+                    setIgnoredFields(layer, querySchema, sourceSchema);
+                } else {
+                    // build the layer query and execute it
                     Object driver = dataSource.getDriver();
                     String driverName = ogr.DriverGetName(driver);
                     ogr.DriverRelease(driver);
@@ -116,7 +109,7 @@
             } else {
                 setLayerFilters(layer, filterTx);
                 // would be nice, but it's not really working...
-                // setIgnoredFields(layer, querySchema, sourceSchema);
+                setIgnoredFields(layer, querySchema, sourceSchema);
             }
 
             // see if we have a geometry factory to use
@@ -132,9 +125,10 @@
                 reader =
                         new FilteringFeatureReader<SimpleFeatureType, SimpleFeature>(
                                 reader, filterTx.getPostFilter());
-                if (targetSchema != querySchema) {
-                    reader = new ReTypeFeatureReader(reader, targetSchema);
-                }
+            }
+
+            if (targetSchema != querySchema) {
+                reader = new ReTypeFeatureReader(reader, targetSchema);
             }
 
             return reader;
