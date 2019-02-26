@@ -1,0 +1,25 @@
+    GridCoverage2D compose(Iterator<TileData> tiles, ReadRequest read, ExecutorService exec)
+            throws IOException {
+        CompletionService<Tile> work = new ExecutorCompletionService<>(exec);
+
+        int count = 0;
+        while (tiles.hasNext()) {
+            count++;
+            work.submit(new TileDecoder(tiles.next(), read));
+        }
+
+        Mosaic mosaic = new Mosaic(read, coverageFactory);
+
+        while (count > 0) {
+            try {
+                mosaic.accept(work.take().get());
+                count--;
+            } catch (Exception e) {
+                Throwables.propagateIfInstanceOf(e, IOException.class);
+                throw new IOException(e);
+            }
+        }
+
+        return mosaic.coverage();
+    }
+
