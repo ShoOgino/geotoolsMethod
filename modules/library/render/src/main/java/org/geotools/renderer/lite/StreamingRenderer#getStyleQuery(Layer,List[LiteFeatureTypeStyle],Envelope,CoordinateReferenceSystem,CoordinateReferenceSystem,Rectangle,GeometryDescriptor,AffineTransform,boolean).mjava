@@ -102,10 +102,46 @@
             List<ReferencedEnvelope> envelopes = null;
             // enable advanced projection handling with the updated map extent
             if (isAdvancedProjectionHandlingEnabled()) {
+                Map projectionHints = new HashMap();
+                if (isAdvancedProjectionDensificationEnabled()
+                        && !CRS.equalsIgnoreMetadata(featCrs, mapCRS)) {
+                    ReferencedEnvelope targetEnvelope = envelope;
+                    ReferencedEnvelope sourceEnvelope = targetEnvelope.transform(featCrs, true);
+                    AffineTransform at = worldToScreenTransform;
+                    MathTransform2D crsTransform =
+                            (MathTransform2D)
+                                    CRS.findMathTransform(
+                                            CRS.getHorizontalCRS(featCrs),
+                                            CRS.getHorizontalCRS(mapCRS));
+                    MathTransform2D screenTransform = new AffineTransform2D(at);
+                    MathTransform2D fullTranform =
+                            (MathTransform2D)
+                                    ConcatenatedTransform.create(crsTransform, screenTransform);
+                    Rectangle2D.Double sourceDomain =
+                            new Rectangle2D.Double(
+                                    sourceEnvelope.getMinX(),
+                                    sourceEnvelope.getMinY(),
+                                    sourceEnvelope.getWidth(),
+                                    sourceEnvelope.getHeight());
+                    WarpBuilder wb = new WarpBuilder(0.8);
+                    int[] actualSplit = wb.getRowColsSplit(fullTranform, sourceDomain);
+                    if (actualSplit != null && (actualSplit[0] != 1 || actualSplit[1] != 1)) {
+                        double densifyDistance =
+                                Math.min(
+                                        sourceEnvelope.getWidth()
+                                                / Math.min(actualSplit[0], MAX_PIXELS_DENSIFY),
+                                        sourceEnvelope.getHeight()
+                                                / Math.min(actualSplit[1], MAX_PIXELS_DENSIFY));
+                        projectionHints.put("advancedProjectionDensify", densifyDistance);
+                    }
+                }
+                if (!isWrappingHeuristicEnabled()) {
+                    projectionHints.put("datelineWrappingCheckEnabled", false);
+                }
                 // get the projection handler and set a tentative envelope
                 ProjectionHandler projectionHandler =
                         ProjectionHandlerFinder.getHandler(
-                                envelope, featCrs, isMapWrappingEnabled());
+                                envelope, featCrs, isMapWrappingEnabled(), projectionHints);
                 if (projectionHandler != null) {
                     setProjectionHandler(styleList, projectionHandler);
                     envelopes = projectionHandler.getQueryEnvelopes();
