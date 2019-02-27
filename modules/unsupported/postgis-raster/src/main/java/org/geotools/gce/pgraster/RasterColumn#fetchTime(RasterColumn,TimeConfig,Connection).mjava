@@ -1,0 +1,39 @@
+    static TimeColumn fetchTime(RasterColumn col, TimeConfig time, Connection cx)
+            throws SQLException {
+        SQL sql =
+                new SQL()
+                        .append("SELECT column_name, data_type")
+                        .append(" FROM ")
+                        .append("information_schema.columns")
+                        .append(" WHERE table_schema = ? AND table_name = ?")
+                        .append(" AND (")
+                        .append(" data_type = 'date' OR data_type LIKE 'timestamp %'")
+                        .append(" )");
+
+        if (time.column != null) {
+            sql.append(" AND column_name = ?");
+        }
+
+        try (PreparedStatement ps = cx.prepareStatement(sql.logAndGet(LOG))) {
+            ps.setString(1, col.schema);
+            ps.setString(2, col.table);
+            if (time.column != null) {
+                ps.setString(3, time.column);
+            }
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    TimeColumn t = new TimeColumn(rs);
+                    if (rs.next()) {
+                        LOG.warning("Multiple time columns found for table " + col.tableKey());
+                        return null;
+                    }
+
+                    return t;
+                } else {
+                    return null;
+                }
+            }
+        }
+    }
+

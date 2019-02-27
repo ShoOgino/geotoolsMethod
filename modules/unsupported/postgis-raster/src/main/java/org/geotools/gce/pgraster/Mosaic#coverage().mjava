@@ -1,0 +1,36 @@
+    public GridCoverage2D coverage() {
+        if (image == null) {
+            return null;
+        }
+
+        RenderedImage finalImage = rescale(image);
+
+        ReferencedEnvelope mapBounds = read.nativeBounds;
+
+        // if bounds of loaded tiles smaller than bounds of map crop it
+        // we do this so that the calling rendering code can handle filling
+        // in backound transparency, etc...
+        if (mapBounds.covers(bounds)) {
+            // crop
+            int x =
+                    (int)
+                            (finalImage.getWidth()
+                                    * (bounds.getMinX() - mapBounds.getMinX())
+                                    / mapBounds.getWidth());
+            int y =
+                    finalImage.getHeight()
+                            - (int)
+                                    (finalImage.getHeight()
+                                            * (bounds.getMaxY() - mapBounds.getMinY())
+                                            / mapBounds.getHeight());
+            int h = (int) (finalImage.getHeight() * bounds.getHeight() / mapBounds.getHeight());
+            int w = (int) (finalImage.getWidth() * bounds.getWidth() / mapBounds.getWidth());
+            finalImage = crop(finalImage, x, y, w, h);
+        }
+
+        return factory.create(
+                read.reader.name(),
+                finalImage,
+                new ReferencedEnvelope(bounds, mapBounds.getCoordinateReferenceSystem()));
+    }
+

@@ -1,0 +1,50 @@
+    @Override
+    public Tile call() throws Exception {
+        Envelope bounds = data.bounds;
+
+        // throw out anything not in bounds, shouldn't happen but just in case
+        if (!read.nativeBounds.intersects(bounds)) return Tile.NULL;
+
+        // decode the image
+        BufferedImage image = ImageIO.read(new ByteArrayInputStream(data.bytes));
+
+        Tile tile;
+
+        // clip it if need be
+        if (!read.nativeBounds.contains(bounds)) {
+            Envelope clippedBounds = bounds.intersection(read.nativeBounds);
+
+            double scaleX = image.getWidth() / bounds.getWidth();
+            double scaleY = image.getHeight() / bounds.getHeight();
+
+            int x = (int) Math.round((clippedBounds.getMinX() - bounds.getMinX()) * scaleX);
+            int y = (int) Math.round((clippedBounds.getMaxY() - bounds.getMinY()) * scaleY);
+            y = image.getHeight() - y;
+
+            int w =
+                    (int)
+                            Math.round(
+                                    image.getWidth()
+                                            / bounds.getWidth()
+                                            * clippedBounds.getWidth());
+            int h =
+                    (int)
+                            Math.round(
+                                    image.getHeight()
+                                            / bounds.getHeight()
+                                            * clippedBounds.getHeight());
+
+            if (w > 0 && h > 0) {
+                image = image.getSubimage(x, y, w, h);
+                tile = new Tile(image, clippedBounds);
+            } else {
+                tile = Tile.NULL;
+            }
+        } else {
+            // good to go
+            tile = new Tile(image, bounds);
+        }
+
+        return tile;
+    }
+
