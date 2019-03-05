@@ -105,38 +105,60 @@
                 Map projectionHints = new HashMap();
                 if (isAdvancedProjectionDensificationEnabled()
                         && !CRS.equalsIgnoreMetadata(featCrs, mapCRS)) {
-                    ReferencedEnvelope targetEnvelope = envelope;
-                    ReferencedEnvelope sourceEnvelope = targetEnvelope.transform(featCrs, true);
-                    AffineTransform at = worldToScreenTransform;
-                    MathTransform2D crsTransform =
-                            (MathTransform2D)
-                                    CRS.findMathTransform(
-                                            CRS.getHorizontalCRS(featCrs),
-                                            CRS.getHorizontalCRS(mapCRS));
-                    MathTransform2D screenTransform = new AffineTransform2D(at);
-                    MathTransform2D fullTranform =
-                            (MathTransform2D)
-                                    ConcatenatedTransform.create(crsTransform, screenTransform);
-                    Rectangle2D.Double sourceDomain =
-                            new Rectangle2D.Double(
-                                    sourceEnvelope.getMinX(),
-                                    sourceEnvelope.getMinY(),
-                                    sourceEnvelope.getWidth(),
-                                    sourceEnvelope.getHeight());
-                    WarpBuilder wb = new WarpBuilder(0.8);
-                    int[] actualSplit = wb.getRowColsSplit(fullTranform, sourceDomain);
-                    if (actualSplit != null && (actualSplit[0] != 1 || actualSplit[1] != 1)) {
-                        double densifyDistance =
-                                Math.min(
-                                        sourceEnvelope.getWidth()
-                                                / Math.min(actualSplit[0], MAX_PIXELS_DENSIFY),
-                                        sourceEnvelope.getHeight()
-                                                / Math.min(actualSplit[1], MAX_PIXELS_DENSIFY));
-                        projectionHints.put("advancedProjectionDensify", densifyDistance);
+                    double tolerance = getAdvancedProjectionDensificationTolerance();
+                    if (tolerance > 0.0) {
+                        ReferencedEnvelope targetEnvelope = envelope;
+                        ReferencedEnvelope sourceEnvelope =
+                                transformEnvelope(targetEnvelope, featCrs);
+                        AffineTransform at = worldToScreenTransform;
+                        AffineTransform screenToWorldTransform = new AffineTransform(at);
+                        screenToWorldTransform.invert();
+                        MathTransform2D crsTransform =
+                                (MathTransform2D)
+                                        CRS.findMathTransform(
+                                                CRS.getHorizontalCRS(featCrs),
+                                                CRS.getHorizontalCRS(mapCRS));
+                        MathTransform2D screenTransform = new AffineTransform2D(at);
+                        MathTransform2D fullTranform =
+                                (MathTransform2D)
+                                        ConcatenatedTransform.create(crsTransform, screenTransform);
+                        MathTransform2D inverseTranform = fullTranform.inverse();
+                        Rectangle2D.Double sourceDomain =
+                                new Rectangle2D.Double(
+                                        sourceEnvelope.getMinX(),
+                                        sourceEnvelope.getMinY(),
+                                        sourceEnvelope.getWidth(),
+                                        sourceEnvelope.getHeight());
+                        WarpBuilder wb = new WarpBuilder(tolerance);
+                        double densifyDistance = 0.0;
+                        int[] actualSplit = wb.getRowColsSplit(fullTranform, sourceDomain);
+                        if (actualSplit == null) {
+                            // alghoritm gave up, we decide to use a fixed distance value
+                            densifyDistance = 5.0;
+                        } else if (actualSplit[0] != 1 || actualSplit[1] != 1) {
+                            Shape shape =
+                                    inverseTranform.createTransformedShape(
+                                            new Rectangle(MAX_PIXELS_DENSIFY, MAX_PIXELS_DENSIFY));
+
+                            Rectangle2D shapeBounds = shape.getBounds2D();
+                            densifyDistance =
+                                    Math.max(
+                                            Math.min(
+                                                    sourceEnvelope.getWidth() / actualSplit[0],
+                                                    sourceEnvelope.getHeight() / actualSplit[1]),
+                                            Math.min(
+                                                    shapeBounds.getWidth(),
+                                                    shapeBounds.getHeight()));
+                        }
+                        if (densifyDistance > 0.0) {
+                            projectionHints.put(
+                                    ProjectionHandler.ADVANCED_PROJECTION_DENSIFY, densifyDistance);
+                        }
                     }
                 }
                 if (!isWrappingHeuristicEnabled()) {
-                    projectionHints.put("datelineWrappingCheckEnabled", false);
+                    projectionHints.put(
+                            WrappingProjectionHandler.DATELINE_WRAPPING_CHECK_ENABLED, false);
                 }
                 // get the projection handler and set a tentative envelope
                 ProjectionHandler projectionHandler =

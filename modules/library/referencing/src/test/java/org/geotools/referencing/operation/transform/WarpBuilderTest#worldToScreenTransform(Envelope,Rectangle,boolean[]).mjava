@@ -1,0 +1,28 @@
+    private AffineTransform worldToScreenTransform(
+            Envelope mapExtent, Rectangle paintArea, boolean[] reverse)
+            throws NoninvertibleTransformException {
+        GeneralEnvelope gridRange =
+                new GeneralEnvelope(
+                        new double[] {0, 0},
+                        new double[] {paintArea.getWidth(), paintArea.getHeight()});
+        final Matrix matrix = MatrixFactory.create(2 + 1);
+        for (int i = 0; i < 2; i++) {
+            int j = i;
+
+            double scale = mapExtent.getSpan(j) / gridRange.getSpan(i);
+            double offset;
+            if (reverse == null || j >= reverse.length || !reverse[j]) {
+                offset = mapExtent.getMinimum(j);
+            } else {
+                scale = -scale;
+                offset = mapExtent.getMaximum(j);
+            }
+            offset -= scale * (gridRange.getLowerCorner().getOrdinate(i));
+
+            matrix.setElement(j, j, 0.0);
+            matrix.setElement(j, i, scale);
+            matrix.setElement(j, 2, offset);
+        }
+        return ((AffineTransform) ProjectiveTransform.create(matrix)).createInverse();
+    }
+
