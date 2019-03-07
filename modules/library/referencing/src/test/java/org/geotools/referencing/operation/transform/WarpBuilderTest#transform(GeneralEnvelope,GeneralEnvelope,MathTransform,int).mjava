@@ -1,0 +1,46 @@
+    private Envelope transform(
+            final GeneralEnvelope sourceEnvelope,
+            GeneralEnvelope targetEnvelope,
+            final MathTransform transform,
+            int npoints)
+            throws TransformException {
+
+        npoints++; // for the starting point.
+
+        final double[] coordinates = new double[(4 * npoints) * 2];
+        final double xmin = sourceEnvelope.getLowerCorner().getOrdinate(0);
+        final double xmax = sourceEnvelope.getUpperCorner().getOrdinate(0);
+        final double ymin = sourceEnvelope.getLowerCorner().getOrdinate(1);
+        final double ymax = sourceEnvelope.getUpperCorner().getOrdinate(1);
+        final double scaleX = (xmax - xmin) / npoints;
+        final double scaleY = (ymax - ymin) / npoints;
+
+        int offset = 0;
+
+        for (int t = 0; t < npoints; t++) {
+            final double dx = scaleX * t;
+            final double dy = scaleY * t;
+            coordinates[offset++] = xmin; // Left side, increasing toward top.
+            coordinates[offset++] = ymin + dy;
+            coordinates[offset++] = xmin + dx; // Top side, increasing toward right.
+            coordinates[offset++] = ymax;
+            coordinates[offset++] = xmax; // Right side, increasing toward bottom.
+            coordinates[offset++] = ymax - dy;
+            coordinates[offset++] = xmax - dx; // Bottom side, increasing toward left.
+            coordinates[offset++] = ymin;
+        }
+        assert offset == coordinates.length;
+        xform(transform, coordinates, coordinates);
+
+        // Now find the min/max of the result
+        if (targetEnvelope == null) {
+            return null;
+        }
+
+        for (int t = 0; t < offset; ) {
+            targetEnvelope.add(new DirectPosition2D(coordinates[t++], coordinates[t++]));
+        }
+
+        return targetEnvelope;
+    }
+

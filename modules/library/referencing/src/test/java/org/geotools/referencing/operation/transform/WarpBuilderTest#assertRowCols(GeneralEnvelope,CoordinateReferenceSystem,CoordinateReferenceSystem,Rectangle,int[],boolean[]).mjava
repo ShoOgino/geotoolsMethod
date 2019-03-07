@@ -1,0 +1,30 @@
+    private void assertRowCols(
+            GeneralEnvelope sourceEnvelope,
+            CoordinateReferenceSystem sourceCRS,
+            CoordinateReferenceSystem targetCRS,
+            Rectangle screen,
+            int[] expectedSplit,
+            boolean[] reverse)
+            throws TransformException, FactoryException, NoninvertibleTransformException {
+
+        MathTransform2D crsTransform =
+                (MathTransform2D)
+                        CRS.findMathTransform(
+                                CRS.getHorizontalCRS(sourceCRS), CRS.getHorizontalCRS(targetCRS));
+        Envelope targetEnvelope = transformEnvelope(sourceEnvelope, targetCRS);
+
+        AffineTransform at = worldToScreenTransform(targetEnvelope, screen, reverse);
+        MathTransform2D screenTransform = new AffineTransform2D(at);
+        MathTransform2D fullTranform =
+                (MathTransform2D) ConcatenatedTransform.create(crsTransform, screenTransform);
+        Rectangle2D.Double sourceDomain =
+                new Rectangle2D.Double(
+                        sourceEnvelope.getLowerCorner().getOrdinate(0),
+                        sourceEnvelope.getLowerCorner().getOrdinate(1),
+                        sourceEnvelope.getSpan(0),
+                        sourceEnvelope.getSpan(1));
+        WarpBuilder wb = new WarpBuilder(0.8);
+        int[] actualSplit = wb.getRowColsSplit(fullTranform, sourceDomain);
+        Assert.assertArrayEquals(expectedSplit, actualSplit);
+    }
+
