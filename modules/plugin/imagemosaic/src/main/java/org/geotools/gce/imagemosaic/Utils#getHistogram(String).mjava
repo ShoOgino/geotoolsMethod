@@ -14,7 +14,7 @@
             if (ehcache.isElementInMemory(file)) {
                 final Element element = ehcache.get(file);
                 if (element != null) {
-                    final Serializable value = element.getValue();
+                    final Object value = element.getObjectValue();
                     if (value != null && value instanceof Histogram) {
                         histogram = (Histogram) value;
                         return histogram;
@@ -25,12 +25,8 @@
 
         // No histogram in cache. Deserializing...
         if (histogram == null) {
-            FileInputStream fileStream = null;
-            ObjectInputStream objectStream = null;
-            try {
-
-                fileStream = new FileInputStream(file);
-                objectStream = new ObjectInputStream(fileStream);
+            try (ObjectInputStream objectStream =
+                    new ObjectInputStream(new FileInputStream(file))) {
                 histogram = (Histogram) objectStream.readObject();
                 if (ehcache != null) {
                     ehcache.put(new Element(file, histogram));
@@ -46,13 +42,6 @@
             } catch (ClassNotFoundException e) {
                 if (LOGGER.isLoggable(Level.FINE)) {
                     LOGGER.fine("Unable to parse Histogram:" + e.getLocalizedMessage());
-                }
-            } finally {
-                if (objectStream != null) {
-                    IOUtils.closeQuietly(objectStream);
-                }
-                if (fileStream != null) {
-                    IOUtils.closeQuietly(fileStream);
                 }
             }
         }
