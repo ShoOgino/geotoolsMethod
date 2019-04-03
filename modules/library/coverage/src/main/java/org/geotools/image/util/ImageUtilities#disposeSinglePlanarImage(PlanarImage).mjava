@@ -1,0 +1,50 @@
+    /**
+     * Disposes the specified image, without recursing back in the sources
+     *
+     * @param planarImage
+     */
+    public static void disposeSinglePlanarImage(PlanarImage planarImage) {
+        // Looking for an ROI image and disposing it too
+        Object roi = null;
+        try {
+            roi = planarImage.getProperty("ROI");
+        } catch (NullPointerException npe) {
+            // for some reason, chained cleanup may have already cleaned (and null) some images
+            // let's ignore it
+        }
+        if ((roi != null)
+                && ((ROI.class.equals(roi.getClass()) || (roi instanceof RenderedImage)))) {
+            if (roi instanceof ROI) {
+                ROI roiImage = (ROI) roi;
+                Rectangle bounds = roiImage.getBounds();
+                if (!(bounds.isEmpty())) {
+                    PlanarImage image = roiImage.getAsImage();
+                    if (image != null) {
+                        // do not recurse, we have ROIs that have ROIs that have ROIs ....
+                        image.dispose();
+                    }
+                }
+            } else {
+                disposeImage((RenderedImage) roi);
+            }
+        }
+
+        try {
+            // Check extended class first
+            if (planarImage instanceof WritableRenderedImageAdapter) {
+                cleanField(planarImage, "theWritableImage");
+                cleanField(planarImage, "theImage", true);
+            } else if (planarImage instanceof RenderedImageAdapter) {
+                cleanField(planarImage, "theImage");
+            }
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            // fine, we tried
+            LOGGER.log(
+                    Level.FINE,
+                    "Failed to clear rendered image adapters field to null. "
+                            + "Not a problem per se, but if the finalizer thread is not fast enough, this might result in a OOM",
+                    e);
+        }
+        planarImage.dispose();
+    }
+

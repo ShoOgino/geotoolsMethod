@@ -1,0 +1,107 @@
+    /** Test migration on a mosaic with multiple files each one having multiple coverages */
+    public void testMultiCoverageRepository(String[] coverageNames, boolean setIndexStoreName)
+            throws Exception {
+        // copy the data over
+        File testDir = tempFolder.newFolder("multi-coverage");
+        URL testUrl = URLs.fileToUrl(testDir);
+        FileUtils.copyDirectory(
+                TestData.file(NetCDFMosaicReaderTest.class, "multi-coverage"), testDir);
+
+        // create an H2 store to hold the mosaic slices
+        final String mosaicDatabasePath = new File(testDir, "customDB").getAbsolutePath();
+        Map sourceParams = new HashMap<>();
+        sourceParams.put("database", mosaicDatabasePath);
+        sourceParams.put("MVCC", "true");
+        final JDBCDataStore customStore = new H2DataStoreFactory().createDataStore(sourceParams);
+        JDBCDataStore indexStore = null;
+        try {
+            DefaultRepository repository = new DefaultRepository();
+            repository.register("mosaicSlices", customStore);
+
+            // change the configuration to refer to a store by name (mimics OpenSearch mosaic
+            // setups)
+            final File mosaicStoreConfiguration = new File(testDir, "datastore.properties");
+            FileUtils.writeStringToFile(
+                    mosaicStoreConfiguration, "StoreName=mosaicSlices", "UTF-8");
+
+            // setup the reader, will make it generate the H2 indexes
+            Hints hints = new Hints(Hints.REPOSITORY, repository);
+            testMultiCoverageMosaic(testUrl, hints);
+
+            // build the sourcestore config file
+            final File sourceStoreConfiguration = new File(testDir, "source.properties");
+            final String sourceProperties =
+                    String.format(
+                            "SPI=org.geotools.data.h2.H2DataStoreFactory\n"
+                                    + "driver=org.h2.Driver\n"
+                                    + "database=%s\n",
+                            mosaicDatabasePath.replace("\\", "\\\\"));
+            FileUtils.writeStringToFile(sourceStoreConfiguration, sourceProperties, "UTF-8");
+
+            // build the target store config file
+            final File targetStoreConfiguration = new File(testDir, "target.properties");
+            final String targetProperties =
+                    String.format(
+                            "SPI=org.geotools.data.h2.H2DataStoreFactory\n"
+                                    + "driver=org.h2.Driver\n"
+                                    + "database=%s\n"
+                                    + "user=sa\n"
+                                    + "password=",
+                            getTargetDbForProperties(testDir));
+            FileUtils.writeStringToFile(targetStoreConfiguration, targetProperties, "UTF-8");
+
+            File logDir = new File(testDir, "logs");
+            assertTrue(logDir.mkdir());
+
+            H2MigrateConfiguration config = new H2MigrateConfiguration();
+            config.setMosaicPath(testDir.getPath());
+            config.setConcurrency(1);
+            config.setTargetStoreConfiguration(targetStoreConfiguration.getPath());
+            config.setSourceStoreConfiguration(sourceStoreConfiguration.getPath());
+            if (setIndexStoreName) {
+                config.setIndexStoreName("netcdfIndex");
+            }
+            if (coverageNames != null) {
+                config.setCoverageNames(coverageNames);
+            }
+            config.setLogDirectory(logDir.getPath());
+
+            final H2Migrator migrator = new H2Migrator(config);
+            migrator.migrate();
+
+            // perform the basic migration checks
+            assertMultiCoverageMigration(testDir, logDir, config);
+
+            File netcdfStore = new File(testDir, H2Migrator.NETCDF_DATASTORE_PROPERTIES);
+            assertTrue(netcdfStore.exists());
+
+            if (setIndexStoreName) {
+                // check the netcdf_datastore contents
+                Properties indexProperties = new Properties();
+                try (InputStream is = new FileInputStream(netcdfStore)) {
+                    indexProperties.load(is);
+                    assertEquals("netcdfIndex", indexProperties.getProperty(Utils.Prop.STORE_NAME));
+                }
+
+                final String indexDatabasePath = new File(testDir, "target").getAbsolutePath();
+                sourceParams = new HashMap<>();
+                sourceParams.put("database", indexDatabasePath);
+                sourceParams.put("MVCC", "true");
+
+                indexStore = new H2DataStoreFactory().createDataStore(sourceParams);
+                repository.register("netcdfIndex", indexStore);
+            }
+
+            // reload the mosaic past migration, is it working?
+            testMultiCoverageMosaic(testUrl, hints);
+        } finally {
+            try {
+                if (indexStore != null) {
+                    indexStore.dispose();
+                }
+            } finally {
+                customStore.dispose();
+            }
+        }
+    }
+

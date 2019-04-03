@@ -1,0 +1,47 @@
+    private Class<?> getMappingInternal(ResultSet columnMetaData, Connection cx, String typeName)
+            throws SQLException {
+        if ("uuid".equalsIgnoreCase(typeName)) {
+            return UUID.class;
+        }
+
+        if ("citext".equalsIgnoreCase(typeName)) {
+            return String.class;
+        }
+
+        if (BIGDATE_UDT.equalsIgnoreCase(typeName)) {
+            return BigDate.class;
+        }
+
+        if (HStore.TYPENAME.equalsIgnoreCase(typeName)) {
+            return HStore.class;
+        }
+
+        if ("json".equalsIgnoreCase(typeName) || "jsonb".equalsIgnoreCase(typeName)) {
+            return String.class;
+        }
+
+        String gType = null;
+        if ("geometry".equalsIgnoreCase(typeName)) {
+            gType = lookupGeometryType(columnMetaData, cx, "geometry_columns", "f_geometry_column");
+        } else if ("geography".equalsIgnoreCase(typeName)) {
+            gType =
+                    lookupGeometryType(
+                            columnMetaData, cx, "geography_columns", "f_geography_column");
+        } else {
+            return null;
+        }
+
+        // decode the type into
+        if (gType == null) {
+            // it's either a generic geography or geometry not registered in the medatata tables
+            return Geometry.class;
+        } else {
+            Class geometryClass = TYPE_TO_CLASS_MAP.get(gType.toUpperCase());
+            if (geometryClass == null) {
+                geometryClass = Geometry.class;
+            }
+
+            return geometryClass;
+        }
+    }
+

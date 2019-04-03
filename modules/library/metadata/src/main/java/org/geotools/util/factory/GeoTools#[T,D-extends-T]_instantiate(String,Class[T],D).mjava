@@ -1,0 +1,59 @@
+    /**
+     * Create instance of className (or access singleton INSTANCE field).
+     *
+     * @param className Class name to instantiate
+     * @param type Class of object created
+     * @param defaultValue Default to be provided, may be null
+     * @return EntityResolver, defaults to {@link PreventLocalEntityResolver#INSTANCE} if
+     *     unavailable.
+     */
+    static <T, D extends T> T instantiate(String className, Class<T> type, D defaultValue) {
+        if (className == null) {
+            return defaultValue;
+        }
+        final Logger LOGGER = Logging.getLogger(GeoTools.class);
+        try {
+            Class<?> kind = Class.forName(className);
+            // step 1 look for instance field
+            for (Field field : kind.getDeclaredFields()) {
+                int modifier = field.getModifiers();
+                if ("INSTANCE".equals(field.getName())
+                        && Modifier.isStatic(modifier)
+                        && Modifier.isPublic(modifier)) {
+                    try {
+                        Object value = field.get(null);
+                        if (value != null && value instanceof EntityResolver) {
+                            return type.cast(value);
+                        } else {
+                            LOGGER.log(
+                                    Level.FINER,
+                                    "Unable to use ENTITY_RESOLVER: " + className + ".INSTANCE");
+                        }
+                    } catch (Throwable t) {
+                        LOGGER.log(
+                                Level.FINER,
+                                "Unable to instantiate ENTITY_RESOLVER: " + className + ".INSTANCE",
+                                t);
+                    }
+                    return defaultValue;
+                }
+            }
+            // step 2 no argument constructor
+            try {
+                Object value = kind.newInstance();
+                if (type.isInstance(value)) {
+                    return type.cast(value);
+                }
+            } catch (InstantiationException | IllegalAccessException e) {
+                LOGGER.log(
+                        Level.FINER, "Unable to instantiate ENTITY_RESOLVER: " + e.getMessage(), e);
+            }
+        } catch (ClassNotFoundException notFound) {
+            LOGGER.log(
+                    Level.FINER,
+                    "Unable to instantiate ENTITY_RESOLVER: " + notFound.getMessage(),
+                    notFound);
+        }
+        return defaultValue;
+    }
+

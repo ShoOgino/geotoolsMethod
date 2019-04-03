@@ -1,0 +1,87 @@
+    /**
+     * Returns true if the provided images are uniform color and sample model wise
+     *
+     * @param sources
+     * @return
+     */
+    private static boolean uniformImages(List<RenderedImage> sources) {
+        final int numSources = sources.size();
+
+        // get first image as reference
+        RenderedImage first = (RenderedImage) sources.get(0);
+        ColorModel firstColorModel = first.getColorModel();
+        SampleModel firstSampleModel = first.getSampleModel();
+
+        // starting point image layout
+        ImageLayout result = new ImageLayout();
+        result.setSampleModel(firstSampleModel);
+        // easy case
+        if (numSources == 1) {
+            result.setColorModel(firstColorModel);
+            return true;
+        }
+
+        // See if they all are the same
+        int firstDataType = firstSampleModel.getDataType();
+        int firstBands = firstSampleModel.getNumBands();
+        int firstSampleSize = firstSampleModel.getSampleSize()[0];
+        boolean hasIndexedColorModels = firstColorModel instanceof IndexColorModel;
+        boolean hasComponentColorModels = firstColorModel instanceof ComponentColorModel;
+        boolean hasPackedColorModels = firstColorModel instanceof PackedColorModel;
+        boolean hasUnrecognizedColorModels =
+                !hasComponentColorModels && !hasIndexedColorModels && !hasPackedColorModels;
+        boolean hasUnsupportedTypes = false;
+        int maxBands = firstBands;
+        for (int i = 1; i < numSources; i++) {
+            RenderedImage source = (RenderedImage) sources.get(i);
+            SampleModel sourceSampleModel = source.getSampleModel();
+            ColorModel sourceColorModel = source.getColorModel();
+            int sourceBands = sourceSampleModel.getNumBands();
+            int sourceDataType = sourceSampleModel.getDataType();
+            if (sourceDataType == DataBuffer.TYPE_UNDEFINED) {
+                hasUnsupportedTypes = true;
+            }
+
+            if (sourceBands > maxBands) {
+                maxBands = sourceBands;
+            }
+
+            if (sourceColorModel instanceof IndexColorModel) {
+                hasIndexedColorModels = true;
+            } else if (sourceColorModel instanceof ComponentColorModel) {
+                hasComponentColorModels = true;
+            } else if (sourceColorModel instanceof PackedColorModel) {
+                hasPackedColorModels = true;
+            } else {
+                hasUnrecognizedColorModels = true;
+            }
+
+            if (sourceDataType != firstDataType || sourceBands != firstBands) {
+                return false;
+            }
+
+            for (int j = 0; j < sourceBands; j++) {
+                if (sourceSampleModel.getSampleSize(j) != firstSampleSize) {
+                    return false;
+                }
+            }
+        }
+        if (hasUnrecognizedColorModels || hasUnsupportedTypes) {
+            return false;
+        }
+
+        // see how many types we're dealing with
+        int colorModelsTypes =
+                (hasIndexedColorModels ? 1 : 0)
+                        + (hasComponentColorModels ? 1 : 0)
+                        + (hasPackedColorModels ? 1 : 0);
+        // if uniform, we have it easy
+        if (colorModelsTypes > 1) {
+            return false;
+        }
+        if (hasIndexedColorModels) {
+            return hasUniformPalettes(sources);
+        }
+        return true;
+    }
+

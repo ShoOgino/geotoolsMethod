@@ -1,0 +1,34 @@
+    private void encodeJoinCondition(
+            FeatureChainedAttributeDescriptor nestedAttrDescr, int stepIdx, StringBuffer sql)
+            throws SQLException, IOException, FilterToSQLException {
+        FeatureChainLink parentStep = nestedAttrDescr.getLink(stepIdx);
+        FeatureChainLink nestedStep = nestedAttrDescr.getLink(stepIdx + 1);
+        FeatureTypeMapping parentFeature = parentStep.getFeatureTypeMapping();
+        JDBCDataStore store = (JDBCDataStore) parentFeature.getSource().getDataStore();
+        NestedAttributeMapping nestedFeatureAttr = parentStep.getNestedFeatureAttribute();
+        FeatureTypeMapping nestedFeature = nestedFeatureAttr.getFeatureTypeMapping(null);
+
+        String parentTableName = parentFeature.getSource().getSchema().getName().getLocalPart();
+        String parentTableAlias = parentStep.getAlias();
+        WrappedFilterToSql parentToSQL = createFilterToSQL(parentFeature);
+        // don't escape, as it will be done by the encodeColumn methods
+        parentToSQL.setSqlNameEscape("");
+        Expression parentExpression = nestedFeatureAttr.getSourceExpression();
+        String parentTableColumn = parentToSQL.encodeToString(parentExpression);
+
+        String nestedTableAlias = nestedStep.getAlias();
+        WrappedFilterToSql nestedFilterToSQL = createFilterToSQL(parentFeature);
+        // don't escape, as it will be done by the encodeColumn methods
+        nestedFilterToSQL.setSqlNameEscape("");
+        Expression nestedExpr = nestedFeatureAttr.getMapping(nestedFeature).getSourceExpression();
+        String nestedTableColumn = nestedFilterToSQL.encodeToString(nestedExpr);
+
+        if (stepIdx == 0) {
+            encodeColumnName(store, parentTableColumn, parentTableName, sql, null);
+        } else {
+            encodeAliasedColumnName(store, parentTableColumn, parentTableAlias, sql, null);
+        }
+        sql.append(" = ");
+        encodeAliasedColumnName(store, nestedTableColumn, nestedTableAlias, sql, null);
+    }
+

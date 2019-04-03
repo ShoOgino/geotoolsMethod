@@ -1,0 +1,39 @@
+        public void encode(Envelope bounds, String srsName) {
+            // DJB: old behavior for null bounds:
+            //
+            // <gml:Box srsName="http://www.opengis.net/gml/srs/epsg.xml#0">
+            // <gml:coordinates decimal="." cs="," ts=" ">0,0 -1,-1</gml:coordinates>
+            // </gml:Box>
+            //
+            // new behavior:
+            // <gml:null>unknown</gml:null>
+            if (bounds == null || bounds.isNull()) {
+                encodeNullBounds();
+
+                return; // we're done!
+            }
+            String boxName = boxName();
+
+            if ((srsName == null) || srsName.equals("")) {
+                start(boxName);
+            } else {
+                AttributesImpl atts = new AttributesImpl();
+                atts.addAttribute("", "srsName", "srsName", "", srsName);
+                start(boxName, atts);
+            }
+
+            try {
+                double[] coords = new double[4];
+                coords[0] = bounds.getMinX();
+                coords[1] = bounds.getMinY();
+                coords[2] = bounds.getMaxX();
+                coords[3] = bounds.getMaxY();
+                CoordinateSequence coordSeq = new PackedCoordinateSequence.Double(coords, 2, 0);
+                coordWriter.writeCoordinates(coordSeq, contentHandler);
+            } catch (SAXException se) {
+                throw new RuntimeException(se);
+            }
+
+            end(boxName);
+        }
+

@@ -1,0 +1,70 @@
+    /**
+     * Checks for GML element start and - if not a coordinates element - sends it directly on down
+     * the chain to the appropriate parent handler. If it is a coordinates (or coord) element, it
+     * uses internal methods to set the current state of the coordinates reader appropriately.
+     *
+     * @param namespaceURI The namespace of the element.
+     * @param localName The local name of the element.
+     * @param qName The full name of the element, including namespace prefix.
+     * @param atts The element attributes.
+     * @throws SAXException Some parsing error occured while reading coordinates.
+     * @task HACK:The method for determining if something is a feature or not is too crude.
+     */
+    public void startElement(String namespaceURI, String localName, String qName, Attributes atts)
+            throws SAXException {
+        characters.setLength(0);
+
+        if (localName.endsWith("Collection")) {
+            // _log.debug("starting a collection with namespace " + NAMESPACE + " and Name " +
+            // localName);
+            return;
+        }
+
+        // if it ends with Member we'll assume it's a feature for the time being
+        // nasty hack to fix members of multi lines and polygons
+        if (isFeatureMember(localName)) {
+            attributes = new Vector();
+            attributeNames = new Vector();
+
+            // currentFeature = new FeatureFlat();
+            insideFeature = true;
+            tempValue = null;
+
+            // _log.debug("Starting a feature " + localName);
+        } else if (insideFeature) {
+            // _log.debug("inside feature " + localName);
+            for (int i = 0; i < atts.getLength(); i++) {
+                String name = atts.getLocalName(i);
+
+                if (name.equalsIgnoreCase("fid")) {
+                    // currentFeature.setTypeName(localName);
+                    typeName = localName;
+
+                    // _log.debug("set type name " + localName);
+                    fid = atts.getValue(i);
+                } else {
+                    attributes.add(atts.getValue(i));
+                    attributeNames.add(name);
+                }
+            }
+
+            if (!typeName.equalsIgnoreCase(localName)) {
+                if (attName.equals("")) {
+                    // _log.debug("setting attName to " + localName);
+                    attName = localName;
+                } else {
+                    // _log.debug("adding " + localName + " to " + attName);
+                    attName = attName + "/" + localName;
+                }
+
+                // _log.debug("attName now equals " + attName);
+            }
+
+            insideAttribute = true;
+
+            return;
+        } else if (!insideAttribute) {
+            parent.startElement(namespaceURI, localName, qName, atts);
+        }
+    }
+

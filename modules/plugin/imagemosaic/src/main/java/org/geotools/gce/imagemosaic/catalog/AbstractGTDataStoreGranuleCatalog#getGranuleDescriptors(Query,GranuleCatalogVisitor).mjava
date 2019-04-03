@@ -4,62 +4,51 @@
         Utilities.ensureNonNull("query", query);
         final Query q = mergeHints(query);
         String typeName = q.getTypeName();
-        final Lock lock = rwLock.readLock();
-        try {
-            lock.lock();
-            checkStore();
+        checkStore();
 
-            //
-            // Load tiles informations, especially the bounds, which will be
-            // reused
-            //
-            final SimpleFeatureSource featureSource =
-                    getTileIndexStore().getFeatureSource(typeName);
-            if (featureSource == null) {
-                throw new NullPointerException(
-                        "The provided SimpleFeatureSource is null, it's impossible to create an index!");
-            }
+        //
+        // Load tiles informations, especially the bounds, which will be
+        // reused
+        //
+        final SimpleFeatureSource featureSource = getTileIndexStore().getFeatureSource(typeName);
+        if (featureSource == null) {
+            throw new NullPointerException(
+                    "The provided SimpleFeatureSource is null, it's impossible to create an index!");
+        }
 
-            final SimpleFeatureCollection features = featureSource.getFeatures(q);
-            if (features == null)
-                throw new NullPointerException(
-                        "The provided SimpleFeatureCollection is null, it's impossible to create an index!");
+        final SimpleFeatureCollection features = featureSource.getFeatures(q);
+        if (features == null)
+            throw new NullPointerException(
+                    "The provided SimpleFeatureCollection is null, it's impossible to create an index!");
 
-            if (LOGGER.isLoggable(Level.FINE)) LOGGER.fine("Index Loaded");
+        if (LOGGER.isLoggable(Level.FINE)) LOGGER.fine("Index Loaded");
 
-            // visiting the features from the underlying store, caring for early bail out
-            try (SimpleFeatureIterator fi = features.features()) {
-                while (fi.hasNext() && !visitor.isVisitComplete()) {
-                    final SimpleFeature sf = fi.next();
-                    MultiLevelROI footprint = getGranuleFootprint(sf);
-                    if (footprint == null || !footprint.isEmpty()) {
-                        try {
-                            final GranuleDescriptor granule =
-                                    new GranuleDescriptor(
-                                            sf,
-                                            suggestedFormat,
-                                            suggestedRasterSPI,
-                                            suggestedIsSPI,
-                                            pathType,
-                                            locationAttribute,
-                                            parentLocation,
-                                            footprint,
-                                            heterogeneous,
-                                            q.getHints());
+        // visiting the features from the underlying store, caring for early bail out
+        try (SimpleFeatureIterator fi = features.features()) {
+            while (fi.hasNext() && !visitor.isVisitComplete()) {
+                final SimpleFeature sf = fi.next();
+                MultiLevelROI footprint = getGranuleFootprint(sf);
+                if (footprint == null || !footprint.isEmpty()) {
+                    try {
+                        final GranuleDescriptor granule =
+                                new GranuleDescriptor(
+                                        sf,
+                                        suggestedFormat,
+                                        suggestedRasterSPI,
+                                        suggestedIsSPI,
+                                        pathType,
+                                        locationAttribute,
+                                        parentLocation,
+                                        footprint,
+                                        heterogeneous,
+                                        q.getHints());
 
-                            visitor.visit(granule, sf);
-                        } catch (Exception e) {
-                            LOGGER.log(Level.FINE, "Skipping invalid granule", e);
-                        }
+                        visitor.visit(granule, sf);
+                    } catch (Exception e) {
+                        LOGGER.log(Level.FINE, "Skipping invalid granule", e);
                     }
                 }
             }
-        } catch (Throwable e) {
-            final IOException ioe = new IOException();
-            ioe.initCause(e);
-            throw ioe;
-        } finally {
-            lock.unlock();
         }
     }
 

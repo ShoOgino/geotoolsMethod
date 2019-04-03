@@ -1,0 +1,50 @@
+    private TWKBMetadata readMetadata() throws IOException {
+        int geometryTypeAndPrecision = dis.readByte();
+        int geometryType = geometryTypeAndPrecision & 0x0F;
+        int precision = zigzagDecode((geometryTypeAndPrecision & 0xF0) >>> 4);
+
+        metadata.setType(geometryType);
+        metadata.setPrecision(precision);
+
+        byte header = dis.readByte();
+        metadata.setHeader(header);
+
+        int dims = 2;
+        if (metadata.hasExtendedDims()) {
+            int dimensions = dis.readByte();
+
+            if ((dimensions & 0x01) > 0) {
+                dims += 1;
+                metadata.setHasM(true);
+                metadata.setMprecision((dimensions & 0xE0) >> 5);
+            }
+            if ((dimensions & 0x02) > 0) {
+                dims += 1;
+                metadata.setHasZ(true);
+                metadata.setZprecision((dimensions & 0x1C) >> 2);
+            }
+        }
+        metadata.setDims(dims);
+
+        // TODO: Read optional size?
+        if (metadata.hasSize()) {
+            metadata.setSize(dis.readSignedInt());
+        } else {
+            metadata.setSize(1);
+        }
+
+        if (metadata.hasBBOX()) {
+            CoordinateSequence bbox = csFactory.create(2, dims);
+            for (int i = 0; i < dims; i++) {
+                double min = readNextDouble(metadata.getScale(0));
+                double delta = readNextDouble(metadata.getScale(0));
+                bbox.setOrdinate(0, i, min);
+                bbox.setOrdinate(1, i, min + delta);
+            }
+            // System.out.println("BBOX read " + bbox);
+            metadata.setEnvelope(bbox);
+        }
+
+        return metadata;
+    }
+

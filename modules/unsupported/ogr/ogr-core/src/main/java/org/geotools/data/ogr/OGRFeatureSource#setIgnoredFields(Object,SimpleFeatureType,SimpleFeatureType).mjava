@@ -2,27 +2,29 @@
             Object layer, SimpleFeatureType querySchema, SimpleFeatureType sourceSchema)
             throws IOException {
         if (ogr.LayerCanIgnoreFields(layer)) {
-            List<String> ignoredFields = new ArrayList<String>();
-            ignoredFields.add("OGR_STYLE");
-            // if no geometry, skip it
-            if (querySchema.getGeometryDescriptor() == null) {
-                ignoredFields.add("OGR_GEOMETRY");
-            }
-            // process all other attributes
-            for (AttributeDescriptor ad : sourceSchema.getAttributeDescriptors()) {
-                if (!(ad instanceof GeometryDescriptor)) {
-                    String name = ad.getLocalName();
-                    if (querySchema.getDescriptor(name) == null) {
-                        ignoredFields.add(name);
+            if (querySchema.equals(sourceSchema)) {
+                ogr.LayerSetIgnoredFields(layer, null);
+            } else {
+                List<String> ignoredFields = new ArrayList<String>();
+                ignoredFields.add("OGR_STYLE");
+                // if no geometry, skip it
+                if (querySchema.getGeometryDescriptor() == null) {
+                    ignoredFields.add("OGR_GEOMETRY");
+                }
+                // process all other attributes
+                for (AttributeDescriptor ad : sourceSchema.getAttributeDescriptors()) {
+                    if (!(ad instanceof GeometryDescriptor)) {
+                        String name = ad.getLocalName();
+                        if (querySchema.getDescriptor(name) == null) {
+                            ignoredFields.add(name);
+                        }
                     }
                 }
-            }
-            if (ignoredFields.size() > 0) {
-                // the list should be NULL terminated
-                ignoredFields.add(null);
-                String[] ignoredFieldsArr =
-                        (String[]) ignoredFields.toArray(new String[ignoredFields.size()]);
-                ogr.CheckError(ogr.LayerSetIgnoredFields(layer, ignoredFieldsArr));
+                if (ignoredFields.size() > 0) {
+                    String[] ignoredFieldsArr =
+                            (String[]) ignoredFields.toArray(new String[ignoredFields.size()]);
+                    ogr.CheckError(ogr.LayerSetIgnoredFields(layer, ignoredFieldsArr));
+                }
             }
         }
     }

@@ -1,0 +1,58 @@
+    private void updateMosaicConfiguration(String[] coverageNames)
+            throws JAXBException, IOException {
+        // create the aux store config file
+        File netcdfStore =
+                new File(configuration.getMosaicDirectory(), NETCDF_DATASTORE_PROPERTIES);
+        try (OutputStream os = new FileOutputStream(netcdfStore)) {
+            if (configuration.getIndexStoreName() != null) {
+                Properties properties = new Properties();
+                properties.put(Utils.Prop.STORE_NAME, configuration.getIndexStoreName());
+                properties.store(os, null);
+            } else {
+                configuration.getTargetStoreConfiguration().store(os, null);
+            }
+        }
+
+        // read, update and rewrite the indexer file
+        final File indexerFile = new File(configuration.getMosaicDirectory(), "indexer.xml");
+        final Indexer indexer = Utils.unmarshal(indexerFile);
+        final List<Parameter> parameters = indexer.getParameters().getParameter();
+        Optional<Parameter> indexerParameter =
+                getParameter(Utils.Prop.AUXILIARY_DATASTORE_FILE, parameters);
+        if (indexerParameter.isPresent()) {
+            indexerParameter.get().setValue(NETCDF_DATASTORE_PROPERTIES);
+        } else {
+            final Parameter param = new Parameter();
+            param.setName(Utils.Prop.AUXILIARY_DATASTORE_FILE);
+            param.setValue(NETCDF_DATASTORE_PROPERTIES);
+            parameters.add(param);
+        }
+        Optional<Parameter> auxParameter = getParameter(Utils.Prop.AUXILIARY_FILE, parameters);
+        if (!auxParameter.isPresent()) {
+            final Parameter param = new Parameter();
+            param.setName(Utils.Prop.AUXILIARY_FILE);
+            param.setValue("_auxiliary.xml");
+            parameters.add(param);
+        }
+        Utils.marshal(indexer, indexerFile);
+        LOGGER.info("Indexer.xml updated with auxiliary data store!");
+
+        // read, update and rewrite the coverage config files
+        for (String coverageName : coverageNames) {
+            File configFile =
+                    new File(configuration.getMosaicDirectory(), coverageName + ".properties");
+            Properties properties = new Properties();
+            try (FileInputStream is = new FileInputStream(configFile)) {
+                properties.load(is);
+            }
+            properties.put(Utils.Prop.AUXILIARY_DATASTORE_FILE, NETCDF_DATASTORE_PROPERTIES);
+            if (properties.get(Utils.Prop.AUXILIARY_FILE) == null) {
+                properties.put(Utils.Prop.AUXILIARY_FILE, "_auxiliary.xml");
+            }
+            try (FileOutputStream os = new FileOutputStream(configFile)) {
+                properties.store(os, null);
+            }
+            LOGGER.info(configFile.getName() + " updated with auxiliary data store!");
+        }
+    }
+

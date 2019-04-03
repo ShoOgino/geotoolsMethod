@@ -1,0 +1,99 @@
+    /**
+     * Build the XSD definition for the provided type.
+     *
+     * <p>The generated definition is recorded in the XSDSchema prior to being returned.
+     *
+     * @param xsd The XSDSchema being worked on
+     * @param type ComplexType to capture as an encoding, usually a SimpleFeatureType
+     * @param BASE_TYPE definition to use as the base type, or null
+     * @return XSDComplexTypeDefinition generated for the provided type
+     */
+    @SuppressWarnings("unchecked")
+    protected XSDComplexTypeDefinition xsd(
+            XSDSchema xsd, ComplexType type, final XSDComplexTypeDefinition BASE_TYPE) {
+        XSDFactory factory = XSDFactory.eINSTANCE;
+
+        XSDComplexTypeDefinition definition = factory.createXSDComplexTypeDefinition();
+        definition.setName(type.getName().getLocalPart());
+        definition.setDerivationMethod(XSDDerivationMethod.EXTENSION_LITERAL);
+
+        if (BASE_TYPE != null) {
+            definition.setBaseTypeDefinition(BASE_TYPE);
+        }
+        List<String> skip = Collections.emptyList();
+        if (BASE_TYPE != null && "AbstractFeatureType".equals(BASE_TYPE.getName())) {
+            // should look at ABSTRACT_FEATURE_TYPE to determine contents to skip
+            skip = Arrays.asList(new String[] {"nounds", "description", "boundedBy"});
+        }
+
+        // attributes
+        XSDModelGroup attributes = factory.createXSDModelGroup();
+        attributes.setCompositor(XSDCompositor.SEQUENCE_LITERAL);
+
+        Name anyName = new NameImpl(XS.NAMESPACE, XS.ANYTYPE.getLocalPart());
+
+        for (PropertyDescriptor descriptor : type.getDescriptors()) {
+
+            if (descriptor instanceof AttributeDescriptor) {
+                AttributeDescriptor attributeDescriptor = (AttributeDescriptor) descriptor;
+
+                if (skip.contains(attributeDescriptor.getLocalName())) {
+                    continue;
+                }
+
+                XSDElementDeclaration attribute = factory.createXSDElementDeclaration();
+                attribute.setName(attributeDescriptor.getLocalName());
+                attribute.setNillable(attributeDescriptor.isNillable());
+
+                Name name = attributeDescriptor.getType().getName();
+
+                // return the first match.
+                if (!anyName.equals(name)) {
+                    AttributeType attributeType = attributeDescriptor.getType();
+
+                    if (attributeType instanceof ComplexType) {
+                        ComplexType complexType = (ComplexType) attributeType;
+                        // any complex contents must resolve (we cannot encode against
+                        // an abstract type for example)
+                        if (xsd.resolveTypeDefinition(name.getNamespaceURI(), name.getLocalPart())
+                                == null) {
+                            // not yet added; better add it into the mix
+                            xsd(xsd, complexType, null);
+                        }
+                    } else {
+                        Class<?> binding = attributeType.getBinding();
+                        Entry<Name, AttributeType> entry = searchSchemas(binding);
+                        if (entry == null) {
+                            throw new IllegalStateException(
+                                    "No type for "
+                                            + attribute.getName()
+                                            + " ("
+                                            + binding.getName()
+                                            + ")");
+                        }
+                        name = entry.getKey();
+                    }
+                }
+
+                XSDTypeDefinition attributeDefinition =
+                        xsd.resolveTypeDefinition(name.getNamespaceURI(), name.getLocalPart());
+                attribute.setTypeDefinition(attributeDefinition);
+
+                XSDParticle particle = factory.createXSDParticle();
+                particle.setMinOccurs(attributeDescriptor.getMinOccurs());
+                particle.setMaxOccurs(attributeDescriptor.getMaxOccurs());
+                particle.setContent(attribute);
+                attributes.getContents().add(particle);
+            }
+        }
+
+        // set up fatureType with attributes
+        XSDParticle contents = factory.createXSDParticle();
+        contents.setContent(attributes);
+
+        definition.setContent(contents);
+        xsd.getContents().add(definition);
+
+        return definition;
+    }
+

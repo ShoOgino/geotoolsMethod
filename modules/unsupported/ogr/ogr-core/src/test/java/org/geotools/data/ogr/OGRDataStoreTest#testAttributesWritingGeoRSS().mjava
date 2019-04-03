@@ -1,12 +1,13 @@
     public void testAttributesWritingGeoRSS() throws Exception {
         if (!ogrSupports("GeoRSS")) {
-            System.out.println("Skipping GeoRSS writing test as OGR was not built to support it");
+            LOGGER.warning("Skipping GeoRSS writing test as OGR was not built to support it");
+            return;
         }
         // Write
         SimpleFeatureCollection features = createFeatureCollection();
         File tmpFile = getTempFile("test-georss", ".rss");
         tmpFile.delete();
-        OGRDataStore s = new OGRDataStore(tmpFile.getAbsolutePath(), "GeoRSS", null, ogr);
+        OGRDataStore s = createDataStore(tmpFile.getAbsolutePath(), "GeoRSS");
         s.createSchema(
                 features,
                 true,
@@ -17,7 +18,16 @@
                     "TITLE=f",
                     "DESCRIPTION=f"
                 });
-        assertEquals(1, s.getTypeNames().length);
+        try {
+            assertEquals(1, s.getTypeNames().length);
+        } catch (IOException e) {
+            if (e.getMessage().startsWith("OGR could not open")) {
+                LOGGER.log(Level.WARNING, "OGR is missing some support library, test skipped", e);
+                return;
+            } else {
+                throw e;
+            }
+        }
         SimpleFeatureCollection fc = s.getFeatureSource("georss").getFeatures();
         assertEquals(features.size(), fc.size());
         // Read

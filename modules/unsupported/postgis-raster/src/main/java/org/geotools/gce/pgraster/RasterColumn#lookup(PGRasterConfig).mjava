@@ -1,0 +1,162 @@
+    static RasterColumn lookup(PGRasterConfig config) throws SQLException {
+
+        try (Connection cx = config.dataSource.getConnection()) {
+
+            // load the column
+            SQL sql =
+                    new SQL()
+                            .append(
+                                    "SELECT r_table_schema, r_table_name, r_raster_column, srid, num_bands, ")
+                            .append("ST_AsText(extent) as extent, scale_x, scale_y")
+                            .append(" FROM raster_columns")
+                            .append(" WHERE r_table_name = ?");
+
+            if (config.schema != null) {
+                sql.append(" AND r_table_schema = ?");
+            }
+            if (config.column != null) {
+                sql.append(" AND r_raster_column = ?");
+            }
+
+            RasterColumn col = null;
+            try (PreparedStatement st = cx.prepareStatement(sql.logAndGet(LOG))) {
+                st.setString(1, config.table);
+                if (config.schema != null) {
+                    st.setString(2, config.schema);
+                }
+                if (config.column != null) {
+                    st.setString(2 + (config.schema == null ? 0 : 1), config.column);
+                }
+
+                try (ResultSet rc = st.executeQuery()) {
+                    while (rc.next()) {
+                        if (col != null)
+                            throw new IllegalArgumentException(
+                                    "Multiple raster columns found for table '"
+                                            + col.tableKey()
+                                            + "', please specify one in config");
+
+                        col = new RasterColumn(rc);
+
+                        // srid
+                        int srid = rc.getInt("srid");
+                        if (srid == 0) {
+                            // grab it from the actual table
+                            srid = fetchSrid(col, cx);
+                        }
+                        if (srid != 0) {
+                            col.srid = srid;
+                            try {
+                                col.crs = CRS.decode("EPSG:" + srid);
+                            } catch (Exception e) {
+                                LOG.log(
+                                        Level.WARNING,
+                                        "Error looking up SRS for srid = " + srid,
+                                        e);
+                            }
+                        }
+                        if (col.crs == null) {
+                            // TODO: look up wkt
+                            LOG.warning("Unable to determine crs for raster column: " + col.key());
+                        }
+
+                        // extent
+                        String extent = rc.getString("extent");
+                        if (extent == null) {
+                            // grab it from the table
+                            extent = fetchExtent(col, cx);
+                        }
+                        if (extent != null) {
+                            col.extent = parseExtent(extent);
+                        }
+
+                        if (col.extent == null) {
+                            LOG.warning(
+                                    "Unable to determine extent for raster column: " + col.key());
+                        }
+
+                        // scale
+                        Point2D.Double scale =
+                                new Point2D.Double(
+                                        rc.getDouble("scale_x"), rc.getDouble("scale_y"));
+
+                        if (scale.x == 0d || scale.y == 0d) {
+                            scale = fetchScale(col, cx);
+                        }
+
+                        if (scale != null && scale.x > 0d) {
+                            col.scale = scale;
+                            col.scale.y = Math.abs(col.scale.y);
+                        }
+
+                        if (col.scale == null) {
+                            LOG.warning(
+                                    "Unable to determine scale for raster column: " + col.key());
+                        }
+
+                        if (col.extent != null && col.scale != null) {
+                            col.size =
+                                    new Dimension(
+                                            (int) (col.extent.getWidth() / col.scale.x),
+                                            (int) (col.extent.getHeight() / col.scale.y));
+                        }
+
+                        // num bands
+                        int numBands = rc.getInt("num_bands");
+                        if (numBands == 0) {
+                            numBands = fetchNumBands(col, cx);
+                        }
+                        if (numBands > 0) {
+                            col.numBands = numBands;
+                        }
+
+                        // time?
+                        if (config.time.enabled) {
+                            TimeColumn time = fetchTime(col, config.time, cx);
+                            if (time != null) {
+                                col.time = time;
+                            }
+                        }
+                    }
+                }
+
+                if (col == null) {
+                    String dump =
+                            "schema = "
+                                    + config.schema
+                                    + ", table = "
+                                    + config.table
+                                    + ", column = "
+                                    + config.column;
+                    throw new IllegalArgumentException(
+                            "No raster column found for config: " + dump);
+                }
+            }
+
+            // load it's overviews
+            sql =
+                    new SQL()
+                            .append("SELECT * FROM raster_overviews")
+                            .append(" WHERE r_table_name = ?")
+                            .append(" AND r_table_schema = ?")
+                            .append(" AND r_raster_column = ?")
+                            .append(" ORDER BY overview_factor ASC");
+
+            try (PreparedStatement ps = cx.prepareCall(sql.logAndGet(LOG))) {
+                ps.setString(1, col.table);
+                ps.setString(2, col.schema);
+                ps.setString(3, col.name);
+
+                try (ResultSet ov = ps.executeQuery()) {
+                    while (ov.next()) {
+                        RasterOverview overview = new RasterOverview(ov);
+                        overview.extent = fetchAndParseExtent(overview, cx);
+                        col.overview(overview);
+                    }
+                }
+            }
+
+            return col;
+        }
+    }
+

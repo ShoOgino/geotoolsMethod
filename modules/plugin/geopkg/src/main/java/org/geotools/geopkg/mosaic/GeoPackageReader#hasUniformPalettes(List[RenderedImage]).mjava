@@ -1,0 +1,59 @@
+    private static boolean hasUniformPalettes(List<RenderedImage> sources) {
+        // all indexed, but are the palettes the same?
+        RenderedImage first = sources.get(0);
+        IndexColorModel reference = (IndexColorModel) first.getColorModel();
+        int mapSize = reference.getMapSize();
+        byte[] reference_reds = new byte[mapSize];
+        byte[] reference_greens = new byte[mapSize];
+        byte[] reference_blues = new byte[mapSize];
+        byte[] reference_alphas = new byte[mapSize];
+        byte[] reds = new byte[mapSize];
+        byte[] greens = new byte[mapSize];
+        byte[] blues = new byte[mapSize];
+        byte[] alphas = new byte[mapSize];
+        reference.getReds(reference_reds);
+        reference.getGreens(reference_greens);
+        reference.getBlues(reference_blues);
+        reference.getAlphas(reference_alphas);
+        boolean uniformPalettes = true;
+        final int numSources = sources.size();
+        for (int i = 1; i < numSources; i++) {
+            RenderedImage source = sources.get(i);
+
+            IndexColorModel sourceColorModel = (IndexColorModel) source.getColorModel();
+
+            // check the basics
+            if (reference.getNumColorComponents() != sourceColorModel.getNumColorComponents()) {
+                throw new IllegalArgumentException(
+                        "Cannot mosaic togheter images with index "
+                                + "color models having different numbers of color components:\n "
+                                + reference
+                                + "\n"
+                                + sourceColorModel);
+            }
+
+            // if not the same color space, then we need to expand
+            if (!reference.getColorSpace().equals(reference.getColorSpace())) {
+                return false;
+            }
+
+            if (!sourceColorModel.equals(reference) || sourceColorModel.getMapSize() != mapSize) {
+                uniformPalettes = false;
+                break;
+            }
+            // the above does not compare the rgb(a) arrays, do it
+            sourceColorModel.getReds(reds);
+            sourceColorModel.getGreens(greens);
+            sourceColorModel.getBlues(blues);
+            sourceColorModel.getAlphas(alphas);
+            if (!Arrays.equals(reds, reference_reds)
+                    || !Arrays.equals(greens, reference_greens)
+                    || !Arrays.equals(blues, reference_blues)
+                    || !Arrays.equals(alphas, reference_alphas)) {
+                uniformPalettes = false;
+                break;
+            }
+        }
+        return uniformPalettes;
+    }
+

@@ -1,0 +1,21 @@
+    public Geometry parse(byte[] wkb) throws HanaWKBParserException {
+        data = ByteBuffer.wrap(wkb);
+        try {
+            readAndSetByteOrder();
+            int typeCode = data.getInt();
+
+            GeometryType type = getGeometryType(typeCode);
+            xyzmMode = getXyzmMode(typeCode);
+            dimension = xyzmMode.getCoordinatesPerPoint();
+            jtsDimension = xyzmMode.hasM() ? dimension - 1 : dimension;
+
+            Geometry geometry = parseGeometryOfType(type);
+            if (data.hasRemaining()) {
+                throw new HanaWKBParserException("There is unparsed WKB data left");
+            }
+            return geometry;
+        } catch (BufferUnderflowException e) {
+            throw new HanaWKBParserException("WKB is too short", e);
+        }
+    }
+

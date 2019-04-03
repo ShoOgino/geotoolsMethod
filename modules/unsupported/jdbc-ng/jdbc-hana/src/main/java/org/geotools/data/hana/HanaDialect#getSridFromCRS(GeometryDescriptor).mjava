@@ -1,0 +1,27 @@
+    private Integer getSridFromCRS(GeometryDescriptor gd) {
+        if (gd.getCoordinateReferenceSystem() == null) {
+            return null;
+        }
+        try {
+            CoordinateReferenceSystem crs = gd.getCoordinateReferenceSystem();
+            Integer srid = CRS.lookupEpsgCode(crs, true);
+
+            // Unlike other databases, HANA does not distinguish between a geometry and a geography
+            // datatype. Instead, HANA carries out its computation on the surface of an ellipsoid
+            // of revolution if the CRS is geographic. However, lots of software expects that
+            // computations are carried out on a Euclidean plane. Therefore, by convention "flat"
+            // versions of geographics CRS' are created with an SRID offset of 10^9. In GeoTools
+            // the default seems to be to use the "flat" version. We adapt the SRID here.
+            if (srid != null) {
+                SingleCRS hcrs = CRS.getHorizontalCRS(crs);
+                if (hcrs instanceof GeographicCRS) {
+                    srid += 1000000000;
+                }
+            }
+            return srid;
+        } catch (Exception e) {
+            LOGGER.log(Level.FINE, "Error looking up the epsg code for metadata insertion", e);
+        }
+        return null;
+    }
+

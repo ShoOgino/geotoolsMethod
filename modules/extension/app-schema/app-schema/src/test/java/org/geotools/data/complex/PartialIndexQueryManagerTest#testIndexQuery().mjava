@@ -1,0 +1,34 @@
+    @Test
+    public void testIndexQuery() throws IOException, URISyntaxException {
+        try (TestFeatureSource fsource =
+                new TestFeatureSource(
+                        "/test-data/index/",
+                        "stationsIndexed.xml",
+                        "http://www.stations.org/1.0",
+                        "stationsIndexed")) {
+            Filter filter = partialIndexedFilter_2idxfilterResults();
+            Query query = new Query("stationsIndexed", filter);
+            PartialIndexQueryManager piqm =
+                    new PartialIndexQueryManager(fsource.getMappedSource().getMapping(), query);
+            Query indexQuery = piqm.getIndexQuery();
+            assertNotNull(indexQuery);
+            // Check expected indexOnlyFilter:
+            List<Filter> filters = Arrays.asList(totallyIndexedFilter(), totallyIndexedFilter2());
+            Filter expectedFilter = ff.and(filters);
+            assertTrue(expectedFilter.equals(indexQuery.getFilter()));
+
+            // check build new combined query:
+            Query combQuery = piqm.buildCombinedQuery(indexFeatureCollection());
+            assertNotNull(combQuery);
+            Filter ultimateFilter = combQuery.getFilter();
+            assertNotEquals(filter, ultimateFilter);
+            assertTrue(ultimateFilter instanceof And);
+            And mainAnd = (And) ultimateFilter;
+            assertEquals(
+                    mainAnd.getChildren().get(0),
+                    buildIdInExpression(
+                            Arrays.asList(new String[] {"st.2", "st.3"}),
+                            fsource.getMappedSource().getMapping()));
+        }
+    }
+

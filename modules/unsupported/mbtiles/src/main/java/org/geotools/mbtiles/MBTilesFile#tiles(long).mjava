@@ -1,9 +1,18 @@
+    @SuppressWarnings("PMD.CloseResource")
     public TileIterator tiles(long zoomLevel) throws SQLException {
-        Connection cx = connPool.getConnection();
-        PreparedStatement ps =
-                prepare(cx, format("SELECT * FROM %s WHERE zoom_level=?", TABLE_TILES))
-                        .set(zoomLevel)
-                        .statement();
-        return new TileIterator(ps.executeQuery());
+        Connection cx = null;
+        PreparedStatement ps = null;
+        try {
+            cx = connPool.getConnection();
+            ps =
+                    prepare(cx, format("SELECT * FROM %s WHERE zoom_level=?", TABLE_TILES))
+                            .set(zoomLevel)
+                            .statement();
+            return new TileIterator(ps.executeQuery(), ps, cx);
+        } catch (Exception e) {
+            close(ps);
+            close(cx);
+            throw e;
+        }
     }
 

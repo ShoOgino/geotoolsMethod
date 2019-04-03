@@ -9,15 +9,27 @@
         // getting the new ROI property
         if (forceUpdate || roi != null) {
             Object prop = null;
+            RenderedImage localImage = image;
+            // there might be the case that the image comes from a bandMerge
+            // so let's try to extract the ROI from the source image
+            if (localImage instanceof RenderedOp) {
+                String operationName = ((RenderedOp) localImage).getOperationName();
+                if ("BandMerge".equalsIgnoreCase(operationName)) {
+                    Vector<RenderedImage> sources = localImage.getSources();
+                    if (!sources.isEmpty()) {
+                        localImage = sources.get(0);
+                    }
+                }
+            }
             if (opName != null) {
                 // Extract the roi using a property generator
                 PropertyGenerator gen =
                         getOperationDescriptor(opName)
                                 .getPropertyGenerators(RenderedRegistryMode.MODE_NAME)[0];
-                prop = gen.getProperty("roi", image);
+                prop = gen.getProperty("roi", localImage);
             } else {
                 // extract the roi from the image
-                prop = image.getProperty("roi");
+                prop = localImage.getProperty("roi");
             }
             // Actual ROI update
             if (prop != null && prop instanceof ROI) {

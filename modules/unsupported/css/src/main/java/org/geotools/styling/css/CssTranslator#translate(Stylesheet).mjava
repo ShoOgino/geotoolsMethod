@@ -11,11 +11,6 @@
         int autoThreshold = getAutoThreshold(stylesheet);
 
         List<CssRule> topRules = stylesheet.getRules();
-        List<CssRule> allRules = expandNested(topRules);
-
-        if (LOGGER.isLoggable(Level.FINE)) {
-            LOGGER.fine("Starting with " + allRules.size() + "  rules in the stylesheet");
-        }
 
         // prepare the full SLD builder
         StyleBuilder styleBuilder = new StyleBuilder();
@@ -25,8 +20,26 @@
 
         int translatedRuleCount = 0;
         if (mode == TranslationMode.Flat) {
+            final List<CssRule> flattened =
+                    topRules.stream()
+                            .map(CssRule::flattenPseudoSelectors)
+                            .collect(Collectors.toList());
+            List<CssRule> allRules = expandNested(flattened);
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine(
+                        "Starting cascaded translation with "
+                                + allRules.size()
+                                + "  rules in the stylesheet");
+            }
             translatedRuleCount = translateFlat(allRules, styleBuilder);
         } else {
+            List<CssRule> allRules = expandNested(topRules);
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine(
+                        "Starting cascaded translation with "
+                                + allRules.size()
+                                + "  rules in the stylesheet");
+            }
             translatedRuleCount =
                     translateCss(mode, allRules, styleBuilder, maxCombinations, autoThreshold);
         }

@@ -14,50 +14,44 @@
             GridCoverageFactory coverageFactory)
             throws IOException {
         Date start = new Date();
-        Connection con = null;
         List<ImageDecoderThread> threads = new ArrayList<ImageDecoderThread>();
         ExecutorService pool = getExecutorServivicePool();
 
         String statementString = getGridSelectStatement(levelInfo);
 
-        try {
-            con = dataSource.getConnection();
-
-            PreparedStatement s = con.prepareStatement(statementString);
+        try (Connection con = dataSource.getConnection();
+                PreparedStatement s = con.prepareStatement(statementString)) {
             setGridSelectParams(s, requestEnvelope, levelInfo);
 
-            ResultSet r = s.executeQuery();
+            try (ResultSet r = s.executeQuery()) {
 
-            while (r.next()) {
-                byte[] tileBytes = getTileBytes(r);
-                Envelope env = getEnvelopeFromResultSet(r);
-                String location = r.getString(config.getKeyAttributeNameInSpatialTable());
+                while (r.next()) {
+                    byte[] tileBytes = getTileBytes(r);
+                    Envelope env = getEnvelopeFromResultSet(r);
+                    String location = r.getString(config.getKeyAttributeNameInSpatialTable());
 
-                Rectangle2D tmp =
-                        new Rectangle2D.Double(
-                                env.getMinX(), env.getMinY(), env.getWidth(), env.getHeight());
-                GeneralEnvelope tileGeneralEnvelope = new GeneralEnvelope(tmp);
-                tileGeneralEnvelope.setCoordinateReferenceSystem(
-                        requestEnvelope.getCoordinateReferenceSystem());
+                    Rectangle2D tmp =
+                            new Rectangle2D.Double(
+                                    env.getMinX(), env.getMinY(), env.getWidth(), env.getHeight());
+                    GeneralEnvelope tileGeneralEnvelope = new GeneralEnvelope(tmp);
+                    tileGeneralEnvelope.setCoordinateReferenceSystem(
+                            requestEnvelope.getCoordinateReferenceSystem());
 
-                ImageDecoderThread thread =
-                        new ImageDecoderThread(
-                                tileBytes,
-                                location,
-                                tileGeneralEnvelope,
-                                pixelDimension,
-                                requestEnvelope,
-                                levelInfo,
-                                tileQueue,
-                                config);
-                //				thread.start();
-                threads.add(thread);
-                pool.execute(thread);
+                    ImageDecoderThread thread =
+                            new ImageDecoderThread(
+                                    tileBytes,
+                                    location,
+                                    tileGeneralEnvelope,
+                                    pixelDimension,
+                                    requestEnvelope,
+                                    levelInfo,
+                                    tileQueue,
+                                    config);
+                    //				thread.start();
+                    threads.add(thread);
+                    pool.execute(thread);
+                }
             }
-
-            ;
-            r.close();
-            s.close();
 
             // if (con.getAutoCommit() == false) {
             // con.commit();
@@ -65,15 +59,6 @@
 
             con.close();
         } catch (SQLException e) {
-            try {
-                // if (con.getAutoCommit() == false) {
-                // con.rollback();
-                // }
-
-                con.close();
-            } catch (SQLException e1) {
-            }
-
             LOGGER.log(Level.SEVERE, e.getMessage(), e);
             throw new IOException(e);
         }

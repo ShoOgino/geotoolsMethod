@@ -1,0 +1,31 @@
+    private void assertFootprintsCleanup(
+            String footprint_wkbs,
+            String name,
+            boolean overviewsInRasterSpace,
+            String overviewsSuffixFormat,
+            FileFilter fileFilter,
+            PropertyIsLike granuleFilter)
+            throws IOException {
+        ImageMosaicReader reader =
+                getMultipleSidecarReader(
+                        footprint_wkbs, name, overviewsInRasterSpace, overviewsSuffixFormat);
+        File directory = (File) reader.getSource();
+
+        // collect the existing files matching the removal criteria
+        FileFilter notFileFilter = f -> !fileFilter.accept(f);
+        File[] existingFiles = directory.listFiles(fileFilter);
+        assertThat(existingFiles, arrayWithSize(6));
+        int otherFilesCount = directory.listFiles(notFileFilter).length;
+
+        GranuleStore store =
+                (GranuleStore) reader.getGranules(reader.getGridCoverageNames()[0], false);
+        Hints hints = new Hints(Hints.GRANULE_REMOVAL_POLICY, GranuleRemovalPolicy.ALL);
+        int removed = store.removeGranules(granuleFilter, hints);
+        assertEquals(1, removed);
+
+        // collect again, files should have been removed
+        File[] existingFilesPastCleanup = directory.listFiles(fileFilter);
+        assertThat(existingFilesPastCleanup, Matchers.emptyArray());
+        assertEquals(otherFilesCount, directory.listFiles(notFileFilter).length);
+    }
+

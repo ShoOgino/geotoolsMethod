@@ -1,0 +1,35 @@
+    @Override
+    public void accepts(
+            org.opengis.feature.FeatureVisitor visitor, org.opengis.util.ProgressListener progress)
+            throws IOException {
+        if (isTypeCompatible(visitor, transformer.getSchema())) {
+            delegateVisitor(visitor, progress);
+        } else if (visitor instanceof MinVisitor) {
+            MinVisitor original = (MinVisitor) visitor;
+            Expression transformedExpression =
+                    transformer.transformExpression(original.getExpression());
+            MinVisitor transformedVisitor = new MinVisitor(transformedExpression);
+            delegateVisitor(transformedVisitor, progress);
+            original.setValue(transformedVisitor.getResult().getValue());
+        } else if (visitor instanceof MaxVisitor) {
+            MaxVisitor original = (MaxVisitor) visitor;
+            Expression transformedExpression =
+                    transformer.transformExpression(original.getExpression());
+            MaxVisitor transformedVisitor = new MaxVisitor(transformedExpression);
+            delegateVisitor(transformedVisitor, progress);
+            original.setValue(transformedVisitor.getResult().getValue());
+        } else if (visitor instanceof UniqueVisitor) {
+            UniqueVisitor original = (UniqueVisitor) visitor;
+            Expression transformedExpression =
+                    transformer.transformExpression(original.getExpression());
+            UniqueVisitor transformedVisitor = new UniqueVisitor(transformedExpression);
+            transformedVisitor.setMaxFeatures(original.getMaxFeatures());
+            transformedVisitor.setStartIndex(original.getStartIndex());
+            transformedVisitor.setPreserveOrder(original.isPreserveOrder());
+            delegateVisitor(transformedVisitor, progress);
+            original.setValue(transformedVisitor.getResult().getValue());
+        } else {
+            super.accepts(visitor, progress);
+        }
+    }
+

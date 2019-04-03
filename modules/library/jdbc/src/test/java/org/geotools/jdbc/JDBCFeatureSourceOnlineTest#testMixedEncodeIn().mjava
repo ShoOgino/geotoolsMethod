@@ -1,0 +1,79 @@
+    /**
+     * Integration test checking that a CQL IN filter goes back being a IN in SQL
+     *
+     * @throws Exception
+     */
+    public void testMixedEncodeIn() throws Exception {
+        FilterFactory ff = dataStore.getFilterFactory();
+        String sp = aname("stringProperty");
+        PropertyName spp = ff.property(sp);
+        String ip = aname("intProperty");
+        PropertyName ipp = ff.property(ip);
+        String dp = aname("doubleProperty");
+        PropertyName dpp = ff.property(dp);
+        Or orFilter =
+                ff.or(
+                        Arrays.asList(
+                                ff.equal(spp, ff.literal("zero"), true),
+                                ff.equal(ipp, ff.literal(1), true),
+                                ff.equal(dpp, ff.literal(0d), true),
+                                ff.equal(spp, ff.literal("two"), true),
+                                ff.equal(ipp, ff.literal(2), true)));
+        Filter[] filters = featureSource.getFeatureSource().splitFilter(orFilter);
+        // nothing to be post-filtered
+        assertEquals(filters[1], Filter.INCLUDE);
+        SQLDialect dialect = featureSource.getDataStore().getSQLDialect();
+        if (dialect instanceof BasicSQLDialect) {
+            FilterToSQL filterToSQL = ((BasicSQLDialect) dialect).createFilterToSQL();
+            String sql = filterToSQL.encodeToString(filters[0]);
+            String spe = filterToSQL.escapeName(sp);
+            String ipe = filterToSQL.escapeName(ip);
+            String dpe = filterToSQL.escapeName(dp);
+            assertEquals(
+                    "WHERE (("
+                            + spe
+                            + " IN ('zero', 'two') AND "
+                            + spe
+                            + " IS NOT NULL ) OR "
+                            + "("
+                            + ipe
+                            + " IN (1, 2) AND "
+                            + ipe
+                            + " IS NOT NULL ) OR "
+                            + "("
+                            + dpe
+                            + " = 0.0 AND "
+                            + dpe
+                            + " IS NOT NULL ))",
+                    sql);
+        } else if (dialect instanceof PreparedStatementSQLDialect) {
+            PreparedFilterToSQL filterToSQL =
+                    ((PreparedStatementSQLDialect) dialect).createPreparedFilterToSQL();
+            String sql = filterToSQL.encodeToString(filters[0]);
+            String spe = filterToSQL.escapeName(sp);
+            String ipe = filterToSQL.escapeName(ip);
+            String dpe = filterToSQL.escapeName(dp);
+            assertEquals(
+                    "WHERE (("
+                            + spe
+                            + " IN (?, ?) AND "
+                            + spe
+                            + " IS NOT NULL ) OR "
+                            + "("
+                            + ipe
+                            + " IN (?, ?) AND "
+                            + ipe
+                            + " IS NOT NULL ) OR "
+                            + "("
+                            + dpe
+                            + " = ? AND "
+                            + dpe
+                            + " IS NOT NULL ))",
+                    sql);
+            List<Object> literals = filterToSQL.getLiteralValues();
+            assertEquals(Arrays.asList("zero", "two", 1, 2, 0d), literals);
+        } else {
+            fail("Unexpected dialect, supports basic or prepared, but was a : " + dialect);
+        }
+    }
+

@@ -1,13 +1,23 @@
     public void testAttributesWritingGmt() throws Exception {
         if (!ogrSupports("GMT")) {
-            System.out.println("Skipping GMT writing test as OGR was not built to support it");
+            LOGGER.warning("Skipping GMT writing test as OGR was not built to support it");
+            return;
         }
         SimpleFeatureCollection features = createFeatureCollection();
         File tmpFile = getTempFile("test-gmt", ".gmt");
         tmpFile.delete();
-        OGRDataStore s = new OGRDataStore(tmpFile.getAbsolutePath(), "GMT", null, ogr);
+        OGRDataStore s = createDataStore(tmpFile.getAbsolutePath(), "GMT");
         s.createSchema(features, true, null);
-        assertEquals(1, s.getTypeNames().length);
+        try {
+            assertEquals(1, s.getTypeNames().length);
+        } catch (IOException e) {
+            if (e.getMessage().startsWith("OGR could not open")) {
+                LOGGER.log(Level.WARNING, "OGR is missing some support library, test skipped", e);
+                return;
+            } else {
+                throw e;
+            }
+        }
         String typeName = tmpFile.getName().substring(0, tmpFile.getName().lastIndexOf(".gmt"));
         SimpleFeatureCollection fc = s.getFeatureSource(typeName).getFeatures();
         assertEquals(features.size(), fc.size());

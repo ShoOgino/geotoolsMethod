@@ -1,0 +1,40 @@
+    /** Test migration on a mosaic with multiple files each one having multiple coverages */
+    @Test
+    public void testMultiCoverageDirect() throws Exception {
+        File testDir = tempFolder.newFolder("multi-coverage");
+        URL testUrl = URLs.fileToUrl(testDir);
+        FileUtils.copyDirectory(
+                TestData.file(NetCDFMosaicReaderTest.class, "multi-coverage"), testDir);
+        // setup the reader, will make it generate the H2 indexes
+        testMultiCoverageMosaic(testUrl, null);
+
+        // build the target store config file
+        final File targetStoreConfiguration = new File(testDir, "target.properties");
+        final String properties =
+                String.format(
+                        "SPI=org.geotools.data.h2.H2DataStoreFactory\n"
+                                + "driver=org.h2.Driver\n"
+                                + "database=%s\n"
+                                + "user=sa\n"
+                                + "password=",
+                        getTargetDbForProperties(testDir));
+        FileUtils.writeStringToFile(targetStoreConfiguration, properties, "UTF-8");
+
+        File logDir = new File(testDir, "logs");
+        assertTrue(logDir.mkdir());
+
+        H2MigrateConfiguration config = new H2MigrateConfiguration();
+        config.setMosaicPath(testDir.getPath());
+        config.setConcurrency(1);
+        config.setTargetStoreConfiguration(targetStoreConfiguration.getPath());
+        config.setLogDirectory(logDir.getPath());
+        final H2Migrator migrator = new H2Migrator(config);
+        migrator.migrate();
+
+        // perform the basic migration checks
+        assertMultiCoverageMigration(testDir, logDir, config);
+
+        // reload the mosaic past migration, is it working?
+        testMultiCoverageMosaic(testUrl, null);
+    }
+

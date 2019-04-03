@@ -3,7 +3,7 @@
      *
      * @param method The EPSG code for the operation method.
      * @param operation The EPSG code for the operation (conversion or transformation).
-     * @param value The parameter values to fill.
+     * @param parameters The parameter values to fill.
      * @throws SQLException if a SQL statement failed.
      */
     private void fillParameterValues(
@@ -28,65 +28,66 @@
                                 + " ORDER BY CU.SORT_ORDER");
         stmt.setString(1, method);
         stmt.setString(2, operation);
-        final ResultSet result = stmt.executeQuery();
-        while (result.next()) {
-            final String name = getString(result, 1, operation);
-            final double value = result.getDouble(2);
-            final Unit unit;
-            Object reference;
-            if (result.wasNull()) {
-                /*
-                 * If no numeric values were provided in the database, then the values must
-                 * appears in some external file. It may be a file to download from FTP.
-                 */
-                reference = getString(result, 3, operation);
-                try {
-                    reference = new URI((String) reference);
-                } catch (URISyntaxException exception) {
-                    // Ignore: we will stores the reference as a file.
-                    reference = new File((String) reference);
-                }
-                unit = null;
-            } else {
-                reference = null;
-                final String unitCode = result.getString(4);
-                unit = (unitCode != null) ? createUnit(unitCode) : null;
-            }
-            final ParameterValue param;
-            try {
-                param = parameters.parameter(name);
-            } catch (ParameterNotFoundException exception) {
-                /*
-                 * Wraps the unchecked ParameterNotFoundException into the checked
-                 * NoSuchIdentifierException, which is a FactoryException subclass.
-                 * Note that in theory, NoSuchIdentifierException is for MathTransforms rather
-                 * than parameters.  However, we are close in spirit here since we are setting
-                 * up MathTransform's parameters. Using NoSuchIdentifierException allows users
-                 * (including CoordinateOperationSet) to know that the failure is probably
-                 * caused by a MathTransform not yet supported in Geotools (or only partially
-                 * supported) rather than some more serious failure in the database side.
-                 * CoordinateOperationSet uses this information in order to determine if it
-                 * should try the next coordinate operation or propagate the exception.
-                 */
-                final NoSuchIdentifierException e =
-                        new NoSuchIdentifierException(
-                                Errors.format(ErrorKeys.CANT_SET_PARAMETER_VALUE_$1, name), name);
-                e.initCause(exception);
-                throw e;
-            }
-            try {
-                if (reference != null) {
-                    param.setValue(reference);
-                } else if (unit != null) {
-                    param.setValue(value, unit);
+        try (ResultSet result = stmt.executeQuery()) {
+            while (result.next()) {
+                final String name = getString(result, 1, operation);
+                final double value = result.getDouble(2);
+                final Unit unit;
+                Object reference;
+                if (result.wasNull()) {
+                    /*
+                     * If no numeric values were provided in the database, then the values must
+                     * appears in some external file. It may be a file to download from FTP.
+                     */
+                    reference = getString(result, 3, operation);
+                    try {
+                        reference = new URI((String) reference);
+                    } catch (URISyntaxException exception) {
+                        // Ignore: we will stores the reference as a file.
+                        reference = new File((String) reference);
+                    }
+                    unit = null;
                 } else {
-                    param.setValue(value);
+                    reference = null;
+                    final String unitCode = result.getString(4);
+                    unit = (unitCode != null) ? createUnit(unitCode) : null;
                 }
-            } catch (InvalidParameterValueException exception) {
-                throw new FactoryException(
-                        Errors.format(ErrorKeys.CANT_SET_PARAMETER_VALUE_$1, name), exception);
+                final ParameterValue param;
+                try {
+                    param = parameters.parameter(name);
+                } catch (ParameterNotFoundException exception) {
+                    /*
+                     * Wraps the unchecked ParameterNotFoundException into the checked
+                     * NoSuchIdentifierException, which is a FactoryException subclass.
+                     * Note that in theory, NoSuchIdentifierException is for MathTransforms rather
+                     * than parameters.  However, we are close in spirit here since we are setting
+                     * up MathTransform's parameters. Using NoSuchIdentifierException allows users
+                     * (including CoordinateOperationSet) to know that the failure is probably
+                     * caused by a MathTransform not yet supported in Geotools (or only partially
+                     * supported) rather than some more serious failure in the database side.
+                     * CoordinateOperationSet uses this information in order to determine if it
+                     * should try the next coordinate operation or propagate the exception.
+                     */
+                    final NoSuchIdentifierException e =
+                            new NoSuchIdentifierException(
+                                    Errors.format(ErrorKeys.CANT_SET_PARAMETER_VALUE_$1, name),
+                                    name);
+                    e.initCause(exception);
+                    throw e;
+                }
+                try {
+                    if (reference != null) {
+                        param.setValue(reference);
+                    } else if (unit != null) {
+                        param.setValue(value, unit);
+                    } else {
+                        param.setValue(value);
+                    }
+                } catch (InvalidParameterValueException exception) {
+                    throw new FactoryException(
+                            Errors.format(ErrorKeys.CANT_SET_PARAMETER_VALUE_$1, name), exception);
+                }
             }
         }
-        result.close();
     }
 

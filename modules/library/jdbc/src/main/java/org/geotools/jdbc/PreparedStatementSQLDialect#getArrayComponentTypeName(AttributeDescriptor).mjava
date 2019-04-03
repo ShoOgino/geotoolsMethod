@@ -1,0 +1,31 @@
+    /**
+     * Given the full information about the attribute being transformed, figure out the native SQL
+     * Type Name to use when creating a SQL Array object· The default implementation just scans
+     * {@link JDBCDataStore#getSqlTypeNameToClassMappings()} backwards, and will fail in case there
+     * are ambiguities. Subclasses can implement their own logic and eventually use information
+     * contained in the attribute's {@link AttributeDescriptor#getUserData()}, stored at attribute
+     * creation time.
+     *
+     * @param att
+     * @return
+     */
+    protected String getArrayComponentTypeName(AttributeDescriptor att) throws SQLException {
+        Map<String, Class<?>> mappings = dataStore.getSqlTypeNameToClassMappings();
+        Class<?> componentType = att.getType().getBinding().getComponentType();
+        List<String> sqlTypeNames =
+                mappings.entrySet()
+                        .stream()
+                        .filter(e -> e.getValue().equals(componentType))
+                        .map(e -> e.getKey())
+                        .collect(Collectors.toList());
+        if (sqlTypeNames.isEmpty()) {
+            throw new SQLException("Failed to find a SQL type for " + componentType);
+        } else if (sqlTypeNames.size() > 1) {
+            throw new SQLException(
+                    String.format(
+                            "Found multiple SQL type candidates %s for the Java type %s",
+                            sqlTypeNames, componentType.getName()));
+        }
+        return sqlTypeNames.get(0);
+    }
+

@@ -1,0 +1,72 @@
+    /**
+     * Creates an encoder from a configuration and a specific schema instance.
+     *
+     * @param configuration The encoder configuration.
+     * @param schema The schema instance.
+     */
+    public Encoder(Configuration configuration, XSDSchema schema) {
+        this.configuration = configuration;
+        this.schema = schema;
+
+        index = new SchemaIndexImpl(new XSDSchema[] {schema});
+
+        bindingLoader = new BindingLoader(configuration.setupBindings());
+        bindingWalker = new BindingWalker(bindingLoader);
+
+        // create the context
+        context = new DefaultPicoContainer();
+        context.registerComponentInstance(this);
+
+        // register the binding factory in the context
+        BindingFactory bindingFactory = new BindingFactoryImpl(bindingLoader);
+        context.registerComponentInstance(bindingFactory);
+
+        // register the element encoder in the context
+        encoder = new ElementEncoder(bindingWalker, context);
+        context.registerComponentInstance(encoder);
+
+        // register the schema index
+        context.registerComponentInstance(index);
+
+        // bindign walker support
+        context.registerComponentInstance(new BindingWalkerFactoryImpl(bindingLoader, context));
+
+        // pass the context off to the configuration
+        context = configuration.setupContext(context);
+        encoder.setContext(context);
+
+        // schema location setup
+        schemaLocations = new HashMap();
+
+        // get a logger from the context
+        logger = (Logger) context.getComponentInstanceOfType(Logger.class);
+
+        if (logger == null) {
+            // create a default
+            logger = org.geotools.util.logging.Logging.getLogger(Encoder.class);
+            context.registerComponentInstance(logger);
+        }
+
+        encoder.setLogger(logger);
+
+        // namespaces
+        namespaces = new NamespaceSupport();
+        context.registerComponentInstance(namespaces);
+        context.registerComponentInstance(new NamespaceSupportWrapper(namespaces));
+
+        // add configuration to context;
+        context.registerComponentInstance(configuration);
+
+        // property extractors
+        propertyExtractors = Schemas.getComponentInstancesOfType(context, PropertyExtractor.class);
+
+        // add the property extractor for bindings as first
+        propertyExtractors.add(0, new BindingPropertyExtractor(this, context));
+
+        // create output properties with some defaults
+        outputProps = new Properties();
+        outputProps.setProperty(INDENT_AMOUNT_KEY, "2");
+
+        configuration.setupEncoder(this);
+    }
+

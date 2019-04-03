@@ -1,5 +1,5 @@
     /**
-     * Retrieve tiles within certain zooms and column/row boundaries
+     * Retrieve tiles within certain zooms and column/row boundaries.
      *
      * @param entry the tile entry
      * @param lowZoom low zoom boundary
@@ -11,6 +11,7 @@
      * @return
      * @throws IOException
      */
+    @SuppressWarnings("PMD.CloseResource") // cx and st get into the TileReader
     public TileReader reader(
             TileEntry entry,
             Integer lowZoom,
@@ -21,44 +22,30 @@
             Integer highRow)
             throws IOException {
 
+        List<String> q = new ArrayList();
+        addRange("zoom_level", lowZoom, highZoom, q);
+        addRange("tile_column", lowCol, highCol, q);
+        addRange("tile_row", lowRow, highRow, q);
+
+        StringBuffer sql = new StringBuffer("SELECT * FROM ").append(entry.getTableName());
+        if (!q.isEmpty()) {
+            sql.append(" WHERE ");
+            for (String s : q) {
+                sql.append(s).append(" AND ");
+            }
+            sql.setLength(sql.length() - 5);
+        }
+        Connection cx = null;
+        Statement st = null;
         try {
-            List<String> q = new ArrayList();
-            if (lowZoom != null) {
-                q.add("zoom_level >= " + lowZoom);
-            }
-            if (highZoom != null) {
-                q.add("zoom_level <= " + highZoom);
-            }
-            if (lowCol != null) {
-                q.add("tile_column >= " + lowCol);
-            }
-            if (highCol != null) {
-                q.add("tile_column <= " + highCol);
-            }
-            if (lowRow != null) {
-                q.add("tile_row >= " + lowRow);
-            }
-            if (highRow != null) {
-                q.add("tile_row <= " + highRow);
-            }
-
-            StringBuffer sql = new StringBuffer("SELECT * FROM ").append(entry.getTableName());
-            if (!q.isEmpty()) {
-                sql.append(" WHERE ");
-                for (String s : q) {
-                    sql.append(s).append(" AND ");
-                }
-                sql.setLength(sql.length() - 5);
-            }
-
-            Connection cx = connPool.getConnection();
-
-            Statement st = cx.createStatement();
+            cx = connPool.getConnection();
+            st = cx.createStatement();
             ResultSet rs = st.executeQuery(sql.toString());
 
-            return new TileReader(rs, cx);
-
+            return new TileReader(rs, st, cx);
         } catch (SQLException e) {
+            close(st);
+            close(cx);
             throw new IOException(e);
         }
     }

@@ -1,0 +1,30 @@
+    private List<String> collectFilesFromTable(ImageMosaicReader reader, String coverage)
+            throws IOException {
+        // grab the necessary background info
+        final String mosaicDirectoryPath = configuration.getMosaicDirectory().getAbsolutePath();
+        final GranuleSource granuleSource = reader.getGranules(coverage, true);
+        final MosaicConfigurationBean configuration =
+                reader.getRasterManager(coverage).getConfiguration();
+        final CatalogConfigurationBean catalogConfiguration =
+                configuration.getCatalogConfigurationBean();
+        final PathType pathType = catalogConfiguration.getPathType();
+        if (pathType != PathType.ABSOLUTE && pathType != PathType.RELATIVE) {
+            throw new MigrationException("Cannot perform migration with path type " + pathType);
+        }
+        // query the location attribute
+        final String locationAttribute = catalogConfiguration.getLocationAttribute();
+        Query q = new Query(coverage);
+        q.setPropertyNames(new String[] {locationAttribute});
+        // extract unique values
+        UniqueVisitor uniqueLocations = new UniqueVisitor(locationAttribute);
+        final SimpleFeatureCollection granules = granuleSource.getGranules(q);
+        granules.accepts(uniqueLocations, null);
+        Set<String> locations = uniqueLocations.getUnique();
+        // map via pathtype and return
+        return locations
+                .stream()
+                .map(l -> pathType.resolvePath(mosaicDirectoryPath, l))
+                .map(url -> URLs.urlToFile(url).getAbsolutePath())
+                .collect(Collectors.toList());
+    }
+

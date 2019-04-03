@@ -1,0 +1,48 @@
+    /**
+     * Returns the minimum number of occurences of an element within a complex type.
+     *
+     * @param type The type definition containg the declaration <code>element</code>
+     * @param element The declaration of the element.
+     * @return The minimum number of occurences.
+     * @throws IllegalArgumentException If the element declaration cannot be locaated withing the
+     *     type definition.
+     */
+    public static final int getMaxOccurs(
+            XSDComplexTypeDefinition type, XSDElementDeclaration element) {
+        final XSDElementDeclaration fElement = element;
+        final ArrayList maxOccurs = new ArrayList();
+
+        ElementVisitor visitor =
+                new ElementVisitor() {
+                    public void visit(XSDParticle particle) {
+                        XSDElementDeclaration decl = (XSDElementDeclaration) particle.getContent();
+
+                        if (decl.isElementDeclarationReference()) {
+                            decl = decl.getResolvedElementDeclaration();
+                        }
+
+                        if (decl == fElement) {
+                            if (particle.isSetMaxOccurs()) {
+                                maxOccurs.add(Integer.valueOf(particle.getMaxOccurs()));
+                            } else if (particle.getContainer() instanceof XSDModelGroup
+                                    && particle.getContainer().getContainer()
+                                            instanceof XSDParticle) {
+                                particle = (XSDParticle) particle.getContainer().getContainer();
+                                maxOccurs.add(Integer.valueOf(particle.getMaxOccurs()));
+                            } else {
+                                maxOccurs.add(1);
+                            }
+                        }
+                    }
+                };
+
+        visitElements(type, visitor, true);
+
+        if (maxOccurs.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Element: " + element + " not found in type: " + type);
+        }
+
+        return ((Integer) maxOccurs.get(0)).intValue();
+    }
+

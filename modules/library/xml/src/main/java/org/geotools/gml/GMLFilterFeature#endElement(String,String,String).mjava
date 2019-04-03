@@ -1,0 +1,83 @@
+    /**
+     * Checks for GML element end and - if not a coordinates element - sends it directly on down the
+     * chain to the appropriate parent handler. If it is a coordinates (or coord) element, it uses
+     * internal methods to set the current state of the coordinates reader appropriately.
+     *
+     * @param namespaceURI Namespace of the element.
+     * @param localName Local name of the element.
+     * @param qName Full name of the element, including namespace prefix.
+     * @throws SAXException Parsing error occurred while reading coordinates.
+     */
+    public void endElement(String namespaceURI, String localName, String qName)
+            throws SAXException {
+        handleCharacters();
+        if (isFeatureMember(localName)) {
+            SimpleFeatureTypeBuilder tb = new SimpleFeatureTypeBuilder();
+            tb.setName(typeName);
+            tb.setNamespaceURI(namespaceURI);
+
+            //            AttributeType attDef[] = new AttributeTypeDefault[attributes.size()];
+            //            for (int i = 0; i < attributes.size(); i++){
+            //                attDef[i] = new AttributeTypeDefault((String)
+            // attributeNames.get(i),attributes.get(i).getClass());
+            //            }
+            //            try {
+            //                FeatureType schema =
+            // FeatureTypeFactory.create(attDef).setTypeName(typeName);
+            //                schema.setNamespace(namespaceURI);
+            //                FlatFeatureFactory fac = new FlatFeatureFactory(schema);
+            //                Feature feature = fac.create((Object []) attributes.toArray(),fid);
+            //                //currentFeature.setAttributes((Object []) attributes.toArray());
+            //                parent.feature(feature);
+            //                //_log.debug("resetting attName at end of feature");
+            //                attName = "";
+            //            }
+            //            catch (org.geotools.feature.SchemaException sve){
+            //                //TODO: work out what to do in this case!
+            //                //_log.error("Unable to create valid schema",sve);
+            //            }
+            //            catch (org.geotools.feature.IllegalFeatureException ife){
+            //                //TODO: work out what to do in this case!
+            //                //_log.error("Unable to build feature",ife);
+            //            }
+            //            insideFeature = false;
+            for (int i = 0, ii = attributes.size(); i < ii; i++) {
+                String name = (String) attributeNames.get(i);
+                Class clazz = attributes.get(i).getClass();
+                tb.add(name, clazz);
+            }
+
+            SimpleFeatureType featureType = tb.buildFeatureType();
+
+            try {
+                SimpleFeature feature = SimpleFeatureBuilder.build(featureType, attributes, fid);
+                parent.feature(feature);
+            } catch (IllegalAttributeException ife) {
+                // TODO: work out what to do in this case!
+                // _log.error("Unable to build feature",ife);
+                // UNBELIEVABLE !!!!!!!!!!!!!!!!!!!!!!!!!!! - IanS
+            }
+
+            attName = "";
+            insideFeature = false;
+        } else if (insideAttribute) {
+            // _log.debug("end - inside attribute [" + tempValue + "]");
+            if ((tempValue != null) && !tempValue.toString().trim().equals("")) {
+                if (tempValue instanceof StringBuffer) {
+                    tempValue = tempValue.toString();
+                }
+
+                attributes.add(tempValue);
+                attributeNames.add(attName);
+                tempValue = null;
+            }
+
+            endAttribute();
+        } else {
+            parent.endElement(namespaceURI, localName, qName);
+
+            // _log.debug("end - inside feature");
+            // insideFeature = false;
+        }
+    }
+

@@ -1,0 +1,49 @@
+    private static CacheManager buildCache(CacheConfig config, boolean removeCacheIfExists) {
+        Configuration cacheConfig = null;
+        if (config.getConfigurationPath() != null) {
+            cacheConfig = loadConfiguration(config.getConfigurationPath());
+        }
+        if (cacheConfig == null) {
+            cacheConfig = new Configuration();
+            cacheConfig.setMaxBytesLocalDisk((long) config.getDiskCacheSize());
+            cacheConfig.setMaxBytesLocalHeap((long) config.getHeapSize());
+
+            if (config.isUseDiskCache()) {
+                DiskStoreConfiguration diskConfig = new DiskStoreConfiguration();
+                diskConfig.setPath(config.getCacheDirectory().toAbsolutePath().toString());
+                cacheConfig.diskStore(diskConfig);
+            }
+        }
+        if (cacheConfig.getDefaultCacheConfiguration() == null) {
+            CacheConfiguration defaultCacheConfiguration =
+                    new CacheConfiguration()
+                            .persistence(
+                                    new PersistenceConfiguration()
+                                            .strategy(
+                                                    PersistenceConfiguration.Strategy
+                                                            .LOCALTEMPSWAP));
+
+            defaultCacheConfiguration.setMaxBytesLocalDisk((long) config.getDiskCacheSize());
+            defaultCacheConfiguration.setMaxBytesLocalHeap((long) config.getHeapSize());
+
+            cacheConfig.defaultCache(defaultCacheConfiguration);
+        }
+
+        // Use CacheManager.create() instead of new CacheManager(config) to avoid
+        // "Another unnamed cache manager already exists..." exception
+        CacheManager manager = CacheManager.create(cacheConfig);
+        if (removeCacheIfExists && manager.cacheExists(DEFAULT_CACHE)) {
+            manager.removeCache(DEFAULT_CACHE);
+            logger().info("Re-creating cache " + DEFAULT_CACHE);
+        }
+        if (!manager.cacheExists(DEFAULT_CACHE)) {
+            manager.addCache(DEFAULT_CACHE);
+        }
+        Cache cache = manager.getCache(DEFAULT_CACHE);
+        SelfPopulatingCache populatingCache =
+                new SelfPopulatingCache(cache, new S3ChunkEntryFactory(config));
+        manager.replaceCacheWithDecoratedCache(cache, populatingCache);
+
+        return manager;
+    }
+
