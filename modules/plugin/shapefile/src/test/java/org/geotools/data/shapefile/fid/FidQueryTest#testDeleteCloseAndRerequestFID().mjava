@@ -1,0 +1,50 @@
+    /**
+     * Attempt to test GEOT-5830 User reports that deleting a feature, re-requesting the data gives
+     * a duplicate FID and the subsequent attempt to delete fails due to corrupt FIX
+     *
+     * @throws Exception
+     */
+    @Test
+    public void testDeleteCloseAndRerequestFID() throws Exception {
+        SimpleFeature feature;
+        SimpleFeatureCollection allfeatures = featureStore.getFeatures();
+        int size = allfeatures.size();
+        try (SimpleFeatureIterator features = allfeatures.features()) {
+            feature = features.next();
+        }
+        FilterFactory2 ff = CommonFactoryFinder.getFilterFactory2(null);
+        Id fidFilter = ff.id(Collections.singleton(ff.featureId(feature.getID())));
+
+        featureStore.removeFeatures(fidFilter);
+        fids.remove(feature.getID());
+        assertEquals((size - 1), featureStore.getCount(Query.ALL));
+        assertEquals(fids.size(), featureStore.getCount(Query.ALL));
+
+        featureStore.getDataStore().dispose();
+        URL url = backshp.toURI().toURL();
+        ds = new ShapefileDataStore(url);
+        numFeatures = 0;
+        featureStore = (SimpleFeatureStore) ds.getFeatureSource();
+        assertEquals((size - 1), featureStore.getCount(Query.ALL));
+
+        SimpleFeatureCollection features2 = featureStore.getFeatures(fidFilter);
+        assertEquals("wrong number of features", 0, features2.size());
+        try (SimpleFeatureIterator features = features2.features()) {
+            assertFalse("found fid", features.hasNext());
+        }
+        // refresh the features using the new datastore
+        allfeatures = featureStore.getFeatures();
+        try (SimpleFeatureIterator features = allfeatures.features()) {
+
+            SimpleFeature f = (SimpleFeature) features.next();
+            assertFalse(fidFilter.evaluate(f));
+        }
+
+        features2 = featureStore.getFeatures(fidFilter);
+        assertEquals("wrong number of features", 0, features2.size());
+        try (SimpleFeatureIterator features = features2.features()) {
+            assertFalse("found fid", features.hasNext());
+        }
+        this.assertFidsMatch();
+    }
+
