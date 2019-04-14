@@ -1,8 +1,18 @@
     public BBOX bbox(Expression geometry, Expression bounds, MatchAction machAction) {
-        if (bounds instanceof Literal && ((Literal) bounds).getValue() instanceof BoundingBox3D) {
-            return bbox(geometry, (BoundingBox3D) ((Literal) bounds).getValue(), machAction);
-        } else {
-            return new BBOXImpl(geometry, bounds, machAction);
+        if (bounds instanceof Literal) {
+            Object value = ((Literal) bounds).getValue();
+            if (value instanceof BoundingBox3D) {
+                return bbox(geometry, (BoundingBox3D) value, machAction);
+            } else if (value instanceof org.locationtech.jts.geom.Geometry
+                    && geometry instanceof PropertyName) {
+                org.locationtech.jts.geom.Geometry g = (org.locationtech.jts.geom.Geometry) value;
+                if (g.getUserData() instanceof CoordinateReferenceSystem) {
+                    CoordinateReferenceSystem crs = (CoordinateReferenceSystem) g.getUserData();
+                    ReferencedEnvelope3D envelope = (ReferencedEnvelope3D) JTS.bounds(g, crs);
+                    return new BBOX3DImpl((PropertyName) geometry, envelope, this);
+                }
+            }
         }
+        return new BBOXImpl(geometry, bounds, machAction);
     }
 
