@@ -1,0 +1,24 @@
+    /** Test that the reader didn't access the external prj */
+    @Test
+    public void prjIsSkippedTest() throws IllegalArgumentException, IOException, FactoryException {
+
+        final File noCrs = TestData.file(GeoTiffSkipExternalTest.class, "override/sample.tif");
+        final AbstractGridFormat format = new GeoTiffFormat();
+        assertTrue(format.accepts(noCrs));
+        GeoTiffReader reader = (GeoTiffReader) format.getReader(noCrs);
+        CoordinateReferenceSystem crs = reader.getCoordinateReferenceSystem();
+
+        final File prj = TestData.file(GeoTiffSkipExternalTest.class, "override/sample.prj");
+        final FileInputStream fis = new FileInputStream(prj);
+        final CoordinateReferenceSystem crs_ =
+                new PrjFileReader(fis.getChannel()).getCoordinateReferenceSystem();
+        // Check External PRJ isn't found due to SKIP external files flag
+        assertFalse(CRS.equalsIgnoreMetadata(crs, crs_));
+        GridCoverage2D coverage = reader.read(null);
+        assertFalse(CRS.equalsIgnoreMetadata(coverage.getCoordinateReferenceSystem(), crs_));
+
+        fis.close();
+        coverage.dispose(true);
+        reader.dispose();
+    }
+
