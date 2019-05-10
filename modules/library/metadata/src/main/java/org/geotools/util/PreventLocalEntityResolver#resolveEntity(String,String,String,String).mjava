@@ -8,9 +8,29 @@
     @Override
     public InputSource resolveEntity(String name, String publicId, String baseURI, String systemId)
             throws SAXException, IOException {
-        if (baseURI != null && baseURI.matches("(?i)(jar:file|http|vfs)[^?#;]*\\.xsd")) {
-            return null;
+        if (LOGGER.isLoggable(Level.FINEST)) {
+            LOGGER.finest(
+                    String.format(
+                            "resolveEntity request: name=%s, publicId=%s, baseURI=%s, systemId=%s",
+                            name, publicId, baseURI, systemId));
         }
-        return resolveEntity(publicId, systemId);
+
+        try {
+            URI uri = URI.create(systemId);
+            // ignore the baseURI if the systemId is absolute
+            if (!uri.isAbsolute()) {
+                // use the baseURI to convert a relative systemId to absolute
+                uri = URI.create(baseURI).resolve(uri);
+            }
+            // check if the absolute systemId is an allowed URI
+            if (ALLOWED_URIS.matcher(uri.toString()).matches()) {
+                return null;
+            }
+        } catch (Exception e) {
+            // do nothing
+        }
+
+        // do not allow external entities
+        throw new SAXException(ERROR_MESSAGE_BASE + systemId);
     }
 
