@@ -1,0 +1,62 @@
+    /**
+     * Applies values rescaling if either the scales or the offsets array is non null, or has any
+     * value that is not a default (1 for scales, 0 for offsets)
+     *
+     * @param scales The scales array
+     * @param offsets The offsets array
+     * @param image The image to be rescaled
+     * @param hints The image processing hints, if any (can be null)
+     * @return The original image, or a rescaled image
+     */
+    public static RenderedImage applyRescaling(
+            Double[] scales, Double[] offsets, RenderedImage image, Hints hints) {
+        // if there is nothing to do, return immediately
+        if (scales == null && offsets == null) {
+            return image;
+        }
+
+        // convert to primitives, apply defaults to nullable elements
+        int numBands = image.getSampleModel().getNumBands();
+        double[] pscales = toPrimitiveArray(scales, numBands, 1);
+        double[] poffsets = toPrimitiveArray(offsets, numBands, 0);
+        boolean hasRescaling = false;
+        for (int i = 0; i < numBands && !hasRescaling; i++) {
+            hasRescaling = poffsets[i] != 0 || pscales[i] != 1;
+        }
+        if (!hasRescaling) {
+            return image;
+        }
+
+        // use the input hints if possible, but create a proper layout to impose the target data
+        // type
+        RenderingHints localHints =
+                hints != null
+                        ? hints.clone()
+                        : (RenderingHints) JAI.getDefaultInstance().getRenderingHints().clone();
+        final ImageLayout layout =
+                Optional.ofNullable((ImageLayout) localHints.get(JAI.KEY_IMAGE_LAYOUT))
+                        .map(il -> (ImageLayout) il.clone())
+                        .orElse(new ImageLayout2(image));
+        SampleModel sm =
+                RasterFactory.createBandedSampleModel(
+                        DataBuffer.TYPE_DOUBLE,
+                        image.getTileWidth(),
+                        image.getTileHeight(),
+                        image.getSampleModel().getNumBands());
+        layout.setSampleModel(sm);
+        layout.setColorModel(
+                new ComponentColorModel(
+                        new BogusColorSpace(numBands),
+                        false,
+                        false,
+                        Transparency.OPAQUE,
+                        DataBuffer.TYPE_DOUBLE));
+        localHints.put(JAI.KEY_IMAGE_LAYOUT, layout);
+
+        // at least one band is getting rescaled, apply the operation
+        ImageWorker iw = new ImageWorker(image);
+        iw.setRenderingHints(localHints);
+        iw.rescale(pscales, poffsets);
+        return iw.getRenderedImage();
+    }
+
