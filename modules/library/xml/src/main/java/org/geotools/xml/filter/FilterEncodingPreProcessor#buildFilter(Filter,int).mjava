@@ -1,0 +1,35 @@
+    private Data buildFilter(Filter filter, int startOfFilterStack) throws IllegalFilterException {
+        if (current.isEmpty()) {
+            return Data.ALL;
+        }
+
+        if (filter instanceof Not) {
+            return buildNotFilter(startOfFilterStack);
+        }
+
+        if (current.size() == (startOfFilterStack + 1)) {
+            return (Data) current.pop();
+        }
+
+        List<org.opengis.filter.Filter> filterList = new ArrayList<org.opengis.filter.Filter>();
+
+        while (current.size() > startOfFilterStack) {
+            Data data = (Data) current.pop();
+
+            if (data.filter != Filter.EXCLUDE) {
+                filterList.add(data.filter);
+            }
+        }
+
+        org.opengis.filter.Filter f;
+        if (filter instanceof And) {
+            f = ff.and(filterList);
+        } else if (filter instanceof Or) {
+            f = ff.or(filterList);
+        } else {
+            // not expected
+            f = null;
+        }
+        return new Data(compressFilter(filter, (BinaryLogicOperator) f));
+    }
+

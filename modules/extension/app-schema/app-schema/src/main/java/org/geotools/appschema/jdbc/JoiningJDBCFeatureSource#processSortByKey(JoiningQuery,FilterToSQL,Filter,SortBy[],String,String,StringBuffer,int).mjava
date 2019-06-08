@@ -1,0 +1,51 @@
+    private boolean processSortByKey(
+            JoiningQuery query,
+            FilterToSQL toSQL,
+            Filter filter,
+            SortBy[] lastSortBy,
+            String lastTableName,
+            String lastTableAlias,
+            StringBuffer sortBySQL,
+            int i)
+            throws SQLException, FilterToSQLException {
+        boolean hasSortBy;
+        // skip if inner join is already done in paging
+        getDataStore()
+                .dialect
+                .encodeColumnName(
+                        lastTableName,
+                        lastSortBy[i].getPropertyName().getPropertyName(),
+                        sortBySQL);
+        sortBySQL.append(" FROM ");
+        getDataStore().encodeTableName(lastTableName, sortBySQL, query.getHints());
+        // perform a left join with multi values tables of the root feature type
+        encodeMultipleValueJoin(query.getRootMapping(), lastTableName, getDataStore(), sortBySQL);
+        if (NestedFilterToSQL.isNestedFilter(filter)) {
+            sortBySQL.append(" WHERE ");
+            // if it's postgis and replacement is enabled use UNION
+            boolean replaceOrWithUnion = isPostgisDialect() && isOrUnionReplacementEnabled();
+            // get current select clause
+            String selectClause = sortBySQL.toString().replace(" INNER JOIN ( ", "");
+            sortBySQL.append(
+                    createNestedFilter(filter, query, toSQL, selectClause, replaceOrWithUnion));
+        } else {
+            sortBySQL.append(" ").append(toSQL.encodeToString(filter));
+        }
+        sortBySQL.append(" ) ");
+        getDataStore().dialect.encodeTableName(TEMP_FILTER_ALIAS, sortBySQL);
+        sortBySQL.append(" ON ( ");
+        encodeColumnName2(
+                lastSortBy[i].getPropertyName().getPropertyName(), lastTableAlias, sortBySQL, null);
+        sortBySQL.append(" = ");
+        encodeColumnName2(
+                lastSortBy[i].getPropertyName().getPropertyName(),
+                TEMP_FILTER_ALIAS,
+                sortBySQL,
+                null);
+        if (i < lastSortBy.length - 1) {
+            sortBySQL.append(" AND ");
+        }
+        hasSortBy = true;
+        return hasSortBy;
+    }
+

@@ -5,18 +5,30 @@
         try {
 
             Object object;
-            InputStream inputStream = null;
-            try {
-                inputStream = response.getResponseStream();
-
+            try (InputStream inputStream = response.getResponseStream()) {
                 Parser parser = new Parser(WMTS_CONFIGURATION);
-                object = parser.parse(new InputSource(inputStream));
+                if (LOGGER.isLoggable(Level.FINEST)) {
+                    StringBuilder stringBuilder = new StringBuilder();
+                    String line = null;
 
+                    try (BufferedReader bufferedReader =
+                            new BufferedReader(new InputStreamReader(inputStream, "utf-8"))) {
+                        while ((line = bufferedReader.readLine()) != null) {
+                            stringBuilder.append(line + "\n");
+                        }
+                    }
+                    String string = stringBuilder.toString();
+                    LOGGER.finest(string);
+
+                    object =
+                            parser.parse(
+                                    new InputSource(new ByteArrayInputStream(string.getBytes())));
+                } else {
+                    object = parser.parse(inputStream);
+                }
             } catch (SAXException | ParserConfigurationException e) {
                 throw (ServiceException)
                         new ServiceException("Error while parsing XML.").initCause(e);
-            } finally {
-                IOUtils.closeQuietly(inputStream);
             }
 
             if (object instanceof ServiceException) {

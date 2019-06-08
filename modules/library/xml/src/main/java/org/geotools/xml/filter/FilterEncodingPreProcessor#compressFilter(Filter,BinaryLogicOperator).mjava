@@ -1,0 +1,60 @@
+    private org.opengis.filter.Filter compressFilter(Filter filter, BinaryLogicOperator f)
+            throws IllegalFilterException {
+        BinaryLogicOperator result;
+        int added = 0;
+        List<org.opengis.filter.Filter> resultList = new ArrayList<org.opengis.filter.Filter>();
+
+        if (filter instanceof And) {
+            if (contains(f, Filter.EXCLUDE)) {
+                return Filter.EXCLUDE;
+            }
+
+            for (org.opengis.filter.Filter child : f.getChildren()) {
+                if (child == org.opengis.filter.Filter.INCLUDE) {
+                    continue;
+                }
+                added++;
+                resultList.add(child);
+            }
+
+            if (resultList.isEmpty()) {
+                return Filter.EXCLUDE;
+            }
+
+            result = ff.and(resultList);
+        } else if (filter instanceof Or) {
+            if (contains(f, Filter.INCLUDE)) {
+                return Filter.INCLUDE;
+            }
+
+            for (Object item : f.getChildren()) {
+                org.opengis.filter.Filter child = (org.opengis.filter.Filter) item;
+                if (child == Filter.EXCLUDE) {
+                    continue;
+                }
+                added++;
+                resultList.add(child);
+            }
+
+            if (resultList.isEmpty()) {
+                return Filter.EXCLUDE;
+            }
+
+            result = ff.or(resultList);
+
+        } else {
+            return Filter.EXCLUDE;
+        }
+
+        switch (added) {
+            case 0:
+                return Filter.EXCLUDE;
+
+            case 1:
+                return result.getChildren().iterator().next();
+
+            default:
+                return result;
+        }
+    }
+
