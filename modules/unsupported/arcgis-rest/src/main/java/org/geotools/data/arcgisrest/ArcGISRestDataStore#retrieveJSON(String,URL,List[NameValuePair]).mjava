@@ -21,13 +21,42 @@
             meth = new HttpPost();
         }
 
+        // Sets the URI, request parameters and request body (depending on method
+        // type)
         URI uri;
-        try {
-            uri = new URIBuilder(url.toString()).setParameters(params).build();
-        } catch (URISyntaxException ex) {
-            throw new IOException(ex.getMessage());
+
+        if (methType.equals("GET")) {
+            // Builds the GET request
+            try {
+                uri = new URIBuilder(url.toString()).setParameters(params).build();
+                meth.setURI(uri);
+            } catch (URISyntaxException ex) {
+                throw new IOException(ex.getMessage());
+            }
+
+            this.LOGGER.log(
+                    Level.FINER, "About to query GET " + url.toString() + "?" + uri.getQuery());
+        } else {
+            // Builds the POST request
+            try {
+                uri = new URIBuilder(url.toString()).build();
+                meth.setURI(uri);
+            } catch (URISyntaxException ex) {
+                throw new IOException(ex.getMessage());
+            }
+
+            HttpEntity body = EntityBuilder.create().chunked().setParameters(params).build();
+            ((HttpPost) (meth)).setEntity(body);
+            meth.setHeader(
+                    HttpHeaders.CONTENT_TYPE,
+                    ContentType.APPLICATION_FORM_URLENCODED.getMimeType());
+            this.LOGGER.log(
+                    Level.FINER,
+                    "About to query POST "
+                            + url.toString()
+                            + " with body: "
+                            + IOUtils.toString(body.getContent(), Charset.defaultCharset()));
         }
-        meth.setURI(uri);
 
         // Adds authorization if login/password is set
         if (this.user != null && this.password != null) {
