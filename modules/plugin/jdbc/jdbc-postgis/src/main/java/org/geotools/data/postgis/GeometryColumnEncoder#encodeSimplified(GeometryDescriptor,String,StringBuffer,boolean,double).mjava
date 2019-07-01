@@ -1,0 +1,37 @@
+    private void encodeSimplified(
+            GeometryDescriptor gatt,
+            String prefix,
+            StringBuffer sql,
+            boolean force2D,
+            double distance) {
+        boolean geography =
+                "geography".equals(gatt.getUserData().get(JDBCDataStore.JDBC_NATIVE_TYPENAME));
+
+        if (geography) {
+            encodeGeography(gatt, prefix, sql);
+            return;
+        }
+
+        if (dialect.isStraightSegmentsGeometry(gatt)) {
+            if (atLeast2_2_0) {
+                sql.append("ST_AsTWKB(");
+                encode2DGeometry(gatt, prefix, sql, stSimplifyEnabled ? distance : null);
+                sql.append("," + getTWKBDigits(distance) + ")");
+            } else {
+                sql.append("ST_AsBinary(");
+                encode2DGeometry(gatt, prefix, sql, stSimplifyEnabled ? distance : null);
+                sql.append(")");
+            }
+        } else {
+            // may have curves mixed in, cannot use TWKB and need to guard ST_Simplify
+            sql.append("ST_AsBinary(");
+            sql.append("CASE WHEN ST_HasArc(");
+            dialect.encodeColumnName(prefix, gatt.getLocalName(), sql);
+            sql.append(") THEN ");
+            dialect.encodeColumnName(prefix, gatt.getLocalName(), sql);
+            sql.append(" ELSE ");
+            encode2DGeometry(gatt, prefix, sql, distance);
+            sql.append(" END)");
+        }
+    }
+
