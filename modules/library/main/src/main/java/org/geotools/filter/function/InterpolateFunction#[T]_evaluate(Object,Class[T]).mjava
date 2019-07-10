@@ -1,5 +1,12 @@
     public <T> T evaluate(Object object, Class<T> context) {
-        initialize();
+        // initialize the lookup data structures only once and in a thread safe way please
+        if (interpPoints == null) {
+            synchronized (this) {
+                if (interpPoints == null) {
+                    initialize();
+                }
+            }
+        }
 
         if (method == Method.NUMERIC && Color.class.isAssignableFrom(context)) {
             throw new IllegalArgumentException(
@@ -36,17 +43,16 @@
 
         /** Degenerate case: a single interpolation point. Evaluate it directly. */
         if (interpPoints.size() == 1) {
-            return interpPoints.get(0).value.evaluate(object, context);
+            return parameters.get(2).evaluate(object, context);
         }
 
         final int segment = findSegment(lookupValue, object);
         if (segment <= 0) {
             // Data below the range of the interpolation points
-            return interpPoints.get(0).value.evaluate(object, context);
-
+            return interpPoints.get(0).getValue(object, context);
         } else if (segment >= interpPoints.size()) {
             // Data above the range of the interpolation points
-            return interpPoints.get(interpPoints.size() - 1).value.evaluate(object, context);
+            return interpPoints.get(interpPoints.size() - 1).getValue(object, context);
         }
 
         /**
