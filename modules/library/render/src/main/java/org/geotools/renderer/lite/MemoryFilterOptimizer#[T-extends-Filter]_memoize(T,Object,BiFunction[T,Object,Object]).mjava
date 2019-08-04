@@ -1,0 +1,19 @@
+    public <T extends Filter> T memoize(
+            T filter, Object extraData, BiFunction<T, Object, Object> duplicator) {
+        // do we want to memoize this filter?
+        if (!memoizeCandidates.contains(filter)) {
+            // drill down, this clones and at the same time visits sub-filters
+            // (the small parts inside a complex filter are the ones likely to repeat)
+            return (T) duplicator.apply(filter, extraData);
+        }
+        // see if we already built a memoized replacement for it
+        T replacement = (T) filterReplacements.get(filter);
+        if (replacement == null) {
+            T duplicated = (T) duplicator.apply(filter, extraData);
+            replacement = FilterMemoizer.memoize(duplicated);
+            filterReplacements.put(filter, replacement);
+        }
+
+        return replacement;
+    }
+
