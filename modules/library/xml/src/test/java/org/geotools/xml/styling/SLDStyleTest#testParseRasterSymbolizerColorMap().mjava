@@ -1,0 +1,53 @@
+    /**
+     * Tests the parsing of a raster symbolizer sld with color Map
+     *
+     * @throws IOException
+     */
+    public void testParseRasterSymbolizerColorMap() throws IOException {
+        StyleFactory factory = CommonFactoryFinder.getStyleFactory(null);
+        java.net.URL surl = TestData.getResource(this, "rasterSymbolizerColorMap.sld");
+        SLDParser stylereader = new SLDParser(factory, surl);
+
+        Style[] styles = stylereader.readXML();
+        assertEquals(1, styles.length);
+        assertEquals(1, styles[0].featureTypeStyles().size());
+        assertEquals(1, styles[0].featureTypeStyles().get(0).rules().size());
+
+        Rule r = styles[0].featureTypeStyles().get(0).rules().get(0);
+        assertEquals(1, r.symbolizers().size());
+
+        RasterSymbolizer rs = (RasterSymbolizer) r.symbolizers().get(0);
+
+        // opacity
+        Double d = rs.getOpacity().evaluate(null, Double.class);
+        assertEquals(1.0, d.doubleValue());
+
+        // overlap behaviour
+        Expression overlapExpr = rs.getOverlap();
+        String type = (String) overlapExpr.evaluate(null);
+        assertEquals("AVERAGE", type);
+
+        // ColorMap
+        ColorMap cMap = rs.getColorMap();
+        assertEquals(20, cMap.getColorMapEntries().length);
+        ColorMapEntry[] centeries = cMap.getColorMapEntries();
+        String[] colors =
+                new String[] {
+                    "#00ff00", "#00fa00", "#14f500", "#28f502", "#3cf505", "#50f50a", "#64f014",
+                    "#7deb32", "#78c818", "#38840c", "#2c4b04", "#ffff00", "#dcdc00", "#b47800",
+                    "#c85000", "#be4100", "#963000", "#3c0200", "#ffffff", "#ffffff"
+                };
+        int[] values =
+                new int[] {
+                    -500, -417, -333, -250, -167, -83, -1, 0, 30, 105, 300, 400, 700, 1200, 1400,
+                    1600, 2000, 3000, 5000, 13000
+                };
+        for (int i = 0; i < centeries.length; i++) {
+            ColorMapEntry entry = centeries[i];
+            String c = (String) entry.getColor().evaluate(null);
+            Integer q = entry.getQuantity().evaluate(null, Integer.class);
+            assertEquals(colors[i], c);
+            assertEquals(values[i], q.intValue());
+        }
+    }
+

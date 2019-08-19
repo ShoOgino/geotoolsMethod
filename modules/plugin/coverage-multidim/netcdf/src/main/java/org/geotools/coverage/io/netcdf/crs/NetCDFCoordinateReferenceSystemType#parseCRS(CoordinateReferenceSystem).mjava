@@ -11,31 +11,17 @@
             crsType = WGS84;
         } else if (crs instanceof ProjectedCRS) {
             ProjectedCRS projectedCRS = (ProjectedCRS) crs;
-            Projection projection = projectedCRS.getConversionFromBase();
-            MathTransform transform = projection.getMathTransform();
-            if (transform instanceof TransverseMercator) {
-                crsType = TRANSVERSE_MERCATOR;
-            } else if (transform instanceof LambertConformal1SP) {
-                crsType = LAMBERT_CONFORMAL_CONIC_1SP;
-            } else if (transform instanceof LambertConformal2SP) {
-                crsType = LAMBERT_CONFORMAL_CONIC_2SP;
-            } else if (transform instanceof LambertAzimuthalEqualArea) {
-                crsType = LAMBERT_AZIMUTHAL_EQUAL_AREA;
-            } else if (transform instanceof Orthographic) {
-                crsType = ORTHOGRAPHIC;
-            } else if (transform instanceof PolarStereographic) {
-                crsType = POLAR_STEREOGRAPHIC;
-            } else if (transform instanceof Stereographic) {
-                crsType = STEREOGRAPHIC;
-            } else if (transform instanceof Mercator1SP) {
-                crsType = MERCATOR_1SP;
-            } else if (transform instanceof Mercator2SP) {
-                crsType = MERCATOR_2SP;
-            } else if (transform instanceof AlbersEqualArea) {
-                crsType = ALBERS_EQUAL_AREA;
-            } else if (transform instanceof RotatedPole) {
-                crsType = ROTATED_POLE;
+            // NetCDF supports a reduced number of CRS Type (WGS84 + some projection).
+            // Some ProjectedCRS may have unit of measure resulting in concatenated transforms.
+            if (hasConcatenatedTransform(projectedCRS)) {
+                Projection projection = projectedCRS.getConversionFromBase();
+                MathTransform mt = projection.getMathTransform();
+                ConcatenatedTransform cmt = ((ConcatenatedTransform) mt);
+                crsType = extractProjectionType(cmt);
+            } else {
+                crsType = getProjectionType(projectedCRS);
             }
+
         } else {
             // Fallback on SPATIAL_REF to deal with projection which
             // doesn't have a CF Mapping.

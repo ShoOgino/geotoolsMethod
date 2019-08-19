@@ -1,18 +1,19 @@
     public int numberOfTiles(long zoomLevel) throws SQLException {
         int size;
-        Connection cx = connPool.getConnection();
-        try {
-            PreparedStatement ps =
-                    prepare(cx, format("SELECT COUNT(*) FROM %s WHERE zoom_level=?", TABLE_TILES))
-                            .set(zoomLevel)
-                            .statement();
-            ResultSet rs = ps.executeQuery();
-            rs.next();
+        try (Connection cx = connPool.getConnection();
+                PreparedStatement ps =
+                        prepare(
+                                        cx,
+                                        format(
+                                                "SELECT COUNT(*) FROM %s WHERE zoom_level=?",
+                                                TABLE_TILES))
+                                .set(zoomLevel)
+                                .statement();
+                ResultSet rs = ps.executeQuery()) {
+            if (!rs.next()) {
+                throw new SQLException("Zoom level count did not return any row");
+            }
             size = rs.getInt(1);
-            rs.close();
-            ps.close();
-        } finally {
-            cx.close();
         }
         return size;
     }

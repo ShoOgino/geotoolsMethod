@@ -1,0 +1,30 @@
+    private void encodeMultipleValueJoin(
+            FeatureTypeMapping rootMapping,
+            String rootTableName,
+            JDBCDataStore store,
+            StringBuffer sql) {
+        for (AttributeMapping attributeMapping : rootMapping.getAttributeMappings()) {
+            if (!(attributeMapping.getMultipleValue() instanceof JdbcMultipleValue)) {
+                continue;
+            }
+            JdbcMultipleValue multipleValue =
+                    (JdbcMultipleValue) attributeMapping.getMultipleValue();
+            sql.append(" LEFT JOIN ");
+            String alias = String.valueOf(multipleValue.getId());
+            try {
+                store.encodeAliasedTableName(multipleValue.getTargetTable(), sql, null, alias);
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+            sql.append(" ON ");
+            store.dialect.encodeColumnName(null, rootTableName, sql);
+            sql.append(".");
+            store.dialect.encodeColumnName(null, multipleValue.getSourceColumn(), sql);
+            sql.append(" = ");
+            store.dialect.encodeTableName(alias, sql);
+            sql.append(".");
+            store.dialect.encodeColumnName(null, multipleValue.getTargetColumn(), sql);
+            sql.append(" ");
+        }
+    }
+

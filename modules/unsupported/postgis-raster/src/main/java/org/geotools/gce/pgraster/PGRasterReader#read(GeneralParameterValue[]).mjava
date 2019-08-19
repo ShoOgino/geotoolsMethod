@@ -1,0 +1,222 @@
+    @Override
+    public GridCoverage2D read(GeneralParameterValue[] params)
+            throws IllegalArgumentException, IOException {
+
+        ReadRequest req = new ReadRequest(this);
+
+        if (params != null) {
+            for (GeneralParameterValue p : params) {
+                Parameter<Object> param = (Parameter<Object>) p;
+
+                String code = param.getDescriptor().getName().getCode();
+                if (code.equals(AbstractGridFormat.READ_GRIDGEOMETRY2D.getName().toString())) {
+                    final GridGeometry2D gg = (GridGeometry2D) param.getValue();
+                    req.bounds = GeneralEnvelope.toGeneralEnvelope(gg.getEnvelope());
+                    req.region = gg.toCanonical().getGridRange2D().getBounds();
+                } else if (code.equals(AbstractGridFormat.TIME.getName().toString())) {
+                    req.times = (List<?>) param.getValue();
+                } else if (code.equals(AbstractGridFormat.OVERVIEW_POLICY.getName().toString())) {
+                    req.overviewPolicy = (OverviewPolicy) param.getValue();
+                } else if (code.equals(AbstractGridFormat.INTERPOLATION.getName().toString())) {
+                    req.interpolation = (Interpolation) param.getValue();
+                } else if (code.equals(AbstractGridFormat.BACKGROUND_COLOR.getName().toString())) {
+                    req.backgroundColor = (Color) param.getValue();
+                }
+            }
+        }
+
+        if (req.bounds == null) {
+            // default to entire bounds
+            req.bounds = GeneralEnvelope.toGeneralEnvelope(raster.bounds());
+        }
+        if (req.region == null && raster.size != null) {
+            req.region = new Rectangle(raster.size);
+        }
+
+        // figure out bounds in raster crs
+        ReferencedEnvelope nativeBounds;
+        if (req.bounds != null) {
+            nativeBounds = new ReferencedEnvelope(req.bounds);
+        } else {
+            nativeBounds = raster.bounds();
+        }
+
+        if (nativeBounds == null) {
+            throw new IllegalStateException(
+                    "No bounds specified in read request and unable to determine raster bounds");
+        }
+
+        // transform it if need be
+        if (!CRS.equalsIgnoreMetadata(nativeBounds.getCoordinateReferenceSystem(), raster.crs)) {
+            if (raster.crs == null) {
+                throw new IllegalStateException(
+                        "Raster crs is unknown, unable to transform from request crs");
+            }
+
+            try {
+                nativeBounds = nativeBounds.transform(raster.crs, true);
+            } catch (Exception e) {
+                throw new IOException("Error transforming requested bounds", e);
+            }
+        }
+        req.nativeBounds = nativeBounds;
+
+        if (req.region != null) {
+            req.resolution =
+                    new Point2D.Double(
+                            nativeBounds.getWidth() / req.region.width,
+                            nativeBounds.getHeight() / req.region.height);
+        }
+
+        // figure out which overview to load
+        ImageReadParam readParam = new ImageReadParam();
+        Integer level = null;
+        try {
+            level = setReadParams(req.overviewPolicy(), readParam, req.bounds, req.region);
+        } catch (TransformException e) {
+            throw new IOException("Error setting read params", e);
+        }
+        if (level == null) level = 0;
+
+        RasterColumn col = this.raster;
+        if (level > 0) {
+            col = this.raster.overviews.get(level - 1);
+        }
+        req.raster = col;
+
+        // load the tiles
+        SQL sql =
+                new SQL()
+                        .append("SELECT ST_AsBinary(ST_Envelope(")
+                        .name(col.name)
+                        .append(")) AS extent")
+                        .append(", ST_AsTiff(")
+                        .name(col.name)
+                        .append(") AS tile")
+                        .append(" FROM ")
+                        .table(col)
+                        .append(" WHERE ST_Intersects(")
+                        .name(col.name)
+                        .append(",")
+                        .append(" ST_GeomFromWKB(?,?))");
+
+        // add the time constraint
+        if (col.time != null) {
+            List<Date> times = new ArrayList<>();
+            List<DateRange> ranges = new ArrayList<>();
+
+            if (req.times != null) {
+                for (Object t : req.times) {
+                    if (t instanceof Date) {
+                        times.add((Date) t);
+                    } else if (t instanceof DateRange) {
+                        ranges.add((DateRange) t);
+                    } else {
+                        Date d = Converters.convert(t, Date.class);
+                        if (d != null) {
+                            times.add(d);
+                        } else {
+                            LOG.warning("Unable to convert value to date:" + t);
+                        }
+                    }
+                }
+            } else {
+                // no time specified, default to the latest
+                try {
+                    Date latest = queryDateExtreme("max", col);
+                    if (latest != null) {
+                        times.add(latest);
+                    }
+                } catch (SQLException | ParseException e) {
+                    throw new IOException("Error querying for date max", e);
+                }
+            }
+
+            if (!times.isEmpty()) {
+                SimpleDateFormat df = dbDataFormat();
+
+                sql.append(" AND ").name(col.time.name).append(" IN (");
+
+                times.forEach(d -> sql.append("'").append(df.format(d)).append("',"));
+                sql.trim(1);
+
+                sql.append(")");
+            } else if (!ranges.isEmpty()) {
+                SimpleDateFormat df = dbDataFormat();
+                sql.append(" AND (");
+
+                for (DateRange range : ranges) {
+                    sql.append("(")
+                            .name(col.time.name)
+                            .append(range.isMinIncluded() ? ">=" : ">")
+                            .append("'")
+                            .append(df.format(range.getMinValue()))
+                            .append("' AND ");
+
+                    sql.name(col.time.name)
+                            .append(range.isMaxIncluded() ? "<=" : "<")
+                            .append("'")
+                            .append(df.format(range.getMaxValue()))
+                            .append("'");
+
+                    sql.append(") OR ");
+                }
+                sql.trim(4);
+                sql.append(")");
+            }
+        }
+
+        try {
+            try (Connection cx = newConnection()) {
+                try (PreparedStatement ps = cx.prepareStatement(sql.logAndGet(LOG))) {
+                    ps.setBytes(1, new WKBWriter().write(toPolygon(nativeBounds)));
+                    ps.setInt(2, col.srid != null ? col.srid : -1);
+
+                    try (ResultSet rs = ps.executeQuery()) {
+                        Iterator<TileData> tiles =
+                                new AbstractIterator<TileData>() {
+                                    WKBReader wkb = new WKBReader(GEOMS);
+
+                                    @Override
+                                    protected TileData computeNext() {
+                                        try {
+                                            if (rs.next()) {
+                                                return new TileData(
+                                                        rs.getBytes(2),
+                                                        wkb.read(rs.getBytes(1))
+                                                                .getEnvelopeInternal());
+                                            }
+                                        } catch (Exception e) {
+                                            Throwables.throwIfInstanceOf(e, RuntimeException.class);
+                                            throw new RuntimeException(e);
+                                        }
+
+                                        try {
+                                            rs.close();
+                                        } catch (SQLException e) {
+                                            LOG.log(Level.FINE, "Error closing result set", e);
+                                        }
+                                        try {
+                                            ps.close();
+                                        } catch (SQLException e) {
+                                            LOG.log(Level.FINE, "Error closing statement", e);
+                                        }
+
+                                        return endOfData();
+                                    }
+                                };
+
+                        if (exec == null) {
+                            return compose(tiles, req);
+                        } else {
+                            return compose(tiles, req, exec);
+                        }
+                    }
+                }
+            }
+
+        } catch (SQLException e) {
+            throw new IOException("Error reading raster", e);
+        }
+    }
+

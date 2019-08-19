@@ -1,0 +1,42 @@
+    /**
+     * Tests the parsing of a raster symbolizer sld with ENV function expression on SelectedChannel
+     *
+     * @throws IOException
+     */
+    public void testParseRasterChannelExpression() throws IOException {
+        StyleFactory factory = CommonFactoryFinder.getStyleFactory(null);
+        java.net.URL surl = TestData.getResource(this, "raster-channel-expression.xml");
+        SLDParser stylereader = new SLDParser(factory, surl);
+
+        Style[] styles = stylereader.readXML();
+        assertEquals(1, styles.length);
+        assertEquals(1, styles[0].featureTypeStyles().size());
+        assertEquals(1, styles[0].featureTypeStyles().get(0).rules().size());
+
+        Rule r = styles[0].featureTypeStyles().get(0).rules().get(0);
+        assertEquals(1, r.symbolizers().size());
+
+        RasterSymbolizer rs = (RasterSymbolizer) r.symbolizers().get(0);
+
+        // opacity
+        assertEquals(1.0, SLD.opacity(rs));
+
+        // channels
+        ChannelSelection cs = rs.getChannelSelection();
+        SelectedChannelType redChannel = cs.getRGBChannels()[0];
+        SelectedChannelType greenChannel = cs.getRGBChannels()[1];
+        SelectedChannelType blueChannel = cs.getRGBChannels()[2];
+
+        // channel names
+        // test default: 5
+        EnvFunction.removeLocalValue("B1");
+        assertEquals(5, redChannel.getChannelName().evaluate(null, Integer.class).intValue());
+        // set env variable B1:20
+        EnvFunction.setLocalValue("B1", "20");
+        assertEquals(20, redChannel.getChannelName().evaluate(null, Integer.class).intValue());
+        EnvFunction.removeLocalValue("B1");
+
+        assertEquals("2", greenChannel.getChannelName().evaluate(null, String.class));
+        assertEquals("4", blueChannel.getChannelName().evaluate(null, String.class));
+    }
+

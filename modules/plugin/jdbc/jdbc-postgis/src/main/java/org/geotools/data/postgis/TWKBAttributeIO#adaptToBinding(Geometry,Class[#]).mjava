@@ -1,0 +1,23 @@
+    /**
+     * The TWKB encoding collapses geometries into points and encodes them as such, causing an
+     * inefficient conversion to be called later down the road, handle this case in a special way to
+     * ensure better performance
+     */
+    public Geometry adaptToBinding(Geometry g, Class<?> binding) {
+        if (g instanceof Point && !binding.isInstance(g)) {
+            CoordinateSequence cs = ((Point) g).getCoordinateSequence();
+            if (Polygon.class.isAssignableFrom(binding)) {
+                g = toPolygon(cs);
+            } else if (LineString.class.isAssignableFrom(binding)) {
+                g = toLineString(cs);
+            } else if (MultiPolygon.class.isAssignableFrom(binding)) {
+                Polygon p = toPolygon(cs);
+                g = gf.createMultiPolygon(new Polygon[] {p});
+            } else if (MultiLineString.class.isAssignableFrom(binding)) {
+                LineString ls = toLineString(cs);
+                g = gf.createMultiLineString(new LineString[] {ls});
+            }
+        }
+        return g;
+    }
+

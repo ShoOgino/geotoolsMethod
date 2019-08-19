@@ -1,0 +1,61 @@
+    /**
+     * If a system property was setup, load the class (if not already registered) and move it in
+     * front of any other factory. This is done for compatibility with legacy {@code FactoryFinder}
+     * implementation.
+     *
+     * @param loader The class loader to use.
+     * @param category The category to scan for plug-ins.
+     * @param message A buffer where to write the logging message.
+     * @return {@code true} if at least one factory has been registered.
+     */
+    private <T> boolean registerFromSystemProperty(
+            final ClassLoader loader, final Class<T> category, final StringBuilder message) {
+        boolean newFactories = false;
+        try {
+            final String classname = System.getProperty(category.getName());
+            if (classname != null)
+                try {
+                    final Class<?> candidate = loader.loadClass(classname);
+                    if (category.isAssignableFrom(candidate)) {
+                        final Class<? extends T> factoryClass = candidate.asSubclass(category);
+                        T factory = getFactoryByClass(factoryClass);
+                        if (factory == null)
+                            try {
+                                factory = factoryClass.getDeclaredConstructor().newInstance();
+                                if (registerFactory(factory, category)) {
+                                    message.append(System.getProperty("line.separator", "\n"));
+                                    message.append("  ");
+                                    message.append(factoryClass.getName());
+                                    newFactories = true;
+                                }
+                            } catch (Exception exception) {
+                                throw new FactoryRegistryException(
+                                        Errors.format(ErrorKeys.CANT_CREATE_FACTORY_$1, classname),
+                                        exception);
+                            }
+                        /*
+                         * Put this factory in front of every other factories (including the ones loaded
+                         * in previous class loaders, which is why we don't inline this ordering in the
+                         * 'register' loop). Note: if some factories were not yet registered, they will
+                         * not be properly ordered. Since this code exists more for compatibility reasons
+                         * than as a commited API, we ignore this short comming for now.
+                         */
+                        Iterable<T> factories = getFactories(category, false)::iterator;
+                        for (final T other : factories) {
+                            if (other != factory) {
+                                setOrdering(category, factory, other);
+                            }
+                        }
+                    }
+                } catch (ClassNotFoundException exception) {
+                    // The class has not been found, maybe because we are not using the appropriate
+                    // class loader. Ignore (do not thrown an exception), in order to give a chance
+                    // to the caller to invokes this method again with a different class loader.
+                }
+        } catch (SecurityException exception) {
+            // We are not allowed to read property, probably
+            // because we are running in an applet. Ignore...
+        }
+        return newFactories;
+    }
+

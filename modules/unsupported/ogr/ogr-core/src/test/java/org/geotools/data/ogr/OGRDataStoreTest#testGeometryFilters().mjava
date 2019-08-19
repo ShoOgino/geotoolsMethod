@@ -1,11 +1,17 @@
     public void testGeometryFilters() throws Exception {
-        OGRDataStore s = new OGRDataStore(getAbsolutePath(STATE_POP), null, null, ogr);
+        OGRDataStore s = createDataStore(getAbsolutePath(STATE_POP), null);
         FeatureSource fs = s.getFeatureSource(s.getTypeNames()[0]);
 
         // from one of the GeoServer demo requests
         FilterFactory ff = CommonFactoryFinder.getFilterFactory(null);
         Filter f = ff.bbox("the_geom", -75.102613, 40.212597, -72.361859, 41.512517, null);
-        assertEquals(4, fs.getFeatures(f).size());
+
+        int numberOfFeatures = fs.getFeatures(f).size();
+        // If GDAL is compiled with GEOS,
+        // the actual geometries are compared and the result will be 4
+        // If GDAL is NOT compiled with GEOS,
+        // only the bounding boxes are compared the result will be 5
+        assertEquals(s.ogr.IsGEOSEnabled() ? 4 : 5, numberOfFeatures);
 
         // mix in an attribute filter
         f = ff.and(f, ff.greater(ff.property("PERSONS"), ff.literal("10000000")));

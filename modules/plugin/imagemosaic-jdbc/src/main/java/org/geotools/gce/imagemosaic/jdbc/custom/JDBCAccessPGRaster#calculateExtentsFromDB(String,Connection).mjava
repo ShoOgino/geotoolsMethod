@@ -38,26 +38,24 @@
                             + " ) select st_asbinary(st_extent(env)) from envelopes";
 
             Envelope envelope = null;
-            PreparedStatement s = con.prepareStatement(envSelect);
-            ResultSet r = s.executeQuery();
-            WKBReader reader = new WKBReader();
+            try (PreparedStatement s = con.prepareStatement(envSelect);
+                    ResultSet r = s.executeQuery()) {
+                WKBReader reader = new WKBReader();
 
-            if (r.next()) {
-                byte[] bytes = r.getBytes(1);
-                Geometry g;
+                if (r.next()) {
+                    byte[] bytes = r.getBytes(1);
+                    Geometry g;
 
-                try {
-                    g = reader.read(bytes);
-                } catch (ParseException e) {
-                    LOGGER.log(Level.SEVERE, e.getMessage(), e);
-                    throw new IOException(e);
+                    try {
+                        g = reader.read(bytes);
+                    } catch (ParseException e) {
+                        LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                        throw new IOException(e);
+                    }
+
+                    envelope = g.getEnvelopeInternal();
                 }
-
-                envelope = g.getEnvelopeInternal();
             }
-
-            r.close();
-            s.close();
 
             if (envelope == null) {
                 if (LOGGER.isLoggable(Level.WARNING))
@@ -67,10 +65,10 @@
                 continue;
             }
 
-            li.setExtentMaxX(new Double(envelope.getMaxX()));
-            li.setExtentMaxY(new Double(envelope.getMaxY()));
-            li.setExtentMinX(new Double(envelope.getMinX()));
-            li.setExtentMinY(new Double(envelope.getMinY()));
+            li.setExtentMaxX(Double.valueOf(envelope.getMaxX()));
+            li.setExtentMaxY(Double.valueOf(envelope.getMaxY()));
+            li.setExtentMinX(Double.valueOf(envelope.getMinX()));
+            li.setExtentMinY(Double.valueOf(envelope.getMinY()));
 
             stmt.setDouble(1, li.getExtentMaxX().doubleValue());
             stmt.setDouble(2, li.getExtentMaxY().doubleValue());

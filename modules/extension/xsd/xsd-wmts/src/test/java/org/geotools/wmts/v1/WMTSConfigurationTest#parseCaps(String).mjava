@@ -1,0 +1,39 @@
+    /**
+     * @param capDoc
+     * @return
+     * @throws IOException
+     * @throws SAXException
+     * @throws ParserConfigurationException
+     */
+    private Map<String, LayerType> parseCaps(String capDoc)
+            throws IOException, SAXException, ParserConfigurationException {
+        Parser p = new Parser(new WMTSConfiguration());
+        p.setValidating(false);
+        Object parsed;
+        try (InputStream is = getClass().getResourceAsStream(capDoc)) {
+            parsed = p.parse(is);
+        }
+
+        assertTrue(
+                "Capabilities failed to parse " + parsed.getClass(),
+                parsed instanceof CapabilitiesType);
+
+        CapabilitiesType caps = (CapabilitiesType) parsed;
+        ContentsType contents = caps.getContents();
+        assertNotNull(contents);
+
+        Map<String, LayerType> layers = new HashMap<>();
+
+        // Parse layers
+        for (Object l : contents.getDatasetDescriptionSummary()) {
+
+            if (l instanceof LayerType) {
+                LayerType layerType = (LayerType) l;
+                String id = layerType.getIdentifier().getValue();
+
+                layers.put(id, layerType);
+            }
+        }
+        return layers;
+    }
+

@@ -1,0 +1,28 @@
+    private List<String> collectFilesFromTable(DataStore sourceStore, String table)
+            throws IOException {
+        final SimpleFeatureSource featureSource = sourceStore.getFeatureSource(table);
+        final Properties properties = getCoverageConfiguration(table);
+        String locationAttribute =
+                getProperty(
+                        properties,
+                        Utils.Prop.LOCATION_ATTRIBUTE,
+                        Utils.DEFAULT_LOCATION_ATTRIBUTE);
+        PathType pathType =
+                PathType.RELATIVE.valueOf(
+                        getProperty(properties, Utils.Prop.PATH_TYPE, PathType.ABSOLUTE.name()));
+
+        // query the location attribute
+        Query q = new Query(table);
+        q.setPropertyNames(new String[] {locationAttribute});
+        // extract unique values
+        UniqueVisitor uniqueLocations = new UniqueVisitor(locationAttribute);
+        featureSource.getFeatures(q).accepts(uniqueLocations, null);
+        Set<String> locations = uniqueLocations.getUnique();
+        // map via pathtype and return
+        return locations
+                .stream()
+                .map(l -> pathType.resolvePath(configuration.getMosaicDirectory().getPath(), l))
+                .map(url -> URLs.urlToFile(url).getAbsolutePath())
+                .collect(Collectors.toList());
+    }
+

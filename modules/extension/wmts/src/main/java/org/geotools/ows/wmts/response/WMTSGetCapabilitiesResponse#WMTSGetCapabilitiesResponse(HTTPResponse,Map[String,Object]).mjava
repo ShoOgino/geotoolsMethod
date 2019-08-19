@@ -1,0 +1,43 @@
+    public WMTSGetCapabilitiesResponse(HTTPResponse response, Map<String, Object> hints)
+            throws ServiceException, IOException {
+        super(response);
+
+        try {
+
+            Object object;
+            try (InputStream inputStream = response.getResponseStream()) {
+                Parser parser = new Parser(WMTS_CONFIGURATION);
+                if (LOGGER.isLoggable(Level.FINEST)) {
+                    StringBuilder stringBuilder = new StringBuilder();
+                    String line = null;
+
+                    try (BufferedReader bufferedReader =
+                            new BufferedReader(new InputStreamReader(inputStream, "utf-8"))) {
+                        while ((line = bufferedReader.readLine()) != null) {
+                            stringBuilder.append(line + "\n");
+                        }
+                    }
+                    String string = stringBuilder.toString();
+                    LOGGER.finest(string);
+
+                    object =
+                            parser.parse(
+                                    new InputSource(new ByteArrayInputStream(string.getBytes())));
+                } else {
+                    object = parser.parse(inputStream);
+                }
+            } catch (SAXException | ParserConfigurationException e) {
+                throw (ServiceException)
+                        new ServiceException("Error while parsing XML.").initCause(e);
+            }
+
+            if (object instanceof ServiceException) {
+                throw (ServiceException) object;
+            }
+
+            this.capabilities = new WMTSCapabilities((CapabilitiesType) object);
+        } finally {
+            response.dispose();
+        }
+    }
+

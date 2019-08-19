@@ -1,0 +1,40 @@
+    private List<String> getInputFileNames(RenderedImage inputImage) {
+        List<String> files = new ArrayList<>();
+        if (inputImage instanceof PlanarImage) {
+            PlanarImage planarImage = (PlanarImage) inputImage;
+
+            final int nSources = planarImage.getNumSources();
+            if (nSources > 0) {
+                for (int k = 0; k < nSources; k++) {
+                    Object source = null;
+                    try {
+                        source = planarImage.getSourceObject(k);
+                    } catch (ArrayIndexOutOfBoundsException e) {
+                        // Ignore
+                    }
+                    if (source != null) {
+                        if (source instanceof PlanarImage) {
+                            List<String> piFiles = getInputFileNames((RenderedImage) source);
+                            files.addAll(piFiles);
+                        }
+                    }
+                }
+            } else {
+                // grab the streams from the reader, the particular implementation being
+                // used has an accessor for the source files
+                Object imageReader =
+                        inputImage.getProperty(ImageReadDescriptor.PROPERTY_NAME_IMAGE_READER);
+                if ((imageReader != null) && (imageReader instanceof ImageReader)) {
+                    final ImageReader reader = (ImageReader) imageReader;
+                    final ImageInputStream stream = (ImageInputStream) reader.getInput();
+                    if (stream instanceof FileImageInputStreamExtImpl) {
+                        FileImageInputStreamExtImpl fis = (FileImageInputStreamExtImpl) stream;
+                        File file = fis.getFile();
+                        files.add(file.getName());
+                    }
+                }
+            }
+        }
+        return files;
+    }
+

@@ -1,0 +1,350 @@
+    /**
+     * Generates a 'SELECT p1, p2, ... FROM ... WHERE ...' prepared statement.
+     *
+     * @param featureType the feature type that the query must return (may contain less attributes
+     *     than the native one)
+     * @param query the query to be run. The type name and property will be ignored, as they are
+     *     supposed to have been already embedded into the provided feature type
+     * @throws SQLException
+     * @throws IOException
+     * @throws FilterToSQLException
+     */
+    public String selectSQL(
+            SimpleFeatureType featureType,
+            JoiningQuery query,
+            AtomicReference<PreparedFilterToSQL> toSQLref)
+            throws IOException, SQLException, FilterToSQLException {
+
+        // first we create from clause, for aliases
+
+        StringBuffer joinClause = new StringBuffer();
+
+        // joining
+        Set<String> tableNames = new HashSet<String>();
+
+        String lastTypeName = featureType.getTypeName();
+        String curTypeName = lastTypeName;
+
+        String[] aliases = null;
+
+        tableNames.add(lastTypeName);
+
+        String alias = null;
+
+        if (query.getQueryJoins() != null) {
+
+            aliases = new String[query.getQueryJoins().size()];
+
+            for (int i = 0; i < query.getQueryJoins().size(); i++) {
+                JoiningQuery.QueryJoin join = query.getQueryJoins().get(i);
+
+                joinClause.append(" INNER JOIN ");
+
+                FilterToSQL toSQL1 = createFilterToSQL(getDataStore().getSchema(lastTypeName));
+                FilterToSQL toSQL2 =
+                        createFilterToSQL(getDataStore().getSchema(join.getJoiningTypeName()));
+
+                if (tableNames.contains(join.getJoiningTypeName())) {
+                    alias = createAlias(join.getJoiningTypeName(), tableNames);
+
+                    aliases[i] = alias;
+
+                    getDataStore()
+                            .encodeTableName(
+                                    join.getJoiningTypeName(), joinClause, query.getHints());
+                    joinClause.append(" ");
+                    getDataStore().dialect.encodeTableName(alias, joinClause);
+                    joinClause.append(" ON ( ");
+
+                    toSQL2.setFieldEncoder(new JoiningFieldEncoder(alias, getDataStore()));
+                    joinClause.append(toSQL2.encodeToString(join.getForeignKeyName()));
+
+                } else {
+                    aliases[i] = null;
+                    getDataStore()
+                            .encodeTableName(
+                                    join.getJoiningTypeName(), joinClause, query.getHints());
+                    joinClause.append(" ON ( ");
+                    toSQL2.setFieldEncoder(
+                            new JoiningFieldEncoder(join.getJoiningTypeName(), getDataStore()));
+                    joinClause.append(toSQL2.encodeToString(join.getForeignKeyName()));
+                }
+
+                joinClause.append(" = ");
+                String fromTypeName = curTypeName;
+                toSQL1.setFieldEncoder(new JoiningFieldEncoder(fromTypeName, getDataStore()));
+                joinClause.append(toSQL1.encodeToString(join.getJoiningKeyName()));
+                joinClause.append(") ");
+                lastTypeName = join.getJoiningTypeName();
+                curTypeName = aliases[i] == null ? lastTypeName : aliases[i];
+
+                tableNames.add(curTypeName);
+            }
+        }
+
+        // begin sql
+        StringBuffer sql = new StringBuffer();
+        sql.append("SELECT ");
+
+        // primary key
+        PrimaryKey key = null;
+
+        try {
+            key = getDataStore().getPrimaryKey(featureType);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        Set<String> pkColumnNames = new HashSet<String>();
+        String colName;
+        for (PrimaryKeyColumn col : key.getColumns()) {
+            colName = col.getName();
+            encodeColumnName(colName, featureType.getTypeName(), sql, query.getHints());
+            sql.append(",");
+            pkColumnNames.add(colName);
+        }
+        Set<String> lastPkColumnNames = pkColumnNames;
+
+        // other columns
+        for (AttributeDescriptor att : featureType.getAttributeDescriptors()) {
+            // skip the eventually exposed pk column values
+            String columnName = att.getLocalName();
+            if (pkColumnNames.contains(columnName)) continue;
+
+            if (att instanceof GeometryDescriptor) {
+                // encode as geometry
+                encodeGeometryColumn(
+                        (GeometryDescriptor) att, featureType.getTypeName(), sql, query.getHints());
+
+                // alias it to be the name of the original geometry
+                getDataStore().dialect.encodeColumnAlias(columnName, sql);
+            } else {
+                encodeColumnName(columnName, featureType.getTypeName(), sql, query.getHints());
+            }
+
+            sql.append(",");
+        }
+
+        if (query.getQueryJoins() != null && query.getQueryJoins().size() > 0) {
+            for (int i = 0; i < query.getQueryJoins().size(); i++) {
+                List<String> ids = query.getQueryJoins().get(i).getIds();
+                for (int j = 0; j < ids.size(); j++) {
+                    if (aliases[i] != null) {
+                        getDataStore()
+                                .dialect
+                                .encodeColumnName(
+                                        aliases[i],
+                                        query.getQueryJoins().get(i).getIds().get(j),
+                                        sql);
+                    } else {
+                        encodeColumnName(
+                                query.getQueryJoins().get(i).getIds().get(j),
+                                query.getQueryJoins().get(i).getJoiningTypeName(),
+                                sql,
+                                query.getHints());
+                    }
+                    sql.append(" ").append(FOREIGN_ID + "_" + i + "_" + j).append(",");
+                }
+                // GEOT-4554: handle PK as default idExpression
+                if (ids.isEmpty()) {
+                    PrimaryKey joinKey = null;
+                    String joinTypeName = query.getQueryJoins().get(i).getJoiningTypeName();
+                    SimpleFeatureType joinFeatureType = getDataStore().getSchema(joinTypeName);
+
+                    try {
+                        joinKey = getDataStore().getPrimaryKey(joinFeatureType);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                    if (!joinKey.getColumns().isEmpty()) {
+                        lastPkColumnNames.clear();
+                    }
+                    int j = 0;
+                    for (PrimaryKeyColumn col : joinKey.getColumns()) {
+                        if (aliases[i] != null) {
+                            getDataStore().dialect.encodeColumnName(aliases[i], col.getName(), sql);
+                        } else {
+                            encodeColumnName(col.getName(), joinTypeName, sql, query.getHints());
+                        }
+                        query.getQueryJoins().get(i).addId(col.getName());
+                        sql.append(" ").append(FOREIGN_ID + "_" + i + "_" + j).append(",");
+                        j++;
+                        lastPkColumnNames.add(col.getName());
+                    }
+                }
+            }
+        }
+        if (!query.hasIdColumn() && !pkColumnNames.isEmpty()) {
+            int pkIndex = 0;
+            for (String pk : pkColumnNames) {
+                encodeColumnName(pk, featureType.getTypeName(), sql, query.getHints());
+                sql.append(" ").append(PRIMARY_KEY).append("_").append(pkIndex).append(",");
+                pkIndex++;
+            }
+        }
+
+        sql.setLength(sql.length() - 1);
+
+        sql.append(" FROM ");
+
+        getDataStore().encodeTableName(featureType.getTypeName(), sql, query.getHints());
+
+        // filtering
+        FilterToSQL toSQL = null;
+        Filter filter = query.getFilter();
+
+        sql.append(joinClause);
+
+        boolean isRootFeature =
+                (query.getQueryJoins() == null || query.getQueryJoins().size() == 0);
+
+        boolean pagingApplied = false;
+
+        if (filter != null && !Filter.INCLUDE.equals(filter)) {
+            // encode filter
+            try {
+                SortBy[] lastSortBy = null;
+                // leave it as null if it's asking for a subset, since we don't want to join to get
+                // other rows of same id
+                // since we don't want a full feature, but a subset only
+                if (!query.isSubset()) {
+                    // grab the full feature type, as we might be encoding a filter
+                    // that uses attributes that aren't returned in the results
+                    lastSortBy =
+                            isRootFeature
+                                    ? query.getSortBy()
+                                    : (query.getQueryJoins() == null
+                                                    || query.getQueryJoins().size() == 0
+                                            ? query.getSortBy()
+                                            : query.getQueryJoins()
+                                                    .get(query.getQueryJoins().size() - 1)
+                                                    .getSortBy());
+                }
+                String lastTableName =
+                        isRootFeature
+                                ? query.getTypeName()
+                                : query.getQueryJoins()
+                                        .get(query.getQueryJoins().size() - 1)
+                                        .getJoiningTypeName();
+                String lastTableAlias =
+                        isRootFeature
+                                ? query.getTypeName()
+                                : aliases[query.getQueryJoins().size() - 1] == null
+                                        ? lastTableName
+                                        : aliases[query.getQueryJoins().size() - 1];
+
+                toSQL = createFilterToSQL(getDataStore().getSchema(lastTableName));
+
+                // apply paging to the root feature if applicable
+                Collection<String> ids = new ArrayList<String>();
+
+                if (isRootFeature && query.isDenormalised()) {
+                    // apply inner join for paging to root feature
+                    // if not denormalised, it will apply the maxFeatures and offset in the query
+                    // directly later
+                    pagingApplied =
+                            applyPaging(
+                                    query,
+                                    sql,
+                                    pkColumnNames,
+                                    featureType.getTypeName(),
+                                    featureType.getTypeName(),
+                                    tableNames,
+                                    toSQL,
+                                    filter,
+                                    ids);
+                }
+
+                if (!isRootFeature) {
+                    // also we always need to apply paging for the last queryJoin since it is the
+                    // join to
+                    // the root feature type (where the original paging parameters come from)
+                    QueryJoin lastJoin =
+                            query.getQueryJoins().get(query.getQueryJoins().size() - 1);
+                    pagingApplied =
+                            applyPaging(
+                                    lastJoin,
+                                    sql,
+                                    pkColumnNames,
+                                    lastTableName,
+                                    lastTableAlias,
+                                    tableNames,
+                                    toSQL,
+                                    filter,
+                                    ids);
+                }
+
+                if (lastSortBy != null && (lastSortBy.length > 0 || !lastPkColumnNames.isEmpty())) {
+                    buildFilter(
+                            query,
+                            sql,
+                            lastPkColumnNames,
+                            toSQL,
+                            filter,
+                            lastSortBy,
+                            lastTableName,
+                            lastTableAlias,
+                            ids);
+                } else if (!pagingApplied) {
+                    toSQL.setFieldEncoder(new JoiningFieldEncoder(curTypeName, getDataStore()));
+                    if (NestedFilterToSQL.isNestedFilter(filter)) {
+                        sql.append(" WHERE ").append(createNestedFilter(filter, query, toSQL));
+                    } else {
+                        sql.append(" ").append(toSQL.encodeToString(filter));
+                    }
+                }
+            } catch (FilterToSQLException e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            if (isRootFeature && query.isDenormalised()) {
+                // apply inner join for paging to root feature
+                pagingApplied =
+                        applyPaging(
+                                query,
+                                sql,
+                                pkColumnNames,
+                                featureType.getTypeName(),
+                                featureType.getTypeName(),
+                                tableNames,
+                                null,
+                                null,
+                                null);
+            }
+            if (!isRootFeature) {
+                // also we always need to apply paging for the last queryJoin since it is the join
+                // to
+                // the root feature type (where the original paging parameters come from)
+                QueryJoin lastJoin = query.getQueryJoins().get(query.getQueryJoins().size() - 1);
+                String lastTableAlias =
+                        aliases[query.getQueryJoins().size() - 1] == null
+                                ? lastJoin.getJoiningTypeName()
+                                : aliases[query.getQueryJoins().size() - 1];
+                pagingApplied =
+                        applyPaging(
+                                lastJoin,
+                                sql,
+                                pkColumnNames,
+                                lastJoin.getJoiningTypeName(),
+                                lastTableAlias,
+                                tableNames,
+                                null,
+                                null,
+                                null);
+            }
+        }
+
+        // sorting
+        sort(query, sql, aliases, pkColumnNames);
+
+        // finally encode limit/offset, if not already done in the INNER JOIN
+        if (!pagingApplied) {
+            getDataStore().applyLimitOffset(sql, query);
+        }
+
+        if (toSQLref != null && toSQL instanceof PreparedFilterToSQL) {
+            toSQLref.set((PreparedFilterToSQL) toSQL);
+        }
+
+        return sql.toString();
+    }
+

@@ -1,0 +1,37 @@
+    /**
+     * If replaceOrWithUnion flag is enabled this method will build main OR condition in the form of
+     * UNION queries like: SELECT id, name FROM table WHERE name = "Alf" OR name = "Rick" -> SELECT
+     * id, name FROM table WHERE name = "Alf" UNION SELECT id, name FROM table WHERE name = "Rick"
+     */
+    @Override
+    protected Object visit(BinaryLogicOperator filter, Object extraData) {
+        String operator = (String) extraData;
+        if (!replaceOrWithUnion
+                || "AND".equalsIgnoreCase(operator)
+                || selectClause == null
+                || !rootBinaryOperator) {
+            rootBinaryOperator = false;
+            return super.visit(filter, extraData);
+        }
+        if ("OR".equalsIgnoreCase(operator)) {
+            rootBinaryOperator = false;
+            // build UNION query instead main OR
+            try {
+                java.util.Iterator list = filter.getChildren().iterator();
+
+                while (list.hasNext()) {
+                    ((Filter) list.next()).accept(this, extraData);
+                    if (list.hasNext()) {
+                        // selectClause will carry the parent SELECT FROM clauses, so we use it to
+                        // build UNION
+                        out.write(" UNION " + selectClause + " ");
+                    }
+                }
+
+            } catch (java.io.IOException ioe) {
+                throw new RuntimeException(IO_ERROR, ioe);
+            }
+        }
+        return extraData;
+    }
+

@@ -2,6 +2,10 @@
             FeatureTypeMapping mappings,
             XPathUtil.StepList xpath,
             NestedAttributeMapping nestedMapping) {
+        if (!(mappings.getSource() instanceof MongoFeatureStore)) {
+            // nothing to do here
+            return null;
+        }
         if (!nestedMapping
                 .getTargetXPath()
                 .equalsIgnoreIndex(xpath.subList(0, nestedMapping.getTargetXPath().size()))) {
@@ -15,6 +19,19 @@
         int start = 0;
         while (end > start) {
             try {
+                // let's check if the feature type name was provided
+                FeatureTypeMapping featureTypeMapping =
+                        ((NestedAttributeMapping) attributeMapping).getFeatureTypeMapping(null);
+                Name featureTypeName = featureTypeMapping.getTargetFeature().getName();
+                QName name = finalXpath.get(start).getName();
+                if (Types.equals(featureTypeName, name)) {
+                    // feature type name provided, let's skip it
+                    start++;
+                    if (start >= end) {
+                        // looks like only the feature type name was provided, we are done
+                        break;
+                    }
+                }
                 SearchResult result = search(finalXpath.subList(start, end), attributeMapping);
                 if (!result.found) {
                     break;

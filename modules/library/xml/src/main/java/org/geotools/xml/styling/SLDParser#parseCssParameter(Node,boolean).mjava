@@ -1,0 +1,161 @@
+    /**
+     * Parses a css parameter. You can choose if the parser must trim whitespace from text nodes or
+     * not.
+     *
+     * @param root node to parse
+     * @param trimWhiteSpace true to trim whitespace from text nodes. If false, whitespaces will be
+     *     collapsed into one
+     * @return
+     */
+    private Expression parseCssParameter(Node root, boolean trimWhiteSpace) {
+        if (LOGGER.isLoggable(Level.FINEST)) {
+            LOGGER.finest("parsingCssParam " + root);
+        }
+
+        NodeList children = root.getChildNodes();
+        final int length = children.getLength();
+        List<Expression> expressions = new ArrayList<Expression>();
+        List<Boolean> cdatas = new ArrayList<Boolean>();
+        for (int i = 0; i < length; i++) {
+            Node child = children.item(i);
+
+            // Added mixed="true" management through concatenation of text and
+            // expression nodes
+            if ((child == null)) {
+                continue;
+            } else if (child.getNodeType() == Node.TEXT_NODE) {
+                String value = child.getNodeValue();
+                if (value == null) continue;
+
+                if (trimWhiteSpace) {
+                    value = value.trim();
+                } else {
+                    // by spec the inner spaces should collapsed into one, leading and trailing
+                    // space should be eliminated too
+                    // http://www.w3.org/TR/2001/REC-xmlschema-2-20010502/ (4.3.6 whiteSpace)
+
+                    // remove inside spaces
+                    value = WHITESPACES.matcher(value).replaceAll(" ");
+                    // we can't deal with leading and trailing whitespaces now
+                    // as the parser will return each line of whitespace as a separate element
+                    // we have to do that as post processing
+                }
+
+                if (value != null && value.length() != 0) {
+                    Literal literal = ff.literal(value);
+
+                    if (LOGGER.isLoggable(Level.FINEST)) {
+                        LOGGER.finest("Built new literal " + literal);
+                    }
+                    // add the text node as a literal
+                    expressions.add(literal);
+                    cdatas.add(false);
+                }
+            } else if (child.getNodeType() == Node.ELEMENT_NODE) {
+
+                if (LOGGER.isLoggable(Level.FINEST)) {
+                    LOGGER.finest("about to parse " + child.getLocalName());
+                }
+                // add the element node as an expression
+                expressions.add(expressionDOMParser.expression(child));
+                cdatas.add(false);
+            } else if (child.getNodeType() == Node.CDATA_SECTION_NODE) {
+                String value = child.getNodeValue();
+                if (value != null && value.length() != 0) {
+                    // we build a literal straight, to preserve even cdata sections
+                    // that have only spaces (as opposed to try and parse it as a literal
+                    // using the expression dom parser)
+                    Literal literal = ff.literal(value);
+
+                    if (LOGGER.isLoggable(Level.FINEST)) {
+                        LOGGER.finest("Built new literal " + literal);
+                    }
+                    // add the text node as a literal
+                    expressions.add(literal);
+                    cdatas.add(true);
+                }
+            } else continue;
+        }
+
+        if (expressions.size() == 0 && LOGGER.isLoggable(Level.FINEST)) {
+            LOGGER.finest("no children in CssParam");
+        }
+
+        if (!trimWhiteSpace) {
+            // remove all leading white spaces, which means, find all
+            // string literals, remove the white space ones, eventually
+            // remove the leading white space form the first non white space one
+            while (expressions.size() > 0) {
+                Expression ex = expressions.get(0);
+
+                // if it's not a string literal we're done
+                if (!(ex instanceof Literal)) break;
+                Literal literal = (Literal) ex;
+                if (!(literal.getValue() instanceof String)) break;
+
+                // ok, string literal.
+                String s = (String) literal.getValue();
+                if (!cdatas.get(0)) {
+                    if ("".equals(s.trim())) {
+                        // If it's whitespace, we have to remove it and continue
+                        expressions.remove(0);
+                        cdatas.remove(0);
+                    } else {
+                        // if it's not only whitespace, remove anyways the eventual whitespace
+                        // at its beginning, and then exit, leading whitespace removal is done
+                        if (s.startsWith(" ")) {
+                            s = LEADING_WHITESPACES.matcher(s).replaceAll("");
+                            expressions.set(0, ff.literal(s));
+                        }
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+
+            // remove also all trailing white spaces the same way
+            while (expressions.size() > 0) {
+                final int idx = expressions.size() - 1;
+                Expression ex = expressions.get(idx);
+
+                // if it's not a string literal we're done
+                if (!(ex instanceof Literal)) break;
+                Literal literal = (Literal) ex;
+                if (!(literal.getValue() instanceof String)) break;
+
+                // ok, string literal.
+                String s = (String) literal.getValue();
+                if (!cdatas.get(idx)) {
+                    if ("".equals(s.trim())) {
+                        // If it's whitespace, we have to remove it and continue
+                        expressions.remove(idx);
+                        cdatas.remove(idx);
+                    } else {
+                        // if it's not only whitespace, remove anyways the eventual whitespace
+                        // at its end, and then exit, trailing whitespace removal is done
+                        if (s.endsWith(" ")) {
+                            s = TRAILING_WHITESPACES.matcher(s).replaceAll("");
+                            expressions.set(idx, ff.literal(s));
+                        }
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+
+        // now combine all expressions into one
+        Expression ret = null;
+        for (Expression expression : expressions) {
+            ret = manageMixed(ret, expression);
+        }
+        // If the expression list is empty, we have an empty tag, and should return an empty string.
+        if (ret == null) {
+            return ff.literal("");
+        }
+
+        return ret;
+    }
+

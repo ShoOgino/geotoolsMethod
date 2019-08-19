@@ -1,20 +1,14 @@
     @Override
     public Geometry postProcess(MathTransform mt, Geometry geometry) {
-        // First let's check if the geometry is undoubtedly not going to need
-        // processing
+        // Let's check if the geometry is undoubtedly not going to need processing
         Envelope env = geometry.getEnvelopeInternal();
-        final double width;
-        final double reWidth;
-        final boolean northEast = CRS.getAxisOrder(targetCRS) == CRS.AxisOrder.NORTH_EAST;
-        if (northEast) {
-            width = env.getHeight();
-            reWidth = renderingEnvelope.getHeight();
-        } else {
-            width = env.getWidth();
-            reWidth = renderingEnvelope.getWidth();
-        }
+        final double width = getWidth(env, targetCRS);
+        final double reWidth = getWidth(renderingEnvelope, targetCRS);
 
-        if (width < radius && renderingEnvelope.contains(env) && reWidth <= radius * 2) {
+        // if it was large and still larger, or small and still small, it likely did not wrap
+        if (width < targetHalfCircle
+                && renderingEnvelope.contains(env)
+                && reWidth <= targetHalfCircle * 2) {
             return geometry;
         }
 
@@ -22,15 +16,19 @@
         // anything larger than half of the world might have wrapped it, however,
         // if it's touching both datelines then don't wrap it, as it might be something
         // like antarctica
-        if (datelineWrappingCheckEnabled && width > radius && width < radius * 2) {
+        final boolean northEast = CRS.getAxisOrder(targetCRS) == CRS.AxisOrder.NORTH_EAST;
+        if (datelineWrappingCheckEnabled
+                && ((geometry.getUserData() == LARGE_EARTH_OBJECT && width < targetHalfCircle)
+                        || (geometry.getUserData() != LARGE_EARTH_OBJECT
+                                && width > targetHalfCircle
+                                && width < targetHalfCircle * 2))) {
             final Geometry wrapped = geometry.copy();
-            wrapped.apply(new WrappingCoordinateFilter(radius, radius * 2, mt, northEast));
+            wrapped.apply(
+                    new WrappingCoordinateFilter(
+                            targetHalfCircle, targetHalfCircle * 2, mt, northEast));
             wrapped.geometryChanged();
-            // did we un-wrap it?
-            // if (isUnwrapped(wrapped)) {
             geometry = wrapped;
             env = geometry.getEnvelopeInternal();
-            // }
         }
 
         // The viewing area might contain the geometry multiple times due to
@@ -51,11 +49,11 @@
             lowLimit =
                     Math.max(
                             renderingEnvelope.getMinY(),
-                            renderingEnvelope.getMedian(1) - maxWraps * radius * 2);
+                            renderingEnvelope.getMedian(1) - maxWraps * targetHalfCircle * 2);
             highLimit =
                     Math.min(
                             renderingEnvelope.getMaxY(),
-                            renderingEnvelope.getMedian(1) + maxWraps * radius * 2);
+                            renderingEnvelope.getMedian(1) + maxWraps * targetHalfCircle * 2);
         } else {
             base = env.getMinX();
             curr = env.getMinX();
@@ -63,31 +61,29 @@
             lowLimit =
                     Math.max(
                             renderingEnvelope.getMinX() - geometryWidth,
-                            renderingEnvelope.getMedian(0) - maxWraps * radius * 2);
+                            renderingEnvelope.getMedian(0) - maxWraps * targetHalfCircle * 2);
             highLimit =
                     Math.min(
                             renderingEnvelope.getMaxX() + geometryWidth,
-                            renderingEnvelope.getMedian(0) + maxWraps * radius * 2);
+                            renderingEnvelope.getMedian(0) + maxWraps * targetHalfCircle * 2);
         }
         while (curr > lowLimit) {
-            curr -= radius * 2;
+            curr -= targetHalfCircle * 2;
         }
 
         // clone and offset as necessary
         geomType = accumulate(geoms, geometry, geomType);
         while (curr <= highLimit) {
             double offset = curr - base;
-            if (Math.abs(offset) < radius) {
-                // in this case we can keep the original geometry, which is already in
-            } else {
-                // in all other cases we make a copy and offset it
+            if (Math.abs(offset) >= targetHalfCircle) {
+                // we make a copy and offset it
                 Geometry offseted = geometry.copy();
                 offseted.apply(new OffsetOrdinateFilter(northEast ? 1 : 0, offset));
                 offseted.geometryChanged();
                 geomType = accumulate(geoms, offseted, geomType);
             }
 
-            curr += radius * 2;
+            curr += targetHalfCircle * 2;
         }
 
         // if we could not find any geom type we stumbled int an empty geom collection

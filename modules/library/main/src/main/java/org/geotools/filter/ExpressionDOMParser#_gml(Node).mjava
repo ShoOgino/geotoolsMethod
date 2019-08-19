@@ -8,7 +8,6 @@
         LOGGER.finer("processing gml " + root);
 
         List coordList;
-        int type = 0;
         Node child = root;
 
         // Jesus I hate DOM.  I have no idea why this was checking for localname
@@ -25,8 +24,8 @@
         }
 
         if (childName.equalsIgnoreCase("gml:box")) {
-            type = GML_BOX;
-            coordList = parseCoords(child);
+            coordList =
+                    new ExpressionDOMParser(CommonFactoryFinder.getFilterFactory2()).coords(child);
 
             org.locationtech.jts.geom.Envelope env = new org.locationtech.jts.geom.Envelope();
 
@@ -75,7 +74,6 @@
 
         if (childName.equalsIgnoreCase("gml:polygon")) {
             LOGGER.finer("polygon");
-            type = GML_POLYGON;
 
             LinearRing outer = null;
             List inner = new ArrayList();
@@ -94,11 +92,11 @@
                 }
 
                 if (kidName.equalsIgnoreCase("gml:outerBoundaryIs")) {
-                    outer = (LinearRing) parseGML(kid);
+                    outer = (LinearRing) gml(kid);
                 }
 
                 if (kidName.equalsIgnoreCase("gml:innerBoundaryIs")) {
-                    inner.add((LinearRing) parseGML(kid));
+                    inner.add((LinearRing) gml(kid));
                 }
             }
 
@@ -115,12 +113,13 @@
 
             NodeList kids = ((Element) child).getElementsByTagName("gml:LinearRing");
             if (kids.getLength() == 0) kids = ((Element) child).getElementsByTagName("LinearRing");
-            return parseGML(kids.item(0));
+            return gml(kids.item(0));
         }
 
         if (childName.equalsIgnoreCase("gml:linearRing")) {
             LOGGER.finer("LinearRing");
-            coordList = parseCoords(child);
+            coordList =
+                    new ExpressionDOMParser(CommonFactoryFinder.getFilterFactory2()).coords(child);
 
             org.locationtech.jts.geom.LinearRing ring = null;
 
@@ -137,8 +136,8 @@
 
         if (childName.equalsIgnoreCase("gml:linestring")) {
             LOGGER.finer("linestring");
-            type = GML_LINESTRING;
-            coordList = parseCoords(child);
+            coordList =
+                    new ExpressionDOMParser(CommonFactoryFinder.getFilterFactory2()).coords(child);
 
             org.locationtech.jts.geom.LineString line = null;
             line = gfac.createLineString((Coordinate[]) coordList.toArray(new Coordinate[] {}));
@@ -148,8 +147,8 @@
 
         if (childName.equalsIgnoreCase("gml:point")) {
             LOGGER.finer("point");
-            type = GML_POINT;
-            coordList = parseCoords(child);
+            coordList =
+                    new ExpressionDOMParser(CommonFactoryFinder.getFilterFactory2()).coords(child);
 
             org.locationtech.jts.geom.Point point = null;
             point = gfac.createPoint((Coordinate) coordList.get(0));
@@ -168,7 +167,7 @@
 
             for (int i = 0; i < kids.getLength(); i++) {
                 if (kids.item(i).getNodeType() == Node.ELEMENT_NODE) {
-                    multi.add(parseGML(kids.item(i)));
+                    multi.add(gml(kids.item(i)));
                 }
             }
 

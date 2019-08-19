@@ -1,0 +1,123 @@
+    /**
+     * Verifies the CRS of the specified {@code DirectPosition} is WGS84, and returns it unmodified
+     * if it is. If not, transforms the input into a new DirectPosition with a WGS84 CRS. Returns it
+     * as a LatLonAlt if input was LatLonAlt.
+     *
+     * @param dp The DirectPosition to examine and transform if necessary
+     * @return The original DirectPosition if it was already WGS84, or the transformed
+     *     DirectPosition.
+     */
+    public static DirectPosition ensureWGS84(DirectPosition dp) {
+        CoordinateReferenceSystem crs = dp.getCoordinateReferenceSystem();
+        CoordinateReferenceSystem bcrs =
+                crs instanceof ProjectedCRS ? ((ProjectedCRS) crs).getBaseCRS() : crs;
+
+        GeographicCRS wgs84crs = null;
+        try {
+            wgs84crs = (GeographicCRS) CRS.decode("EPSG:4327");
+        } catch (Exception nsace) {
+            getLog().warn("could not get crs for EPSG:4327");
+        }
+
+        // have doubts about following line, was the commented out 2nd clause to condition doing
+        // anything - colin
+        if (bcrs.equals(wgs84crs)) { // || bcrs.equals(CRSUtils.WGS84_PROJ)) {
+            return dp;
+        }
+        // again, what does the follllowing achieve? - colin
+        if (bcrs.toWKT().indexOf("WGS84") > -1) {
+            return dp;
+        }
+        if (bcrs instanceof GeographicCRS) {
+            if (((GeographicCRS) bcrs).getDatum().equals(wgs84crs.getDatum())) {
+                return dp;
+            }
+        }
+        // not going to need CommonFactory.getCoordinateOperationFactory(),
+        // can use transform util in org.geotools.referencing.CRS instaed
+        // CoordinateReferenceSystem crs2 = dim == 2 ? wgs84crs : CRSUtils.WGS84_PROJ;
+        // same equality issues as above
+        DirectPosition dp2 =
+                GeometryFactoryFinder.getPositionFactory(null).createDirectPosition(null);
+        try {
+            MathTransform transform = CRS.findMathTransform(crs, wgs84crs);
+            transform.transform(dp, dp2);
+        } catch (FactoryException fe) {
+            getLog().warn(
+                            "Could not create CoordinateOperation to convert DirectPosition CRS "
+                                    + crs.getName()
+                                    + " to WGS84, using original ordinates",
+                            fe);
+            // throw new IllegalArgumentException("Unconvertible coordinate CRS");
+        } catch (TransformException e) {
+            getLog().warn(
+                            "Could not transform DirectPosition CRS "
+                                    + crs.getName()
+                                    + " to WGS84, using original ordinates",
+                            e);
+            // throw new IllegalArgumentException("Unconvertible coordinate CRS");
+        } catch (MismatchedDimensionException e) {
+            // PENDING(NL): There's probably something better we can do here
+            // than just throw an exception.  Normally we only care about lat and lon,
+            // and if one has altitude and the other doesn't that shouldn't
+            // be a showstopper.
+            getLog().warn(
+                            "Dimension mismatch prevented conversion of DirectPosition CRS "
+                                    + crs.getName()
+                                    + " to WGS84, using original ordinates",
+                            e);
+            // throw new IllegalArgumentException("Unconvertible coordinate CRS");
+        }
+        return dp2;
+
+        // hmm, not sure about following line,
+        // think the LatLongAlt class was specific to how the polexis code works
+        // and is not needed here
+        // boolean wasLatLonAlt = dp instanceof LatLongAlt;
+        /*
+        if (wasLatLonAlt) {
+        	dp = commonFactory.getGeometryFactory(crs).createDirectPosition();
+        }
+        */
+        /*
+           CommonFactory commonFactory = FactoryManager.getCommonFactory();
+           CoordinateOperationFactory coopFactory = commonFactory.getCoordinateOperationFactory();
+           try {
+           	CoordinateReferenceSystem crs2 = dim == 2 ? wgs84crs : CRSUtils.WGS84_PROJ;
+           	CoordinateOperation coOp = coopFactory.createOperation(crs, crs2);
+           	DirectPosition dp2 = commonFactory.getGeometryFactory(crs2).createDirectPosition();
+               dp2 = coOp.getMathTransform().transform(dp, dp2);
+           	if (dp2.getCoordinateReferenceSystem() != null) {
+           		if (wasLatLonAlt) {
+           			dp2 = new LatLonAlt(dp2);
+           		}
+           		return dp2;
+           	} else {
+           		getLog().warn(
+           			"Attempted to convert coordinate CRS, transform method returned DirectPosition with null CRS, using original ordinates",
+        new IllegalArgumentException("Unconvertible coordinate CRS"));
+           	}
+           } catch (FactoryException fe) {
+           	getLog().warn("Could not create CoordinateOperation to convert DirectPosition CRS "
+           		+ crs.getName() + " to WGS84, using original ordinates", fe);
+           	//throw new IllegalArgumentException("Unconvertible coordinate CRS");
+           } catch (TransformException e) {
+           	getLog().warn("Could not transform DirectPosition CRS "
+           		+ crs.getName() + " to WGS84, using original ordinates", e);
+           	//throw new IllegalArgumentException("Unconvertible coordinate CRS");
+           } catch (MismatchedDimensionException e) {
+           	// PENDING(NL): There's probably something better we can do here
+           	// than just throw an exception.  Normally we only care about lat and lon,
+           	// and if one has altitude and the other doesn't that shouldn't
+           	// be a showstopper.
+           	getLog().warn("Dimension mismatch prevented conversion of DirectPosition CRS "
+           		+ crs.getName() + " to WGS84, using original ordinates", e);
+           	//throw new IllegalArgumentException("Unconvertible coordinate CRS");
+           } catch (RuntimeException e) {
+           	getLog().warn("Could not convert DirectPosition CRS "
+           		+ crs.getName() + " to WGS84, using original ordinates", e);
+           	//throw e;
+           }
+           return dp;*/
+    }
+

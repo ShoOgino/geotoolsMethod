@@ -1,0 +1,37 @@
+    private Object visitDistanceSpatialOperator(
+            DistanceBufferOperator filter,
+            PropertyName property,
+            Literal geometry,
+            boolean swapped,
+            Object extraData) {
+        if (!(filter instanceof DWithin) && !(filter instanceof Beyond)) {
+            throw new IllegalArgumentException("Unsupported filter type " + filter.getClass());
+        }
+        try {
+            property.accept(this, extraData);
+            out.write(".ST_WithinDistance(");
+            geometry.accept(this, extraData);
+            out.write(", ");
+            String unit = filter.getDistanceUnits();
+            if (UNITS_MAP.containsKey(unit)) {
+                double distInMeters = filter.getDistance() * UNITS_MAP.get(unit);
+                out.write(Double.toString(distInMeters));
+                out.write(", 'meter'");
+            } else {
+                out.write(Double.toString(filter.getDistance()));
+                out.write(", '");
+                out.write(filter.getDistanceUnits());
+                out.write("'");
+            }
+            out.write(")");
+            if ((filter instanceof DWithin) != swapped) {
+                out.write(" = 1");
+            } else {
+                out.write(" = 0");
+            }
+            return extraData;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+

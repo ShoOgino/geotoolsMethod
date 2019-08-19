@@ -1,0 +1,28 @@
+    /** Execute the GetMap request */
+    GridCoverage2D getMap(
+            ReferencedEnvelope requestedEnvelope, int width, int height, Color backgroundColor)
+            throws IOException {
+        // build the request
+        ReferencedEnvelope gridEnvelope =
+                initMapRequest(requestedEnvelope, width, height, backgroundColor);
+
+        // issue the request and wrap response in a grid coverage
+        try {
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine("Issuing request: " + mapRequest.getFinalURL());
+            }
+            GetMapResponse response = wms.issueRequest(mapRequest);
+            try (InputStream is = response.getInputStream()) {
+                RenderedImage image = ImageIOExt.read(is);
+                if (image == null) {
+                    throw new IOException("GetMap failed: " + mapRequest.getFinalURL());
+                }
+                return gcf.create(layers.get(0).getLayer().getTitle(), image, gridEnvelope);
+            } finally {
+                response.dispose();
+            }
+        } catch (ServiceException e) {
+            throw (IOException) new IOException("GetMap failed").initCause(e);
+        }
+    }
+

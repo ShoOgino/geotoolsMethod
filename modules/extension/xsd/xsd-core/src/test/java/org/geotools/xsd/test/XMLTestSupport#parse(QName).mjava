@@ -1,0 +1,65 @@
+    /**
+     * Parses the build document, explicity specifying the type of the root element.
+     *
+     * <p>This method should be called after building the entire document.
+     *
+     * @param type The name of the type of the root element of the build document.
+     */
+    protected Object parse(QName type) throws Exception {
+        Element root = document.getDocumentElement();
+
+        if (root == null) {
+            throw new IllegalStateException("Document has no root element");
+        }
+
+        Configuration config = createConfiguration();
+
+        if (type != null) {
+            config.getContext()
+                    .registerComponentInstance("http://geotools.org/typeDefinition", type);
+        }
+
+        // register additional namespaces
+        root.setAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
+        for (Iterator e = namespaceMappings.entrySet().iterator(); e.hasNext(); ) {
+            Map.Entry mapping = (Map.Entry) e.next();
+            String prefix = (String) mapping.getKey();
+            String uri = (String) mapping.getValue();
+
+            root.setAttribute("xmlns:" + prefix, uri);
+        }
+
+        // process the schemaLocation, replace any schema locations that we know about
+        if (root.hasAttribute("xsi:schemaLocation")) {
+            XSD xsd = config.getXSD();
+            List<XSD> deps = xsd.getAllDependencies();
+            deps.add(xsd);
+
+            String[] locations = root.getAttribute("xsi:schemaLocation").split(" +");
+            for (int i = 0; i < locations.length; i += 2) {
+                String uri = locations[i];
+                for (XSD dep : deps) {
+                    if (dep.getNamespaceURI().equals(uri)) {
+                        locations[i + 1] = dep.getSchemaLocation();
+                    }
+                }
+            }
+
+            StringBuffer joined = new StringBuffer();
+            for (String s : locations) {
+                joined.append(s).append(" ");
+            }
+            joined.setLength(joined.length() - 1);
+            root.setAttribute("xsi:schemaLocation", joined.toString());
+        } else {
+            // no schemaLocation attribute, add one for the schema for this config
+            root.setAttribute(
+                    "xsi:schemaLocation",
+                    config.getNamespaceURI() + " " + config.getXSD().getSchemaLocation());
+        }
+
+        DOMParser parser = new DOMParser(config, document);
+
+        return parser.parse();
+    }
+

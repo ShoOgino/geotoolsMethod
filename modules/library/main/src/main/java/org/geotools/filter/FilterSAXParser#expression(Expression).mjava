@@ -11,7 +11,7 @@
         // Handle all filter compare states and expressions
         if (filterType == FilterType.BETWEEN) {
             if (curState.equals("attribute")) {
-                ((BetweenFilterImpl) curFilter).setExpression(expression);
+                ((IsBetweenImpl) curFilter).setExpression(expression);
                 curState = "LowerBoundary";
             } else if (curState.equals("LowerBoundary")) {
                 ((BinaryComparisonAbstract) curFilter).setExpression1(expression);
@@ -102,8 +102,22 @@
                     ((LikeFilterImpl) curFilter).setMatchingCase(Boolean.parseBoolean(matchCase));
                 }
 
-                ((LikeFilterImpl) curFilter)
-                        .setPattern(expression, wildcard, singleChar, escapeChar);
+                if (expression instanceof Literal) {
+                    Literal literal = (Literal) expression;
+                    Object value = literal.getValue();
+                    if (value != null && value instanceof String) {
+                        String pattern = (String) value;
+
+                        ((LikeFilterImpl) curFilter).setLiteral(pattern);
+                        ((LikeFilterImpl) curFilter).setWildCard(wildcard);
+                        ((LikeFilterImpl) curFilter).setSingleChar(singleChar);
+                        ((LikeFilterImpl) curFilter).setEscape(escapeChar);
+                    } else {
+                        throw new ClassCastException("Pattern Literal must be a string:" + value);
+                    }
+                } else {
+                    throw new ClassCastException("Pattern must be a literal String");
+                }
                 curState = "complete";
             } else {
                 throw new IllegalFilterException(

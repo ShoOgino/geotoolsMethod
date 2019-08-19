@@ -1,0 +1,61 @@
+    /** Internal parse method - made protected for unit testing */
+    protected FeatureTypeStyle parseFeatureTypeStyle(Node style) {
+        if (LOGGER.isLoggable(Level.FINEST)) {
+            LOGGER.finest("Parsing featuretype style " + style.getLocalName());
+        }
+
+        FeatureTypeStyle ft = factory.createFeatureTypeStyle();
+        ArrayList<Rule> rules = new ArrayList<Rule>();
+        ArrayList<String> sti = new ArrayList<String>();
+        NodeList children = style.getChildNodes();
+        final int length = children.getLength();
+        for (int i = 0; i < length; i++) {
+            Node child = children.item(i);
+
+            if ((child == null) || (child.getNodeType() != Node.ELEMENT_NODE)) {
+                continue;
+            }
+
+            if (LOGGER.isLoggable(Level.FINEST)) {
+                LOGGER.finest("processing " + child.getLocalName());
+            }
+            String childName = child.getLocalName();
+            if (childName == null) {
+                childName = child.getNodeName();
+            }
+
+            if (childName.equalsIgnoreCase("Name")) {
+                ft.setName(getFirstChildValue(child));
+            } else if (childName.equalsIgnoreCase("Title")) {
+                ft.getDescription().setTitle(parseInternationalString(child));
+            } else if (childName.equalsIgnoreCase("Abstract")) {
+                ft.getDescription().setAbstract(parseInternationalString(child));
+            } else if (childName.equalsIgnoreCase("FeatureTypeName")) {
+                ft.featureTypeNames().add(new NameImpl(getFirstChildValue(child)));
+            } else if (childName.equalsIgnoreCase("SemanticTypeIdentifier")) {
+                String value = getFirstChildValue(child);
+                if (value != null) {
+                    sti.add(value);
+                }
+            } else if (childName.equalsIgnoreCase("Rule")) {
+                rules.add(parseRule(child));
+            } else if (childName.equalsIgnoreCase("Transformation")) {
+                ExpressionDOMParser parser =
+                        new ExpressionDOMParser(CommonFactoryFinder.getFilterFactory2(null));
+                Expression tx = parser.expression(getFirstNonTextChild(child));
+                ft.setTransformation(tx);
+            } else if (childName.equalsIgnoreCase(VendorOptionString)) {
+                parseVendorOption(ft.getOptions(), child);
+            }
+        }
+
+        if (sti.size() > 0) {
+            ft.semanticTypeIdentifiers().clear();
+            sti.forEach(s -> ft.semanticTypeIdentifiers().add(SemanticType.valueOf(s)));
+        }
+        ft.rules().clear();
+        ft.rules().addAll(rules);
+
+        return ft;
+    }
+

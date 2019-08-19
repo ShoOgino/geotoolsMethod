@@ -1,0 +1,26 @@
+    @Test
+    public void testCleanUpMetadataAndDataWorldImage() throws Exception {
+        // copy the data and get the reader
+        File directory = setupTestDirectory(this, this.rgbURL, "worldimage_clean_data");
+        ImageMosaicReader reader = getReader(directory);
+
+        // collect the existing files matching the removal criteria
+        FileFilter fileFilter = f -> f.getName().startsWith("global_mosaic_1");
+        FileFilter otherFileFilter = f -> !fileFilter.accept(f) && !f.getName().endsWith(".qix");
+        File[] existingFiles = directory.listFiles(fileFilter);
+        assertThat(existingFiles, arrayWithSize(33));
+        int otherFilesCount = directory.listFiles(otherFileFilter).length;
+
+        GranuleStore store =
+                (GranuleStore) reader.getGranules(reader.getGridCoverageNames()[0], false);
+        Hints hints = new Hints(Hints.GRANULE_REMOVAL_POLICY, GranuleRemovalPolicy.ALL);
+        int removed =
+                store.removeGranules(FF.like(FF.property("location"), "*global_mosaic_1*"), hints);
+        assertEquals(11, removed);
+
+        // collect again, files should have been removed
+        File[] existingFilesPastCleanup = directory.listFiles(fileFilter);
+        assertThat(existingFilesPastCleanup, Matchers.emptyArray());
+        assertEquals(otherFilesCount, directory.listFiles(otherFileFilter).length);
+    }
+

@@ -55,10 +55,18 @@
 
             // check if we can do a warp-affine reduction
             final ParameterBlock sourceParamBlock = op.getParameterBlock();
+
+            RenderingHints hints = getRenderingHints();
+            boolean preserveChainedAffines = false;
+            if (hints != null && hints.containsKey(PRESERVE_CHAINED_AFFINES)) {
+                preserveChainedAffines = (boolean) hints.get(PRESERVE_CHAINED_AFFINES);
+            }
+
             if (WARP_REDUCTION_ENABLED
                     && "Warp".equals(opName)
                     && mtProperty instanceof MathTransform2D
-                    && sourceBoundsProperty instanceof Rectangle) {
+                    && sourceBoundsProperty instanceof Rectangle
+                    && !preserveChainedAffines) {
                 try {
                     // we can merge the affine into the warp
                     MathTransform2D originalTransform = (MathTransform2D) mtProperty;
@@ -258,7 +266,7 @@
             }
 
             // see if we can merge affine with other affine types then
-            if ("Affine".equals(opName)) {
+            if ("Affine".equals(opName) && !preserveChainedAffines) {
                 ParameterBlock paramBlock = sourceParamBlock;
                 RenderedImage sSource = paramBlock.getRenderedSource(0);
 
@@ -303,7 +311,7 @@
                         try {
                             AffineTransform inverse = sTx.createInverse();
                             ROI newROI = this.roi != null ? this.roi.transform(inverse) : null;
-                            this.roi = newROI.intersect(r);
+                            this.roi = newROI != null ? newROI.intersect(r) : null;
                         } catch (NoninvertibleTransformException e) {
                             LOGGER.log(Level.SEVERE, e.getMessage(), e);
                         }
@@ -312,7 +320,8 @@
                         setNoData(nodata);
                     }
                 }
-            } else if (SCALE_NAME.equals(opName) || SCALE2_NAME.equals(opName)) {
+            } else if ((SCALE_NAME.equals(opName) || SCALE2_NAME.equals(opName))
+                    && !preserveChainedAffines) {
                 boolean isScale2 = SCALE2_NAME.equals(opName);
                 ParameterBlock paramBlock = sourceParamBlock;
                 RenderedImage sSource = paramBlock.getRenderedSource(0);

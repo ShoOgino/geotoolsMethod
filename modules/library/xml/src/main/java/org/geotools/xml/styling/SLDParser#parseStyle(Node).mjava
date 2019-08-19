@@ -1,0 +1,63 @@
+    /**
+     * build a style for the Node provided
+     *
+     * @param n the node which contains the style to be parsed.
+     * @return the Style constructed.
+     * @throws RuntimeException if an error occurs setting up the parser
+     */
+    public Style parseStyle(Node n) {
+        if (dom == null) {
+            try {
+                dom = newDocumentBuilder(false).newDocument();
+            } catch (javax.xml.parsers.ParserConfigurationException pce) {
+                throw new RuntimeException(pce);
+            }
+        }
+
+        Style style = factory.createStyle();
+
+        NodeList children = n.getChildNodes();
+        final int length = children.getLength();
+        if (LOGGER.isLoggable(Level.FINEST)) {
+            LOGGER.finest("" + children.getLength() + " children to process");
+        }
+
+        for (int j = 0; j < length; j++) {
+            Node child = children.item(j);
+
+            if ((child == null)
+                    || (child.getNodeType() != Node.ELEMENT_NODE)
+                    || (child.getFirstChild() == null)) {
+                continue;
+            }
+            // System.out.println("The child is: " + child.getNodeName() + " or
+            // " + child.getLocalName() + " prefix is " +child.getPrefix());
+            if (LOGGER.isLoggable(Level.FINEST)) {
+                LOGGER.finest("processing " + child.getLocalName());
+            }
+            String childName = child.getLocalName();
+            if (childName == null) {
+                childName = child.getNodeName();
+            }
+            String firstChildValue = getFirstChildValue(child);
+            if (childName.equalsIgnoreCase("Name")) {
+                style.setName(firstChildValue);
+            } else if (childName.equalsIgnoreCase("Title")) {
+
+                style.getDescription().setTitle(parseInternationalString(child));
+            } else if (childName.equalsIgnoreCase("Abstract")) {
+                style.getDescription().setAbstract(parseInternationalString(child));
+            } else if (childName.equalsIgnoreCase("IsDefault")) {
+                if ("1".equals(firstChildValue)) {
+                    style.setDefault(true);
+                } else {
+                    style.setDefault(Boolean.valueOf(firstChildValue).booleanValue());
+                }
+            } else if (childName.equalsIgnoreCase("FeatureTypeStyle")) {
+                style.featureTypeStyles().add(parseFeatureTypeStyle(child));
+            }
+        }
+
+        return style;
+    }
+

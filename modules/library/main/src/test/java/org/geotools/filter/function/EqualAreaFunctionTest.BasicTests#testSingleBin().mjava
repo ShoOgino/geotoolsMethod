@@ -1,0 +1,39 @@
+        /** Test a feature collection where each feature has the same area */
+        @Test
+        public void testSingleBin() throws Exception {
+            // create a feature collection with five features values 1-5
+            SimpleFeatureType dataType =
+                    DataUtilities.createType("singleBin", "id:0,value:int,geom:Polygon");
+            int iVal[] = new int[] {1, 2, 3, 4, 5};
+            SimpleFeature[] myfeatures = new SimpleFeature[iVal.length];
+            Polygon polygon = (Polygon) new WKTReader().read("POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))");
+            for (int i = 0; i < iVal.length; i++) {
+                myfeatures[i] =
+                        SimpleFeatureBuilder.build(
+                                dataType,
+                                new Object[] {
+                                    Integer.valueOf(i + 1), Integer.valueOf(iVal[i]), polygon
+                                },
+                                "classification.test1" + (i + 1));
+            }
+            SimpleFeatureCollection myFeatureCollection = DataUtilities.collection(myfeatures);
+
+            // run the equal area function
+            org.opengis.filter.expression.Expression function =
+                    FF.function("EqualArea", FF.property("value"), FF.literal(5));
+            RangedClassifier ranged =
+                    assertRangedClassifier(function.evaluate(myFeatureCollection));
+            assertEquals(5, ranged.getSize());
+
+            for (int i = 0; i < 5; i++) {
+                assertEquals(i + 1, ((Number) ranged.getMin(i)).doubleValue(), 0d);
+                if (i != 4) {
+                    assertEquals(i + 2, ((Number) ranged.getMax(i)).doubleValue(), 0d);
+                    assertEquals((i + 1) + ".." + (i + 2), ranged.getTitle(i));
+                } else {
+                    assertEquals(i + 1, ((Number) ranged.getMax(i)).doubleValue(), 0d);
+                    assertEquals((i + 1) + ".." + (i + 1), ranged.getTitle(i));
+                }
+            }
+        }
+

@@ -1,0 +1,59 @@
+    /**
+     * Given a math transform and a source domain, return the number of rows and cols by which the
+     * domain should be split to avoid transform linearity issues, or null if it could not be found.
+     *
+     * @param mt
+     * @param domain
+     * @return
+     */
+    public int[] getRowColsSplit(MathTransform2D mt, Rectangle2D.Double domain) {
+        // first simple case, the tx is affine
+        if (mt instanceof AffineTransform2D) {
+            return new int[] {1, 1};
+        }
+
+        // second simple case, the caller does not want any optimization
+        if (maxDistanceSquared == 0) {
+            return null;
+        }
+
+        // get the bounds and perform sanity check
+        final double minx = domain.getMinX();
+        final double maxx = domain.getMaxX();
+        final double miny = domain.getMinY();
+        final double maxy = domain.getMaxY();
+        if (!isValidDomain(minx, maxx, miny, maxy)) {
+            throw new IllegalArgumentException("The domain is empty!");
+        }
+
+        /*
+         * Prepare to build a warp grid. A warp grid requires a set of uniform cells, but the
+         * number of rows and cols may differ. The following method will drill down using a
+         * recursive division algorithm to find the optimal number of divisions along the
+         * x and y axis
+         */
+        int[] rowCols;
+        try {
+            rowCols =
+                    computeOptimalDepths(
+                            mt,
+                            minx,
+                            maxx,
+                            miny,
+                            maxy,
+                            0,
+                            0,
+                            (minx1, maxx1, miny1, maxy1, rowDepth, colDepth) -> {
+                                if (rowDepth + colDepth > 20) {
+                                    // this would take 2^(20) points, way too much already
+                                    throw new ExcessiveDepthException(
+                                            "Warp grid getting too large to fit in memory, bailing out");
+                                }
+                            });
+        } catch (Exception e) {
+            return null;
+        }
+
+        return new int[] {(int) pow(2, rowCols[0]), (int) pow(2, rowCols[1])};
+    }
+

@@ -23,9 +23,31 @@
             for (CssRule rule : rules) {
                 TypeNameSimplifier simplifier = new TypeNameSimplifier(tn);
                 Selector simplified = (Selector) rule.getSelector().accept(simplifier);
-                if (simplified != Selector.REJECT) {
-                    typeNameRules.add(
-                            new CssRule(simplified, rule.getProperties(), rule.getComment()));
+                if (simplified != Selector.REJECT
+                        && !simplified.equals(rule.getSelector())
+                        && rule.getSelector() instanceof Or) {
+                    // work bit by bit, some might refer to a typename and others not
+                    Or or = (Or) rule.getSelector();
+                    List<CssRule> reduced = new ArrayList<>();
+                    for (Selector child : or.getChildren()) {
+                        Selector cs = (Selector) child.accept(simplifier);
+                        if (cs != Selector.REJECT) {
+                            final CssRule r = deriveWithSelector(rule, cs);
+                            reduced.add(r);
+                        }
+                    }
+                    // change the structure of the OR only if necessary
+                    if (reduced.size() > or.getChildren().size()) {
+                        typeNameRules.addAll(reduced);
+                    } else {
+                        final CssRule r = deriveWithSelector(rule, simplified);
+                        typeNameRules.add(r);
+                    }
+                } else {
+                    if (simplified != Selector.REJECT) {
+                        final CssRule r = deriveWithSelector(rule, simplified);
+                        typeNameRules.add(r);
+                    }
                 }
             }
             result.put(tn.name, typeNameRules);

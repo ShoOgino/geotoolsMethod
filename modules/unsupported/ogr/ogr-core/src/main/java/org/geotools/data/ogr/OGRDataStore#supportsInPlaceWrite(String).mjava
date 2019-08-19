@@ -1,13 +1,14 @@
     public boolean supportsInPlaceWrite(String typeName) throws IOException {
-        Object ds = null;
+        OGRDataSource ds = null;
         Object l = null;
         try {
             // try opening in update mode
-            ds = ogr.Open(ogrSourceName, 1);
-            if (ds == null) {
+            Object rawDs = ogr.Open(ogrSourceName, 1);
+            if (rawDs == null) {
                 return false;
             }
-            l = openOGRLayer(ds, typeName);
+            ds = new OGRDataSource(ogr, null, rawDs, true);
+            l = openOGRLayer(ds, typeName, false);
 
             // for the moment we support working only with random writers
             boolean canDelete = ogr.LayerCanDeleteFeature(l);
@@ -16,7 +17,7 @@
             return canDelete && canWriteRandom && canWriteSequential;
         } finally {
             if (l != null) ogr.LayerRelease(l);
-            if (ds != null) ogr.DataSourceRelease(ds);
+            if (ds != null) ds.close();
         }
     }
 

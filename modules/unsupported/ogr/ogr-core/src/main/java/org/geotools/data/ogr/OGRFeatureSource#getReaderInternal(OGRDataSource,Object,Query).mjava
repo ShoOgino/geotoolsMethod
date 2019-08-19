@@ -1,0 +1,146 @@
+    protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(
+            OGRDataSource dataSource, Object layer, Query query) throws IOException {
+        // check how much we can encode
+        OGRFilterTranslator filterTx = new OGRFilterTranslator(getSchema(), query.getFilter());
+        if (Filter.EXCLUDE.equals(filterTx.getFilter())) {
+            return new EmptyFeatureReader<SimpleFeatureType, SimpleFeature>(getSchema());
+        }
+
+        // encode and count
+        boolean cleanup = false;
+        try {
+            // grab the data source
+            if (dataSource == null) {
+                dataSource = getDataStore().openOGRDataSource(false);
+                cleanup = true;
+            }
+
+            // prepare the target schema
+            SimpleFeatureType sourceSchema = getSchema();
+            SimpleFeatureType querySchema = sourceSchema;
+            SimpleFeatureType targetSchema = sourceSchema;
+            String[] properties = query.getPropertyNames();
+            if (properties != null && properties.length > 0) {
+                targetSchema = SimpleFeatureTypeBuilder.retype(sourceSchema, properties);
+                querySchema = targetSchema;
+                // if we have a filter we have to include in the queried features also the
+                // attribute needed to evaluate both the pre-filter and post-filter (the pre-filter
+                // evaluation just does not work when using setIgnoredFields down in this method)
+                if (query.getFilter() != Filter.INCLUDE) {
+                    Set<String> queriedAttributes = new HashSet<String>(Arrays.asList(properties));
+                    FilterAttributeExtractor extraAttributeExtractor =
+                            new FilterAttributeExtractor();
+                    query.getFilter().accept(extraAttributeExtractor, null);
+                    Set<String> extraAttributeSet =
+                            new HashSet<String>(extraAttributeExtractor.getAttributeNameSet());
+                    extraAttributeSet.removeAll(queriedAttributes);
+                    if (extraAttributeSet.size() > 0) {
+                        String[] queryProperties =
+                                new String[properties.length + extraAttributeSet.size()];
+                        System.arraycopy(properties, 0, queryProperties, 0, properties.length);
+                        String[] extraAttributes =
+                                extraAttributeSet.toArray(new String[extraAttributeSet.size()]);
+                        System.arraycopy(
+                                extraAttributes,
+                                0,
+                                queryProperties,
+                                properties.length,
+                                extraAttributes.length);
+                        querySchema =
+                                SimpleFeatureTypeBuilder.retype(sourceSchema, queryProperties);
+                    }
+                }
+            }
+
+            // build the layer query and execute it
+            if (layer == null) {
+                // We only need ExecuteSQL if the user specified sorting
+                if (query.getSortBy() == null || query.getSortBy().length == 0) {
+                    layer = dataSource.getLayerByName(getSchema().getTypeName(), true);
+                    setLayerFilters(layer, filterTx);
+                    setIgnoredFields(layer, querySchema, sourceSchema);
+                } else {
+                    // build the layer query and execute it
+                    Object driver = dataSource.getDriver();
+                    String driverName = ogr.DriverGetName(driver);
+                    ogr.DriverRelease(driver);
+                    boolean isNonOgrSql = doesDriverUseNonOgrSql(driverName);
+
+                    String fidColumnName = "FID";
+                    if (isNonOgrSql) {
+                        boolean needsFid = false;
+                        for (SortBy sort : query.getSortBy()) {
+                            if (SortBy.NATURAL_ORDER.equals(sort)
+                                    || SortBy.REVERSE_ORDER.equals(sort)) {
+                                needsFid = true;
+                                break;
+                            }
+                        }
+                        if (needsFid) {
+                            layer = dataSource.getLayerByName(getSchema().getTypeName(), false);
+                            fidColumnName = ogr.LayerGetFIDColumnName(layer);
+                            ogr.LayerRelease(layer);
+                            if (fidColumnName == null) {
+                                throw new IOException(
+                                        "Cannot do natural order without an FID column!");
+                            }
+                        }
+                    }
+
+                    String sql =
+                            getLayerSql(
+                                    querySchema == sourceSchema ? null : querySchema,
+                                    filterTx.getAttributeFilter(),
+                                    query.getSortBy(),
+                                    isNonOgrSql,
+                                    fidColumnName);
+                    Object spatialFilterPtr = null;
+                    Geometry spatialFilter = filterTx.getSpatialFilter();
+                    if (spatialFilter != null) {
+                        spatialFilterPtr =
+                                new GeometryMapper.WKB(new GeometryFactory(), ogr)
+                                        .parseGTGeometry(spatialFilter);
+                    }
+                    layer = dataSource.executeSQL(sql, spatialFilterPtr);
+                    if (layer == null) {
+                        throw new IOException("Failed to query the source layer with SQL: " + sql);
+                    }
+                }
+            } else {
+                setLayerFilters(layer, filterTx);
+                // would be nice, but it's not really working...
+                setIgnoredFields(layer, querySchema, sourceSchema);
+            }
+
+            // see if we have a geometry factory to use
+            GeometryFactory gf = getGeometryFactory(query);
+
+            // build the reader
+            FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    new OGRFeatureReader(dataSource, layer, querySchema, sourceSchema, gf, ogr);
+            cleanup = false;
+
+            // do we have to post-filter?
+            if (!filterTx.isFilterFullySupported()) {
+                reader =
+                        new FilteringFeatureReader<SimpleFeatureType, SimpleFeature>(
+                                reader, filterTx.getPostFilter());
+            }
+
+            if (targetSchema != querySchema) {
+                reader = new ReTypeFeatureReader(reader, targetSchema);
+            }
+
+            return reader;
+        } finally {
+            if (cleanup) {
+                if (layer != null) {
+                    ogr.LayerRelease(layer);
+                }
+                if (dataSource != null) {
+                    dataSource.close();
+                }
+            }
+        }
+    }
+

@@ -1,0 +1,23 @@
+    private void importSrs(Connection conn) throws SQLException, IOException {
+        try (PreparedStatement psSrsExists =
+                        conn.prepareStatement(
+                                "SELECT COUNT(*) FROM PUBLIC.ST_SPATIAL_REFERENCE_SYSTEMS WHERE SRS_NAME = ? OR SRS_ID = ?");
+                Statement createSrs = conn.createStatement();
+                InputStream is = MetadataImport.class.getResourceAsStream("srs.csv")) {
+            SrsReader reader = new SrsReader(is);
+            while (true) {
+                Srs srs = reader.readNextSrs();
+                if (srs == null) {
+                    break;
+                }
+                if (doesSrsExist(psSrsExists, srs.getName(), srs.getSrid())) {
+                    System.out.println(
+                            "Skipping SRS \"" + srs.getName() + "\" as it already exists");
+                    continue;
+                }
+                System.out.println("Creating SRS \"" + srs.getName() + "\"");
+                createSrs.execute(MetadataDdl.getSrsDdl(srs));
+            }
+        }
+    }
+

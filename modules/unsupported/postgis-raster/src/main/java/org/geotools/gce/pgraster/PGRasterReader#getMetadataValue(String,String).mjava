@@ -1,0 +1,60 @@
+    @Override
+    public String getMetadataValue(String coverageName, String name) {
+        if (raster.time != null) {
+            TimeColumn t = raster.time;
+            SimpleDateFormat in = dbDataFormat();
+            SimpleDateFormat out = utcDateFormat();
+
+            try {
+                switch (name) {
+                    case HAS_TIME_DOMAIN:
+                        return String.valueOf(true);
+                    case TIME_DOMAIN:
+                        {
+                            SQL sql = new SQL().append("SELECT DISTINCT to_char(").name(t.name);
+
+                            if (t.isTimestamp()) {
+                                sql.append(" AT TIME ZONE 'UTC'");
+                            }
+
+                            sql.append(", 'YYYY-MM-DD\"T\"HH24:MI:SS.MS+00'), ").append(t.name);
+                            sql.append(" FROM ")
+                                    .table(raster)
+                                    .append(" ORDER BY ")
+                                    .name(t.name)
+                                    .append(" DESC");
+
+                            try (Connection cx = newConnection()) {
+                                try (PreparedStatement ps =
+                                        cx.prepareStatement(sql.logAndGet(LOG))) {
+                                    try (ResultSet rs = ps.executeQuery()) {
+                                        List<Date> times = new ArrayList<>();
+                                        while (rs.next()) {
+                                            String s = rs.getString(1);
+                                            if (s != null) {
+                                                times.add(in.parse(s));
+                                            }
+                                        }
+                                        return times.stream()
+                                                .map(out::format)
+                                                .collect(Collectors.joining(","));
+                                    }
+                                }
+                            }
+                        }
+                    case TIME_DOMAIN_MINIMUM:
+                    case TIME_DOMAIN_MAXIMUM:
+                        String fn = TIME_DOMAIN_MINIMUM.equals(name) ? "min" : "max";
+                        Date d = queryDateExtreme(fn, raster);
+                        if (d != null) {
+                            return out.format(d);
+                        }
+                }
+            } catch (SQLException | ParseException e) {
+                throw new RuntimeException("Error fetching metadata value: " + name, e);
+            }
+        }
+
+        return null;
+    }
+

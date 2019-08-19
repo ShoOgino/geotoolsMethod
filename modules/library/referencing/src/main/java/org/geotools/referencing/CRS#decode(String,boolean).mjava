@@ -43,7 +43,7 @@
      *   <td>Coordinate reference systems may or may not be forced to
      *       (<var>longitude</var>, <var>latitude</var>) axis order. The behavior depends on user
      *       setting, for example the value of the <code>{@value
-     *       org.geotools.referencing.factory.epsg.LongitudeFirstFactory#SYSTEM_DEFAULT_KEY}</code>
+     *       GeoTools#FORCE_LONGITUDE_FIRST_AXIS_ORDER}</code>
      *       system property.</td>
      * </tr>
      * <tr>
@@ -51,7 +51,7 @@
      *   <td>{@link Boolean#FALSE FALSE}</td>
      *   <td>Forcing (<var>longitude</var>, <var>latitude</var>) axis order is not allowed,
      *       no matter the value of the <code>{@value
-     *       org.geotools.referencing.factory.epsg.LongitudeFirstFactory#SYSTEM_DEFAULT_KEY}</code>
+     *       GeoTools#FORCE_LONGITUDE_FIRST_AXIS_ORDER}</code>
      *       system property.</td>
      * </tr>
      * </table>
@@ -69,9 +69,24 @@
      */
     public static CoordinateReferenceSystem decode(String code, final boolean longitudeFirst)
             throws NoSuchAuthorityCodeException, FactoryException {
-        // @deprecated: 'toUpperCase()' is required only for epsg-wkt.
-        // Remove after we deleted the epsg-wkt module.
         code = code.trim().toUpperCase();
-        return getAuthorityFactory(longitudeFirst).createCoordinateReferenceSystem(code);
+
+        CoordinateReferenceSystem result;
+        if (longitudeFirst) {
+            result = defaultCache.get(code);
+        } else {
+            result = xyCache.get(code);
+        }
+
+        if (result == null) {
+            result = getAuthorityFactory(longitudeFirst).createCoordinateReferenceSystem(code);
+            if (longitudeFirst) {
+                defaultCache.put(code, result);
+            } else {
+                xyCache.put(code, result);
+            }
+        }
+
+        return result;
     }
 

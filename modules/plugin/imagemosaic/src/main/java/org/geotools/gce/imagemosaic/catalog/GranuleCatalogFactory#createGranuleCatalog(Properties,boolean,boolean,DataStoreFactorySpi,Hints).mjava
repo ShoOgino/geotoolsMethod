@@ -7,7 +7,7 @@
         // build the catalog
         Repository repository = (Repository) hints.get(Hints.REPOSITORY);
         String storeName = (String) params.get(Utils.Prop.STORE_NAME);
-        AbstractGTDataStoreGranuleCatalog catalog;
+        AbstractGTDataStoreGranuleCatalog gtCatalog;
         if (storeName != null && !storeName.trim().isEmpty()) {
             if (repository == null) {
                 throw new IllegalArgumentException(
@@ -15,19 +15,33 @@
                                 + storeName
                                 + " but there is no Repository to resolve it");
             } else {
-                catalog =
+                gtCatalog =
                         new RepositoryDataStoreCatalog(
                                 params, create, repository, storeName, spi, hints);
             }
         } else {
-            catalog = new GTDataStoreGranuleCatalog(params, create, spi, hints);
+            gtCatalog = new GTDataStoreGranuleCatalog(params, create, spi, hints);
         }
+        DataStore store = gtCatalog.getTileIndexStore();
 
         // caching wrappers
+        GranuleCatalog catalog;
         if (caching) {
-            return new STRTreeGranuleCatalog(params, catalog, hints);
+            catalog = new STRTreeGranuleCatalog(params, gtCatalog, hints);
         } else {
-            return new CachingDataStoreGranuleCatalog(catalog);
+            catalog = new CachingDataStoreGranuleCatalog(gtCatalog);
         }
+
+        // locking wrappers
+        if (store instanceof Wrapper) {
+            store =
+                    Optional.ofNullable((DataStore) ((Wrapper) store).unwrap(JDBCDataStore.class))
+                            .orElse(store);
+        }
+        if (!(store instanceof JDBCDataStore)) {
+            catalog = new LockingGranuleCatalog(catalog, hints);
+        }
+
+        return catalog;
     }
 

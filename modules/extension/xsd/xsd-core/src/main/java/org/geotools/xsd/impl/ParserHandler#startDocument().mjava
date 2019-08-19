@@ -1,0 +1,46 @@
+    public void startDocument() throws SAXException {
+        // perform teh configuration
+        configure(config);
+
+        // create the document handler + root context
+        DocumentHandler docHandler = handlerFactory.createDocumentHandler(this);
+
+        context = new DefaultPicoContainer();
+        context = config.setupContext(context);
+        if (contextCustomizer != null) {
+            contextCustomizer.customizeContext(context);
+        }
+
+        docHandler.setContext(context);
+
+        // create the stack and add handler for document element
+        handlers = new Stack();
+        handlers.push(docHandler);
+
+        // get a logger from the context
+        logger = (Logger) context.getComponentInstanceOfType(Logger.class);
+
+        if (logger == null) {
+            // create a default
+            logger = org.geotools.util.logging.Logging.getLogger(ParserHandler.class);
+            context.registerComponentInstance(logger);
+        }
+
+        // setup the namespace support
+        context.registerComponentInstance(namespaces);
+        context.registerComponentInstance(new NamespaceSupportWrapper(namespaces));
+
+        // binding factory support
+        bindingFactory = new BindingFactoryImpl(bindingLoader);
+        context.registerComponentInstance(bindingFactory);
+
+        // binding walker support
+        context.registerComponentInstance(new BindingWalkerFactoryImpl(bindingLoader, context));
+
+        // register configuration itself
+        context.registerComponentInstance(config);
+
+        validator.startDocument();
+        docHandler.startDocument();
+    }
+

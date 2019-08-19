@@ -1,0 +1,31 @@
+    private File[] runNO2Removal(String folder, Hints hints) throws IOException {
+        File testDir = tempFolder.newFolder(folder);
+        URL testUrl = URLs.fileToUrl(testDir);
+        FileUtils.copyDirectory(TestData.file(this, "gome"), testDir);
+        ImageMosaicReader reader = null;
+        try {
+            reader = new ImageMosaicReader(testUrl);
+            assertNotNull(reader);
+            // read and dispose the coverages to make sure sidecars are created
+            reader.read("NO2", NO_DEFERRED_LOADING_PARAMS).dispose(true);
+            reader.read("BrO", NO_DEFERRED_LOADING_PARAMS).dispose(true);
+            FileFilter no2_20130101_filter = f -> f.getName().contains("20130101.NO2.DUMMY");
+            File[] fileBefore = testDir.listFiles(no2_20130101_filter);
+            assertEquals(2, fileBefore.length);
+
+            // remove granule
+            GranuleStore store = (GranuleStore) reader.getGranules("NO2", false);
+
+            int removed =
+                    store.removeGranules(FF.like(FF.property("location"), "*20130101*"), hints);
+            assertEquals(1, removed);
+
+            // return files after
+            return testDir.listFiles(no2_20130101_filter);
+        } finally {
+            if (reader != null) {
+                reader.dispose();
+            }
+        }
+    }
+

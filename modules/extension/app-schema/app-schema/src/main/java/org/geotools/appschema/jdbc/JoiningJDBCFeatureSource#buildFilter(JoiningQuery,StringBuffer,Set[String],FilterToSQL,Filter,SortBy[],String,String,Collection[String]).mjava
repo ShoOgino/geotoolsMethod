@@ -1,0 +1,75 @@
+    private void buildFilter(
+            JoiningQuery query,
+            StringBuffer sql,
+            Set<String> lastPkColumnNames,
+            FilterToSQL toSQL,
+            Filter filter,
+            SortBy[] lastSortBy,
+            String lastTableName,
+            String lastTableAlias,
+            Collection<String> ids)
+            throws SQLException, FilterToSQLException {
+        // we will use another join for the filter
+        // assuming that the last sort by specifies the ID of the parent feature
+        // this way we will ensure that if the table is denormalized, that all rows
+        // with the same ID are included (for multi-valued features)
+
+        StringBuffer sortBySQL = new StringBuffer();
+        sortBySQL.append(" INNER JOIN ( SELECT DISTINCT ");
+        boolean hasSortBy = false;
+        boolean isMultiSort = lastSortBy.length > 1 && ids.isEmpty();
+        hasSortBy =
+                isMultiSort
+                        ? buildFiterBasedOnPk(
+                                query,
+                                toSQL,
+                                filter,
+                                lastSortBy,
+                                lastTableName,
+                                lastTableAlias,
+                                lastPkColumnNames,
+                                sortBySQL,
+                                hasSortBy)
+                        : buildFiterBasedOnSortBy(
+                                query,
+                                toSQL,
+                                filter,
+                                lastSortBy,
+                                lastTableName,
+                                lastTableAlias,
+                                ids,
+                                sortBySQL,
+                                hasSortBy);
+
+        if (lastSortBy.length == 0) {
+            // GEOT-4554: if ID expression is not specified, use PK
+            int i = 0;
+            for (String pk : lastPkColumnNames) {
+                if (!ids.contains(pk)) {
+                    getDataStore().dialect.encodeColumnName(null, pk, sortBySQL);
+                    sortBySQL.append(" FROM ");
+                    getDataStore().encodeTableName(lastTableName, sortBySQL, query.getHints());
+                    sortBySQL.append(" ").append(toSQL.encodeToString(filter));
+                    sortBySQL.append(" ) ");
+                    getDataStore().dialect.encodeTableName(TEMP_FILTER_ALIAS, sortBySQL);
+                    sortBySQL.append(" ON ( ");
+                    encodeColumnName2(pk, lastTableAlias, sortBySQL, null);
+                    sortBySQL.append(" = ");
+                    encodeColumnName2(pk, TEMP_FILTER_ALIAS, sortBySQL, null);
+                    if (i < lastPkColumnNames.size() - 1) {
+                        sortBySQL.append(" AND ");
+                    }
+                    i++;
+                    hasSortBy = true;
+                }
+            }
+        }
+        if (hasSortBy) {
+            if (sortBySQL.toString().endsWith(" AND ")) {
+                sql.append(sortBySQL.substring(0, sortBySQL.length() - 5)).append(" ) ");
+            } else {
+                sql.append(sortBySQL).append(" ) ");
+            }
+        }
+    }
+

@@ -1,0 +1,29 @@
+    /** Check pgNearest filter with 3 results */
+    @Test
+    public void testNearestNativeFilterNumResults() throws IOException {
+        ContentFeatureSource fs = dataStore.getFeatureSource(tname("gt_jdbc_test_measurements"));
+        FilterFactory ff = dataStore.getFilterFactory();
+        GeometryFactory gf = dataStore.getGeometryFactory();
+        Function nearest =
+                ff.function(
+                        "pgNearest",
+                        ff.literal(gf.createPoint(new Coordinate(0, 0))),
+                        ff.literal(3));
+        Query q =
+                new Query(tname("gt_jdbc_test_measurements"), ff.equals(nearest, ff.literal(true)));
+        ContentFeatureCollection fc = fs.getFeatures(q);
+        try (Stream<SimpleFeature> featuresStream = FeatureStreams.toFeatureStream(fc)) {
+            List<SimpleFeature> featuresList = featuresStream.collect(Collectors.toList());
+            assertEquals(3, featuresList.size());
+            assertEquals(
+                    "POINT (1 2)",
+                    featuresList.get(0).getDefaultGeometryProperty().getValue().toString());
+            assertEquals(
+                    "POINT (2 2)",
+                    featuresList.get(1).getDefaultGeometryProperty().getValue().toString());
+            assertEquals(
+                    "POINT (1 4)",
+                    featuresList.get(2).getDefaultGeometryProperty().getValue().toString());
+        }
+    }
+

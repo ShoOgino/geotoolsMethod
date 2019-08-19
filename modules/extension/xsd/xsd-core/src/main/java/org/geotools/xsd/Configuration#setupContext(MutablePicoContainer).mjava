@@ -1,0 +1,58 @@
+    /**
+     * Configures the root context to be used when parsing elements.
+     *
+     * @param container The container representing the context.
+     */
+    public final MutablePicoContainer setupContext(MutablePicoContainer container) {
+        // configure bindings of all dependencies
+        List dependencies = allDependencies();
+
+        for (Iterator d = dependencies.iterator(); d.hasNext(); ) {
+            Configuration dependency = (Configuration) d.next();
+
+            // throw locator and location resolver into context
+            XSDSchemaLocationResolver resolver = new SchemaLocationResolver(dependency.getXSD());
+
+            if (resolver != null) {
+                QName key = new QName(dependency.getNamespaceURI(), "schemaLocationResolver");
+                container.registerComponentInstance(key, resolver);
+            }
+
+            XSDSchemaLocator locator = new SchemaLocator(dependency.getXSD());
+
+            if (locator != null) {
+                QName key = new QName(dependency.getNamespaceURI(), "schemaLocator");
+                container.registerComponentInstance(key, locator);
+            }
+
+            // set any parser properties
+            synchronized (dependency.getProperties()) {
+                for (QName property : (Set<QName>) dependency.getProperties()) {
+                    try {
+                        container.registerComponentInstance(property, property);
+                    } catch (DuplicateComponentKeyRegistrationException e) {
+                        // ok, ignore
+                    }
+                }
+            }
+
+            // add any additional configuration, factories and such
+            // create a new container to allow configurations to override factories in dependant
+            // configurations
+            container = container.makeChildContainer();
+            dependency.configureContext(container);
+        }
+
+        // copy the internal context over
+        if (!context.getComponentAdapters().isEmpty()) {
+            container = container.makeChildContainer();
+
+            for (Iterator ca = context.getComponentAdapters().iterator(); ca.hasNext(); ) {
+                ComponentAdapter adapter = (ComponentAdapter) ca.next();
+                container.registerComponent(adapter);
+            }
+        }
+
+        return container;
+    }
+

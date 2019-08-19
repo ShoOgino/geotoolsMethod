@@ -1,0 +1,45 @@
+    @Override
+    public CoordinateReferenceSystem createCRS(int srid, Connection cx) throws SQLException {
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        try {
+            ps =
+                    cx.prepareStatement(
+                            "SELECT ORGANIZATION, ORGANIZATION_COORDSYS_ID, DEFINITION FROM PUBLIC.ST_SPATIAL_REFERENCE_SYSTEMS WHERE SRS_ID = ?");
+            ps.setInt(1, srid);
+            rs = ps.executeQuery();
+            if (!rs.next()) return null;
+
+            String org = rs.getString(1);
+            int orgId = rs.getInt(2);
+            String wkt = rs.getString(3);
+            if (org != null) {
+                try {
+                    return CRS.decode(org + ":" + orgId);
+                } catch (Exception e) {
+                    LOGGER.log(
+                            Level.WARNING,
+                            "Could not decode "
+                                    + org
+                                    + ":"
+                                    + orgId
+                                    + " using the geotools database",
+                            e);
+                }
+            }
+
+            if (wkt != null) {
+                try {
+                    return CRS.parseWKT(wkt);
+                } catch (FactoryException e) {
+                    LOGGER.log(Level.WARNING, "Could not decode wkt definition for " + srid, e);
+                }
+            }
+
+            return null;
+        } finally {
+            dataStore.closeSafe(rs);
+            dataStore.closeSafe(ps);
+        }
+    }
+

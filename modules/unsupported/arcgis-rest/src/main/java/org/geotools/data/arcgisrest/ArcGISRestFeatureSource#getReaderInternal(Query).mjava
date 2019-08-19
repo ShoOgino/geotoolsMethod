@@ -2,27 +2,23 @@
     protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query)
             throws IOException {
 
-        Map<String, Object> params =
-                new HashMap<String, Object>(ArcGISRestDataStore.DEFAULT_PARAMS);
+        List<NameValuePair> params = new ArrayList<>();
+        params.addAll(ArcGISRestDataStore.DEFAULT_GETFEATURES_PARAMS);
+
         InputStream result;
 
-        params.put(ArcGISRestDataStore.GEOMETRY_PARAM, this.composeExtent(this.getBounds(query)));
+        params.add(
+                new BasicNameValuePair(GEOMETRY_PARAM, this.composeExtent(this.getBounds(query))));
 
         // TODO: currently it sets _only_ the BBOX query
-        params.put(ArcGISRestDataStore.GEOMETRY_PARAM, this.composeExtent(this.getBounds(query)));
+        params.add(
+                new BasicNameValuePair(GEOMETRY_PARAM, this.composeExtent(this.getBounds(query))));
 
         // Sets the atttributes to return
-        params.put(ArcGISRestDataStore.ATTRIBUTES_PARAM, this.composeAttributes(query));
-
-        // Sets the outpout to GeoJSON
-        params.put(ArcGISRestDataStore.FORMAT_PARAM, ArcGISRestDataStore.FORMAT_GEOJSON);
+        params.add(new BasicNameValuePair(ATTRIBUTES_PARAM, this.composeAttributes(query)));
 
         // Executes the request
-        try {
-            result = this.dataStore.retrieveJSON("POST", (new URL(this.composeQueryURL())), params);
-        } catch (HTTPException e) {
-            throw new IOException("Error " + e.getStatusCode() + " " + e.getMessage());
-        }
+        result = this.dataStore.retrieveJSON("POST", (new URL(this.composeQueryURL())), params);
 
         // Returns a reader for the result
         return new ArcGISRestFeatureReader(this.schema, result, this.dataStore.getLogger());

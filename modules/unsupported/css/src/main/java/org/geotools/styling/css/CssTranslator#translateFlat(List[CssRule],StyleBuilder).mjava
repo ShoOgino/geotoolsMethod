@@ -4,6 +4,9 @@
         Map<PseudoClass, List<Property>> properties = null;
         Set<PseudoClass> mixablePseudoClasses = null;
 
+        // this is to support pseudo rules at top level being merged with the previous rule, as
+        // described in the docs... not going to be used with nested rules, eventually it will
+        // have to go, just kept for backwards compatibility
         int translatedRuleCount = 0;
         for (CssRule rule : allRules) {
             if (rule.getProperties().get(PseudoClass.ROOT) == null) {
@@ -39,7 +42,8 @@
             return 0;
         }
 
-        Map<Integer, List<CssRule>> zIndexRules = organizeByZIndex(finalRules);
+        Map<Integer, List<CssRule>> zIndexRules =
+                organizeByZIndex(finalRules, CssRule.ZIndexMode.NoZIndexZero);
 
         for (Map.Entry<Integer, List<CssRule>> zEntry : zIndexRules.entrySet()) {
             List<CssRule> rules = zEntry.getValue();
@@ -64,50 +68,58 @@
                 String sortByGroup = null;
 
                 // generate the SLD rules
+                CachedSimplifyingFilterVisitor cachedSimplifier =
+                        new CachedSimplifyingFilterVisitor(targetFeatureType);
                 for (CssRule cssRule : flattenedRules) {
                     if (!cssRule.hasNonNullSymbolizerProperty()) {
                         continue;
                     }
 
-                    buildSldRule(cssRule, ftsBuilder, targetFeatureType);
-                    translatedRuleCount++;
+                    List<CssRule> derivedRules =
+                            removeNested(cssRule, targetFeatureType, cachedSimplifier);
+                    for (CssRule derived : derivedRules) {
 
-                    // check if we have global composition going, and use the value of
-                    // the first rule providing the information (the one with the highest
-                    // priority)
-                    if (composite == null) {
-                        List<Value> values =
-                                cssRule.getPropertyValues(PseudoClass.ROOT, COMPOSITE)
-                                        .get(COMPOSITE);
-                        if (values != null && !values.isEmpty()) {
-                            composite = values.get(0).toLiteral();
-                        }
-                    }
-                    if (compositeBase == null) {
-                        List<Value> values =
-                                cssRule.getPropertyValues(PseudoClass.ROOT, COMPOSITE_BASE)
-                                        .get(COMPOSITE_BASE);
-                        if (values != null && !values.isEmpty()) {
-                            compositeBase = Boolean.valueOf(values.get(0).toLiteral());
-                        }
-                    }
+                        buildSldRule(derived, ftsBuilder, targetFeatureType, cachedSimplifier);
+                        translatedRuleCount++;
 
-                    // check if we have any sort-by
-                    if (sortBy == null) {
-                        List<Value> values =
-                                cssRule.getPropertyValues(PseudoClass.ROOT, SORT_BY).get(SORT_BY);
-                        if (values != null && !values.isEmpty()) {
-                            sortBy = values.get(0).toLiteral();
+                        // check if we have global composition going, and use the value of
+                        // the first rule providing the information (the one with the highest
+                        // priority)
+                        if (composite == null) {
+                            List<Value> values =
+                                    derived.getPropertyValues(PseudoClass.ROOT, COMPOSITE)
+                                            .get(COMPOSITE);
+                            if (values != null && !values.isEmpty()) {
+                                composite = values.get(0).toLiteral();
+                            }
                         }
-                    }
+                        if (compositeBase == null) {
+                            List<Value> values =
+                                    derived.getPropertyValues(PseudoClass.ROOT, COMPOSITE_BASE)
+                                            .get(COMPOSITE_BASE);
+                            if (values != null && !values.isEmpty()) {
+                                compositeBase = Boolean.valueOf(values.get(0).toLiteral());
+                            }
+                        }
 
-                    // check if we have any sort-by-group
-                    if (sortByGroup == null) {
-                        List<Value> values =
-                                cssRule.getPropertyValues(PseudoClass.ROOT, SORT_BY_GROUP)
-                                        .get(SORT_BY_GROUP);
-                        if (values != null && !values.isEmpty()) {
-                            sortByGroup = values.get(0).toLiteral();
+                        // check if we have any sort-by
+                        if (sortBy == null) {
+                            List<Value> values =
+                                    derived.getPropertyValues(PseudoClass.ROOT, SORT_BY)
+                                            .get(SORT_BY);
+                            if (values != null && !values.isEmpty()) {
+                                sortBy = values.get(0).toLiteral();
+                            }
+                        }
+
+                        // check if we have any sort-by-group
+                        if (sortByGroup == null) {
+                            List<Value> values =
+                                    derived.getPropertyValues(PseudoClass.ROOT, SORT_BY_GROUP)
+                                            .get(SORT_BY_GROUP);
+                            if (values != null && !values.isEmpty()) {
+                                sortByGroup = values.get(0).toLiteral();
+                            }
                         }
                     }
                 }

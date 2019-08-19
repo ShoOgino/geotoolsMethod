@@ -27,7 +27,26 @@
             } else if (binding == Double.class || binding == double.class) {
                 raf.writeDouble((Double) value);
             } else if (binding == String.class) {
-                raf.writeUTF((String) value);
+                if (isBigString(ad)) {
+                    // if attribute descriptor marked as Big String
+                    String strVal = (String) value;
+                    List<String> values = new ArrayList<>();
+                    // if bytes length is over the maximum allowed, calculate parts
+                    if (strVal.getBytes().length >= MAX_BYTES_LENGTH) {
+                        values.addAll(split(strVal, 32767));
+                    } else {
+                        values.add(strVal);
+                    }
+                    // write total parts
+                    raf.writeInt(values.size());
+                    // write every string chunk
+                    for (String evalue : values) {
+                        raf.writeUTF(evalue);
+                    }
+                } else {
+                    // normal string encoding
+                    raf.writeUTF((String) value);
+                }
             } else if (binding == java.sql.Date.class
                     || binding == java.sql.Time.class
                     || binding == java.sql.Timestamp.class

@@ -1,0 +1,52 @@
+    public PGRasterReader(PGRasterConfig config, PGRasterFormat format, Hints hints)
+            throws IOException {
+        super(config, hints);
+
+        this.config = config;
+        this.format = format;
+
+        try {
+            raster = RasterColumn.lookup(config);
+        } catch (SQLException e) {
+            throw new IOException("Error looking up raster column", e);
+        }
+
+        // the (possibly mapped) coverage name
+        coverageName = config.name != null ? config.name : raster.table;
+
+        // crs and bounds
+        crs = raster.crs;
+        originalEnvelope = GeneralEnvelope.toGeneralEnvelope(raster.bounds());
+        if (raster.scale != null) {
+            originalGridRange =
+                    new GridEnvelope2D(
+                            new Rectangle(
+                                    (int) (originalEnvelope.getSpan(0) / raster.scale.x),
+                                    (int) (originalEnvelope.getSpan(1) / raster.scale.y)));
+        }
+
+        if (raster.scale != null) {
+            highestRes = new double[] {raster.scale.x, raster.scale.y};
+        }
+
+        // overviews
+        numOverviews = raster.overviews.size();
+        if (numOverviews > 0) {
+            if (raster.scale != null) {
+                overViewResolutions = new double[numOverviews][2];
+                for (int i = 0; i < numOverviews; i++) {
+                    RasterOverview ov = raster.overviews.get(i);
+                    overViewResolutions[i] =
+                            new double[] {raster.scale.x * ov.factor, raster.scale.y * ov.factor};
+                }
+            } else {
+                numOverviews = 0;
+            }
+        }
+
+        // process hints
+        if (hints != null) {
+            exec = (ExecutorService) hints.get(Hints.EXECUTOR_SERVICE);
+        }
+    }
+

@@ -1,0 +1,61 @@
+    public void testCreateParser() throws Exception {
+        WMTSCapabilities capabilities =
+                createCapabilities("GeoServer_2.2.x/1.0.0/GetCapabilities.xml");
+        try {
+            assertEquals("1.0.0", capabilities.getVersion());
+            assertEquals("OGC WMTS", capabilities.getService().getName());
+            assertEquals(
+                    "Web Map Tile Service - GeoWebCache", capabilities.getService().getTitle());
+
+            for (int i = 0; i < capabilities.getService().getKeywordList().length; i++) {
+                assertEquals(
+                        capabilities.getService().getKeywordList()[i],
+                        "OpenGIS WMS Web Map Server".split(" ")[i]);
+            }
+
+            WMTSRequest request = capabilities.getRequest();
+
+            OperationType getTile = request.getGetTile();
+            assertNotNull(getTile);
+
+            assertEquals(110, capabilities.getLayerList().size());
+
+            List<WMTSLayer> layers = capabilities.getLayerList();
+            WMTSLayer l0 = layers.get(0);
+
+            assertEquals("OML_Foreshore", l0.getTitle());
+            assertNull(l0.getParent());
+            assertTrue(
+                    l0.getSrs().contains("urn:ogc:def:crs:EPSG::4326")); // case should not matter
+            assertEquals(4, l0.getBoundingBoxes().size());
+
+            assertEquals(2, l0.getTileMatrixLinks().size());
+            TileMatrixSetLink tmsl0 = l0.getTileMatrixLinks().get("EPSG:4326");
+            assertNotNull(tmsl0);
+            assertEquals("EPSG:4326", tmsl0.getIdentifier());
+            List<TileMatrixLimits> tmLimits = tmsl0.getLimits();
+            assertNotNull(tmLimits);
+            assertEquals("Bad size: TileMatrixLimits", 22, tmLimits.size());
+            TileMatrixLimits tml3 = tmLimits.get(3);
+            assertEquals(1, tml3.getMinrow());
+            assertEquals(1, tml3.getMaxrow());
+            assertEquals(7, tml3.getMincol());
+            assertEquals(7, tml3.getMaxcol());
+
+            assertEquals("b_road", layers.get(1).getTitle());
+            assertEquals("meridian:b_road", layers.get(1).getName());
+            assertEquals("b_road_polyline", layers.get(20).getTitle());
+            assertEquals("meridian:b_road_polyline", layers.get(20).getName());
+
+            CRSEnvelope bbox = (CRSEnvelope) layers.get(1).getBoundingBoxes().get("EPSG:4326");
+            assertNotNull(bbox);
+        } catch (Exception e) {
+            java.util.logging.Logger.getGlobal().log(java.util.logging.Level.INFO, "", e);
+            if ((e.getMessage() != null) && e.getMessage().indexOf("timed out") > 0) {
+                // System.err.println("Unable to test - timed out: " + e);
+            } else {
+                throw (e);
+            }
+        }
+    }
+

@@ -1,0 +1,48 @@
+        @Test
+        public void testEqualAreaClassification() throws IOException, SchemaException {
+            ListFeatureCollection fc = getSimplifiedStatesCollection();
+            Expression areaFunction = EqualAreaFunction.getCartesianAreaFunction();
+            double totalArea = getTotalArea(fc, areaFunction);
+            NumberRange<Double> minMax = getMinMax(fc, PERSONS);
+
+            EqualAreaListVisitor visitor =
+                    new EqualAreaListVisitor(PERSONS, areaFunction, numClasses);
+            fc.accepts(visitor, null);
+            List<Double>[] result = (List<Double>[]) visitor.getResult().getValue();
+
+            List<Double> firstBin = result[0];
+            assertThat(minMax.getMinimum(), Matchers.equalTo(firstBin.get(0)));
+            List<Double> lastBin = result[result.length - 1];
+            assertThat(minMax.getMaximum(), Matchers.equalTo(lastBin.get(lastBin.size() - 1)));
+
+            Map<PropertyIsBetween, Double> filterMap =
+                    Arrays.stream(result)
+                            .map(
+                                    list ->
+                                            FF.between(
+                                                    PERSONS,
+                                                    FF.literal(list.get(0)),
+                                                    FF.literal(list.get(list.size() - 1))))
+                            .collect(Collectors.toMap(k -> k, k -> Double.valueOf(0)));
+            for (SimpleFeature feature : fc) {
+                boolean found = false;
+                for (Map.Entry<PropertyIsBetween, Double> entry : filterMap.entrySet()) {
+
+                    if (entry.getKey().evaluate(feature)) {
+                        entry.setValue(
+                                entry.getValue() + areaFunction.evaluate(feature, Double.class));
+                        found = true;
+                        break;
+                    }
+                }
+                assertTrue(found);
+            }
+            double averageArea = totalArea / filterMap.size();
+
+            for (Map.Entry<PropertyIsBetween, Double> entry : filterMap.entrySet()) {
+                double area = entry.getValue();
+                double deviation = Math.abs(area - averageArea) / averageArea;
+                assertThat(deviation, Matchers.lessThanOrEqualTo(tolerance));
+            }
+        }
+

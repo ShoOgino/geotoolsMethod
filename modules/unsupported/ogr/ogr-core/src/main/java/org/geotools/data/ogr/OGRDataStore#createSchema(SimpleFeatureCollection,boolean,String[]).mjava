@@ -6,7 +6,7 @@
      * only so as long as it's empty, it's not possible to write against an existing GML file for
      * example.
      *
-     * @param schema the geotools schema
+     * @param data The data to fill into the newly created layer
      * @param approximateFields if true, OGR will try to create fields that are approximations of
      *     the required ones when an exact match cannt be provided
      * @param options OGR data source/layer creation options
@@ -15,13 +15,13 @@
     public void createSchema(
             SimpleFeatureCollection data, boolean approximateFields, String[] options)
             throws IOException {
-        Object dataSource = null;
+        OGRDataSource dataSource = null;
         Object layer = null;
         SimpleFeatureType schema = data.getSchema();
         SimpleFeatureIterator features;
         try {
             // either open datasource, or try creating one
-            dataSource = openOrCreateDataSource(options, dataSource);
+            dataSource = dataSourcePool.openOrCreateDataSource(options);
 
             FeatureTypeMapper mapper = new FeatureTypeMapper(ogr);
 
@@ -29,12 +29,13 @@
             layer = createNewLayer(schema, dataSource, options, mapper);
 
             // check the ability to create fields
-            Object driver = ogr.DataSourceGetDriver(dataSource);
+            Object driver = dataSource.getDriver();
             String driverName = ogr.DriverGetName(driver);
             ogr.DriverRelease(driver);
             if (!driverName.equalsIgnoreCase("georss")
                     && !driverName.equalsIgnoreCase("gpx")
                     && !driverName.equalsIgnoreCase("sosi")
+                    && !driverName.equalsIgnoreCase("geojson")
                     && !ogr.LayerCanCreateField(layer)) {
                 throw new DataSourceException(
                         "OGR reports it's not possible to create fields on this layer");
@@ -42,7 +43,7 @@
 
             // create fields
             Map<String, String> nameMap = new HashMap<String, String>();
-            for (int i = 0, j = 0; i < schema.getAttributeCount(); i++) {
+            for (int i = 0; i < schema.getAttributeCount(); i++) {
                 AttributeDescriptor ad = schema.getDescriptor(i);
                 if (ad == schema.getGeometryDescriptor()) {
                     continue;
@@ -53,7 +54,6 @@
                 // the data source might have changed the name of the field, map them
                 String newName = ogr.FieldGetName(fieldDefinition);
                 nameMap.put(newName, ad.getLocalName());
-                j++;
             }
 
             // get back the feature definition
@@ -119,7 +119,7 @@
                 ogr.LayerRelease(layer);
             }
             if (dataSource != null) {
-                ogr.DataSourceRelease(dataSource);
+                dataSource.close();
             }
         }
     }

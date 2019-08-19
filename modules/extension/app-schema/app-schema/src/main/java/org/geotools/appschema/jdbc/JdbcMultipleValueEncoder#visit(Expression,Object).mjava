@@ -1,0 +1,24 @@
+    @Override
+    protected Expression visit(Expression expression, Object extraData) {
+        if (!(expression instanceof JdbcMultipleValue)) {
+            return super.visit(expression, extraData);
+        }
+        JdbcMultipleValue multipleValue = (JdbcMultipleValue) expression;
+        FilterToSQL filterToSql = createFilterToSQL(multipleValue);
+        filterToSql.setFieldEncoder(
+                field -> {
+                    StringBuffer sql = new StringBuffer();
+                    store.dialect.encodeTableName(multipleValue.getId(), sql);
+                    sql.append(".");
+                    sql.append(field);
+                    return sql.toString();
+                });
+        try {
+            return new MultipleValueExpressionHolder(
+                    output,
+                    filterToSql.encodeToString(((JdbcMultipleValue) expression).getTargetValue()));
+        } catch (FilterToSQLException exception) {
+            throw new RuntimeException(exception);
+        }
+    }
+

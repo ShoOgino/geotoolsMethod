@@ -1,0 +1,86 @@
+    /**
+     * Checks to make sure we're not going to shoot ourselves in the foot. if InlineFeature has a
+     * FeatureCollection, then thats the only node ie. no set of FeatureCollections or
+     * SimpleFeatureCollection mixed with a set of Feature
+     *
+     * <p>Other stuff as we think of them.
+     *
+     * @param root SLD root node -- "InlineFeature"
+     * @return true if okay, otherwise exception
+     */
+    private boolean isSimple(Node root) throws Exception {
+        // if there's a <FeatureCollection>, thats the only child
+        // if there was a <FeatureCollection>, then descend into it
+        // check to make sure there are only <featureMember> in it
+
+        int foundFeature = 0;
+        int foundFC = 0;
+
+        Node fcNode = null;
+        String featureName = null;
+
+        NodeList children = root.getChildNodes();
+
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+
+            if ((child == null) || (child.getNodeType() != Node.ELEMENT_NODE)) {
+                continue;
+            }
+            String childName = child.getLocalName();
+            if (childName == null) childName = child.getNodeName();
+
+            if (childName.equalsIgnoreCase("FeatureCollection")) {
+                (foundFC)++;
+                fcNode = child;
+            } else {
+                if (featureName == null) featureName = childName;
+                if (!(childName.equalsIgnoreCase(featureName)))
+                    throw new Exception(
+                            "SLD inline feature parser  - it appear that there is >1 feature type present.  I got a "
+                                    + childName
+                                    + " when I was expecting a "
+                                    + featureName
+                                    + " tag");
+            }
+        }
+        if (foundFC > 1)
+            throw new Exception(
+                    "SLD - UserLayer, inline feature parser - found >1 FeatureCollection.  Not supported");
+        if ((foundFC > 0) && (foundFeature > 0))
+            throw new Exception(
+                    "SLD - UserLayer, inline feature parser - found  SimpleFeatureCollection and featureMembers.  Not supported");
+
+        if (foundFC == 0) return true;
+
+        featureName = null;
+
+        // otherwise decend into the SimpleFeatureCollection and check to make sure it only contains
+        // features
+        children = fcNode.getChildNodes();
+
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+
+            if ((child == null) || (child.getNodeType() != Node.ELEMENT_NODE)) {
+                continue;
+            }
+            String childName = child.getLocalName();
+            if (childName == null) childName = child.getNodeName();
+            if (childName.equalsIgnoreCase("featureMember")) {
+                foundFeature++;
+            } else if (childName.equalsIgnoreCase("FeatureCollection")) {
+                throw new Exception(
+                        "SLD - UserLayer, inline feature parser - found a node of type FeatureCollection.  Expected a featureMember - dont support nested collections.");
+
+            } else if (!childName.equalsIgnoreCase("boundedBy")) {
+                throw new Exception(
+                        "SLD - UserLayer, inline feature parser - found a node of type '"
+                                + child.getLocalName()
+                                + "' and dont understand it.  Expected a featureMember.");
+            }
+        }
+
+        return true;
+    }
+

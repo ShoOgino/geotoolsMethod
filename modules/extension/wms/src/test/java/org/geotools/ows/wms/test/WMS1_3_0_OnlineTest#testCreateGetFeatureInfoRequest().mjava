@@ -1,0 +1,70 @@
+    public void testCreateGetFeatureInfoRequest() throws Exception {
+        try {
+            URL featureURL =
+                    new URL(
+                            "http://demo.cubewerx.com/cipi12/cubeserv/cubeserv.cgi?service=wms&request=getcapabilities");
+            WebMapServer wms = getCustomWMS(featureURL);
+            WMSCapabilities caps = wms.getCapabilities();
+            assertNotNull(caps);
+            assertNotNull(caps.getRequest().getGetFeatureInfo());
+
+            GetMapRequest getMapRequest = wms.createGetMapRequest();
+
+            getMapRequest.setProperty(GetMapRequest.LAYERS, "ETOPO2:Foundation");
+            //        List simpleLayers = getMapRequest.getAvailableLayers();
+            //        Iterator iter = simpleLayers.iterator();
+            //        while (iter.hasNext()) {
+            //                SimpleLayer simpleLayer = (SimpleLayer) iter.next();
+            //                Object[] styles = simpleLayer.getValidStyles().toArray();
+            //                if (styles.length == 0) {
+            //                        simpleLayer.setStyle("");
+            //                        continue;
+            //                }
+            //                Random random = new Random();
+            //                int randomInt = random.nextInt(styles.length);
+            //                simpleLayer.setStyle((String) styles[randomInt]);
+            //        }
+            //        getMapRequest.setLayers(simpleLayers);
+
+            getMapRequest.setSRS("EPSG:4326");
+            getMapRequest.setDimensions("400", "400");
+            getMapRequest.setFormat("image/png");
+            //
+            // http://demo.cubewerx.com/cipi12/cubeserv/cubeserv.cgi?INFO_FORMAT=text/html&LAYERS=ETOPO2:Foundation&FORMAT=image/png&HEIGHT=400&J=200&REQUEST=GetFeatureInfo&I=200&BBOX=-34.12087,15.503481,1.8462441,35.6043956&WIDTH=400&STYLES=&SRS=EPSG:4326&QUERY_LAYERS=ETOPO2:Foundation&VERSION=1.3.0
+            getMapRequest.setBBox("-34.12087,15.503481,1.8462441,35.6043956");
+            URL url2 = getMapRequest.getFinalURL();
+
+            GetFeatureInfoRequest request = wms.createGetFeatureInfoRequest(getMapRequest);
+            //        request.setQueryLayers(request.getQueryableLayers());
+            request.setProperty(GetFeatureInfoRequest.QUERY_LAYERS, "ETOPO2:Foundation");
+            request.setQueryPoint(200, 200);
+            request.setInfoFormat("text/html");
+
+            // System.out.println(request.getFinalURL());
+
+            //     TODO   Currently this server rtreturns code 400 !?
+            GetFeatureInfoResponse response = (GetFeatureInfoResponse) wms.issueRequest(request);
+            // System.out.println(response.getContentType());
+            assertTrue(response.getContentType().indexOf("text/html") != -1);
+            BufferedReader in =
+                    new BufferedReader(new InputStreamReader(response.getInputStream()));
+            String line;
+
+            boolean textFound = false;
+            while ((line = in.readLine()) != null) {
+                // System.out.println(line);
+                if (line.indexOf("CubeSERV Feature Query") != -1) {
+                    textFound = true;
+                    break;
+                }
+            }
+            assertTrue(textFound);
+        } catch (java.net.ConnectException ce) {
+            if (ce.getMessage().indexOf("timed out") > 0) {
+                // System.err.println("Unable to test - timed out: " + ce);
+            } else {
+                throw (ce);
+            }
+        }
+    }
+

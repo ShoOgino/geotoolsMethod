@@ -1,0 +1,30 @@
+    private RenderedImage mosaicHeterogeneousImages(List<ImageInTile> sources) {
+        // at the time of writing, only JAI-EXT mosaic can handle a mix of different
+        // color models, we need to use it explicitly
+        RenderedImage image;
+        final ParameterBlockJAI pb =
+                new ParameterBlockJAI(new it.geosolutions.jaiext.mosaic.MosaicDescriptor());
+        for (ImageInTile it : sources) {
+            if (it.posx != 0 || it.posy != 0) {
+                ImageWorker iw = new ImageWorker(it.image);
+                iw.translate(
+                        it.posx, it.posy, Interpolation.getInstance(Interpolation.INTERP_NEAREST));
+                RenderedImage translated = iw.getRenderedImage();
+                pb.addSource(translated);
+            } else {
+                pb.addSource(it.image);
+            }
+        }
+        pb.setParameter("mosaicType", MosaicDescriptor.MOSAIC_TYPE_OVERLAY);
+        pb.setParameter("sourceAlpha", null);
+        pb.setParameter("sourceROI", null);
+        pb.setParameter("sourceThreshold", null);
+        pb.setParameter("backgroundValues", new double[] {0});
+        pb.setParameter("nodata", null);
+
+        RenderingHints hints = new Hints(JAI.getDefaultInstance().getRenderingHints());
+        hints.putAll(GeoTools.getDefaultHints());
+        image = new MosaicRIF().create(pb, hints);
+        return image;
+    }
+

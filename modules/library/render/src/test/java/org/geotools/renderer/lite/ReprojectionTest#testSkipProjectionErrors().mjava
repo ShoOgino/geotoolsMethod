@@ -1,7 +1,7 @@
     public void testSkipProjectionErrors() throws Exception {
         // build map context
-        MapContext mapContext = new DefaultMapContext(DefaultGeographicCRS.WGS84);
-        mapContext.addLayer(createLineCollection(), createLineStyle());
+        MapContent MapContent = new MapContent();
+        MapContent.addLayer(new FeatureLayer(createLineCollection(), createLineStyle()));
 
         // build projected envelope to work with (small one around the area of
         // validity of utm zone 1, which being a Gauss projection is a vertical
@@ -10,26 +10,27 @@
                 new ReferencedEnvelope(
                         new Envelope(-180, -170, 20, 40), DefaultGeographicCRS.WGS84);
         CoordinateReferenceSystem utm1N = CRS.decode("EPSG:32601");
-        System.out.println(CRS.getGeographicBoundingBox(utm1N));
+        // System.out.println(CRS.getGeographicBoundingBox(utm1N));
         ReferencedEnvelope reUtm = reWgs.transform(utm1N, true);
 
         BufferedImage image = new BufferedImage(200, 200, BufferedImage.TYPE_4BYTE_ABGR);
 
         // setup the renderer and listen for errors
         StreamingRenderer sr = new StreamingRenderer();
-        sr.setContext(mapContext);
+        sr.setMapContent(MapContent);
         sr.addRenderListener(
                 new RenderListener() {
                     public void featureRenderer(SimpleFeature feature) {}
 
                     public void errorOccurred(Exception e) {
-                        e.printStackTrace();
+                        java.util.logging.Logger.getGlobal()
+                                .log(java.util.logging.Level.INFO, "", e);
                         errors++;
                     }
                 });
         errors = 0;
         sr.paint((Graphics2D) image.getGraphics(), new Rectangle(200, 200), reUtm);
-        mapContext.dispose();
+        MapContent.dispose();
         // we should get two errors since there are two features that cannot be
         // projected but the renderer itself should not throw exceptions
         assertEquals(1, errors);

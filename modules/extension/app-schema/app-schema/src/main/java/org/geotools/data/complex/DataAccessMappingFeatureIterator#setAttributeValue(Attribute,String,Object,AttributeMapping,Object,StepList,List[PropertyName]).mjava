@@ -75,7 +75,12 @@
                 return null;
             }
         }
-        if (values == null && source != null) {
+        if (source instanceof Feature
+                && attMapping.isMultiValued()
+                && attMapping.getMultipleValue() != null) {
+            // extract the multiple value for the current multiple values attributes
+            values = extractMultipleValues((Feature) source, attMapping);
+        } else if (values == null && source != null) {
             values = getValues(attMapping.isMultiValued(), sourceExpression, source);
         }
         boolean isHRefLink = isByReference(clientPropsMappings, isNestedFeature);
@@ -189,12 +194,20 @@
                         clientPropsMappings.putAll(valueProperties);
                     }
                 }
+                Map<Name, Expression> clientProperties = clientPropsMappings;
                 if (!isNestedFeature) {
                     if (singleVal instanceof Attribute) {
                         singleVal = ((Attribute) singleVal).getValue();
                     }
                     if (singleVal instanceof Collection) {
                         valueList.addAll((Collection) singleVal);
+                    }
+                    if (singleVal instanceof MultiValueContainer) {
+                        MultiValueContainer multiValue = (MultiValueContainer) singleVal;
+                        valueList.add(multiValue.value);
+                        clientProperties =
+                                MultiValueContainer.resolve(
+                                        filterFac, multiValue, clientProperties);
                     } else {
                         valueList.add(singleVal);
                     }
@@ -211,7 +224,7 @@
                                 false,
                                 sourceExpression,
                                 source,
-                                clientPropsMappings,
+                                clientProperties,
                                 ignoreXlinkHref);
             }
         } else {
