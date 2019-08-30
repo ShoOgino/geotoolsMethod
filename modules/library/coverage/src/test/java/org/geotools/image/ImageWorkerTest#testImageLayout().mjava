@@ -1,0 +1,40 @@
+    @Test(expected = Test.None.class)
+    public void testImageLayout() {
+        int tileWitdh = 161;
+        int tileHeight = 21; // a small tileHeight
+        PixelInterleavedSampleModel sm =
+                new PixelInterleavedSampleModel(
+                        DataBuffer.TYPE_BYTE, tileWitdh, tileHeight, 1, tileWitdh, new int[] {0});
+        ComponentColorModel cm =
+                new ComponentColorModel(
+                        ColorSpace.getInstance(ColorSpace.CS_GRAY),
+                        false,
+                        false,
+                        Transparency.OPAQUE,
+                        DataBuffer.TYPE_BYTE);
+        RenderedImage image = new TiledImage(0, 0, tileWitdh, tileHeight, 0, 0, sm, cm);
+        ImageWorker worker = new ImageWorker(image);
+        RenderingHints hints = worker.getRenderingHints();
+        ImageLayout layout = (ImageLayout) hints.get(JAI.KEY_IMAGE_LAYOUT);
+
+        // No IllegalArgumentException will be thrown at this point when creating a new ImageLayout
+        // on top of a reference one.
+        ImageLayout newLayout =
+                new ImageLayout(
+                        layout.getTileGridXOffset(null),
+                        layout.getTileGridYOffset(null),
+                        layout.getTileWidth(null),
+                        layout.getTileHeight(null),
+                        sm,
+                        cm);
+        assertEquals(tileWitdh, newLayout.getTileWidth(null));
+
+        final int imageUtilitiesTileHeight = newLayout.getTileHeight(null);
+        assertNotEquals(tileHeight, imageUtilitiesTileHeight);
+        // That's the default tilesize provided by ImageUtilities
+        // when the original tile size is smaller than a reference value (64).
+        assertEquals(512, imageUtilitiesTileHeight);
+        assertEquals(0, newLayout.getTileGridXOffset(null));
+        assertEquals(0, newLayout.getTileGridYOffset(null));
+    }
+
