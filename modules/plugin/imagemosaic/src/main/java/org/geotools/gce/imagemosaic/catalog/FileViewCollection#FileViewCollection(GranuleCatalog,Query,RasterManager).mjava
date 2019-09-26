@@ -1,0 +1,23 @@
+    protected FileViewCollection(GranuleCatalog catalog, Query query, RasterManager manager)
+            throws IOException {
+        super(getDelegateCollection(catalog, query, manager));
+        pathType = manager.getPathType();
+        parentLocation = manager.getParentLocation();
+        locationAttribute = manager.getLocationAttribute();
+
+        // prepare the builder with the reduced schema (no location)
+        SimpleFeatureTypeBuilder tb = new SimpleFeatureTypeBuilder();
+        tb.init(delegate.getSchema());
+        tb.remove(locationAttribute);
+        if (delegate.getSchema()
+                .getAttributeDescriptors()
+                .stream()
+                .anyMatch(d -> IMAGEINDEX.equals(d.getLocalName()))) {
+            // used by multidim files, in output we return info only about first slice
+            tb.remove(IMAGEINDEX);
+        }
+        // slice
+        this.schema = tb.buildFeatureType();
+        this.featureBuilder = new SimpleFeatureBuilder(schema);
+    }
+

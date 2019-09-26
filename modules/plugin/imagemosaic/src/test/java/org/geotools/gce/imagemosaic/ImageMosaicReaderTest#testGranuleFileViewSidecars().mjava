@@ -1,0 +1,68 @@
+    @Test
+    public void testGranuleFileViewSidecars() throws Exception {
+        // copy the data and get the reader
+        File directory = setupTestDirectory(this, this.rgbURL, "rbgFileView");
+        ImageMosaicReader reader = getReader(directory);
+        try {
+            GranuleSource source = reader.getGranules(reader.getGridCoverageNames()[0], true);
+            assertThat(source.getSupportedHints(), hasItem(GranuleSource.FILE_VIEW));
+
+            Query q = new Query();
+            q.setHints(new Hints(GranuleSource.FILE_VIEW, true));
+            SimpleFeatureCollection granules = source.getGranules(q);
+
+            // no location attribute, just the geometry
+            SimpleFeatureType schema = granules.getSchema();
+            assertNull(schema.getDescriptor("location"));
+            assertEquals(Arrays.asList(schema.getGeometryDescriptor()), schema.getDescriptors());
+            // check the count, collect first and last
+            SimpleFeature first = null;
+            SimpleFeature last = null;
+            int count = 0;
+            try (SimpleFeatureIterator it = granules.features()) {
+                while (it.hasNext()) {
+                    count++;
+                    SimpleFeature next = it.next();
+                    if (first == null) first = next;
+                    last = next;
+                }
+            }
+            // all files present
+            assertEquals(24, count);
+
+            FileGroup groupFirst = (FileGroup) first.getUserData().get(GranuleSource.FILES);
+            assertNotNull(groupFirst);
+            assertThat(
+                    groupFirst.getMainFile().getPath().toLowerCase(),
+                    endsWith("global_mosaic_0.png"));
+            System.out.println(groupFirst.getSupportFiles());
+            assertThat(
+                    groupFirst
+                            .getSupportFiles()
+                            .stream()
+                            .map(f -> f.getName())
+                            .collect(Collectors.toList()),
+                    Matchers.containsInAnyOrder(
+                            equalToIgnoringCase("global_mosaic_0.prj"),
+                            equalToIgnoringCase("global_mosaic_0.pgw")));
+
+            FileGroup groupLast = (FileGroup) last.getUserData().get(GranuleSource.FILES);
+            assertNotNull(groupLast);
+            // mind the alphabetic ordering, it's not group_mosaic_22
+            assertThat(
+                    groupLast.getMainFile().getPath().toLowerCase(),
+                    endsWith("global_mosaic_9.png"));
+            assertThat(
+                    groupLast
+                            .getSupportFiles()
+                            .stream()
+                            .map(f -> f.getName())
+                            .collect(Collectors.toList()),
+                    Matchers.containsInAnyOrder(
+                            equalToIgnoringCase("global_mosaic_9.prj"),
+                            equalToIgnoringCase("global_mosaic_9.pgw")));
+        } finally {
+            reader.dispose();
+        }
+    }
+
