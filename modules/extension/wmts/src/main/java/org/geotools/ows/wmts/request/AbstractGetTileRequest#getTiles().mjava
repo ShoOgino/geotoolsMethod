@@ -40,13 +40,24 @@
         TileMatrixSet matrixSet = selectMatrixSet();
 
         String requestUrl = onlineResource.toString();
-        if (WMTSServiceType.REST.equals(type)) {
-            String format = (String) getProperties().get("Format");
-            if (format == null || format.isEmpty()) {
-                format = "image/png";
-                if (LOGGER.isLoggable(Level.FINE))
-                    LOGGER.fine("Format not set, trying with " + format);
+        String format = (String) getProperties().get(FORMAT);
+        if (StringUtils.isEmpty(format)) {
+            if (!layer.getFormats().isEmpty()) {
+                format = layer.getFormats().get(0);
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.fine(
+                            "Format is not set, available formats: "
+                                    + layer.getFormats()
+                                    + " -- Selecting "
+                                    + format);
+                }
             }
+        }
+        if (StringUtils.isEmpty(format)) {
+            format = "image/png";
+            if (LOGGER.isLoggable(Level.FINE)) LOGGER.fine("Format not set, trying with " + format);
+        }
+        if (WMTSServiceType.REST.equals(type)) {
             requestUrl = layer.getTemplate(format);
             if (requestUrl == null) {
                 if (LOGGER.isLoggable(Level.INFO))
@@ -62,6 +73,8 @@
 
         WMTSTileService wmtsService =
                 new WMTSTileService(requestUrl, type, layer, styleString, matrixSet);
+
+        wmtsService.setFormat(format);
 
         wmtsService.getDimensions().put(WMTSTileService.DIMENSION_TIME, requestedTime);
 
