@@ -1,0 +1,53 @@
+    @Test
+    public void testWMTSServerWithCustomHttpClient() throws Exception {
+        // Test basic authentication properties are set for requests.
+        // GetCapabilities request is dependent on HTTPClient class.
+        // GetTile request is dependent on HttpClient class from common http library.
+        final URL wmtsUrl = new URL("http://fake.local/wmts");
+
+        // Mock HTTPClient
+        MockHTTPResponse getCapabilitiesResponse = new MockHTTPResponse(KVP_CAPA_RESOURCENAME);
+        HTTPClient owsHttpClient =
+                new MockHttpClient() {
+                    @Override
+                    public HTTPResponse get(URL url) {
+                        return getCapabilitiesResponse;
+                    }
+                };
+        owsHttpClient.setUser("username");
+        owsHttpClient.setPassword("userpassword");
+
+        // Mock HttpClient (common)
+        MockHttpCommonClient commonHttpClient =
+                new MockHttpCommonClient() {
+                    @Override
+                    protected InputStream getResponseInputStream(HttpMethod method)
+                            throws IOException {
+                        return getResourceStreamForCommonHttpClient("test-data/world.png");
+                    }
+                };
+        WebMapTileServer server =
+                new WebMapTileServer(wmtsUrl, owsHttpClient, null) {
+                    @Override
+                    protected HttpClient getHttpClient() {
+                        return commonHttpClient;
+                    }
+                };
+        assertNotNull(server.getCapabilities());
+
+        WMTSLayer layer = server.getCapabilities().getLayer("topp:states");
+        WMTSCoverageReader wcr = new WMTSCoverageReader(server, layer);
+        ReferencedEnvelope bbox =
+                new ReferencedEnvelope(-180, 180, -90, 90, CRS.decode("EPSG:4326"));
+        List<Tile> responses = testInitMapRequest(wcr, bbox);
+        assertFalse(responses.isEmpty());
+        BufferedImage bufferedImage = responses.get(0).loadImageTileImage(responses.get(0));
+        assertNotNull(bufferedImage);
+
+        GetMethod getTileHttpMethod = (GetMethod) commonHttpClient.getCalledMethods().get(0);
+        assertNotNull(getTileHttpMethod);
+        Header authorizationHeader = getTileHttpMethod.getRequestHeader("Authorization");
+        // Authorization header must be set for WMTS GetTile requests if username and password set.
+        assertNotNull("Missing Authorization header", authorizationHeader);
+    }
+
