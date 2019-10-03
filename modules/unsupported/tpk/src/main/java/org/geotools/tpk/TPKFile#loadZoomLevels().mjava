@@ -1,0 +1,63 @@
+    /**
+     * Iterate over the Zoom Levels contained in the TPK archive and build a TPKZoomLevel object for
+     * each
+     *
+     * <p>The TPKZoomLevel object caches control information about the zoom level and each bundle
+     * that comprises the zoom level. Access to individual tile data is done via this object.
+     */
+    private void loadZoomLevels() {
+
+        long startLoad = System.currentTimeMillis();
+        for (Long levelId : zoomLevelMapping.keySet()) {
+
+            // "LevelID" folder
+            String levelFolder = String.format(LEVEL_FOLDER, levelId);
+
+            List<String> bundles;
+            List<String> indexes = null;
+
+            // find names of all bundles for level
+            bundles =
+                    zipEntryMap
+                            .keySet()
+                            .stream()
+                            .filter(s -> s.contains(levelFolder))
+                            .filter(s -> s.endsWith(BUNDLE_DATA_EXTENSION))
+                            .collect(Collectors.toList());
+
+            // find names of all bundle indexes for level
+            if (cacheType == CacheType.V1) { // V2 caches don't have independent indexes
+                indexes =
+                        zipEntryMap
+                                .keySet()
+                                .stream()
+                                .filter(s -> s.contains(levelFolder))
+                                .filter(s -> s.endsWith(BUNDLE_INDEX_EXTENSION))
+                                .collect(Collectors.toList());
+            }
+
+            if (!bundles.isEmpty()) {
+
+                // get the LODInfo/LevelID mapping to actual WTMS zoom level
+                Long zoomLevel = zoomLevelMapping.get(levelId);
+
+                // go build a zoom level object using the related bundles and bundle-indexes
+                TPKZoomLevel zlObj = null;
+                if (cacheType == CacheType.V1) {
+                    zlObj = new TPKZoomLevelV1(theTPK, zipEntryMap, bundles, indexes, zoomLevel);
+                } else if (cacheType == CacheType.V2) {
+                    zlObj = new TPKZoomLevelV2(theTPK, zipEntryMap, bundles, zoomLevel);
+                }
+
+                // keep track of it
+                zoomLevelMap.put(zoomLevel, zlObj);
+            }
+        }
+
+        String msg =
+                String.format(
+                        "Loaded zoom levels in %d milliseconds",
+                        System.currentTimeMillis() - startLoad);
+        Logger.getLogger(this.getClass().getName()).info(msg);
+    }
+

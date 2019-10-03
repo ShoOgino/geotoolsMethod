@@ -1,0 +1,53 @@
+    /**
+     * Read the bundle index for the given set of tiles and return a corresponding list of TPKTile
+     * objects. Note that we read the index in the optimal order for this cache format
+     *
+     * @param top -- topmost row of coverage
+     * @param bottom -- bottommost row of coverage
+     * @param left -- leftmost column of coverage
+     * @param right -- rightmost column of coverahe
+     * @param format -- format tile data is in (JPEG, PNG)
+     * @return -- list of TPKTile objects
+     */
+    private List<TPKTile> makeTileSet(long top, long bottom, long left, long right, String format) {
+        // get the first bundle for this zoom level
+        TPKBundle bundle = bundles.get(0);
+        int bundleIndex = 0;
+
+        List<TPKTile> tiles = new ArrayList<>();
+        for (long col = left; col <= right; col++) {
+            for (long row = top; row >= bottom; row--) {
+
+                // find bundle for tile if we don't already have it!
+                if (!bundle.inBundle(col, row)) {
+                    final long c = col;
+                    final long r = row;
+                    TPKBundle saveBundle = bundle;
+                    bundle =
+                            bundles.stream().filter(b -> b.inBundle(c, r)).findFirst().orElse(null);
+                    if (bundle == null) {
+                        bundle = saveBundle;
+                        continue;
+                    }
+                    bundleIndex = bundles.indexOf(bundle);
+                }
+
+                // calculate the index position we need to read
+                long bundleRow = (max_row_column - row) - bundle.baseRow;
+                long indexReadOffset =
+                        INDEX_HEADER_LENGTH
+                                + (((col - bundle.baseColumn) * BUNDLE_DIMENSION) + bundleRow)
+                                        * INDEX_ENTRY_LENGTH;
+
+                // read the tile index and get the offset to the tile data
+                long tileDataOffset = getTileDataOffset(bundle, indexReadOffset);
+                TPKTile.TileInfo ti = new TPKTile.TileInfo(0, tileDataOffset);
+
+                // build a TPKTile object for this tile
+                TPKTile tile = new TPKTile(col, row, format, ti, bundleIndex);
+                tiles.add(tile);
+            }
+        }
+        return tiles;
+    }
+

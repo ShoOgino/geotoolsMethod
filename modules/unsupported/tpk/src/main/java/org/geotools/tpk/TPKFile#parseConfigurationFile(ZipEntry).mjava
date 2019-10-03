@@ -1,0 +1,51 @@
+    /**
+     * Extract required metatdata from conf.xml file
+     *
+     * <p>Populates imageFormat, creates and poulates zoomLevelMapping and zoomLevelResolutionMap
+     * hashmaps
+     *
+     * @param confFile -- ZipEntry object for the TPK's conf.xml file
+     */
+    private void parseConfigurationFile(ZipEntry confFile) {
+        zoomLevelMapping = new HashMap<>();
+        zoomLevelResolutionMap = new HashMap<>();
+
+        try {
+            InputStream is = theTPK.getInputStream(confFile);
+            DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+            DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+            Document confDoc = dBuilder.parse(is);
+
+            // find the "StorageFormat" element to determine compact cache version/format
+            NodeList sfs = confDoc.getElementsByTagName(TAG_STORAGE_FORMAT);
+            Node sf = sfs.item(0);
+            if (sf.getNodeType() == Node.ELEMENT_NODE) {
+                String storageFormat = sf.getTextContent();
+                if (storageFormat.equals(COMPACT_CACHE_V1)) {
+                    cacheType = CacheType.V1;
+                } else if (storageFormat.equals(COMPACT_CACHE_V2)) {
+                    cacheType = CacheType.V2;
+                } else {
+                    throw new RuntimeException("Unknown value for StorageFormat element");
+                }
+            }
+
+            // get the format of each tile stored in the cache
+            NodeList ctfs = confDoc.getElementsByTagName(TAG_TILE_FORMAT);
+            Node ctf = ctfs.item(0);
+            if (ctf.getNodeType() == Node.ELEMENT_NODE) {
+                imageFormat = ctf.getTextContent();
+            }
+
+            // get a list of the zoom-level information elements and go parse them
+            NodeList lods = confDoc.getElementsByTagName(TAG_LOD_INFO);
+            for (int i = 0; i < lods.getLength(); i++) {
+                parseLodInfo(lods.item(i));
+            }
+            is.close();
+
+        } catch (Exception ex) {
+            throw new RuntimeException("Caught exception opening/processing conf.xml", ex);
+        }
+    }
+

@@ -1,0 +1,153 @@
+    @Override
+    public GridCoverage2D read(GeneralParameterValue[] parameters) throws IllegalArgumentException {
+
+        long startRead = System.currentTimeMillis();
+
+        TPKFile file = new TPKFile(sourceFile, zoomLevelMap, bounds, imageFormat);
+        ReferencedEnvelope requestedEnvelope = null;
+        Rectangle dim = null;
+
+        if (parameters != null) {
+            for (int i = 0; i < parameters.length; i++) {
+                final ParameterValue param = (ParameterValue) parameters[i];
+                final ReferenceIdentifier name = param.getDescriptor().getName();
+                if (name.equals(AbstractGridFormat.READ_GRIDGEOMETRY2D.getName())) {
+                    final GridGeometry2D gg = (GridGeometry2D) param.getValue();
+                    try {
+                        requestedEnvelope =
+                                ReferencedEnvelope.create(
+                                                gg.getEnvelope(), gg.getCoordinateReferenceSystem())
+                                        .transform(SPHERICAL_MERCATOR, true);
+                    } catch (Exception e) {
+                        requestedEnvelope = null;
+                    }
+
+                    dim = gg.getGridRange2D().getBounds();
+                }
+            }
+        }
+
+        if (requestedEnvelope == null) {
+            requestedEnvelope = bounds;
+        }
+
+        long zoomLevel = 0;
+        long leftTile, topTile, rightTile, bottomTile;
+
+        if (requestedEnvelope != null && dim != null) {
+            // find the closest zoom based on horizontal resolution
+            double ratioWidth =
+                    requestedEnvelope.getSpan(0)
+                            / WORLD_ENVELOPE.getSpan(
+                                    0); // proportion of total width that is being requested
+            double propWidth =
+                    dim.getWidth()
+                            / ratioWidth; // this is the width in pixels that the whole world would
+            // have in the requested resolution
+            zoomLevel =
+                    Math.round(Math.log(propWidth / DEFAULT_TILE_SIZE) / Math.log(ZOOM_LEVEL_BASE));
+            // the closest zoom level to the resolution, based on the formula width =
+            // zoom_base^zoom_level * tile_size -> zoom_level = log(width /
+            // tile_size)/log(zoom_base)
+        }
+
+        // now take a zoom level that is available in the TPK file
+        zoomLevel = file.getClosestZoom(zoomLevel);
+
+        long numberOfTiles =
+                Math.round(
+                        Math.pow(
+                                ZOOM_LEVEL_BASE,
+                                zoomLevel)); // number of tile columns/rows for chosen zoom level
+        double resX = WORLD_ENVELOPE.getSpan(0) / numberOfTiles; // points per tile
+        double resY = WORLD_ENVELOPE.getSpan(1) / numberOfTiles; // points per tile
+        double offsetX = WORLD_ENVELOPE.getMinimum(0);
+        double offsetY = WORLD_ENVELOPE.getMinimum(1);
+
+        leftTile = file.getMinColumn(zoomLevel);
+        rightTile = file.getMaxColumn(zoomLevel);
+        bottomTile = file.getMinRow(zoomLevel);
+        topTile = file.getMaxRow(zoomLevel);
+
+        if (requestedEnvelope != null) { // crop tiles to requested envelope
+            leftTile =
+                    Math.max(
+                            leftTile,
+                            Math.round(
+                                    Math.floor(
+                                            (requestedEnvelope.getMinimum(0) - offsetX) / resX)));
+            bottomTile =
+                    Math.max(
+                            bottomTile,
+                            Math.round(
+                                    Math.floor(
+                                            (requestedEnvelope.getMinimum(1) - offsetY) / resY)));
+            rightTile =
+                    Math.max(
+                            leftTile,
+                            Math.min(
+                                    rightTile,
+                                    Math.round(
+                                            Math.floor(
+                                                    (requestedEnvelope.getMaximum(0) - offsetX)
+                                                            / resX))));
+            topTile =
+                    Math.max(
+                            bottomTile,
+                            Math.min(
+                                    topTile,
+                                    Math.round(
+                                            Math.floor(
+                                                    (requestedEnvelope.getMaximum(1) - offsetY)
+                                                            / resY))));
+        }
+
+        int width = (int) (rightTile - leftTile + 1) * DEFAULT_TILE_SIZE;
+        int height = (int) (topTile - bottomTile + 1) * DEFAULT_TILE_SIZE;
+
+        // recalculate the envelope we are actually returning
+        ReferencedEnvelope resultEnvelope =
+                new ReferencedEnvelope(
+                        offsetX + leftTile * resX,
+                        offsetX + (rightTile + 1) * resX,
+                        offsetY + bottomTile * resY,
+                        offsetY + (topTile + 1) * resY,
+                        SPHERICAL_MERCATOR);
+
+        String imageFormat = file.getImageFormat();
+
+        // go get all of the raw data for each tile creating a list of Tile objects
+        List<TPKTile> tiles =
+                file.getTiles(zoomLevel, topTile, bottomTile, leftTile, rightTile, imageFormat);
+
+        // now construct the complete image
+        BufferedImage image = getStartImage(BufferedImage.TYPE_INT_ARGB, width, height);
+        final Graphics graphics = image.getGraphics();
+
+        final long originLeft = leftTile;
+        final long originTop = topTile;
+
+        // use parallel processing to create individual tile images
+        tiles.parallelStream()
+                .map(TileImage::new) // it's this conversion to image that we are parallelizing
+                .forEach(
+                        tileImage -> {
+                            // calc tile position
+                            int posx = (int) (tileImage.col - originLeft) * DEFAULT_TILE_SIZE;
+                            int posy = (int) (originTop - tileImage.row) * DEFAULT_TILE_SIZE;
+
+                            // use drawImage() to stitch the individual tile images together
+                            graphics.drawImage(tileImage.image, posx, posy, null);
+                        });
+
+        file.close();
+
+        Logger.getLogger(this.getClass().getName())
+                .info(
+                        String.format(
+                                "At zoom level %d TPK read completed in %d milliseconds",
+                                zoomLevel, System.currentTimeMillis() - startRead));
+
+        return coverageFactory.create("any name for now", image, resultEnvelope);
+    }
+
