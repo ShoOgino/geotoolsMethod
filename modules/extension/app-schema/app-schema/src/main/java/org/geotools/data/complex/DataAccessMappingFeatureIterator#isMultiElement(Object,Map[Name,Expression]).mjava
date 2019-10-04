@@ -1,0 +1,32 @@
+    /**
+     * Determines if it's a case of MultiValue Inner Elements.
+     *
+     * @param values values to evaluate
+     * @param clientPropsMappings client mappings
+     * @return true if validation passes
+     */
+    private boolean isMultiElement(Object values, final Map<Name, Expression> clientPropsMappings) {
+        // values needs to be a collection
+        if (!(values instanceof Collection)) return false;
+        Collection<Object> collection = (Collection<Object>) values;
+        // values should be not-empty and MultiValueContainer instances
+        if (collection.isEmpty()
+                || !collection.stream().allMatch(o -> o instanceof MultiValueContainer))
+            return false;
+        final List<Entry<Name, Expression>> expressionEntryList =
+                collection
+                        .stream()
+                        .map(o -> (MultiValueContainer) o)
+                        .flatMap(
+                                m -> {
+                                    Map<Name, Expression> clientProperties = clientPropsMappings;
+                                    clientProperties =
+                                            MultiValueContainer.resolve(
+                                                    filterFac, m, clientProperties);
+                                    return clientProperties.entrySet().stream();
+                                })
+                        .collect(Collectors.toList());
+        if (expressionEntryList.isEmpty()) return false;
+        return expressionEntryList.stream().allMatch(y -> y.getKey() instanceof ComplexNameImpl);
+    }
+
