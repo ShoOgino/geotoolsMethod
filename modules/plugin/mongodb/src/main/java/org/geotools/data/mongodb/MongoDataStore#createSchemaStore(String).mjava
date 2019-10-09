@@ -1,4 +1,4 @@
-    private MongoSchemaStore createSchemaStore(String schemaStoreURI) {
+    private synchronized MongoSchemaStore createSchemaStore(String schemaStoreURI) {
         if (schemaStoreURI.startsWith("file:")) {
             try {
                 return new MongoSchemaFileStore(schemaStoreURI);
@@ -24,6 +24,35 @@
                 LOGGER.log(
                         Level.SEVERE,
                         "Unable to create mongodb-based schema store with URI \""
+                                + schemaStoreURI
+                                + "\"",
+                        e);
+            }
+        } else if (schemaStoreURI.startsWith(MongoSchemaFileStore.PRE_FIX_HTTP)) {
+            try {
+
+                File downloadedFile =
+                        MongoUtil.downloadSchemaFile(
+                                dataStoreDB.getName(),
+                                new URL(schemaStoreURI),
+                                httpClient,
+                                SchemaStoreDirectoryProvider.getHighestPriority());
+                if (MongoUtil.isZipFile(downloadedFile)) {
+                    File extractedFileLocation =
+                            MongoUtil.extractZipFile(
+                                    downloadedFile.getParentFile(), downloadedFile);
+                    LOGGER.log(
+                            Level.INFO,
+                            "Found Schema Files at "
+                                    + extractedFileLocation.toString()
+                                    + "after extracting ");
+                    return new MongoSchemaFileStore(extractedFileLocation.toURI());
+                } else return new MongoSchemaFileStore(downloadedFile.getParentFile().toURI());
+
+            } catch (IOException e) {
+                LOGGER.log(
+                        Level.SEVERE,
+                        "Unable to create file-based schema store with URI \""
                                 + schemaStoreURI
                                 + "\"",
                         e);

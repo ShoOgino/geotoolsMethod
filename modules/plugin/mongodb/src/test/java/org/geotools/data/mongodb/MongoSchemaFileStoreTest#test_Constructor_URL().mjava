@@ -1,0 +1,27 @@
+    @Test
+    public void test_Constructor_URL() throws Exception {
+        final String mockFileURL = "https://mock.url.com/stations.json";
+
+        MockHTTPClient mockHttpClient = new MockHTTPClient();
+        byte[] responseBytes =
+                IOUtils.toByteArray(getClass().getResourceAsStream("stations-schema.json"));
+        MockHttpResponse mockResponse = new MockHttpResponse(responseBytes, "text/json");
+        mockHttpClient.expectGet(mockFileURL, mockResponse);
+        SchemaStoreDirectory directory = SchemaStoreDirectoryProvider.getLowestPriority();
+
+        File downloadedFile =
+                MongoUtil.downloadSchemaFile(
+                        "mockshema", new URL(mockFileURL), mockHttpClient, directory);
+
+        MongoSchemaStore mss = new MongoSchemaFileStore(downloadedFile.getParentFile().toURI());
+        assertEquals(1, mss.typeNames().size());
+        SimpleFeatureType type = mss.retrieveSchema(new NameImpl("stations"));
+        assertNotNull(type);
+        mss.deleteSchema(new NameImpl("stations"));
+        // cleanup
+        Files.walk(new File(directory.getDirectory(), "mockshema").toPath())
+                .sorted(Comparator.reverseOrder())
+                .map(Path::toFile)
+                .forEach(File::delete);
+    }
+
