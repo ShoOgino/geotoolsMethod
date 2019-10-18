@@ -7,32 +7,29 @@
 
         // Mock HTTPClient
         MockHTTPResponse getCapabilitiesResponse = new MockHTTPResponse(KVP_CAPA_RESOURCENAME);
+        MockHTTPResponse getTileResponse = new MockHTTPResponse("test-data/world.png");
+        final Map<String, String> getTileHeadersCalled = new HashMap<>();
         HTTPClient owsHttpClient =
                 new MockHttpClient() {
                     @Override
-                    public HTTPResponse get(URL url) {
-                        return getCapabilitiesResponse;
+                    public HTTPResponse get(URL url, Map<String, String> headers) {
+                        if (url.toString().toLowerCase().contains("request=getcapabilities")) {
+                            return getCapabilitiesResponse;
+                        } else if (url.toString().toLowerCase().contains("request=gettile")) {
+                            getTileHeadersCalled.clear();
+                            getTileHeadersCalled.putAll(headers);
+                            return getTileResponse;
+                        } else {
+                            throw new NotImplementedException(
+                                    "request is not implemented. " + url.toString());
+                        }
                     }
                 };
         owsHttpClient.setUser("username");
         owsHttpClient.setPassword("userpassword");
 
-        // Mock HttpClient (common)
-        MockHttpCommonClient commonHttpClient =
-                new MockHttpCommonClient() {
-                    @Override
-                    protected InputStream getResponseInputStream(HttpMethod method)
-                            throws IOException {
-                        return getResourceStreamForCommonHttpClient("test-data/world.png");
-                    }
-                };
-        WebMapTileServer server =
-                new WebMapTileServer(wmtsUrl, owsHttpClient, null) {
-                    @Override
-                    protected HttpClient getHttpClient() {
-                        return commonHttpClient;
-                    }
-                };
+        WebMapTileServer server = new WebMapTileServer(wmtsUrl, owsHttpClient, null);
+        server.getHeaders().put("header1", "value1");
         assertNotNull(server.getCapabilities());
 
         WMTSLayer layer = server.getCapabilities().getLayer("topp:states");
@@ -44,10 +41,10 @@
         BufferedImage bufferedImage = responses.get(0).loadImageTileImage(responses.get(0));
         assertNotNull(bufferedImage);
 
-        GetMethod getTileHttpMethod = (GetMethod) commonHttpClient.getCalledMethods().get(0);
-        assertNotNull(getTileHttpMethod);
-        Header authorizationHeader = getTileHttpMethod.getRequestHeader("Authorization");
-        // Authorization header must be set for WMTS GetTile requests if username and password set.
-        assertNotNull("Missing Authorization header", authorizationHeader);
+        // check headers defined at WebMapTileServer are sent with GetTileRequest
+        assertNotNull(getTileHeadersCalled);
+        assertTrue(
+                "Expected header1 in the GetTile request",
+                getTileHeadersCalled.containsKey("header1"));
     }
 
