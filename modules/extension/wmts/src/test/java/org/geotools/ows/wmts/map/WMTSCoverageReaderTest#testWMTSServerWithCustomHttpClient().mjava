@@ -1,0 +1,50 @@
+    @Test
+    public void testWMTSServerWithCustomHttpClient() throws Exception {
+        // Test basic authentication properties are set for requests.
+        // GetCapabilities request is dependent on HTTPClient class.
+        // GetTile request is dependent on HttpClient class from common http library.
+        final URL wmtsUrl = new URL("http://fake.local/wmts");
+
+        // Mock HTTPClient
+        MockHTTPResponse getCapabilitiesResponse = new MockHTTPResponse(KVP_CAPA_RESOURCENAME);
+        MockHTTPResponse getTileResponse = new MockHTTPResponse("test-data/world.png");
+        final Map<String, String> getTileHeadersCalled = new HashMap<>();
+        HTTPClient owsHttpClient =
+                new MockHttpClient() {
+                    @Override
+                    public HTTPResponse get(URL url, Map<String, String> headers) {
+                        if (url.toString().toLowerCase().contains("request=getcapabilities")) {
+                            return getCapabilitiesResponse;
+                        } else if (url.toString().toLowerCase().contains("request=gettile")) {
+                            getTileHeadersCalled.clear();
+                            getTileHeadersCalled.putAll(headers);
+                            return getTileResponse;
+                        } else {
+                            throw new NotImplementedException(
+                                    "request is not implemented. " + url.toString());
+                        }
+                    }
+                };
+        owsHttpClient.setUser("username");
+        owsHttpClient.setPassword("userpassword");
+
+        WebMapTileServer server = new WebMapTileServer(wmtsUrl, owsHttpClient, null);
+        server.getHeaders().put("header1", "value1");
+        assertNotNull(server.getCapabilities());
+
+        WMTSLayer layer = server.getCapabilities().getLayer("topp:states");
+        WMTSCoverageReader wcr = new WMTSCoverageReader(server, layer);
+        ReferencedEnvelope bbox =
+                new ReferencedEnvelope(-180, 180, -90, 90, CRS.decode("EPSG:4326"));
+        List<Tile> responses = testInitMapRequest(wcr, bbox);
+        assertFalse(responses.isEmpty());
+        BufferedImage bufferedImage = responses.get(0).loadImageTileImage(responses.get(0));
+        assertNotNull(bufferedImage);
+
+        // check headers defined at WebMapTileServer are sent with GetTileRequest
+        assertNotNull(getTileHeadersCalled);
+        assertTrue(
+                "Expected header1 in the GetTile request",
+                getTileHeadersCalled.containsKey("header1"));
+    }
+
