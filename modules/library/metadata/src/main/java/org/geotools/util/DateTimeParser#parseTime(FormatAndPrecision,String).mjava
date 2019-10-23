@@ -1,0 +1,24 @@
+    private Object parseTime(FormatAndPrecision f, String value) {
+        ParsePosition pos = new ParsePosition(0);
+        Date time = f.getFormat().parse(value, pos);
+        Object parsed = parseAsDateRangeWithFormatPrecision(time, value, pos, f);
+
+        // Let's try with the lenient alternatives in case we didn't get a result yet
+        if (parsed == null && isFlagSet(FLAG_IS_LENIENT)) {
+            for (String lenientFormat : f.getLenientFormats()) {
+                // rebuild formats at each parse since date formats are not thread safe
+                final SimpleDateFormat format = new SimpleDateFormat(lenientFormat);
+                format.setTimeZone(UTC_TZ);
+                // The lenientFormat is already somehow a lenient version of the
+                // official format. no need to have it lenient too.
+                format.setLenient(false);
+                time = format.parse(value, pos);
+                parsed = parseAsDateRangeWithFormatPrecision(time, value, pos, f);
+                if (parsed != null) {
+                    return parsed;
+                }
+            }
+        }
+        return parsed;
+    }
+

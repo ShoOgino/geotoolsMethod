@@ -1,0 +1,37 @@
+    /**
+     * Parses date given in parameter according the ISO-8601 standard. This parameter should follow
+     * a syntax defined in the #FormatAndPrecision array to be validated. Lenient version are
+     * allowed too if the Lenient flag has been set
+     *
+     * @param value The date to parse.
+     * @return A date found in the request.
+     * @throws ParseException if the string can not be parsed.
+     */
+    private Object getFuzzyDate(final String value) throws ParseException {
+        String computedValue = value;
+
+        // special handling for 'current', 'now' and 'present' keyword (we accept both wms and wcs
+        // ways)
+        if (CURRENT_TIME_NAMES.contains(computedValue.toLowerCase())) {
+            if ((computedValue.equalsIgnoreCase("current") && isFlagSet(FLAG_GET_TIME_ON_CURRENT))
+                    || (computedValue.equalsIgnoreCase("now") && isFlagSet(FLAG_GET_TIME_ON_NOW))
+                    || (computedValue.equalsIgnoreCase("present")
+                            && isFlagSet(FLAG_GET_TIME_ON_PRESENT))) {
+                Calendar now = Calendar.getInstance();
+                now.set(Calendar.MILLISECOND, 0);
+                computedValue = FormatAndPrecision.MILLISECOND.getFormat().format(now.getTime());
+            } else {
+                return null;
+            }
+        }
+
+        for (FormatAndPrecision f : FormatAndPrecision.values()) {
+            Object parsedTime = parseTime(f, computedValue);
+            if (parsedTime != null) {
+                return parsedTime;
+            }
+        }
+
+        throw new ParseException("Invalid date: " + value, 0);
+    }
+
