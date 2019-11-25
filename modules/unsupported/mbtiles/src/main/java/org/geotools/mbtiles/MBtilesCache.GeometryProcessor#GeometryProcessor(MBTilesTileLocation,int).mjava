@@ -1,0 +1,51 @@
+        GeometryProcessor(MBTilesTileLocation tile, int extent) {
+            // This needs an explaination... the tiles follow the TMS spec, so they go from south to
+            // north, however the geometry inside the tile uses screen coordinate system, so top to
+            // bottom instead. Confused? Here are excerpts from the spec:
+
+            // The tiles table contains tiles and the values used to locate them. The zoom_level,
+            // tile_column, and tile_row columns MUST encode the location of the tile, following the
+            // Tile Map // Service Specification, with the restriction that the global-mercator (aka
+            // Spherical Mercator) profile MUST be used.
+
+            // Geometry data in a Vector Tile is defined in a screen coordinate system.
+            // The upper left corner of the tile (as displayed by default) is the origin of the
+            // coordinate system.
+            // The X axis is positive to the right, and the Y axis is positive downward.
+            long numberOfTiles =
+                    Math.round(
+                            Math.pow(
+                                    2,
+                                    tile.getZoomLevel())); // number of tile columns/rows for chosen
+            // zoom level
+            double resX = WORLD_ENVELOPE.getSpan(0) / numberOfTiles; // points per tile
+            double resY = WORLD_ENVELOPE.getSpan(1) / numberOfTiles; // points per tile
+            double offsetX = WORLD_ENVELOPE.getMinimum(0);
+            double offsetY = WORLD_ENVELOPE.getMinimum(1);
+
+            double tx = offsetX + tile.getTileColumn() * resX;
+            double ty = offsetY + (tile.getTileRow() + 1) * resY;
+            double mx = resX / extent;
+            double my = resY / extent;
+
+            // affine transformation
+            this.at =
+                    new AffineTransformation() {
+                        @Override
+                        public void filter(CoordinateSequence seq, int i) {
+                            // java-vector-tile uses the exact same Coordinate object for first and
+                            // last
+                            // element of a ring, but we don't want to transform it twice
+                            if (seq instanceof CoordinateSequence
+                                    && i > 0 // don't consider points
+                                    && i == seq.size() - 1
+                                    && seq.getCoordinate(0) == seq.getCoordinate(i)) {
+                                return;
+                            }
+                            super.filter(seq, i);
+                        }
+                    };
+            at.setToScale(mx, -my);
+            at.translate(tx, ty);
+        }
+
