@@ -1,0 +1,115 @@
+    /**
+     * Parses the date given in parameter. The date format should comply to ISO-8601 standard. The
+     * string may contains either a single date, or a start time, end time and a period. In the
+     * first case, this method returns a singleton containing only the parsed date. In the second
+     * case, this method returns a list including all dates from start time up to the end time with
+     * the interval specified in the {@code value} string.
+     *
+     * @param value The date, time and period to parse.
+     * @return A list of dates, or an empty list of the {@code value} string is null or empty.
+     * @throws ParseException if the string can not be parsed.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public Collection parse(String value) throws ParseException {
+        if (value == null) {
+            return Collections.emptyList();
+        }
+        value = value.trim();
+        if (value.length() == 0) {
+            return Collections.emptyList();
+        }
+
+        final Set result =
+                new TreeSet(
+                        new Comparator() {
+
+                            public int compare(Object o1, Object o2) {
+                                final boolean o1Date = o1 instanceof Date;
+                                final boolean o2Date = o2 instanceof Date;
+
+                                if (o1 == o2) {
+                                    return 0;
+                                }
+
+                                // o1 date
+                                if (o1Date) {
+                                    final Date dateLeft = (Date) o1;
+                                    if (o2Date) {
+                                        // o2 date
+                                        return dateLeft.compareTo((Date) o2);
+                                    }
+                                    // o2 daterange
+                                    return dateLeft.compareTo(((DateRange) o2).getMinValue());
+                                }
+
+                                // o1 date range
+                                final DateRange left = (DateRange) o1;
+                                if (o2Date) {
+                                    // o2 date
+                                    return left.getMinValue().compareTo(((Date) o2));
+                                }
+                                // o2 daterange
+                                return left.getMinValue().compareTo(((DateRange) o2).getMinValue());
+                            }
+                        });
+        String[] listDates = value.split(",");
+        int maxValues = maxTimes;
+        for (String date : listDates) {
+            // is it a date or a period?
+            if (date.indexOf("/") <= 0) {
+                Object o = getFuzzyDate(date);
+                if (o instanceof Date) {
+                    addDate(result, (Date) o);
+                } else {
+                    addPeriod(result, (DateRange) o);
+                }
+            } else {
+                // period
+                String[] period = date.split("/");
+
+                //
+                // Period like one of the following:
+                // yyyy-MM-ddTHH:mm:ssZ/yyyy-MM-ddTHH:mm:ssZ/P1D
+                // May be one of the following possible ISO 8601 Time Interval formats with trailing
+                // period for
+                // breaking the interval by given period:
+                // TIME/TIME/PERIOD
+                // DURATION/TIME/PERIOD
+                // TIME/DURATION/PERIOD
+                //
+                if (period.length == 3) {
+                    Date[] range = parseTimeDuration(period);
+
+                    final long millisIncrement = parsePeriod(period[2]);
+                    final long startTime = range[0].getTime();
+                    final long endTime = range[1].getTime();
+                    long time;
+                    int j = 0;
+                    while ((time = j * millisIncrement + startTime) <= endTime) {
+                        final Calendar calendar = new GregorianCalendar(UTC_TZ);
+                        calendar.setTimeInMillis(time);
+                        addDate(result, calendar.getTime());
+                        j++;
+                        checkMaxTimes(result, maxValues);
+                    }
+                }
+                // Period like : yyyy-MM-ddTHH:mm:ssZ/yyyy-MM-ddTHH:mm:ssZ, it is an extension
+                // of WMS that works with continuos period [Tb, Te].
+                // May be one of the following possible ISO 8601 Time Interval formats, as in ECQL
+                // Time Period:
+                // TIME/DURATION
+                // DURATION/TIME
+                // TIME/TIME
+                else if (period.length == 2) {
+                    Date[] range = parseTimeDuration(period);
+                    addPeriod(result, new DateRange(range[0], range[1]));
+                } else {
+                    throw new ParseException("Invalid time period: " + Arrays.toString(period), 0);
+                }
+            }
+            checkMaxTimes(result, maxValues);
+        }
+
+        return new ArrayList(result);
+    }
+

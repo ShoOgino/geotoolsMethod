@@ -5,13 +5,30 @@
         final List<Date> dates = new ArrayList<Date>();
         for (String match : getMatches()) {
             // try to convert to date
+
             try {
                 if (customFormat != null) {
                     Date parsed = customFormat.parse(match);
+                    if (useHighTime) {
+                        // Special case to make t and z upper case for ISO8601 matching.
+                        format = format.replace("t", "T").replace("z", "Z");
+                        parsed =
+                                FormatAndPrecision.expandFromCustomFormat(parsed, format)
+                                        .getMaxValue();
+                    }
                     dates.add(parsed);
                 } else {
-                    List<Date> parsed = parser.parse(match);
-                    dates.addAll(parsed);
+                    Collection parsed = PARSER.parse(match);
+                    parsed.stream()
+                            .forEach(
+                                    d -> {
+                                        DateRange range = (DateRange) d;
+                                        Date date =
+                                                useHighTime
+                                                        ? range.getMaxValue()
+                                                        : range.getMinValue();
+                                        dates.add(date);
+                                    });
                 }
             } catch (ParseException e) {
                 if (LOGGER.isLoggable(Level.FINE))
@@ -29,6 +46,7 @@
         int index = 0;
         for (String propertyName : getPropertyNames()) {
             // set the property
+
             feature.setAttribute(propertyName, dates.get(index++));
 
             // do we have more dates?
