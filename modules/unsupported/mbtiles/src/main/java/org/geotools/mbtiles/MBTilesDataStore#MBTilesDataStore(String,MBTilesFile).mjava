@@ -1,0 +1,28 @@
+    public MBTilesDataStore(String namespaceURI, MBTilesFile mbtiles) throws IOException {
+        this.namespaceURI = namespaceURI;
+        this.mbtiles = mbtiles;
+        MBTilesMetadata metadata = mbtiles.loadMetaData();
+        if (!MBTilesMetadata.t_format.PBF.equals(metadata.getFormat())) {
+            throw new DataSourceException(
+                    "Expected 'PBF' as the format, but found " + metadata.getFormat());
+        }
+        if (metadata.getJson() == null) {
+            throw new DataSourceException(
+                    "Cannot find 'json' metadata field, required to load the layers and their structure");
+        }
+        try {
+            LinkedHashMap<String, VectorLayerMetadata> layersMap =
+                    VectorLayersMetadata.parseMetadata(metadata.getJson()).getLayersMap();
+            schemas = new LinkedHashMap<>();
+            for (String layerName : layersMap.keySet()) {
+                VectorLayerMetadata lm = layersMap.get(layerName);
+                schemas.put(layerName, buildFeatureType(lm));
+            }
+        } catch (Exception e) {
+            throw new DataSourceException(
+                    "Could not parse the 'json' metadata field, failed to initialize the store", e);
+        }
+
+        this.tileCache = new MBtilesCache(schemas);
+    }
+
