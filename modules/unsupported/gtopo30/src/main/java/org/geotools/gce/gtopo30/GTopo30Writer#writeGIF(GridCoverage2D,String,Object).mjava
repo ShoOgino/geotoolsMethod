@@ -7,8 +7,6 @@
      */
     private void writeGIF(final GridCoverage2D gc, final String name, Object dest)
             throws IOException {
-        ImageOutputStream out = null;
-
         // rescaling to a smaller resolution in order to save space on storage
         final GridCoverage2D gc1 = rescaleCoverage(gc);
 
@@ -51,32 +49,20 @@
         }
 
         // get the image out stream
-        if (dest instanceof File) {
-            // writing gif image
-            final File file =
-                    new File((File) dest, new StringBuffer(name).append(".GIF").toString());
-            out = ImageIOExt.createImageOutputStream(image, file);
-        } else {
-            final ZipOutputStream outZ = (ZipOutputStream) dest;
-            final ZipEntry e = new ZipEntry(gc.getName().toString() + ".GIF");
-            outZ.putNextEntry(e);
-
-            out = ImageIOExt.createImageOutputStream(image, outZ);
+        try (ImageOutputStream out = getImageOutputStream(dest, image, name + ".GIF")) {
+            // write it down as a gif
+            final ParameterBlockJAI pbj = new ParameterBlockJAI("ImageWrite");
+            pbj.addSource(image);
+            pbj.setParameter("Output", out);
+            pbj.setParameter("Format", "gif");
+            JAI.create("ImageWrite", pbj, new RenderingHints(JAI.KEY_TILE_CACHE, null));
+        } finally {
+            // disposing the old unused coverages
+            gc1.dispose(false);
         }
 
-        // write it down as a gif
-        final ParameterBlockJAI pbj = new ParameterBlockJAI("ImageWrite");
-        pbj.addSource(image);
-        pbj.setParameter("Output", out);
-        pbj.setParameter("Format", "gif");
-        JAI.create("ImageWrite", pbj, new RenderingHints(JAI.KEY_TILE_CACHE, null));
-
-        out.close();
         if (dest instanceof ZipOutputStream) {
             ((ZipOutputStream) dest).closeEntry();
         }
-
-        // disposing the old unused coverages
-        gc1.dispose(false);
     }
 

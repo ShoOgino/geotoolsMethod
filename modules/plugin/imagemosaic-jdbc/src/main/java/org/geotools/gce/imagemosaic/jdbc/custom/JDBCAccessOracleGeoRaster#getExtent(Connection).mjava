@@ -16,29 +16,21 @@
                         + getConfig().getCoverageNameAttribute()
                         + "=?";
 
-        PreparedStatement s = null;
-        ResultSet r = null;
         Envelope extent = null;
 
-        try {
-            s = con.prepareStatement(extentSelectLBX);
+        try (PreparedStatement s = con.prepareStatement(extentSelectLBX)) {
             s.setString(1, getConfig().getCoverageName());
-            r = s.executeQuery();
-            if (r.next()) {
-                throw new SQLException("Did not get any result from the database bounds query");
+            try (ResultSet r = s.executeQuery()) {
+                if (r.next()) {
+                    throw new SQLException("Did not get any result from the database bounds query");
+                }
+                byte[] wkb = r.getBytes(1);
+                Geometry geom = new WKBReader().read(wkb);
+                extent = geom.getEnvelopeInternal();
+                LOGGER.fine("creating Extent");
             }
-            byte[] wkb = r.getBytes(1);
-            Geometry geom = new WKBReader().read(wkb);
-            extent = geom.getEnvelopeInternal();
-            LOGGER.fine("creating Extent");
-
         } catch (Exception e) {
             throw new RuntimeException(e);
-
-        } finally {
-
-            closeResultSet(r);
-            closePreparedStmt(s);
         }
 
         LOGGER.fine("returning Extent");

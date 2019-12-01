@@ -8,36 +8,23 @@
      */
     private void writeDEM(PlanarImage image, final String name, Object dest)
             throws FileNotFoundException, IOException {
-        ImageOutputStream out;
+        try (ImageOutputStream out = getImageOutputStream(dest, image, name + ".DEM")) {
+            out.setByteOrder(java.nio.ByteOrder.BIG_ENDIAN);
 
-        if (dest instanceof File) {
-            // write statistics
-            dest = new File((File) dest, new StringBuffer(name).append(".DEM").toString());
-            out = ImageIOExt.createImageOutputStream(image, (File) dest);
-        } else {
-            final ZipOutputStream outZ = (ZipOutputStream) dest;
-            final ZipEntry e = new ZipEntry(name + ".DEM");
-            outZ.putNextEntry(e);
-            out = ImageIOExt.createImageOutputStream(image, outZ);
+            // untile the image in case it is tiled
+            // otherwise we could add tiles which are unexistant in the original
+            // data
+            // generating failures when reading back the data again.
+            image = untileImage(image);
+
+            // requesting an imageio writer
+            // setting tile parameters in order to tile the image on the disk
+            final ParameterBlockJAI pbjW = new ParameterBlockJAI("ImageWrite");
+            pbjW.addSource(image);
+            pbjW.setParameter("Format", "raw");
+            pbjW.setParameter("Output", out);
+            JAI.create("ImageWrite", pbjW);
         }
-
-        out.setByteOrder(java.nio.ByteOrder.BIG_ENDIAN);
-
-        // untile the image in case it is tiled
-        // otherwise we could add tiles which are unexistant in the original
-        // data
-        // generating failures when reading back the data again.
-        image = untileImage(image);
-
-        // requesting an imageio writer
-        // setting tile parameters in order to tile the image on the disk
-        final ParameterBlockJAI pbjW = new ParameterBlockJAI("ImageWrite");
-        pbjW.addSource(image);
-        pbjW.setParameter("Format", "raw");
-        pbjW.setParameter("Output", out);
-        JAI.create("ImageWrite", pbjW);
-
-        out.close();
         if (dest instanceof ZipOutputStream) {
             ((ZipOutputStream) dest).closeEntry();
         }

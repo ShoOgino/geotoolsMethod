@@ -8,13 +8,9 @@
      */
     private byte[] getImageBytesUsingSDOExport(
             GeneralEnvelope envelope, int level, Connection conn) {
-        PreparedStatement ps = null;
-        CallableStatement cs = null;
-        ResultSet r = null;
-
-        try {
-            ps = conn.prepareStatement(stmtPixel);
-
+        BigDecimal[] pixelCoords1 = null;
+        BigDecimal[] pixelCoords2 = null;
+        try (PreparedStatement ps = conn.prepareStatement(stmtPixel)) {
             ps.setInt(1, level);
             ps.setDouble(2, envelope.getMinimum(0));
             ps.setDouble(3, envelope.getMaximum(1));
@@ -23,24 +19,21 @@
             ps.setDouble(6, envelope.getMinimum(1));
             ps.setString(7, getConfig().getCoverageName());
 
-            r = ps.executeQuery();
-            BigDecimal[] pixelCoords1 = null;
-            BigDecimal[] pixelCoords2 = null;
-
-            if (r.next()) {
-                pixelCoords1 = (BigDecimal[]) r.getArray(1).getArray();
-                pixelCoords2 = (BigDecimal[]) r.getArray(2).getArray();
-            } else {
-                throw new RuntimeException(
-                        "No cell/pixel coordinates for world Envelope " + envelope);
+            try (ResultSet r = ps.executeQuery()) {
+                if (r.next()) {
+                    pixelCoords1 = (BigDecimal[]) r.getArray(1).getArray();
+                    pixelCoords2 = (BigDecimal[]) r.getArray(2).getArray();
+                } else {
+                    throw new RuntimeException(
+                            "No cell/pixel coordinates for world Envelope " + envelope);
+                }
             }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
 
-            r.close();
-            ps.close();
-
-            // Export the georaster object, cropped by cell coordinates as a TIFF image into a BLOB
-
-            cs = conn.prepareCall(stmtExport);
+        // Export the georaster object, cropped by cell coordinates as a TIFF image into a BLOB
+        try (CallableStatement cs = conn.prepareCall(stmtExport)) {
             cs.setString(1, getConfig().getCoverageName());
             String params =
                     String.format(
@@ -65,14 +58,9 @@
                 }
             }
             if (freeTemporary != null) freeTemporary.invoke(blob);
-            cs.close();
             return bytes;
         } catch (Exception e) {
             throw new RuntimeException(e);
-        } finally {
-            closeResultSet(r);
-            closeStmt(ps);
-            closeStmt(cs);
         }
     }
 

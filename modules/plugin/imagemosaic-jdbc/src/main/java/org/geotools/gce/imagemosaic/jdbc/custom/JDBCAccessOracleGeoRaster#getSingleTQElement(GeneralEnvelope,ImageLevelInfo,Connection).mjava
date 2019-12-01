@@ -25,32 +25,33 @@
             byte[] bytes = getImageBytesUsingSDOExport(envelope, level, conn);
 
             // start creating a java Buffered image from the blob
-            SeekableStream stream = new ByteArraySeekableStream(bytes);
+            try (SeekableStream stream = new ByteArraySeekableStream(bytes)) {
 
-            // find an ImageDecorder
-            String decoderName = null;
-            for (String dn : ImageCodec.getDecoderNames(stream)) {
-                decoderName = dn;
-                break;
+                // find an ImageDecorder
+                String decoderName = null;
+                for (String dn : ImageCodec.getDecoderNames(stream)) {
+                    decoderName = dn;
+                    break;
+                }
+                // decode Image
+                ImageDecoder decoder = ImageCodec.createImageDecoder(decoderName, stream, null);
+                RenderedImage rimage = decoder.decodeAsRenderedImage();
+
+                // Check for the color model, if there is none, create one
+                ColorModel cm = rimage.getColorModel();
+                if (cm == null) cm = PlanarImage.createColorModel(rimage.getSampleModel());
+
+                // Convert to BufferedImage
+                PlanarImage pimage = PlanarImage.wrapRenderedImage(rimage);
+                bimg = pimage.getAsBufferedImage(null, cm);
+
+                LOGGER.fine("Creating BufferedImage from GeoRaster Object");
+
+                // LOGGER.fine("Writing Retrieved Image to disk (Should be for Debugging only!)");
+                // ImageIO.write(bimg,"png", new File("/tmp/pics/test.png"));
+
+                return new TileQueueElement(getConfig().getCoverageName(), bimg, envelope);
             }
-            // decode Image
-            ImageDecoder decoder = ImageCodec.createImageDecoder(decoderName, stream, null);
-            RenderedImage rimage = decoder.decodeAsRenderedImage();
-
-            // Check for the color model, if there is none, create one
-            ColorModel cm = rimage.getColorModel();
-            if (cm == null) cm = PlanarImage.createColorModel(rimage.getSampleModel());
-
-            // Convert to BufferedImage
-            PlanarImage pimage = PlanarImage.wrapRenderedImage(rimage);
-            bimg = pimage.getAsBufferedImage(null, cm);
-
-            LOGGER.fine("Creating BufferedImage from GeoRaster Object");
-
-            // LOGGER.fine("Writing Retrieved Image to disk (Should be for Debugging only!)");
-            // ImageIO.write(bimg,"png", new File("/tmp/pics/test.png"));
-
-            return new TileQueueElement(getConfig().getCoverageName(), bimg, envelope);
         } catch (Exception ex) {
             throw new RuntimeException(ex);
         }
