@@ -1,0 +1,43 @@
+    @Test
+    public void readLineStrings() throws Exception {
+        File file =
+                URLs.urlToFile(
+                        getClass()
+                                .getClassLoader()
+                                .getResource("org/geotools/data/flatgeobuf/lines.fgb"));
+        Map<String, Serializable> params = new HashMap<>();
+        params.put("file", file);
+        DataStore store = DataStoreFinder.getDataStore(params);
+        assertEquals(1, store.getTypeNames().length);
+        assertEquals("lines", store.getTypeNames()[0]);
+        SimpleFeatureSource featureSource = store.getFeatureSource("lines");
+        assertEquals(
+                "geom:LineString,name:String,id:Integer",
+                DataUtilities.encodeType(featureSource.getSchema()));
+        SimpleFeatureCollection featureCollection = featureSource.getFeatures();
+        assertEquals(2, featureCollection.size());
+        SimpleFeatureIterator it = featureCollection.features();
+        try {
+            int c = 0;
+            while (it.hasNext()) {
+                SimpleFeature feature = it.next();
+                if (c == 0) {
+                    assertEquals(
+                            "LINESTRING (0 0, 10 10)", feature.getDefaultGeometry().toString());
+                    assertEquals(1, feature.getAttribute("id"));
+                    assertEquals("ABC", feature.getAttribute("name"));
+                } else if (c == 1) {
+                    assertEquals(
+                            "LINESTRING (20 20, 21 21, 23 23)",
+                            feature.getDefaultGeometry().toString());
+                    assertEquals(2, feature.getAttribute("id"));
+                    assertEquals("DEF", feature.getAttribute("name"));
+                }
+                c++;
+            }
+        } finally {
+            it.close();
+        }
+        store.dispose();
+    }
+

@@ -1,0 +1,41 @@
+    private HeaderMeta getHeaderMeta(SimpleFeatureType featureType) throws IOException {
+        if (this.headerMeta == null) {
+            List<AttributeDescriptor> types = featureType.getAttributeDescriptors();
+            List<ColumnMeta> columns = new ArrayList<ColumnMeta>();
+
+            for (int i = 0; i < types.size(); i++) {
+                AttributeDescriptor ad = types.get(i);
+                if (ad instanceof GeometryDescriptor) {
+                    // multiple geometries per feature is not supported
+                } else {
+                    String key = ad.getLocalName();
+                    Class<?> binding = ad.getType().getBinding();
+                    ColumnMeta column = new ColumnMeta();
+                    column.name = key;
+                    if (binding.isAssignableFrom(Boolean.class)) column.type = ColumnType.Bool;
+                    else if (binding.isAssignableFrom(Integer.class)) column.type = ColumnType.Int;
+                    else if (binding.isAssignableFrom(Long.class)) column.type = ColumnType.Long;
+                    else if (binding.isAssignableFrom(Double.class))
+                        column.type = ColumnType.Double;
+                    else if (binding.isAssignableFrom(String.class))
+                        column.type = ColumnType.String;
+                    else throw new IOException("Unknown type");
+                    columns.add(column);
+                }
+            }
+
+            // CoordinateReferenceSystem crs =
+            // featureType.getGeometryDescriptor().getCoordinateReferenceSystem();
+            byte geometryType =
+                    toGeometryType(featureType.getGeometryDescriptor().getType().getBinding());
+            // byte dimensions = (byte) (crs == null ? 2 :
+            // crs.getCoordinateSystem().getDimension());
+
+            this.headerMeta = new HeaderMeta();
+            headerMeta.featuresCount = 0;
+            headerMeta.geometryType = geometryType;
+            headerMeta.columns = columns;
+        }
+        return this.headerMeta;
+    }
+

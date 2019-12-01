@@ -1,0 +1,44 @@
+    @Test
+    public void readMultiPoints() throws Exception {
+        File file =
+                URLs.urlToFile(
+                        getClass()
+                                .getClassLoader()
+                                .getResource("org/geotools/data/flatgeobuf/multipoints.fgb"));
+        Map<String, Serializable> params = new HashMap<>();
+        params.put("file", file);
+        DataStore store = DataStoreFinder.getDataStore(params);
+        assertEquals(1, store.getTypeNames().length);
+        assertEquals("multipoints", store.getTypeNames()[0]);
+        SimpleFeatureSource featureSource = store.getFeatureSource("multipoints");
+        assertEquals(
+                "geom:MultiPoint,name:String,id:Integer",
+                DataUtilities.encodeType(featureSource.getSchema()));
+        SimpleFeatureCollection featureCollection = featureSource.getFeatures();
+        assertEquals(2, featureCollection.size());
+        SimpleFeatureIterator it = featureCollection.features();
+        try {
+            int c = 0;
+            while (it.hasNext()) {
+                SimpleFeature feature = it.next();
+                if (c == 0) {
+                    assertEquals(
+                            "MULTIPOINT ((24.257813 49.61071), (-92.460937 40.178873))",
+                            feature.getDefaultGeometry().toString());
+                    assertEquals(9, feature.getAttribute("id"));
+                    assertEquals("ABC", feature.getAttribute("name"));
+                } else if (c == 1) {
+                    assertEquals(
+                            "MULTIPOINT ((100 0), (101 1))",
+                            feature.getDefaultGeometry().toString());
+                    assertEquals(56, feature.getAttribute("id"));
+                    assertEquals("TYU", feature.getAttribute("name"));
+                }
+                c++;
+            }
+        } finally {
+            it.close();
+        }
+        store.dispose();
+    }
+
