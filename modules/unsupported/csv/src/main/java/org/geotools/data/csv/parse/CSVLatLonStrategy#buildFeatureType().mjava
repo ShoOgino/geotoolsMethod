@@ -2,16 +2,26 @@
     protected SimpleFeatureType buildFeatureType() {
         String[] headers;
         Map<String, Class<?>> typesFromData;
-        CsvReader csvReader = null;
+        CSVReader csvReader = null;
         try {
             csvReader = csvFileState.openCSVReader();
-            headers = csvReader.getHeaders();
+            headers = csvFileState.getCSVHeaders();
+            if (LOGGER.getLevel() == Level.FINE) {
+                LOGGER.fine("Got headers: ");
+                for (String h : headers) {
+                    LOGGER.fine("'" + h + "'");
+                }
+            }
             typesFromData = findMostSpecificTypesFromData(csvReader, headers);
-        } catch (IOException e) {
+        } catch (IOException | CsvValidationException e) {
             throw new RuntimeException(e);
         } finally {
             if (csvReader != null) {
-                csvReader.close();
+                try {
+                    csvReader.close();
+                } catch (IOException e) {
+                    // who cares!
+                }
             }
         }
         SimpleFeatureTypeBuilder builder = createBuilder(csvFileState, headers, typesFromData);
