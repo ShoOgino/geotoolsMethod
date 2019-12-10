@@ -28,14 +28,13 @@
                 styleContext.getSprite() == null
                         ? ""
                         : styleContext.getSprite().trim().toLowerCase();
+        Expression iconSize = iconSize();
         if (MARK_SHEET_ALIASES.contains(spriteSheetLocation)) {
             Fill f = sf.fill(null, iconColor(), null);
             Stroke s = sf.stroke(iconColor(), null, null, null, null, null, null);
             gs = sf.mark(iconExpression, f, s);
         } else {
-            gs =
-                    transformer.createExternalGraphicForSprite(
-                            iconExpression, iconSize(), styleContext);
+            gs = transformer.createExternalGraphicForSprite(iconExpression, iconSize, styleContext);
         }
 
         if (gs instanceof Mark) {
@@ -43,15 +42,24 @@
             // GraphicalSymbol is a mark.
             // If it is an ExternalGraphic from a sprite sheet, the absolute size of the icon is
             // unknown at this point.
-            graphicSize = ff.multiply(ff.literal(MARK_ICON_DEFAULT_SIZE), iconSize());
+            graphicSize = ff.multiply(ff.literal(MARK_ICON_DEFAULT_SIZE), iconSize);
         }
 
         Graphic g =
                 sf.graphic(Arrays.asList(gs), iconOpacity(), graphicSize, iconRotate(), null, null);
+        // From the specification:
+        // Offset distance of icon from its anchor. Positive values indicate right and down, while
+        // negative values indicate left and up. Each component is multiplied by the value of
+        // icon-size to obtain the final offset in pixels
         Displacement d = iconOffsetDisplacement();
-        d.setDisplacementY(d.getDisplacementY());
+        d.setDisplacementY(
+                ff.multiply(iconSize, ff.multiply(ff.literal(-1), d.getDisplacementY())));
+        d.setDisplacementX(ff.multiply(iconSize, d.getDisplacementX()));
         g.setDisplacement(d);
+        g.setAnchorPoint(iconAnchorPoint());
 
         return g;
+
+        // ADD A VENDOR OPTION FOR THE POINT INDEPENDENT LOCATION!!
     }
 

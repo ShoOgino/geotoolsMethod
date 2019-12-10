@@ -109,7 +109,9 @@
                 textExpression = transformer.cqlExpressionFromTokens(text);
             }
         }
-        textExpression = ff.function("StringTransform", textExpression, textTransform());
+        if (hasTextTransform()) {
+            textExpression = ff.function("StringTransform", textExpression, textTransform());
+        }
 
         TextSymbolizer2 symbolizer =
                 (TextSymbolizer2)
@@ -153,7 +155,9 @@
 
         symbolizer
                 .getOptions()
-                .put("conflictResolution", String.valueOf(!(textAllowOverlap || iconAllowOverlap)));
+                .put(
+                        CONFLICT_RESOLUTION_KEY,
+                        String.valueOf(!(textAllowOverlap || iconAllowOverlap)));
 
         String textFitVal =
                 transformer
@@ -230,16 +234,6 @@
 
         // If the layer has an icon image, add it to our symbolizer
         if (hasIconImage()) {
-            // icon-ignore-placement requires an icon-image so we handle this property here.
-            // By default - or icon-ignore-placement: false, MapBox prevents symbols from being
-            // visible if they collide
-            // with other icons.  GeoServer only implements this behavior if the vendorOption
-            // labelObstacle is set
-            // to true.
-            if (!getIconIgnorePlacement()) {
-                symbolizer.getOptions().put("labelObstacle", "true");
-            }
-
             // Check to see that hasTextField() is true check to see if IconPadding is greater to
             // put to spaceAround
             if (!hasTextField()
@@ -247,29 +241,15 @@
                             && !"point".equalsIgnoreCase(symbolPlacementVal.trim())) {
                 symbolizer.getOptions().put("spaceAround", String.valueOf(getIconPadding()));
             }
-            // If we have an icon with a Point placement create a PointSymoblizer for the icon.
-            // This enables adjusting the text placement without moving the icon.
+            // If we have an icon with a Point placement force graphic placement independ
+            // of the label final position (each one gets its own anchor and displacement)
+            Graphic graphic = getGraphic(transformer, styleContext);
             if ("point".equalsIgnoreCase(symbolPlacementVal.trim())) {
-                org.geotools.styling.PointSymbolizer pointSymbolizer =
-                        sf.pointSymbolizer(
-                                getId(),
-                                ff.property((String) null),
-                                sf.description(Text.text("text"), null),
-                                Units.PIXEL,
-                                getGraphic(transformer, styleContext));
-                symbolizers.add(pointSymbolizer);
-            } else {
-
-                symbolizer.setGraphic(getGraphic(transformer, styleContext));
+                symbolizer.getOptions().put(GRAPHIC_PLACEMENT_KEY, INDEPENDENT.name());
             }
-        }
-
-        // Check that a labelObstacle vendor option hasn't already been placed on the symbolizer and
-        // that
-        // textIgnorePlacement is either null or false, if so add it.  If textIgnorePlacement is
-        // true, accept default behavior.
-        if (symbolizer.getOptions().get("labelObstacle") == null && !getTextIgnorePlacement()) {
-            symbolizer.getOptions().put("labelObstacle", "true");
+            // the mapbox-gl library does not paint the graphic if the icon cannot be found
+            symbolizer.getOptions().put(PointSymbolizer.FALLBACK_ON_DEFAULT_MARK, "false");
+            symbolizer.setGraphic(graphic);
         }
 
         symbolizers.add(symbolizer);
