@@ -1,0 +1,25 @@
+    @Test
+    public void testBandMergeWithNodata() throws FileNotFoundException, IOException {
+        double noDataValue = -10000d;
+        Range nodata = RangeFactory.create(noDataValue, noDataValue);
+        double[] background = new double[] {noDataValue};
+
+        RenderedImage twoBands = null;
+        PlanarImage pi = PlanarImage.wrapRenderedImage(imageWithNodata2);
+        pi.setProperty("GC_NODATA", new NoDataContainer(nodata));
+
+        ImageWorker worker = new ImageWorker(pi).setNoData(nodata).setBackground(background);
+
+        twoBands = worker.addBand(worker.getRenderedImage(), false).getRenderedImage();
+        RenderedImage oneBand = new ImageWorker(twoBands).retainBands(1).getRenderedImage();
+        RenderedImage threeBands =
+                new ImageWorker(twoBands).addBand(oneBand, false).getRenderedImage();
+
+        // Check that the noData holes are still noData after bandMerge
+        double[] threeSamples = new double[3];
+        threeBands.getData().getPixel(18, 18, threeSamples);
+        for (double sample : threeSamples) {
+            assertEquals(noDataValue, sample, 1E-6);
+        }
+    }
+
