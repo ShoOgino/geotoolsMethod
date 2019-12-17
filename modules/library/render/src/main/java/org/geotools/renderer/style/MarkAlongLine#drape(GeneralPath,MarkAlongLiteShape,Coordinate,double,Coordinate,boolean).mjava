@@ -1,0 +1,62 @@
+    /**
+     * @param newshape reference of shape painter
+     * @param wktShape shape to drape
+     * @param drapeFromCoordinate point to start/continue drawing from (tx,ty)
+     * @param rotationRadians rotation the segment being drapped upon
+     * @param previousShapeEndCoordinate where previous shape finished drawing
+     * @param joinWithLastSegment flag to signal if this shape is to continue previous incomplete
+     *     shape
+     * @return wktShape passed param with populated hints
+     */
+    private MarkAlongLiteShape drape(
+            GeneralPath newshape,
+            MarkAlongLiteShape wktShape,
+            Coordinate drapeFromCoordinate,
+            double rotationRadians,
+            Coordinate previousShapeEndCoordinate,
+            boolean joinWithLastSegment) {
+        // setting AT to anchor wktShape to start of line segnment
+        // and rotate to line segment angle
+        AffineTransformation at = new AffineTransformation();
+        at.rotate(rotationRadians);
+        at.translate(drapeFromCoordinate.x, drapeFromCoordinate.y);
+        wktShape.setGeometry(at.transform(wktShape.getGeometry()));
+
+        float[] coords = new float[6];
+        boolean skipSegment = joinWithLastSegment;
+
+        for (PathIterator i = wktShape.getPathIterator(null); !i.isDone(); i.next()) {
+            int type = i.currentSegment(coords);
+            switch (type) {
+                case PathIterator.SEG_MOVETO:
+                    // connect this shape with previous shape if necessary
+                    if (skipSegment) {
+                        newshape.moveTo(previousShapeEndCoordinate.x, previousShapeEndCoordinate.y);
+                        newshape.quadTo(
+                                previousShapeEndCoordinate.x,
+                                previousShapeEndCoordinate.y,
+                                coords[0],
+                                coords[1]);
+                        skipSegment = false;
+                    } else newshape.moveTo(coords[0], coords[1]);
+                    break;
+                case PathIterator.SEG_LINETO:
+                    newshape.lineTo(coords[0], coords[1]);
+                    break;
+                case PathIterator.SEG_QUADTO:
+                    newshape.quadTo(coords[0], coords[1], coords[2], coords[3]);
+                    break;
+                case PathIterator.SEG_CUBICTO:
+                    newshape.curveTo(
+                            coords[0], coords[1], coords[2], coords[3], coords[4], coords[5]);
+                    break;
+                case PathIterator.SEG_CLOSE:
+                    newshape.closePath();
+                    break;
+            }
+        }
+        // save where drawing of this shape stopped for reference
+        wktShape.getHints().put(MarkAlongLiteShape.FINAL_COORDS, coords);
+        return wktShape;
+    }
+

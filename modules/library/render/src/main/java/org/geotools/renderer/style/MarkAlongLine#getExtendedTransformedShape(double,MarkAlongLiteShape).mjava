@@ -1,0 +1,40 @@
+    private MarkAlongLiteShape getExtendedTransformedShape(
+            double length, MarkAlongLiteShape previousDrapeMe) {
+        // e.g repetition = 2.5 means drape the shape completey twice and once half
+        float repetition = (float) (length / this.wktShape.getBounds2D().getWidth());
+        MarkAlongLiteShape repeatedShape = this.getClone(null); // first shape
+        if (previousDrapeMe != null)
+            if (previousDrapeMe.getLeftOver() != null && previousDrapeMe.isClipped()) {
+                repeatedShape.preAppend(previousDrapeMe.getLeftOver());
+            }
+        repeatedShape.setSegmentLength(length);
+        // AT to translate copies of geometry and union them into result shape
+        AffineTransformation at = new AffineTransformation();
+
+        Geometry geom;
+        Geometry cloneGeom;
+        Geometry translatedGeom;
+        double translateX = 0;
+        for (int i = 1; i < repetition; i++) {
+            // translate along x according to the width and repetition number
+            // first time use width of final shape, it might have previous part of shape also
+            // else increment starting from previous translation + original size of shape
+            translateX =
+                    (i == 1)
+                            ? repeatedShape.getBounds().getWidth()
+                            : translateX + this.wktShape.getBounds2D().getWidth();
+            at.setToTranslation(translateX, 0);
+            geom = repeatedShape.getGeometry();
+            cloneGeom = this.getClone(null).getGeometry();
+            translatedGeom = at.transform(cloneGeom);
+            repeatedShape.setGeometry(geom.union(translatedGeom));
+        }
+
+        // length adjustment
+        if (repeatedShape.getBounds().width != length) {
+            repeatedShape = MarkAlongLine.FitOnLength(repeatedShape, length, scaleImit);
+        }
+
+        return repeatedShape;
+    }
+
