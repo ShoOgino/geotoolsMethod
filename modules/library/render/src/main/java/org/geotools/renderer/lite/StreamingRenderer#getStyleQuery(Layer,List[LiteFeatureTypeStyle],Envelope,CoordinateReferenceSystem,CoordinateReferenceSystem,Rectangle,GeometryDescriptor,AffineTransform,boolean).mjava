@@ -252,14 +252,18 @@
                 Set<RenderingHints.Key> fsHints = source.getSupportedHints();
 
                 SingleCRS crs2D = crs == null ? null : CRS.getHorizontalCRS(crs);
-                MathTransform mt = buildFullTransform(crs2D, mapCRS, worldToScreenTransform);
+                MathTransform sourceToScreen =
+                        buildFullTransform(crs2D, mapCRS, worldToScreenTransform);
                 double[] spans =
-                        Decimator.computeGeneralizationDistances(
-                                mt.inverse(), screenSize, generalizationDistance);
-                double distance = spans[0] < spans[1] ? spans[0] : spans[1];
+                        getGeneralizationSpans(
+                                envelope,
+                                sourceToScreen,
+                                worldToScreenTransform,
+                                featCrs,
+                                screenSize);
                 for (LiteFeatureTypeStyle fts : styleList) {
                     if (fts.screenMap != null) {
-                        fts.screenMap.setTransform(mt);
+                        fts.screenMap.setTransform(sourceToScreen);
                         fts.screenMap.setSpans(spans[0], spans[1]);
                         if (fsHints.contains(Hints.SCREENMAP)) {
                             // replace the renderer screenmap with the hint, and avoid doing
@@ -270,6 +274,7 @@
                     }
                 }
 
+                double distance = spans[0] < spans[1] ? spans[0] : spans[1];
                 if (hasRenderingTransformation) {
                     // the RT might need valid geometries, we can at most apply a topology
                     // preserving generalization
