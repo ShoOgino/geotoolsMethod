@@ -1,0 +1,32 @@
+    @Test
+    public void testReadCache() throws Exception {
+        Set<MBTilesRange> rangesRead = new HashSet<>();
+        this.store = getMadagascarRangeReadRecorder(rangesRead);
+        SimpleFeatureSource water = store.getFeatureSource("water");
+
+        // read from a single tile, should kick a disk read
+        BBOX bbox = getMercatorBoxFilter(5700000, 5900000, -1500000, -1300000);
+        SimpleFeatureCollection fc = water.getFeatures(new Query("water", bbox));
+        assertEquals(1, countByVisit(fc));
+        assertThat(rangesRead, Matchers.contains(new MBTilesRange(7, 82, 82, 59, 59)));
+
+        // read it again, this time no disk reads should be performed, it's all in the tile cache
+        rangesRead.clear();
+        assertEquals(1, countByVisit(fc));
+        assertThat(rangesRead, Matchers.empty());
+
+        // perform new read, making area larger towards east, should read one more tile, but not the
+        // previous one
+        rangesRead.clear();
+        bbox = getMercatorBoxFilter(5500000, 5900000, -1500000, -1300000);
+        fc = water.getFeatures(new Query("water", bbox));
+        assertEquals(2, countByVisit(fc));
+        assertThat(rangesRead, Matchers.contains(new MBTilesRange(7, 81, 81, 59, 59)));
+
+        // same as above but different layer, again the cache should kick in
+        rangesRead.clear();
+        fc = store.getFeatureSource("landcover").getFeatures(new Query("landcover", bbox));
+        assertEquals(2, countByVisit(fc));
+        assertThat(rangesRead, Matchers.empty());
+    }
+

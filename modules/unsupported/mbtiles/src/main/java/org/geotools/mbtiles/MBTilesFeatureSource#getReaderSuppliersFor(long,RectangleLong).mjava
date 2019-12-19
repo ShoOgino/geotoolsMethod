@@ -1,0 +1,18 @@
+    protected List<ReaderSupplier> getReaderSuppliersFor(long z, RectangleLong tb) {
+        List<ReaderSupplier> result = new ArrayList<>();
+
+        // grab the locations in the rectangle, and for each in memory collection build a supplier
+        Map<MBTilesTileLocation, SimpleFeatureCollection> memoryTiles =
+                tileCache.getCachedFeatures(z, tb, getSchema().getTypeName());
+        result.addAll(getMemorySuppliers(memoryTiles.values()));
+
+        // check if any tile still needs to be read
+        RectangleLong unreadRect = getUnreadLocationBounds(z, tb, memoryTiles.keySet());
+        if (unreadRect != null && !unreadRect.isNull()) {
+            // add the tiles that really need to be read
+            result.add(getDatabaseSupplier(z, unreadRect, memoryTiles.keySet()));
+        }
+
+        return result;
+    }
+
