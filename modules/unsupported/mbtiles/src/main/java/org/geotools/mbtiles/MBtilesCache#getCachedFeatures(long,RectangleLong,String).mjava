@@ -1,0 +1,34 @@
+    /**
+     * Collects and returns all feature collections in tiles already available in cache
+     *
+     * @param z The zoom level
+     * @param tb The rectangle of tiles to be retrieved from cache
+     * @param layerName The layer name for which the features should be read
+     * @return A map between the tile location and the corresponding feature collection
+     */
+    public Map<MBTilesTileLocation, SimpleFeatureCollection> getCachedFeatures(
+            long z, RectangleLong tb, String layerName) {
+        // using linked hash map to get consistent enumeration/rendering of tiles
+        Map<MBTilesTileLocation, SimpleFeatureCollection> result = new LinkedHashMap<>();
+        tb.forEach(
+                (x, y) -> {
+                    MBTilesTileLocation loc = new MBTilesTileLocation(z, x, y);
+                    Map<String, CollectionProvider> tileContents = cache.get(loc);
+                    if (tileContents != null) {
+                        SimpleFeatureCollection features = null;
+                        if (tileContents.containsKey(layerName)) {
+                            features = tileContents.get(layerName).getGeoToolsFeatures();
+                        } else if (schemas.get(layerName) != null) {
+                            // mark that the features were just not present, as opposed to not read
+                            // otherwise this might trigger an uneeded extra read
+                            features = new EmptyFeatureCollection(schemas.get(layerName));
+                        }
+
+                        if (features != null) {
+                            result.put(loc, features);
+                        }
+                    }
+                });
+        return result;
+    }
+

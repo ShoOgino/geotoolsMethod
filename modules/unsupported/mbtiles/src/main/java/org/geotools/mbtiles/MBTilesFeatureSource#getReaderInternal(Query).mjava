@@ -3,15 +3,18 @@
             throws IOException {
         try {
             long z = getTargetZLevel(query);
-            RectangleLong tileBounds = getTileBoundsFor(query, z);
-            MBTilesFile.TileIterator tiles =
-                    mbtiles.tiles(
-                            z,
-                            tileBounds.getMinX(),
-                            tileBounds.getMinY(),
-                            tileBounds.getMaxX(),
-                            tileBounds.getMaxY());
-            return new MBTilesFeatureReader(tiles, getSchema(), tileCache);
+            List<RectangleLong> tileBounds = getTileBoundsFor(query, z);
+            List<ReaderSupplier> suppliers =
+                    tileBounds
+                            .stream()
+                            .flatMap(tb -> getReaderSuppliersFor(z, tb).stream())
+                            .collect(Collectors.toList());
+
+            if (suppliers.isEmpty()) {
+                return new EmptyFeatureReader<>(getSchema());
+            }
+
+            return new CompositeSimpleFeatureReader(getSchema(), suppliers);
         } catch (SQLException e) {
             throw new IOException(e);
         }
