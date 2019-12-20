@@ -1,0 +1,65 @@
+    private FileDataStore createDataStoreFromFile(
+            File file, URI namespace, Map<String, Serializable> params) throws IOException {
+        CSVFileState csvFileState = new CSVFileState(file, namespace);
+        Object strategyParam = STRATEGYP.lookUp(params);
+        CSVStrategy csvStrategy = null;
+        if (strategyParam != null) {
+            String strategyString = strategyParam.toString();
+            if (strategyString.equalsIgnoreCase(GUESS_STRATEGY)) {
+                csvStrategy = new CSVLatLonStrategy(csvFileState);
+            } else if (strategyString.equalsIgnoreCase(ATTRIBUTES_ONLY_STRATEGY)) {
+                csvStrategy = new CSVAttributesOnlyStrategy(csvFileState);
+            } else if (strategyString.equalsIgnoreCase(SPECIFC_STRATEGY)) {
+                Object latParam = LATFIELDP.lookUp(params);
+                Object lngParam = LnGFIELDP.lookUp(params);
+                if (latParam == null || lngParam == null) {
+                    throw new IllegalArgumentException(
+                            "'specify' csv strategy selected, but lat/lng params both not specified");
+                }
+                csvStrategy =
+                        new CSVLatLonStrategy(
+                                csvFileState, latParam.toString(), lngParam.toString());
+            } else if (strategyString.equalsIgnoreCase(WKT_STRATEGY)) {
+                Object wktParam = WKTP.lookUp(params);
+                if (wktParam == null) {
+                    throw new IllegalArgumentException(
+                            "'wkt' csv strategy selected, but wktField param not specified");
+                }
+                csvStrategy = new CSVSpecifiedWKTStrategy(csvFileState, wktParam.toString());
+            } else {
+                csvStrategy = new CSVAttributesOnlyStrategy(csvFileState);
+            }
+        } else {
+            csvStrategy = new CSVAttributesOnlyStrategy(csvFileState);
+        }
+        Boolean quotes = (Boolean) QUOTEALL.lookUp(params);
+        if (quotes != null && quotes.booleanValue()) {
+            csvStrategy.setQuoteAllFields(quotes.booleanValue());
+        }
+        Character quoteChar = (Character) QUOTECHAR.lookUp(params);
+        if (quoteChar != null) {
+            csvStrategy.setQuotechar(quoteChar.charValue());
+        }
+        Character sepChar = (Character) SEPERATORCHAR.lookUp(params);
+        if (sepChar != null) {
+            csvStrategy.setSeparator(sepChar);
+        }
+        Character escapeChar = (Character) ESCAPECHAR.lookUp(params);
+        if (escapeChar != null) {
+            csvStrategy.setEscapechar(escapeChar);
+        }
+        String lineSep = (String) LINESEPSTRING.lookUp(params);
+        if (lineSep != null) {
+            csvStrategy.setLineSeparator(lineSep);
+        }
+        CSVDataStore store = new CSVDataStore(csvFileState, csvStrategy);
+        if (namespace != null) {
+            store.setNamespaceURI(namespace.toString());
+        }
+        store.setDataStoreFactory(this);
+        store.setGeometryFactory(new GeometryFactory());
+        store.setFeatureTypeFactory(new FeatureTypeFactoryImpl());
+        store.setFeatureFactory(CommonFactoryFinder.getFeatureFactory(null));
+        return store;
+    }
+

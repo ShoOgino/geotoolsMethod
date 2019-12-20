@@ -1,0 +1,56 @@
+    @Test
+    public void replaceAll() throws Exception {
+        Map<String, Serializable> params = new HashMap<String, Serializable>();
+        params.put("file", statesfile);
+        params.put(CSVDataStoreFactory.STRATEGYP.key, CSVDataStoreFactory.SPECIFC_STRATEGY);
+        params.put(CSVDataStoreFactory.LATFIELDP.key, "LAT");
+        params.put(CSVDataStoreFactory.LnGFIELDP.key, "LON");
+        DataStore store = DataStoreFinder.getDataStore(params);
+
+        final SimpleFeatureType type = store.getSchema("locations");
+        SimpleFeature f;
+        DefaultFeatureCollection collection = new DefaultFeatureCollection();
+
+        // 45.52, -122.681944, Portland, 800, 2014
+        GeometryFactory gf = JTSFactoryFinder.getGeometryFactory();
+        Point portland = gf.createPoint(new Coordinate(45.52, -122.681944));
+        f =
+                SimpleFeatureBuilder.build(
+                        type, new Object[] {portland, "Portland", 800, 2014}, "locations.1");
+        collection.add(f);
+
+        try (FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
+                store.getFeatureWriter("locations", Transaction.AUTO_COMMIT); ) {
+
+            // remove all features
+            while (writer.hasNext()) {
+                writer.next();
+                writer.remove();
+            }
+            // copy new features in
+            try (SimpleFeatureIterator iterator = collection.features()) {
+                while (iterator.hasNext()) {
+                    SimpleFeature feature = iterator.next();
+                    SimpleFeature newFeature = writer.next(); // new blank feature
+                    newFeature.setAttributes(feature.getAttributes());
+                    writer.write();
+                }
+            }
+        }
+
+        // Test everything was replaced by the one feature we added
+        SimpleFeatureStore featureStore = (SimpleFeatureStore) store.getFeatureSource("locations");
+        assertEquals(
+                "featureStore should only have the one feature we created",
+                1,
+                featureStore.getFeatures().size());
+        final String newline = System.lineSeparator();
+        String contents =
+                "LAT,LON,CITY,NUMBER,YEAR" + newline + "45.52,-122.681944,Portland,800,2014";
+        assertEquals(
+                "Ensure the file has only the one feature we created",
+                contents.trim(),
+                getFileContents(statesfile).trim());
+        assertTrue("Temp files being left behind", cleanedup());
+    }
+

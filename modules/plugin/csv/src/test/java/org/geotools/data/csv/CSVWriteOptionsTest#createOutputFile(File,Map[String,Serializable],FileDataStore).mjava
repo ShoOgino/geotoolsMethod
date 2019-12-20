@@ -1,0 +1,28 @@
+    private String createOutputFile(
+            File file2, Map<String, Serializable> params2, FileDataStore input) throws IOException {
+        DataStore datastore = factory.createNewDataStore(params2);
+
+        SimpleFeatureType featureType = input.getSchema();
+
+        datastore.createSchema(featureType);
+        String typeName = datastore.getTypeNames()[0];
+        SimpleFeatureSource source = datastore.getFeatureSource(typeName);
+        if (source instanceof SimpleFeatureStore) {
+            SimpleFeatureStore outStore = (SimpleFeatureStore) source;
+            outStore.addFeatures(input.getFeatureSource().getFeatures());
+        } else {
+            fail("Can't write to CSVDatastore");
+        }
+
+        datastore.dispose();
+        datastore = (CSVDataStore) factory.createNewDataStore(params2);
+        source = datastore.getFeatureSource(typeName);
+        SimpleFeatureCollection features = source.getFeatures();
+        assertEquals(
+                "wrong number of records",
+                input.getFeatureSource().getFeatures().size(),
+                features.size());
+        String contents = getFileContents(file2);
+        return contents;
+    }
+
