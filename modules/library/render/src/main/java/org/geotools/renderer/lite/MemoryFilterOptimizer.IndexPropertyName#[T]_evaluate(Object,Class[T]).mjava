@@ -1,23 +1,38 @@
         @Override
-        @Extension
         public <T> T evaluate(Object object, Class<T> context) {
-            if (object instanceof SimpleFeature
-                    && ((SimpleFeature) object).getFeatureType() == schema) {
+            if (object instanceof SimpleFeature) {
                 SimpleFeature sf = (SimpleFeature) object;
-                try {
-                    Object value = sf.getAttribute(index);
-                    if (context == null || context.isInstance(value)) {
-                        return (T) value;
+                SimpleFeatureType other = sf.getFeatureType();
+                if (other == schema || other.getDescriptor(index).equals(descriptor)) {
+                    // ContentFeatureSource/ContentFeatureCollection return a SimpleFeatureType
+                    // instance that is equal, but not same, to the one associated to the features
+                    // they return. For this optimization to work we need a fast check, so instance
+                    // equality, so we'll switch the object reference if the two schemas are equal,
+                    // but not same. In fact, within the limits of a PropertyName implementation,
+                    // we can do this if the two return the same property at the same index,
+                    // which makes for a even faster comparison when the reference equality fails.
+                    if (other != schema) {
+                        this.schema = other;
                     }
-                } catch (ArrayIndexOutOfBoundsException e) {
-                    throw new RuntimeException(
-                            "Could not locate attribute at index "
-                                    + index
-                                    + " on feature "
-                                    + object,
-                            e);
+
+                    try {
+                        Object value = sf.getAttribute(index);
+                        if (context == null || context.isInstance(value)) {
+                            return (T) value;
+                        } else {
+                            return Converters.convert(value, context);
+                        }
+                    } catch (ArrayIndexOutOfBoundsException e) {
+                        throw new RuntimeException(
+                                "Could not locate attribute at index "
+                                        + index
+                                        + " on feature "
+                                        + object,
+                                e);
+                    }
                 }
             }
+
             return delegate.evaluate(object, context);
         }
 
