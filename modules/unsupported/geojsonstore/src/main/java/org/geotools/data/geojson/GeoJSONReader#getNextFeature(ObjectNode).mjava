@@ -1,0 +1,60 @@
+    /**
+     * @param node
+     * @return
+     * @throws IOException
+     */
+    private SimpleFeature getNextFeature(ObjectNode node) throws IOException {
+        JsonNode type = node.get("type");
+        if (!"Feature".equalsIgnoreCase(type.asText())) {
+            throw new RuntimeException(
+                    "Unexpected object type in GeoJSON Parsing, expected Feature got '"
+                            + type.asText()
+                            + "'");
+        }
+        JsonNode props = node.get("properties");
+        if (builder == null) {
+            builder = getBuilder(props);
+        }
+        boolean restart = true;
+        SimpleFeature feature = null;
+        while (restart) {
+            restart = false;
+
+            Iterator<Entry<String, JsonNode>> fields = props.fields();
+            while (fields.hasNext()) {
+                Entry<String, JsonNode> n = fields.next();
+                AttributeDescriptor descriptor = schema.getDescriptor(n.getKey());
+                if (descriptor == null) {
+                    // we haven't seen this attribute before
+                    restart = true;
+                    builder = null;
+                    schema = null;
+                    // rebuild the schema
+                    builder = getBuilder(props);
+                    setSchemaChanged(true);
+                    descriptor = schema.getDescriptor(n.getKey());
+                }
+                Class<?> binding = descriptor.getType().getBinding();
+                if (binding == Integer.class) {
+                    builder.set(n.getKey(), n.getValue().asInt());
+                } else if (binding == Double.class) {
+                    builder.set(n.getKey(), n.getValue().asDouble());
+                } else if (binding == String.class) {
+                    builder.set(n.getKey(), n.getValue().textValue());
+                } else {
+                    builder.set(n.getKey(), n.getValue().toString());
+                }
+            }
+            JsonNode geom = node.get("geometry");
+            ObjectMapper mapper = new ObjectMapper();
+            mapper.registerModule(new JtsModule());
+            GeometryParser<Geometry> gParser = new GenericGeometryParser(gFac);
+            Geometry g = gParser.geometryFromJson(geom);
+            builder.set(GEOMETRY_NAME, g);
+
+            String newId = baseName + "." + nextID++;
+            feature = builder.buildFeature(newId);
+        }
+        return feature;
+    }
+

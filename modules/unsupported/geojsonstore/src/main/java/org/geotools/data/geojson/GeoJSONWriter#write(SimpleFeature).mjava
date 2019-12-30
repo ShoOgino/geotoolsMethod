@@ -1,4 +1,45 @@
     public void write(SimpleFeature currentFeature) throws IOException {
-        collection.add(currentFeature);
+        // System.out.println("JSONWriter writing " + currentFeature.getID());
+        generator.writeStartObject();
+        generator.writeStringField("type", "Feature");
+        generator.writeFieldName("properties");
+        generator.writeStartObject();
+        for (Property p : currentFeature.getProperties()) {
+            PropertyType type = p.getType();
+            if (type instanceof GeometryType) {
+                continue;
+            }
+            Object value = p.getValue();
+            String name = p.getName().getLocalPart();
+            if (value == null) {
+                generator.writeNullField(name);
+                continue;
+            }
+            Class<?> binding = p.getType().getBinding();
+            if (binding == Integer.class) {
+                generator.writeNumberField(name, (int) value);
+            } else if (binding == Double.class) {
+                generator.writeNumberField(name, (double) value);
+            } else {
+                generator.writeFieldName(name);
+                generator.writeString(value.toString());
+            }
+        }
+        generator.writeEndObject();
+
+        generator.writeFieldName("geometry");
+        Geometry defaultGeometry = (Geometry) currentFeature.getDefaultGeometry();
+        if (defaultGeometry != null) {
+            String gString = mapper.writeValueAsString(defaultGeometry);
+
+            generator.writeRawValue(gString);
+            generator.writeStringField("id", currentFeature.getID());
+        } else {
+            generator.writeNull();
+        }
+        generator.writeEndObject();
+        generator.flush();
+        // TODO: remove for speed later
+        out.flush();
     }
 

@@ -1,9 +1,10 @@
-    public SimpleFeature next()
-            throws IOException, IllegalArgumentException, NoSuchElementException {
-        if (geoJSONWriter == null) {
-            throw new IOException("Writer is closed");
+    @Override
+    public SimpleFeature next() throws IOException {
+        if (writer == null) {
+            throw new IOException("FeatureWriter has been closed");
         }
         if (this.currentFeature != null) {
+            LOGGER.fine("writing " + currentFeature.getID());
             this.write();
         }
         try {
@@ -13,16 +14,17 @@
                     return this.currentFeature;
                 } else {
                     this.appending = true;
+                    LOGGER.fine("Now appending");
                 }
             }
             SimpleFeatureType featureType = state.getFeatureType();
-            String fid = featureType.getTypeName() + "." + nextID;
+            String fid = featureType.getTypeName() + "." + nextRow;
             Object values[] = DataUtilities.defaultValues(featureType);
 
             this.currentFeature = SimpleFeatureBuilder.build(featureType, values, fid);
             return this.currentFeature;
-        } catch (IllegalArgumentException invalid) {
-            throw new IOException("Unable to create feature:" + invalid.getMessage(), invalid);
+        } catch (IllegalArgumentException e) {
+            throw new IOException("Unable to create feature: " + e.getLocalizedMessage(), e);
         }
     }
 

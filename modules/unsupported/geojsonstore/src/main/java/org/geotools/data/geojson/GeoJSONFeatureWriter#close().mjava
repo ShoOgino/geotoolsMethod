@@ -1,26 +1,27 @@
+    @Override
     public void close() throws IOException {
-        LOGGER.entering(this.getClass().getName(), "close");
-        if (geoJSONWriter == null) {
-            throw new IOException("Writer is already closed");
+        try {
+            if (writer == null) {
+                throw new IOException("FeatureWriter already closed");
+            }
+            if (this.currentFeature != null) {
+                this.write();
+            }
+            while (hasNext()) {
+                next();
+                write();
+            }
+            writer.close();
+            if (delegate != null) {
+                this.delegate.close();
+                this.delegate = null;
+            }
+            File file =
+                    URLs.urlToFile(((GeoJSONDataStore) state.getEntry().getDataStore()).getUrl());
+
+            Files.copy(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            temp.delete();
         }
-        if (this.currentFeature != null) {
-            LOGGER.fine("Writing current feature");
-            this.write();
-        }
-        // now write out the remaining features
-        while (this.hasNext()) {
-            LOGGER.fine("writing remaining features");
-            next();
-            write();
-        }
-        geoJSONWriter.close();
-        geoJSONWriter = null;
-        if (delegate != null) {
-            delegate.close();
-            delegate = null;
-        }
-        LOGGER.fine("Copyting " + temp + " to " + file);
-        // now copy over the new file onto the old one
-        Files.copy(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING);
     }
 

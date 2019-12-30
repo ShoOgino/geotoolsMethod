@@ -1,21 +1,37 @@
     @Override
     protected SimpleFeatureType buildFeatureType() throws IOException {
-        if (schema == null) {
-            FeatureCollection<?, ?> collection = fetchFeatures();
-            SimpleFeatureType sch = (SimpleFeatureType) collection.getSchema();
-            SimpleFeatureTypeBuilder sb = new SimpleFeatureTypeBuilder();
-            sb.setName(getState().getEntry().getTypeName());
-            for (AttributeDescriptor att : sch.getAttributeDescriptors()) {
-                sb.add(att);
+        SimpleFeatureTypeBuilder builder = new SimpleFeatureTypeBuilder();
+        builder.setName(entry.getName());
+
+        // read headers
+
+        try (GeoJSONReader reader = getDataStore().read()) {
+            try (FeatureIterator<SimpleFeature> itr = reader.getIterator()) {
+                boolean empty = true;
+                while (itr.hasNext()) {
+                    empty = false;
+                    itr.next();
+                    schema = (SimpleFeatureType) reader.getSchema();
+                    if (quick) {
+                        break;
+                    }
+                }
+                /*
+                 * In the event we are dealing with an empty file the schema may have
+                 * been set in the datastore.
+                 */
+                if (empty) {
+                    schema = getDataStore().getSchema();
+                    return schema;
+                }
             }
-            if (sch.getCoordinateReferenceSystem() != null) {
-                sb.setCRS(sch.getCoordinateReferenceSystem());
-            } else {
-                sb.setCRS(DefaultGeographicCRS.WGS84);
-            }
-            sb.setDescription(sch.getDescription());
-            schema = sb.buildFeatureType();
+            // we are going to hard code a point location
+            // columns like lat and lon will be gathered into a
+            // Point called Location
+            builder.setCRS(DefaultGeographicCRS.WGS84); // <- Coordinate reference
+            // system
+
+            return schema;
         }
-        return schema;
     }
 
