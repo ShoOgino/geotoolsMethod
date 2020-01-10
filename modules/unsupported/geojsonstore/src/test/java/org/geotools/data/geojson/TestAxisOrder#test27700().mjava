@@ -1,0 +1,32 @@
+    @Test
+    public void test27700() throws IOException {
+        File file2 = new File(directory, "parks.geojson");
+
+        SimpleFeatureCollection pFeatures = parkStore.getFeatureSource().getFeatures();
+
+        Map<String, Serializable> params2 = new HashMap<>();
+        params2.put(GeoJSONDataStoreFactory.FILE_PARAM.key, file2);
+
+        GeoJSONDataStoreFactory factory = new GeoJSONDataStoreFactory();
+        DataStore duplicate = factory.createNewDataStore(params2);
+        SimpleFeatureType featureType = pFeatures.getSchema();
+        duplicate.createSchema(featureType);
+
+        String typeName = duplicate.getTypeNames()[0];
+        SimpleFeatureSource source = duplicate.getFeatureSource(typeName);
+        if (source instanceof SimpleFeatureStore) {
+            SimpleFeatureStore outStore = (SimpleFeatureStore) source;
+            outStore.addFeatures(pFeatures);
+        } else {
+            fail("Can't write to GeoJSONDatastore " + file2);
+        }
+
+        String contents = GeoJSONTestSupport.getFileContents(file2);
+        int index = contents.indexOf("coordinates");
+        assertTrue("No Coordinates in output file", index > 0);
+        String test = contents.substring(index + 17, index + 53);
+        assertTrue("bad coords", "-3.349553814356446,56.82150229321035".equalsIgnoreCase(test));
+        String[] c = test.split(",");
+        assertTrue(Double.parseDouble(c[0]) < Double.parseDouble(c[1]));
+    }
+

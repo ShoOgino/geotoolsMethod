@@ -1,0 +1,56 @@
+    @Test
+    public void test31287() throws IOException, NoSuchAuthorityCodeException, FactoryException {
+
+        File file2 = new File(directory, "out31287.geojson");
+
+        Map<String, Serializable> params2 = new HashMap<>();
+        params2.put(GeoJSONDataStoreFactory.FILE_PARAM.key, file2);
+
+        GeoJSONDataStoreFactory factory = new GeoJSONDataStoreFactory();
+        DataStore duplicate = factory.createNewDataStore(params2);
+        SimpleFeatureTypeBuilder tBuilder = new SimpleFeatureTypeBuilder();
+
+        CoordinateReferenceSystem crs = CRS.decode("EPSG:31287");
+
+        tBuilder.setCRS(crs);
+        tBuilder.setDefaultGeometry("geom");
+        tBuilder.add("geom", Point.class);
+
+        tBuilder.setName("out31287");
+        SimpleFeatureType schema = tBuilder.buildFeatureType();
+        SimpleFeatureBuilder builder = new SimpleFeatureBuilder(schema);
+        // roughly Graz
+        builder.add(gf.createPoint(new Coordinate(356142.53322693426, 561296.9376779466)));
+        SimpleFeature feature = builder.buildFeature("1");
+        SimpleFeatureCollection features = DataUtilities.collection(feature);
+
+        duplicate.createSchema(schema);
+        String typeName = duplicate.getTypeNames()[0];
+
+        SimpleFeatureSource source = duplicate.getFeatureSource(typeName);
+        if (source instanceof SimpleFeatureStore) {
+            SimpleFeatureStore outStore = (SimpleFeatureStore) source;
+            outStore.addFeatures(features);
+        } else {
+            fail("Can't write to GeoJSONDatastore " + file2);
+        }
+
+        SimpleFeatureStore featureStored =
+                (SimpleFeatureStore) duplicate.getFeatureSource(typeName);
+
+        SimpleFeatureIterator dups = featureStored.getFeatures().features();
+        Point expected = gf.createPoint(new Coordinate(15.457678, 47.0850875));
+        try {
+            while (dups.hasNext()) {
+                SimpleFeature d = dups.next();
+                Geometry dgeom = (Geometry) d.getDefaultGeometry();
+
+                assertCoordsMatch(expected, (Point) dgeom);
+            }
+
+        } finally {
+            dups.close();
+            store.dispose();
+        }
+    }
+
