@@ -85,17 +85,35 @@
         }
         Fill fill = sf.fill(null, textColor(), textOpacity());
 
-        Font font =
-                sb.createFont(ff.literal(""), ff.literal("normal"), ff.literal("normal"), fontSize);
-
-        if (getTextFont() != null) {
-            font.getFamily().clear();
-            for (String textFont : getTextFont()) {
-                font.getFamily().add(ff.literal(textFont));
+        // leverage GeoTools ability to have several distinct fonts, inherited from SLD 1.0
+        List<Font> fonts = new ArrayList<>();
+        List<String> staticFonts = getTextFont();
+        if (staticFonts != null) {
+            for (String textFont : staticFonts) {
+                FontAttributesExtractor fae = new FontAttributesExtractor(textFont);
+                Font font =
+                        sb.createFont(
+                                ff.function(
+                                        FontAlternativesFunction.NAME.getName(),
+                                        ff.literal(fae.getBaseName())),
+                                ff.literal(fae.isItalic() ? "italic" : "normal"),
+                                ff.literal(fae.isBold() ? "bold" : "normal"),
+                                fontSize);
+                fonts.add(font);
             }
         } else if (textFont() != null) {
-            font.getFamily().clear();
-            font.getFamily().add(textFont());
+            Expression dynamicFont = textFont();
+            Font font =
+                    sb.createFont(
+                            ff.function(
+                                    FontAlternativesFunction.NAME.getName(),
+                                    ff.function(
+                                            MapBoxFontBaseNameFunction.NAME.getName(),
+                                            dynamicFont)),
+                            ff.function(MapBoxFontStyleFunction.NAME.getName(), dynamicFont),
+                            ff.function(MapBoxFontWeightFunction.NAME.getName(), dynamicFont),
+                            fontSize);
+            fonts.add(font);
         }
 
         // If the textField is a literal string (not a function), then
@@ -121,10 +139,12 @@
                                 sf.description(Text.text("text"), null),
                                 Units.PIXEL,
                                 textExpression,
-                                font,
+                                null,
                                 labelPlacement,
                                 halo,
                                 fill);
+        symbolizer.fonts().clear();
+        symbolizer.fonts().addAll(fonts);
 
         Number symbolSpacing =
                 transformer.requireLiteral(
@@ -175,27 +195,13 @@
             symbolizer.getOptions().put(GRAPHIC_RESIZE_KEY, NONE.name());
         }
 
-        // MapBox symbol-avoid-edges defaults to false, If true, the symbols will not cross tile
-        // edges to avoid
-        // mutual collisions.  This concept is represented by using the Partials option in GeoTools.
-        //  The partials
-        // options instructs the renderer to render labels that cross the map extent, which are
-        // normally not painted
-        // since there is no guarantee that a map put on the side of the current one (tiled
-        // rendering) will contain
-        // the other half of the label. By enabling “partials” the style editor takes responsibility
-        // for the other
-        // half being there (maybe because the label points have been placed by hand and are assured
-        // not to conflict
-        // with each other, at all zoom levels).
-        //
-        // Based upon the above if symbol-avoid-edges is true we do not need
-        // to add the partials option as the renderer will do this by default. But if
-        // symbol-avoid-edges is missing or
-        // set to false, then we do need to add the partials option set to true.
-        if (!getSymbolAvoidEdges()) {
-            symbolizer.getOptions().put(PARTIALS_KEY, "true");
-        }
+        // Kept commented out as a reminder not to bring this back. It breaks rendering
+        // on server side, as the labels are actually cut at tile borders, unlike client side
+        // where they can just continue over, and one can hope they won't overlap
+        //        if (!getSymbolAvoidEdges()) {
+        //            symbolizer.getOptions().put(PARTIALS_KEY, "true");
+        //        }
+        symbolizer.getOptions().put(PARTIALS_KEY, "false");
 
         // Mapbox allows you to sapecify an array of values, one for each side
         if (getIconTextFitPadding() != null && !getIconTextFitPadding().isEmpty()) {
