@@ -1,21 +1,72 @@
     private void readCoordinateSequences() {
         Figure[] figures = binary.getFigures();
-        CoordinateSequence[] sequences = new CoordinateSequence[figures.length];
+        CoordinateSequence[][] sequences = new CoordinateSequence[figures.length][];
+        CoordinateSequenceFactory csFactory = gf.getCoordinateSequenceFactory();
+        int segmentIdx = 0;
         for (int i = 0; i < figures.length; i++) {
-            int figurePointOffset = figures[i].getPointOffset();
+            Figure figure = figures[i];
+            int figurePointOffset = figure.getPointOffset();
             int nextPointOffset =
                     figures.length >= i + 2
                             ? figures[i + 1].getPointOffset()
                             : binary.getCoordinates().length;
             Coordinate[] coordinates =
                     Arrays.copyOfRange(binary.getCoordinates(), figurePointOffset, nextPointOffset);
-            int attribute = figures[i].getAttribute();
-            if ((attribute == 0 || attribute == 2)
-                    && !coordinates[0].equals(coordinates[coordinates.length - 1])) {
-                coordinates = Arrays.copyOf(coordinates, coordinates.length + 1);
-                coordinates[coordinates.length - 1] = coordinates[0];
+            int attribute = figure.getAttribute();
+            if (binary.getVersion() == 1) {
+                if ((attribute == 0 || attribute == 2)
+                        && !coordinates[0].equals(coordinates[coordinates.length - 1])) {
+                    coordinates = Arrays.copyOf(coordinates, coordinates.length + 1);
+                    coordinates[coordinates.length - 1] = coordinates[0];
+                }
+                sequences[i] = new CoordinateSequence[1];
+                sequences[i][0] = csFactory.create(coordinates);
+            } else if (binary.getVersion() == 2) {
+                if (figure.getAttribute() == 3) {
+                    // need to look into the segments, have a mix of straight and curved components
+                    List<CoordinateSequence> figureSequences = new ArrayList<>();
+                    List<Figure.SequenceType> sequenceTypes = new ArrayList<>();
+                    List<Coordinate> sequenceCoordinates = null;
+                    Segment[] segments = binary.getSegments();
+                    for (int c = 0; c < coordinates.length - 1; ) {
+                        Segment segment = segments[segmentIdx++];
+                        if (segment == FIRST_ARC || segment == FIRST_LINE) {
+                            if (sequenceCoordinates != null) {
+                                if (c < coordinates.length - 1) {
+                                    sequenceCoordinates.add(coordinates[c]);
+                                }
+                                CoordinateSequence cs =
+                                        csFactory.create(
+                                                sequenceCoordinates.toArray(
+                                                        new Coordinate
+                                                                [sequenceCoordinates.size()]));
+                                figureSequences.add(cs);
+                            }
+                            sequenceCoordinates = new ArrayList<>();
+                            sequenceTypes.add(segment == FIRST_ARC ? CURVED : STRAIGHT);
+                        }
+                        sequenceCoordinates.add(coordinates[c++]);
+                        // arc segments are made of 3 points, not two
+                        if (segment == FIRST_ARC || segment == ARC) {
+                            sequenceCoordinates.add(coordinates[c++]);
+                        }
+                    }
+                    if (sequenceCoordinates != null) {
+                        sequenceCoordinates.add(coordinates[coordinates.length - 1]);
+                        CoordinateSequence cs =
+                                csFactory.create(
+                                        sequenceCoordinates.toArray(
+                                                new Coordinate[sequenceCoordinates.size()]));
+                        figureSequences.add(cs);
+                    }
+                    sequences[i] =
+                            figureSequences.toArray(new CoordinateSequence[figureSequences.size()]);
+                    figure.setSequenceTypes(sequenceTypes);
+                } else {
+                    sequences[i] = new CoordinateSequence[1];
+                    sequences[i][0] = csFactory.create(coordinates);
+                }
             }
-            sequences[i] = gf.getCoordinateSequenceFactory().create(coordinates);
         }
         binary.setSequences(sequences);
     }

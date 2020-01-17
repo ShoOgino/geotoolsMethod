@@ -1,0 +1,48 @@
+    private Geometry decodeCurvePolygon(int shapeIndex) {
+        Shape shape = binary.getShape(shapeIndex);
+        int figureOffset = shape.getFigureOffset();
+        int figureStopIndex = binary.getFigures().length - 1;
+        if (shapeIndex + 1 < binary.getShapes().length) {
+            Shape nextShape = binary.getShape(shapeIndex + 1);
+            figureStopIndex = nextShape.getFigureOffset() - 1;
+        }
+        // empty polygon case
+        if (figureOffset <= -1) {
+            return cgf.createPolygon(new Coordinate[0]);
+        }
+        LinearRing outerShell = null;
+        LinearRing[] holes = new LinearRing[figureStopIndex - figureOffset];
+        for (int i = figureOffset; i <= figureStopIndex; i++) {
+            Figure figure = binary.getFigure(i);
+            CoordinateSequence[] sequences = binary.getSequence(i);
+            LinearRing ring;
+            // compound case
+            if (sequences.length > 1) {
+                List<Figure.SequenceType> sequenceTypes = figure.getSequenceTypes();
+                List<LineString> components = new ArrayList<>(sequences.length);
+                for (int j = 0; j < sequences.length; j++) {
+                    CoordinateSequence sequence = sequences[j];
+                    if (sequenceTypes.get(j) == CURVED) {
+                        components.add(cgf.createCurvedGeometry(sequence));
+                    } else {
+                        components.add(cgf.createLineString(sequence));
+                    }
+                }
+                ring = (LinearRing) cgf.createCurvedGeometry(components);
+            } else {
+                if (figure.getAttribute() == 2 && binary.getVersion() == 2) { // arc
+                    ring = (LinearRing) cgf.createCurvedGeometry(sequences[0]);
+                } else {
+                    ring = gf.createLinearRing(sequences[0]);
+                }
+            }
+            if (i == figureOffset) {
+                outerShell = ring;
+            } else {
+                holes[i - figureOffset - 1] = ring;
+            }
+        }
+
+        return cgf.createPolygon(outerShell, holes);
+    }
+
