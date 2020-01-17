@@ -1,0 +1,24 @@
+    @Test
+    public void testQueryEnvelopeAcrossDateLine() throws Exception {
+        final double minX = 140;
+        final double maxX = 200;
+        // [140, 200] can be split into
+        // [140, 180] AND [180, 200] which is the same as
+        // [140, 180] AND [-180, -160]
+
+        ReferencedEnvelope re = new ReferencedEnvelope(minX, maxX, -40, 30, WGS84);
+        ProjectionHandler ph = ProjectionHandlerFinder.getHandler(re, WGS84, true);
+        List<ReferencedEnvelope> queryEnvelopes = ph.getQueryEnvelopes();
+        assertEquals(2, queryEnvelopes.size());
+        ReferencedEnvelope qe = queryEnvelopes.get(1);
+
+        final double wrappedMinX = minX % 360;
+        final double wrappedMaxX = maxX % 360;
+        assertEquals(-180, qe.getMinX(), 1e-3);
+        assertEquals(wrappedMaxX - 360, qe.getMaxX(), 1e-3);
+
+        qe = queryEnvelopes.get(0);
+        assertEquals(wrappedMinX, qe.getMinX(), 1e-3);
+        assertEquals(180, qe.getMaxX(), 1e-3);
+    }
+
