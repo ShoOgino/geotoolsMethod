@@ -1,0 +1,38 @@
+    @Test
+    public void testWritePrj() throws IOException, FactoryException {
+        File f = new File(tmp, "testcrs.csv");
+        Map<String, Object> params = new HashMap<>();
+        params.put(CSVDataStoreFactory.FILE_PARAM.key, f.toString());
+        params.put(CSVDataStoreFactory.STRATEGYP.key, CSVDataStoreFactory.WKT_STRATEGY);
+        params.put(CSVDataStoreFactory.WKTP.key, "WKT");
+        params.put(CSVDataStoreFactory.WRITEPRJ.key, "true");
+        DataStore store = DataStoreFinder.getDataStore(params);
+        String typeName = referenceStore.getTypeNames()[0];
+        SimpleFeatureType schema = referenceStore.getSchema(typeName);
+        store.createSchema(schema);
+        SimpleFeatureSource source = store.getFeatureSource(store.getTypeNames()[0]);
+        if (!(source instanceof SimpleFeatureStore)) {
+            fail("can't create output file");
+        }
+        SimpleFeatureStore outstore = (SimpleFeatureStore) source;
+        outstore.addFeatures(referenceStore.getFeatureSource(typeName).getFeatures());
+        store.dispose();
+        String prjName = FilenameUtils.getBaseName(f.getName()) + ".prj";
+        File prj = new File(f.getParent(), prjName);
+        assertTrue(prj.exists());
+
+        CoordinateReferenceSystem expected = schema.getCoordinateReferenceSystem();
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(prj))) {
+            String line = "";
+            StringBuffer buffer = new StringBuffer();
+            while ((line = reader.readLine()) != null) {
+                buffer.append(line);
+            }
+            String string = buffer.toString();
+
+            CoordinateReferenceSystem crs = CRS.parseWKT(string);
+            assertTrue(CRS.equalsIgnoreMetadata(expected, crs));
+        }
+    }
+
