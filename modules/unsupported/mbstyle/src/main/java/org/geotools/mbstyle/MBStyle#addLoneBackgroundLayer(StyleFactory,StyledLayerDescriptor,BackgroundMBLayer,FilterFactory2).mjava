@@ -1,0 +1,53 @@
+    private void addLoneBackgroundLayer(
+            StyleFactory sf,
+            StyledLayerDescriptor sld,
+            BackgroundMBLayer background,
+            FilterFactory2 ff) {
+        // Background does not use a source; construct a user later with a world extent
+        // inline feature so that we still have a valid SLD.
+        UserLayer userLayer = sf.createUserLayer();
+        Style style = sf.createStyle();
+
+        final SimpleFeatureTypeBuilder ftb = new SimpleFeatureTypeBuilder();
+        final PrecisionModel pm = new PrecisionModel(PrecisionModel.FLOATING);
+        final GeometryFactory jtsFactory = new GeometryFactory(pm, 4326);
+
+        // must include a geometry so that the layer is rendered
+        try {
+            CoordinateReferenceSystem crs = CRS.decode("EPSG:4326");
+
+            ftb.add("geometry", org.locationtech.jts.geom.Polygon.class, crs);
+            ftb.setCRS(crs);
+            ftb.setDefaultGeometry("geometry");
+            ftb.setName("background");
+            SimpleFeatureType featureType = ftb.buildFeatureType();
+
+            final DefaultFeatureCollection fc = new DefaultFeatureCollection();
+            fc.add(
+                    SimpleFeatureBuilder.build(
+                            featureType,
+                            new Object[] {
+                                jtsFactory.toGeometry(new ReferencedEnvelope(CRS.getEnvelope(crs)))
+                            },
+                            "background"));
+
+            userLayer.setInlineFeatureType(featureType);
+            userLayer.setInlineFeatureDatastore(DataUtilities.dataStore(fc));
+            userLayer.setName("background");
+
+            // fake style and filter, won't ever be ued
+            StyleBuilder sb = new StyleBuilder();
+            Rule rule = sb.createRule(sb.createPolygonSymbolizer());
+            rule.setFilter(ff.equal(ff.literal(0), ff.literal(1)));
+            FeatureTypeStyle featureTypeStyle = sb.createFeatureTypeStyle("background", rule);
+            style.featureTypeStyles().add(featureTypeStyle);
+            // the actual background color
+            style.setBackground(background.getFill(this));
+
+            userLayer.userStyles().add(style);
+            sld.layers().add(userLayer);
+        } catch (FactoryException e) {
+            throw new MBFormatException("Error constructing background layer", e);
+        }
+    }
+
