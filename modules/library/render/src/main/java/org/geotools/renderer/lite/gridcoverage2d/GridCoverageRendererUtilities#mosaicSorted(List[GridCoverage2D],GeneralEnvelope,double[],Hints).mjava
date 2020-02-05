@@ -1,0 +1,49 @@
+    /**
+     * Mosaic coverages with a preliminary sorting by size
+     *
+     * @param coverages
+     * @param destinationEnvelope
+     * @param bgValues
+     * @param hints
+     * @return
+     */
+    public static GridCoverage2D mosaicSorted(
+            List<GridCoverage2D> coverages,
+            GeneralEnvelope destinationEnvelope,
+            double[] bgValues,
+            Hints hints) {
+        GridCoverage2D mosaicked = null;
+        if (coverages.size() == 0) {
+            return null;
+        } else if (coverages.size() == 1) {
+            mosaicked = coverages.get(0);
+        } else {
+            // sort the coverages by size, avoid having a sliver coverage 1-2 px large or high
+            // first as it will have a skewed grid to world that will then be applied
+            // to all members of the mosaic
+            Comparator<GridCoverage2D> sliverComparator =
+                    (c1, c2) -> {
+                        RenderedImage r1 = c1.getRenderedImage();
+                        RenderedImage r2 = c2.getRenderedImage();
+                        // area2 - area1, largest first
+                        long areaDiff =
+                                ((long) r2.getWidth()) * r2.getHeight()
+                                        - ((long) r1.getWidth()) * r1.getHeight();
+                        return (int) Math.signum(areaDiff);
+                    };
+            Collections.sort(coverages, sliverComparator);
+
+            // do not expand index color models, we know they are all the same
+            Hints mosaicHints = new Hints(hints);
+            mosaicHints.put(JAI.KEY_REPLACE_INDEX_COLOR_MODEL, false);
+            mosaicked =
+                    mosaic(
+                            coverages,
+                            new ArrayList<GridCoverage2D>(),
+                            destinationEnvelope,
+                            mosaicHints,
+                            bgValues);
+        }
+        return mosaicked;
+    }
+

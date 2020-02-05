@@ -1,0 +1,53 @@
+    /**
+     * Forces an input list of coverages to the valid bounds of the provided target CRS, when a
+     * reprojection is needed, using a ProjectionHandler.
+     *
+     * @param coverages
+     * @param handler
+     * @param bgValues
+     * @param targetCRS
+     * @param hints
+     * @return
+     */
+    public static List<GridCoverage2D> forceToValidBounds(
+            List<GridCoverage2D> coverages,
+            ProjectionHandler handler,
+            double[] bgValues,
+            CoordinateReferenceSystem targetCRS,
+            Hints hints) {
+        // check if we have to reproject
+        boolean reprojectionNeeded = false;
+        for (GridCoverage2D coverage : coverages) {
+            if (coverage == null) {
+                continue;
+            }
+            final CoordinateReferenceSystem coverageCRS = coverage.getCoordinateReferenceSystem();
+            if (!CRS.equalsIgnoreMetadata(coverageCRS, targetCRS)) {
+                reprojectionNeeded = true;
+                break;
+            }
+        }
+
+        if (reprojectionNeeded && handler != null && handler.getValidAreaBounds() != null) {
+            List<GridCoverage2D> cropped = new ArrayList<>();
+            ReferencedEnvelope validArea = handler.getValidAreaBounds();
+            GridGeometryReducer reducer = new GridGeometryReducer(validArea);
+            for (GridCoverage2D coverage : coverages) {
+                GridGeometry2D gg = coverage.getGridGeometry();
+                GridGeometry2D reduced = reducer.reduce(gg);
+                if (!reduced.equals(gg)) {
+                    GeneralEnvelope cutEnvelope = reducer.getCutEnvelope(reduced);
+                    GridCoverage2D croppedCoverage =
+                            crop(coverage, cutEnvelope, false, bgValues, hints);
+                    if (croppedCoverage != null) {
+                        cropped.add(croppedCoverage);
+                    }
+                } else {
+                    cropped.add(coverage);
+                }
+            }
+            coverages = cropped;
+        }
+        return coverages;
+    }
+

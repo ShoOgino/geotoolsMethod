@@ -1,0 +1,55 @@
+    /**
+     * Crop a coverage on a specified destination Envelope
+     *
+     * @param coverage
+     * @param destinationEnvelope
+     * @param doReprojection
+     * @param backgroundValues
+     * @param hints
+     * @return
+     */
+    public static GridCoverage2D crop(
+            GridCoverage2D coverage,
+            GeneralEnvelope destinationEnvelope,
+            boolean doReprojection,
+            double[] backgroundValues,
+            Hints hints) {
+        // CREATING THE CROP ENVELOPE
+        GridCoverage2D outputCoverage = coverage;
+        final GeneralEnvelope coverageEnvelope = (GeneralEnvelope) coverage.getEnvelope();
+        final CoordinateReferenceSystem coverageCRS = coverage.getCoordinateReferenceSystem2D();
+
+        try {
+            GeneralEnvelope renderingEnvelopeInCoverageCRS = null;
+            if (doReprojection) {
+                renderingEnvelopeInCoverageCRS =
+                        GridCoverageRendererUtilities.reprojectEnvelopeWithWGS84Pivot(
+                                destinationEnvelope, coverageCRS);
+            } else {
+                // NO REPROJECTION
+                renderingEnvelopeInCoverageCRS = new GeneralEnvelope(destinationEnvelope);
+            }
+            final GeneralEnvelope cropEnvelope =
+                    new GeneralEnvelope(renderingEnvelopeInCoverageCRS);
+            cropEnvelope.intersect(coverageEnvelope);
+            if (cropEnvelope.isEmpty() || cropEnvelope.isNull()) {
+                if (LOGGER.isLoggable(Level.INFO)) {
+                    LOGGER.info(
+                            "The destination envelope does not intersect the envelope of the source coverage.");
+                }
+                return null;
+            }
+
+            // Cropping for real
+            outputCoverage = coverageCrop(coverage, cropEnvelope, backgroundValues, hints);
+        } catch (Throwable t) {
+            // If it happens that the crop fails we try to proceed since the crop does only an
+            // optimization. Things might work out anyway.
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.log(Level.FINE, "Crop Failed for reason: " + t.getLocalizedMessage(), t);
+            }
+            outputCoverage = coverage;
+        }
+        return outputCoverage;
+    }
+
