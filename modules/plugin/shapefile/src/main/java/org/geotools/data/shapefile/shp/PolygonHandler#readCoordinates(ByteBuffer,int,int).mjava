@@ -4,24 +4,38 @@
      */
     private CoordinateSequence readCoordinates(
             final ByteBuffer buffer, final int numPoints, final int dimensions) {
-        CoordinateSequence cs =
-                JTS.createCS(geometryFactory.getCoordinateSequenceFactory(), numPoints, dimensions);
-
+        CoordinateSequence cs;
+        if (shapeType == ShapeType.POLYGONM) {
+            cs = JTS.createCS(geometryFactory.getCoordinateSequenceFactory(), numPoints, 3, 1);
+        } else if (shapeType == ShapeType.POLYGONZ) {
+            cs = JTS.createCS(geometryFactory.getCoordinateSequenceFactory(), numPoints, 4, 1);
+        } else {
+            cs =
+                    JTS.createCS(
+                            geometryFactory.getCoordinateSequenceFactory(), numPoints, dimensions);
+        }
         DoubleBuffer dbuffer = buffer.asDoubleBuffer();
         double[] ordinates = new double[numPoints * 2];
         dbuffer.get(ordinates);
         for (int t = 0; t < numPoints; t++) {
-            cs.setOrdinate(t, 0, ordinates[t * 2]);
-            cs.setOrdinate(t, 1, ordinates[t * 2 + 1]);
+            cs.setOrdinate(t, CoordinateSequence.X, ordinates[t * 2]);
+            cs.setOrdinate(t, CoordinateSequence.Y, ordinates[t * 2 + 1]);
         }
 
-        if (dimensions > 2) {
-            // z
+        if (shapeType == ShapeType.POLYGONZ) { // Handle Z
             dbuffer.position(dbuffer.position() + 2);
             dbuffer.get(ordinates, 0, numPoints);
 
             for (int t = 0; t < numPoints; t++) {
-                cs.setOrdinate(t, 2, ordinates[t]);
+                cs.setOrdinate(t, CoordinateSequence.Z, ordinates[t]);
+            }
+        }
+        if (shapeType == ShapeType.POLYGONM || shapeType == ShapeType.POLYGONZ) { // Handle M
+            dbuffer.position(dbuffer.position() + 2);
+            dbuffer.get(ordinates, 0, numPoints);
+
+            for (int t = 0; t < numPoints; t++) {
+                cs.setOrdinate(t, CoordinateSequence.M, ordinates[t]);
             }
         }
 
