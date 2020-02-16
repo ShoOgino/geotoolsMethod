@@ -1,0 +1,30 @@
+    @Test
+    public void testBuildClientWithoutProxy() throws IOException {
+        params = getParams("localhost", 9200, "admin", null);
+        assertNotNull(dataStoreFactory.createDataStore(params));
+        verify(clientBuilder, times(1)).build();
+        assertEquals(1, hostsCaptor.getValue().length);
+        assertEquals("localhost", hostsCaptor.getValue()[0].getHostName());
+        assertEquals(9200, hostsCaptor.getValue()[0].getPort());
+
+        assertEquals(1, configCallbackCaptor.getAllValues().size());
+        configCallbackCaptor.getAllValues().get(0).customizeHttpClient(httpClientBuilder);
+        Credentials credentials =
+                credentialsProviderCaptor
+                        .getValue()
+                        .getCredentials(new AuthScope("localhost", 9200));
+        assertNotNull(credentials);
+        assertEquals("admin", credentials.getUserPrincipal().getName());
+        assertEquals("admin", credentials.getPassword());
+
+        assertEquals(1, threadFactoryCaptor.getAllValues().size());
+        ThreadFactory threadFactory = threadFactoryCaptor.getAllValues().get(0);
+        Thread thread = threadFactory.newThread(mock(Runnable.class));
+        assertEquals("esrest-asynchttp-ADMIN-1", thread.getName());
+
+        assertNotNull(
+                requestConfigCallbackCaptor
+                        .getValue()
+                        .customizeRequestConfig(requestConfigBuilder));
+    }
+

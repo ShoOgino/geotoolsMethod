@@ -1,0 +1,37 @@
+    public ElasticFeatureReader(
+            ContentState contentState,
+            List<ElasticHit> hits,
+            Map<String, ElasticAggregation> aggregations,
+            float maxScore) {
+        this.state = contentState;
+        this.featureType = state.getFeatureType();
+        this.searchHitIterator = hits.iterator();
+        this.builder = new SimpleFeatureBuilder(featureType);
+        this.parserUtil = new ElasticParserUtil();
+        this.maxScore = maxScore;
+
+        this.aggregationIterator = Collections.emptyIterator();
+        if (aggregations != null && !aggregations.isEmpty()) {
+            String aggregationName = aggregations.keySet().stream().findFirst().orElse(null);
+            if (aggregations.size() > 1) {
+                LOGGER.info("Result has multiple aggregations. Using " + aggregationName);
+            }
+            if (aggregations.get(aggregationName).getBuckets() != null) {
+                this.aggregationIterator =
+                        aggregations.get(aggregationName).getBuckets().iterator();
+            }
+        }
+
+        if (contentState.getEntry() != null && contentState.getEntry().getDataStore() != null) {
+            final ElasticDataStore dataStore;
+            dataStore = (ElasticDataStore) contentState.getEntry().getDataStore();
+            this.arrayEncoding = dataStore.getArrayEncoding();
+        } else {
+            this.arrayEncoding =
+                    ElasticDataStore.ArrayEncoding.valueOf(
+                            (String) ElasticDataStoreFactory.ARRAY_ENCODING.getDefaultValue());
+        }
+
+        this.mapper = new ObjectMapper();
+    }
+

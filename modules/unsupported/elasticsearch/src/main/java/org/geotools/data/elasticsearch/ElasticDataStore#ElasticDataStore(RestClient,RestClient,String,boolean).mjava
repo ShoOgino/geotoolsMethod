@@ -1,0 +1,34 @@
+    public ElasticDataStore(
+            RestClient restClient,
+            RestClient proxyRestClient,
+            String indexName,
+            boolean enableRunAs)
+            throws IOException {
+        LOGGER.fine("Initializing data store for " + indexName);
+
+        this.indexName = indexName;
+
+        try {
+            checkRestClient(restClient);
+            if (proxyRestClient != null) {
+                checkRestClient(proxyRestClient);
+            }
+            client = new RestElasticClient(restClient, proxyRestClient, enableRunAs);
+        } catch (Exception e) {
+            throw new IOException("Unable to create REST client", e);
+        }
+        LOGGER.fine("Created REST client: " + client);
+
+        final List<String> types = getClient().getTypes(indexName);
+        if (!types.isEmpty()) {
+            baseTypeNames = types.stream().map(NameImpl::new).collect(Collectors.toList());
+        } else {
+            baseTypeNames = new ArrayList<>();
+        }
+
+        layerConfigurations = new ConcurrentHashMap<>();
+        docTypes = new HashMap<>();
+
+        arrayEncoding = ArrayEncoding.JSON;
+    }
+

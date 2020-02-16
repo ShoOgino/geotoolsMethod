@@ -1,0 +1,44 @@
+    /**
+     * Writes the FilterBuilder for the attribute Expression.
+     *
+     * @param expression the attribute.
+     */
+    @Override
+    public Object visit(PropertyName expression, Object extraData) {
+        LOGGER.finest("exporting PropertyName");
+
+        SimpleFeatureType featureType = this.featureType;
+
+        Class<?> target = null;
+        if (extraData instanceof Class) {
+            target = (Class<?>) extraData;
+        }
+
+        // first evaluate expression against feature type get the attribute,
+        AttributeDescriptor attType = (AttributeDescriptor) expression.evaluate(featureType);
+
+        String encodedField;
+        if (attType != null) {
+            Map<Object, Object> userData = attType.getUserData();
+            if (userData != null && userData.containsKey("full_name")) {
+                encodedField = userData.get("full_name").toString();
+            } else {
+                encodedField = attType.getLocalName();
+            }
+            if (target != null && target.isAssignableFrom(attType.getType().getBinding())) {
+                // no need for casting, it's already the right type
+                target = null;
+            }
+        } else {
+            // fall back to just encoding the property name
+            encodedField = expression.getPropertyName();
+        }
+
+        if (target != null) {
+            LOGGER.fine("PropertyName type casting not implemented");
+        }
+        field = encodedField;
+
+        return extraData;
+    }
+

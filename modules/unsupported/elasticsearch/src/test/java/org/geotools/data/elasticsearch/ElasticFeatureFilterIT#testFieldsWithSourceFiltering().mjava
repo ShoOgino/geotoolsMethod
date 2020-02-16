@@ -1,0 +1,56 @@
+    /**
+     * This test ensures that when specifying properties in a query with source filtering enabled
+     * you only get back the properties specified. If properties are not specified or
+     * Query.ALL_PROPERTIES is used then you get everything.
+     */
+    @Test
+    public void testFieldsWithSourceFiltering() throws Exception {
+        init();
+        dataStore.setSourceFilteringEnabled(true);
+
+        FilterFactory ff = dataStore.getFilterFactory();
+        PropertyIsEqualTo filter = ff.equals(ff.property("modem_b"), ff.literal(true));
+
+        Query query = new Query();
+        query.setFilter(filter);
+
+        SimpleFeatureCollection features = featureSource.getFeatures(query);
+
+        try (SimpleFeatureIterator iterator = features.features()) {
+            assertTrue(iterator.hasNext());
+            SimpleFeature feature = iterator.next();
+
+            Assert.assertTrue(feature.getProperties().size() > 2);
+        }
+
+        // Specify Columns
+        query.setPropertyNames(new String[] {"standard_ss", "security_ss"});
+
+        features = featureSource.getFeatures(query);
+
+        try (SimpleFeatureIterator iterator = features.features()) {
+            assertTrue(iterator.hasNext());
+            SimpleFeature feature = iterator.next();
+
+            Iterator<Property> propertyIterator = feature.getProperties().iterator();
+
+            Assert.assertEquals(query.getPropertyNames().length, feature.getProperties().size());
+            Assert.assertEquals(
+                    query.getPropertyNames()[0], propertyIterator.next().getName().getLocalPart());
+            Assert.assertEquals(
+                    query.getPropertyNames()[1], propertyIterator.next().getName().getLocalPart());
+        }
+
+        // Specify All
+        query.setProperties(Query.ALL_PROPERTIES);
+
+        features = featureSource.getFeatures(query);
+
+        try (SimpleFeatureIterator iterator = features.features()) {
+            assertTrue(iterator.hasNext());
+            SimpleFeature feature = iterator.next();
+
+            Assert.assertTrue(feature.getProperties().size() > 2);
+        }
+    }
+
