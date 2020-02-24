@@ -3,16 +3,22 @@
         // optimization in case the granule CRS and the mosaic CRS correspond
         CoordinateReferenceSystem granuleCRS =
                 templateDescriptor.getGranuleEnvelope().getCoordinateReferenceSystem();
-        if (CRS.equalsIgnoreMetadata(
-                rasterManager.spatialDomainManager.coverageCRS2D, granuleCRS)) {
+        RasterLayerRequest originalRequest = this.getRequest();
+        CoordinateReferenceSystem referenceCRS =
+                originalRequest.spatialRequestHelper.getReferenceCRS(true);
+        if (CRS.equalsIgnoreMetadata(referenceCRS, granuleCRS)) {
             return this;
         }
 
         // rebuild
-        RasterLayerRequest originalRequest = this.getRequest();
         RasterManager originalRasterManager = originalRequest.getRasterManager();
         RasterManager manager =
-                originalRasterManager.getForGranuleCRS(templateDescriptor, this.mosaicBBox);
+                originalRasterManager.getForGranuleCRS(
+                        templateDescriptor,
+                        this.mosaicBBox,
+                        originalRequest.spatialRequestHelper.isSupportingAlternativeCRSOutput()
+                                ? this.queryBBox
+                                : this.mosaicBBox);
         RasterLayerRequest request =
                 new RasterLayerRequest(originalRequest.getParams(), manager) {
                     @Override

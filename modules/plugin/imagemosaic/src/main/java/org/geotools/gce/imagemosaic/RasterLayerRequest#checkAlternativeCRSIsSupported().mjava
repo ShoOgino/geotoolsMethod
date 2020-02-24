@@ -1,0 +1,31 @@
+    private void checkAlternativeCRSIsSupported() throws IOException {
+        if (heterogeneousCRS && useAlternativeCRS && requestedBounds != null) {
+            CoordinateReferenceSystem requestedCRS = requestedBounds.getCoordinateReferenceSystem();
+            Integer requestedEpsgCode = null;
+            try {
+                requestedEpsgCode = CRS.lookupEpsgCode(requestedCRS, false);
+            } catch (FactoryException e) {
+                throw new IOException(
+                        "Exception occurred while looking for an "
+                                + "epsgCode on the provided crs: "
+                                + requestedCRS,
+                        e);
+            }
+            // Enable alternative CRS Output support only when the requested CRS doesn't match
+            // the coverage's one. In that case, proceed with the standard approach
+            if (rasterManager.hasAlternativeCRS(requestedEpsgCode)
+                    && !CRS.equalsIgnoreMetadata(
+                            requestedCRS, spatialRequestHelper.getReferenceCRS(false))) {
+                // Initialize the alternativeCRS Output Coverage properties
+                spatialRequestHelper.setSupportingAlternativeCRSOutput(true);
+                CoverageProperties alternativeProperties = new CoverageProperties();
+                alternativeProperties.setCrs2D(requestedCRS);
+                alternativeProperties.setBBox(ReferencedEnvelope.reference(requestedBounds));
+                spatialRequestHelper.setAlternativeProperties(alternativeProperties);
+            } else {
+                // We can't support the alternative CRS so let's disable it
+                useAlternativeCRS = false;
+            }
+        }
+    }
+
