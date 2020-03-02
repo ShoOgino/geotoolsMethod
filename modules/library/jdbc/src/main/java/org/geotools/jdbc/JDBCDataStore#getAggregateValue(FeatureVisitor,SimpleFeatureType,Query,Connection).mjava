@@ -70,13 +70,20 @@
                     rs = st.executeQuery(sql);
                 }
 
+                // give the dialect an opportunity to convert outputs, if needed, for databases
+                // with a weak/problematic type system (e.g., sqlite)
+                java.util.function.Function<Object, Object> converter =
+                        dialect.getAggregateConverter(visitor, featureType);
+
                 while (rs.next()) {
                     if (groupByExpressions == null || groupByExpressions.isEmpty()) {
                         Object value = rs.getObject(1);
-                        result = value;
-                        results.add(value);
+                        result = converter.apply(value);
+                        results.add(result);
                     } else {
-                        results.add(extractValuesFromResultSet(rs, groupByExpressions.size()));
+                        results.add(
+                                extractValuesFromResultSet(
+                                        rs, groupByExpressions.size(), converter));
                     }
                 }
             } finally {

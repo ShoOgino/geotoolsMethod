@@ -1,0 +1,30 @@
+    /**
+     * Returns the list of aggregation output types for the given visitor and feature type (or an
+     * empty Optional if could not determine it)
+     */
+    protected Optional<List<Class>> getResultTypes(
+            FeatureVisitor visitor, SimpleFeatureType featureType) {
+        if (!(visitor instanceof FeatureAttributeVisitor)) {
+            return Optional.empty();
+        }
+
+        FeatureAttributeVisitor fav = (FeatureAttributeVisitor) visitor;
+        List<Expression> expressions = fav.getExpressions();
+        if (expressions == null || expressions.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<Class> inputTypes = new ArrayList<>();
+        for (Expression ex : expressions) {
+            ExpressionTypeVisitor etv = new ExpressionTypeVisitor(featureType);
+            Class expressionType = (Class) ex.accept(etv, null);
+            if (expressionType == null) {
+                return Optional.empty();
+            }
+
+            inputTypes.add(expressionType);
+        }
+
+        return fav.getResultType(inputTypes);
+    }
+
