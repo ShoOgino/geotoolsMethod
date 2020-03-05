@@ -1,0 +1,17 @@
+    private double[] getNumericalPercentages(
+            int classNum, RangedClassifier classifier, FeatureCollection collection)
+            throws IOException {
+        double max = ((Number) classifier.getMax(classifier.getSize() - 1)).doubleValue();
+        double min = ((Number) classifier.getMin(0)).doubleValue();
+        double classWidth = (max - min) / classNum;
+        Subtract subtract = FF.subtract(getParameters().get(0), FF.literal(min));
+        Divide divide = FF.divide(subtract, FF.literal(classWidth));
+        Function abs = FF.function("abs", divide);
+        GroupByVisitor groupBy =
+                new GroupByVisitor(
+                        Aggregate.COUNT, getParameters().get(0), Arrays.asList(abs), null);
+        collection.accepts(groupBy, null);
+        Map<List<Integer>, Integer> result = groupBy.getResult().toMap();
+        return calculateNumericalPercentages(result, collection.size(), classNum);
+    }
+

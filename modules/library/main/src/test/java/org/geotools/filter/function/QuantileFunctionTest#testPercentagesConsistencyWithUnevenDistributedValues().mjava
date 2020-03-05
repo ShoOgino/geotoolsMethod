@@ -1,0 +1,30 @@
+    @Test
+    public void testPercentagesConsistencyWithUnevenDistributedValues() throws SchemaException {
+
+        SimpleFeatureType dataType =
+                DataUtilities.createType("classification.test1", "id:0,value:int");
+        int iVal[] = new int[] {1, 1, 2, 3, 4, 5};
+        SimpleFeature[] myfeatures = new SimpleFeature[iVal.length];
+        for (int i = 0; i < iVal.length; i++) {
+            myfeatures[i] =
+                    SimpleFeatureBuilder.build(
+                            dataType,
+                            new Object[] {Integer.valueOf(i + 1), Integer.valueOf(iVal[i])},
+                            "classification.test1" + (i + 1));
+        }
+
+        SimpleFeatureCollection myFeatureCollection = DataUtilities.collection(myfeatures);
+        org.opengis.filter.expression.Expression func =
+                ff.function("Quantile", ff.property("value"), ff.literal(5), ff.literal(true));
+
+        Object value = func.evaluate(myFeatureCollection);
+        assertTrue(value instanceof RangedClassifier);
+        RangedClassifier ranged = (RangedClassifier) value;
+        double[] percentages = ranged.getPercentages();
+        assertEquals(percentages.length, 5);
+        assertEquals(Math.floor(percentages[0]), 33.0);
+        for (int i = 1; i < percentages.length; i++) {
+            assertEquals(Math.floor(percentages[i]), 16.0);
+        }
+    }
+
