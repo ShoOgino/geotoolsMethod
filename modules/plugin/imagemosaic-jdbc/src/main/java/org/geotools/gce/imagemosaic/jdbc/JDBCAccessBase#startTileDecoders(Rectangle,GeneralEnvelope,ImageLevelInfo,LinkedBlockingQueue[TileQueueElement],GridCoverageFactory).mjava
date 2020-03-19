@@ -18,6 +18,7 @@
         ExecutorService pool = getExecutorServivicePool();
 
         String statementString = getGridSelectStatement(levelInfo);
+        Queue<Future<?>> runResults = new LinkedList<Future<?>>();
 
         try (Connection con = dataSource.getConnection();
                 PreparedStatement s = con.prepareStatement(statementString)) {
@@ -49,7 +50,7 @@
                                     config);
                     //				thread.start();
                     threads.add(thread);
-                    pool.execute(thread);
+                    runResults.add(pool.submit(thread));
                 }
             }
 
@@ -86,6 +87,16 @@
         //				throw new RuntimeException(e.getLocalizedMessage());
         //			}
         //		}
+
+        // rethrow unhandled exceptions into main thread
+        for (Future<?> jobDone : runResults) {
+            try {
+                jobDone.get();
+            } catch (Exception ex) {
+                LOGGER.log(Level.SEVERE, ex.getLocalizedMessage(), ex);
+                throw new RuntimeException(ex);
+            }
+        }
 
         tileQueue.add(TileQueueElement.ENDELEMENT);
 
