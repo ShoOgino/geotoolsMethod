@@ -1,0 +1,50 @@
+    /**
+     * Writes the FilterBuilder for the PropertyIsBetween Filter.
+     *
+     * @param filter the Filter to be visited.
+     */
+    public Object visit(PropertyIsBetween filter, Object extraData) {
+        LOGGER.finest("exporting PropertyIsBetween");
+
+        Expression expr = filter.getExpression();
+        Expression lowerbounds = filter.getLowerBoundary();
+        Expression upperbounds = filter.getUpperBoundary();
+
+        Class<?> context;
+        nested = false;
+        AttributeDescriptor attType = (AttributeDescriptor) expr.evaluate(featureType);
+        if (attType != null) {
+            context = attType.getType().getBinding();
+            if (attType.getUserData().containsKey(ElasticConstants.NESTED)) {
+                nested = (Boolean) attType.getUserData().get(ElasticConstants.NESTED);
+            }
+            if (Date.class.isAssignableFrom(context)) {
+                updateDateFormatter(attType);
+            }
+        } else {
+            // assume it's a string?
+            context = String.class;
+        }
+
+        expr.accept(this, extraData);
+        key = (String) field;
+        lowerbounds.accept(this, context);
+        lower = field;
+        upperbounds.accept(this, context);
+        Object upper = field;
+
+        if (nested) {
+            path = extractNestedPath(key);
+        }
+
+        queryBuilder =
+                ImmutableMap.of(
+                        "range", ImmutableMap.of(key, ImmutableMap.of("gte", lower, "lte", upper)));
+        if (nested) {
+            queryBuilder =
+                    ImmutableMap.of("nested", ImmutableMap.of("path", path, "query", queryBuilder));
+        }
+
+        return extraData;
+    }
+

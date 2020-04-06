@@ -1,0 +1,75 @@
+    /**
+     * Builds a RasterManager for the sub mosaic of a given template granule, and within a given
+     * search bounds
+     */
+    public RasterManager getForGranuleCRS(
+            GranuleDescriptor templateDescriptor,
+            ReferencedEnvelope requestBounds,
+            ReferencedEnvelope requestBoundsQuery)
+            throws Exception {
+        CoordinateReferenceSystem granuleCRS =
+                templateDescriptor.getGranuleEnvelope().getCoordinateReferenceSystem();
+        CoordinateReferenceSystem requestedCRS = requestBounds.getCoordinateReferenceSystem();
+
+        // When no requesting AlternativeCRSOutput, the provided
+        // requestBounds and requestBoundsQuery are the same object
+        boolean useAlternativeCRS =
+                heterogeneousCRS
+                        && hasAlternativeCRS(CRS.lookupEpsgCode(requestedCRS, false))
+                        && !requestBounds.equals(requestBoundsQuery);
+        CoordinateReferenceSystem referenceCRS =
+                useAlternativeCRS ? requestedCRS : spatialDomainManager.coverageCRS2D;
+        if (CRS.equalsIgnoreMetadata(referenceCRS, granuleCRS)) {
+            return this;
+        }
+
+        // compute the bounds of the sub-mosaic in that CRS
+        ReferencedEnvelope bounds = getBoundsForGranuleCRS(templateDescriptor, requestBoundsQuery);
+        ReferencedEnvelope targetBounds = reprojectBounds(requestBounds, granuleCRS, bounds);
+
+        // rebuild the raster manager
+        RasterManager reprojected = (RasterManager) this.clone();
+        reprojected.configuration = new MosaicConfigurationBean(this.configuration);
+        reprojected.configuration.setCrs(granuleCRS);
+        if (useAlternativeCRS) {
+            // We are going to produce a submosaic in the requested CRS,
+            // so that it won't be handled as heterogeneous anymore.
+            reprojected.heterogeneousCRS = false;
+        }
+        reprojected.configuration.setEnvelope(targetBounds);
+        if (reprojected.imposedEnvelope != null) {
+            // we might have an imposed bbox
+            reprojected.imposedEnvelope = targetBounds;
+        }
+        if (templateDescriptor.getOverviewsController() != null) {
+            reprojected.overviewsController = templateDescriptor.getOverviewsController();
+        }
+
+        OverviewLevel level = templateDescriptor.getOverviewsController().getLevel(0);
+        // original gridrange (estimated). I am using the floor here in order to make sure
+        // we always stays inside the real area that we have for the granule
+        final double highestRes[] = new double[] {level.resolutionX, level.resolutionY};
+        GridEnvelope2D originalGridRange =
+                new GridEnvelope2D(
+                        new Rectangle(
+                                (int) (targetBounds.getSpan(0) / highestRes[0]),
+                                (int) (targetBounds.getSpan(1) / highestRes[1])));
+        AffineTransform2D raster2Model =
+                new AffineTransform2D(
+                        highestRes[0],
+                        0,
+                        0,
+                        -highestRes[1],
+                        targetBounds.getLowerCorner().getOrdinate(0) + 0.5 * highestRes[0],
+                        targetBounds.getUpperCorner().getOrdinate(1) - 0.5 * highestRes[1]);
+        reprojected.spatialDomainManager =
+                new SpatialDomainManager(
+                        new GeneralEnvelope(targetBounds),
+                        originalGridRange,
+                        granuleCRS,
+                        raster2Model,
+                        reprojected.overviewsController);
+
+        return reprojected;
+    }
+

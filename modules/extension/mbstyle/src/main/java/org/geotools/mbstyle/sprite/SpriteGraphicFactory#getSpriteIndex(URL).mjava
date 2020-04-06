@@ -1,0 +1,39 @@
+    /**
+     * Retrieve the sprite sheet index for the provided sprite base url. The base url should have no
+     * extension.
+     *
+     * @param baseUrl The base URL of the Mapbox sprite source (no extension).
+     * @return The sprite sheet index
+     */
+    protected SpriteIndex getSpriteIndex(URL baseUrl) throws IOException {
+        SpriteIndex spriteIndex = indexCache.get(baseUrl);
+        if (spriteIndex == null) {
+            String indexUrlStr = baseUrl.toExternalForm() + ".json";
+            URL url = new URL(indexUrlStr);
+            HTTPClient client = getHttpClient();
+            HTTPResponse response = client.get(url);
+            String charset = Optional.ofNullable(response.getResponseCharset()).orElse("UTF-8");
+            try (BufferedReader reader =
+                    new BufferedReader(
+                            new InputStreamReader(response.getResponseStream(), charset))) {
+                Object parsed = jsonParser.parse(reader);
+                if (parsed instanceof JSONObject) {
+                    spriteIndex = new SpriteIndex(indexUrlStr, (JSONObject) parsed);
+                    indexCache.put(baseUrl, spriteIndex);
+                } else {
+                    throw new MBSpriteException(
+                            "Exception parsing sprite index file from: "
+                                    + indexUrlStr
+                                    + ". Expected JSONObject, but was: "
+                                    + parsed.getClass().getSimpleName());
+                }
+
+            } catch (ParseException e) {
+                throw new MBSpriteException(
+                        "Exception parsing sprite index file from: " + indexUrlStr, e);
+            }
+        }
+
+        return spriteIndex;
+    }
+

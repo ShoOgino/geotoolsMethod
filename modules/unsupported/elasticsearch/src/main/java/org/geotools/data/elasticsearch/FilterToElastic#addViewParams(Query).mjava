@@ -1,0 +1,54 @@
+    void addViewParams(Query query) {
+        if (query.getHints() != null
+                && query.getHints().get(Hints.VIRTUAL_TABLE_PARAMETERS) != null) {
+            @SuppressWarnings("unchecked")
+            Map<String, String> parameters =
+                    (Map<String, String>) query.getHints().get(Hints.VIRTUAL_TABLE_PARAMETERS);
+
+            boolean nativeOnly = false;
+            for (final Map.Entry<String, String> entry : parameters.entrySet()) {
+                if (entry.getKey().equalsIgnoreCase("native-only")) {
+                    nativeOnly = Boolean.parseBoolean(entry.getValue());
+                }
+            }
+            if (nativeOnly) {
+                LOGGER.fine(
+                        "Ignoring GeoServer filter (Elasticsearch native query/post filter only)");
+                queryBuilder = ElasticConstants.MATCH_ALL;
+            }
+
+            for (final Map.Entry<String, String> entry : parameters.entrySet()) {
+                if (entry.getKey().equalsIgnoreCase("q")) {
+                    final String value = entry.getValue();
+                    try {
+                        nativeQueryBuilder = mapReader.readValue(value);
+                    } catch (Exception e) {
+                        // retry with decoded value
+                        try {
+                            nativeQueryBuilder =
+                                    mapReader.readValue(ElasticParserUtil.urlDecode(value));
+                        } catch (Exception e2) {
+                            throw new FilterToElasticException("Unable to parse native query", e);
+                        }
+                    }
+                }
+                if (entry.getKey().equalsIgnoreCase("a")) {
+                    final ObjectMapper mapper = new ObjectMapper();
+                    final TypeReference<Map<String, Map<String, Map<String, Object>>>> type;
+                    type = new TypeReference<Map<String, Map<String, Map<String, Object>>>>() {};
+                    final String value = entry.getValue();
+                    try {
+                        this.aggregations = mapper.readValue(value, type);
+                    } catch (Exception e) {
+                        try {
+                            this.aggregations =
+                                    mapper.readValue(ElasticParserUtil.urlDecode(value), type);
+                        } catch (Exception e2) {
+                            throw new FilterToElasticException("Unable to parse aggregation", e);
+                        }
+                    }
+                }
+            }
+        }
+    }
+

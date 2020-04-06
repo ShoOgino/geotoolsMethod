@@ -2,7 +2,6 @@
      * Return the metadata value for the specified metadata name
      *
      * @param name the name of the metadata to be returned
-     * @return
      */
     String getMetadataValue(String name) {
         String value = null;
@@ -54,9 +53,36 @@
 
         // check if heterogeneous CRS
         if (name.equalsIgnoreCase(AbstractGridCoverage2DReader.MULTICRS_READER)) {
-            return String.valueOf(configuration.getCatalogConfigurationBean().isHeterogeneousCRS());
+            return String.valueOf(heterogeneousCRS);
         }
 
+        if (name.equalsIgnoreCase(AbstractGridCoverage2DReader.MULTICRS_EPSGCODES)
+                && heterogeneousCRS) {
+
+            // Extract the internal EPSG Codes found on the catalog
+            String crsAttribute = null;
+            try {
+                crsAttribute = getCrsAttribute();
+                if (crsAttribute != null) {
+                    Set<String> crsSet = extractDomain(crsAttribute);
+                    for (String crs : crsSet) {
+                        // Opportunistic caching:
+                        // LoadingCache usually loads objects at first need.
+                        // However, since this metadata method is doing a scan
+                        // of the available codes when invoked, let's take
+                        // advantage of that by putting the values on cache
+                        String epsgCode = crs.replaceAll("[^0-9,]", "");
+                        alternativeCRSCache.put(Integer.valueOf(epsgCode), true);
+                    }
+                    return String.join(",", crsSet);
+                }
+            } catch (IOException e) {
+                if (LOGGER.isLoggable(Level.WARNING)) {
+                    LOGGER.log(Level.WARNING, "Unable to retrieve the list of supported CRSs", e);
+                }
+                return "";
+            }
+        }
         // check additional domains
         if (domainsManager != null) {
             return domainsManager.getMetadataValue(name);

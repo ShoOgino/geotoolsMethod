@@ -4,7 +4,7 @@
      * @param param the input {@code ParamaterValue} object
      * @param name the name of the parameter
      */
-    private void extractParameter(ParameterValue<?> param, Identifier name) {
+    private void extractParameter(ParameterValue<?> param, Identifier name) throws IOException {
 
         // //
         //
@@ -14,30 +14,17 @@
         if (name.equals(AbstractGridFormat.READ_GRIDGEOMETRY2D.getName())) {
             final Object value = param.getValue();
             if (value == null) return;
-            final GridGeometry2D gg = (GridGeometry2D) value;
-            this.requestedBounds = gg.getEnvelope2D();
-
-            if (rasterManager
-                    .getConfiguration()
-                    .getCatalogConfigurationBean()
-                    .isHeterogeneousCRS()) {
-                GridEnvelope2D paddedRange = new GridEnvelope2D(gg.getGridRange2D());
-                paddedRange.setBounds(
-                        paddedRange.x - DEFAULT_PADDING,
-                        paddedRange.y - DEFAULT_PADDING,
-                        paddedRange.width + DEFAULT_PADDING * 2,
-                        paddedRange.height + DEFAULT_PADDING * 2);
-
-                GridGeometry2D padded =
-                        new GridGeometry2D(
-                                paddedRange, gg.getGridToCRS(), gg.getCoordinateReferenceSystem());
-                spatialRequestHelper.setRequestedGridGeometry(padded.toCanonical());
-            } else {
-                spatialRequestHelper.setRequestedGridGeometry(gg.toCanonical());
-            }
+            this.requestedGridGeometry = (GridGeometry2D) value;
+            this.requestedBounds = requestedGridGeometry.getEnvelope2D();
             return;
         }
 
+        if (name.equals(ImageMosaicFormat.OUTPUT_TO_ALTERNATIVE_CRS.getName())) {
+            final Object value = param.getValue();
+            if (value == null) return;
+            useAlternativeCRS = ((Boolean) value).booleanValue();
+            return;
+        }
         // //
         //
         // Use JAI ImageRead parameter
