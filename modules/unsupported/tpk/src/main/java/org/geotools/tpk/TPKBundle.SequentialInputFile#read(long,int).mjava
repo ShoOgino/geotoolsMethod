@@ -1,0 +1,54 @@
+        /**
+         * At a given offset read a given number of bytes and returned them as a new byte array
+         *
+         * @param offset -- where in the stream to start reading
+         * @param length -- how many bytes to read
+         * @return -- a byte array of "length" bytes
+         */
+        public byte[] read(long offset, int length) {
+            byte[] result = new byte[length];
+            try {
+
+                // if the stream isn't open or if the stream is "beyond" the offset
+                if (currentReadPosition > offset || stream == null) {
+                    // close any existing stream
+                    if (stream != null) {
+                        stream.close();
+                        currentReadPosition = 0;
+                    }
+
+                    // get the ZipEntry for this file and get a new InputStream for it
+                    ZipEntry zipEntry = zipEntryMap.get().get(name);
+                    stream = TPKFile.get().getInputStream(zipEntry);
+                }
+
+                // determine if we need to skip over any bytes in the stream
+                long toSkip = offset - currentReadPosition;
+                while (toSkip > 0) {
+                    long skipped = stream.skip(toSkip);
+                    toSkip -= skipped;
+                    currentReadPosition += skipped; // update position!
+                }
+
+                // we need a loop here as the stream limits us to reading 8k bytes at a time
+                int readOffset = 0;
+                while (length > 0) {
+                    int bytesRead = stream.read(result, readOffset, length);
+
+                    if (bytesRead == -1) {
+                        Logger.getLogger(this.getClass().getName())
+                                .warning("Didn't read correctly");
+                        length = 0;
+                        result = null;
+                    } else {
+                        readOffset += bytesRead;
+                        currentReadPosition += bytesRead;
+                        length -= bytesRead;
+                    }
+                }
+            } catch (IOException ex) {
+                throw new RuntimeException("Caught error reading sequential input ZipEntry stream");
+            }
+            return result;
+        }
+
