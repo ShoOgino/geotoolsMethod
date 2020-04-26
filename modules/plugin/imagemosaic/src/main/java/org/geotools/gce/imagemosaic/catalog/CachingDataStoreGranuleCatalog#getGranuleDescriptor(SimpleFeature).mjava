@@ -1,0 +1,35 @@
+    protected GranuleDescriptor getGranuleDescriptor(SimpleFeature sf) {
+        String featureId = sf.getID();
+        GranuleDescriptor granule = null;
+        // caching by granule's location
+        if (descriptorsCache.containsKey(featureId)) {
+            granule = descriptorsCache.get(featureId);
+        } else {
+            try {
+                // create the granule descriptor
+                MultiLevelROI footprint = getGranuleFootprint(sf);
+                if (footprint == null || !footprint.isEmpty()) {
+                    // caching only if the footprint is either absent or present and
+                    // NON-empty
+                    granule =
+                            new GranuleDescriptor(
+                                    sf,
+                                    adaptee.suggestedFormat,
+                                    adaptee.suggestedRasterSPI,
+                                    adaptee.suggestedIsSPI,
+                                    adaptee.pathType,
+                                    adaptee.locationAttribute,
+                                    adaptee.parentLocation,
+                                    footprint,
+                                    adaptee.heterogeneous,
+                                    adaptee.hints); // retain hints since this may contain a
+                    // reader or anything
+                    descriptorsCache.put(featureId, granule);
+                }
+            } catch (Exception e) {
+                LOGGER.log(Level.FINE, "Skipping invalid granule", e);
+            }
+        }
+        return granule;
+    }
+

@@ -1,0 +1,40 @@
+    @Test
+    public void testNativeEnvelope() throws Exception {
+        String testLocation = "heterogeneous_crs_2";
+        URL storeUrl = TestData.url(this, testLocation);
+
+        File testDataFolder = new File(storeUrl.toURI());
+        File testDirectory = crsMosaicFolder.newFolder(testLocation);
+        FileUtils.copyDirectory(testDataFolder, testDirectory);
+
+        ImageMosaicReader imReader = new ImageMosaicReader(testDirectory, null);
+        GranuleSource source = imReader.getGranules(imReader.getGridCoverageNames()[0], true);
+
+        // no decoration requested, no time should be spent adding native bounds
+        SimpleFeatureCollection fc = source.getGranules(Query.ALL);
+        try (SimpleFeatureIterator fi = fc.features()) {
+            while (fi.hasNext()) {
+                SimpleFeature f = fi.next();
+                assertThat(f.getUserData(), not(hasKey(GranuleSource.NATIVE_BOUNDS_KEY)));
+            }
+        }
+
+        // decoration requested this time
+        Query q = new Query();
+        q.getHints().put(GranuleSource.NATIVE_BOUNDS, true);
+        SimpleFeatureCollection fcb = source.getGranules(q);
+        try (SimpleFeatureIterator fi = fcb.features()) {
+            while (fi.hasNext()) {
+                SimpleFeature f = fi.next();
+                assertThat(f.getUserData(), hasKey(GranuleSource.NATIVE_BOUNDS_KEY));
+                // check the native bounds are reported in the native CRS
+                String crs = (String) f.getAttribute("crs");
+                ReferencedEnvelope envelope =
+                        (ReferencedEnvelope) f.getUserData().get(GranuleSource.NATIVE_BOUNDS_KEY);
+                assertTrue(
+                        CRS.equalsIgnoreMetadata(
+                                CRS.decode(crs, true), envelope.getCoordinateReferenceSystem()));
+            }
+        }
+    }
+
