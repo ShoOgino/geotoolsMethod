@@ -41,8 +41,33 @@
                 boolean copySource = true;
                 if (centralPixel == transparentValue) {
                     // Check if previous and next pixels are zero.
-                    float rightPixel = srcData[imageVerticalOffset + srcPixelStride];
+                    int leftPixelStride = srcPixelStride;
                     float leftPixel = srcData[imageVerticalOffset - srcPixelStride];
+                    int widthI = 1;
+                    // if a width > 1 has been specified and near pixel is still
+                    // transparent check the next
+                    while (leftPixel == transparentValue && widthI < width) {
+                        leftPixelStride += srcPixelStride;
+                        int elementAt = imageVerticalOffset - leftPixelStride;
+                        if (elementAt < srcData.length && elementAt >= 0)
+                            leftPixel = srcData[elementAt];
+                        else break;
+                        widthI++;
+                    }
+                    int rightPixelStride = srcPixelStride;
+                    float rightPixel = srcData[imageVerticalOffset + rightPixelStride];
+                    widthI = 1;
+                    // if a width > 1 has been specified and near pixel is still
+                    // transparent check the next
+                    while (rightPixel == transparentValue && widthI < width) {
+                        rightPixelStride += srcPixelStride;
+                        int elementAt = imageVerticalOffset + rightPixelStride;
+                        if (elementAt < srcData.length && elementAt >= 0)
+                            rightPixel = srcData[elementAt];
+                        else break;
+                        widthI++;
+                    }
+
                     if (rightPixel != transparentValue && leftPixel != transparentValue) {
                         // This has been identified as a pixel of a vertical transparent stripe
                         fillAlgorithm.fillPixel(
@@ -50,14 +75,39 @@
                                 srcDataArrays,
                                 dstDataArrays,
                                 imageDataVerticalOffset,
-                                srcPixelStride,
+                                leftPixelStride,
+                                rightPixelStride,
                                 dstPixelOffset);
                         copySource = false;
                     } else {
+                        int upperScanlineStride = srcScanlineStride;
                         // A transparent pixel with adjacent transparent pixels along x
-                        float upperPixel = srcData[imageVerticalOffset - srcScanlineStride];
+                        float upperPixel = srcData[imageVerticalOffset - upperScanlineStride];
+                        widthI = 1;
+                        // if a width > 1 has been specified and near pixel is still
+                        // transparent check the next
+                        while (upperPixel == transparentValue && widthI < width) {
+                            upperScanlineStride += srcScanlineStride;
+                            int elementAt = imageVerticalOffset - upperScanlineStride;
+                            if (elementAt < srcData.length && elementAt >= 0)
+                                upperPixel = srcData[elementAt];
+                            else break;
+                            widthI++;
+                        }
                         if (upperPixel != transparentValue) {
-                            float lowerPixel = srcData[imageVerticalOffset + srcScanlineStride];
+                            int lowerScanlineStride = srcScanlineStride;
+                            float lowerPixel = srcData[imageVerticalOffset + lowerScanlineStride];
+                            widthI = 1;
+                            // if a width > 1 has been specified and near pixel is still
+                            // transparent check the next
+                            while (lowerPixel == transparentValue && widthI < width) {
+                                lowerScanlineStride += srcScanlineStride;
+                                int elementAt = imageVerticalOffset + lowerScanlineStride;
+                                if (elementAt < srcData.length && elementAt >= 0)
+                                    lowerPixel = srcData[imageVerticalOffset + lowerScanlineStride];
+                                else break;
+                                widthI++;
+                            }
                             if (lowerPixel != transparentValue) {
                                 // This has been identified as a pixel of an horizontal transparent
                                 // stripe
@@ -66,7 +116,8 @@
                                         srcDataArrays,
                                         dstDataArrays,
                                         imageDataVerticalOffset,
-                                        srcScanlineStride,
+                                        upperScanlineStride,
+                                        lowerScanlineStride,
                                         dstPixelOffset);
                                 copySource = false;
                             }
