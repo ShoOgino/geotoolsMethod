@@ -1,4 +1,4 @@
-    private void byteLoop(RasterAccessor src, RasterAccessor dst) {
+    private void ushortLoop(RasterAccessor src, RasterAccessor dst) {
 
         int dwidth = dst.getWidth();
         int dheight = dst.getHeight();
@@ -14,14 +14,15 @@
         int srcPixelStride = src.getPixelStride();
         int srcScanlineStride = src.getScanlineStride();
 
-        byte dstDataArrays[][] = dst.getByteDataArrays();
-        byte srcDataArrays[][] = src.getByteDataArrays();
-        byte srcData[] = srcDataArrays[numBands - 1];
+        short dstDataArrays[][] = dst.getShortDataArrays();
+        short srcDataArrays[][] = src.getShortDataArrays();
+        short srcData[] = srcDataArrays[numBands - 1];
 
         int srcScanlineOffset = srcBandOffsets[numBands - 1];
         int srcScanlineDataOffset = srcBandOffsets[srcOffsetsForBands[0]];
         int dstScanlineOffset[] = new int[numBands];
 
+        short transparentValue = noData.shortValue();
         for (int i = 0; i < numBands; i++) {
             dstScanlineOffset[i] = dstBandOffsets[i];
         }
@@ -36,13 +37,13 @@
             for (int i = 0; i < dwidth; i++) {
                 int imageVerticalOffset = imageOffset;
                 int imageDataVerticalOffset = imageDataOffset;
-                int centralPixel = srcData[imageVerticalOffset];
+                short centralPixel = srcData[imageVerticalOffset];
                 boolean copySource = true;
-                if (centralPixel == noData.intValue()) {
+                if (centralPixel == transparentValue) {
                     // Check if previous and next pixels are zero.
-                    int rightPixel = srcData[imageVerticalOffset + srcPixelStride];
-                    int leftPixel = srcData[imageVerticalOffset - srcPixelStride];
-                    if (rightPixel != noData.intValue() && leftPixel != noData.intValue()) {
+                    short rightPixel = srcData[imageVerticalOffset + srcPixelStride];
+                    short leftPixel = srcData[imageVerticalOffset - srcPixelStride];
+                    if (rightPixel != transparentValue && leftPixel != transparentValue) {
                         // This has been identified as a pixel of a vertical transparent stripe
                         fillAlgorithm.fillPixel(
                                 numBands,
@@ -54,10 +55,10 @@
                         copySource = false;
                     } else {
                         // A transparent pixel with adjacent transparent pixels along x
-                        int upperPixel = srcData[imageVerticalOffset - srcScanlineStride];
-                        if (upperPixel != noData.intValue()) {
-                            int lowerPixel = srcData[imageVerticalOffset + srcScanlineStride];
-                            if (lowerPixel != noData.intValue()) {
+                        short upperPixel = srcData[imageVerticalOffset - srcScanlineStride];
+                        if (upperPixel != transparentValue) {
+                            short lowerPixel = srcData[imageVerticalOffset + srcScanlineStride];
+                            if (lowerPixel != transparentValue) {
                                 // This has been identified as a pixel of an horizontal transparent
                                 // stripe
                                 fillAlgorithm.fillPixel(
