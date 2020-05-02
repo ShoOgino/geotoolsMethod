@@ -1,0 +1,42 @@
+        static Fields buildFromXml(InputStream inputStream) throws Exception {
+            Fields fields = new Fields();
+
+            // Document
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            Document document = builder.parse(inputStream);
+            Element root = document.getDocumentElement();
+
+            // Coordinate's fields names
+            Element coordNode = (Element) root.getElementsByTagName("Coordinate").item(0);
+            fields.lon = coordNode.getElementsByTagName("longitude").item(0).getTextContent();
+            fields.lat = coordNode.getElementsByTagName("latitude").item(0).getTextContent();
+
+            // Attributes
+            Element attributesNode = (Element) root.getElementsByTagName("Attributes").item(0);
+            NodeList attrNodes = attributesNode.getElementsByTagName("Attribute");
+            for (int i = 0; i < attrNodes.getLength(); i++) {
+                Row row = fields.new Row();
+
+                NodeList fieldNodes = attrNodes.item(i).getChildNodes();
+                int cnt = 0;
+                for (int j = 0; j < fieldNodes.getLength(); j++) {
+                    if (fieldNodes.item(j).getNodeType() == Node.ELEMENT_NODE) {
+                        Element fieldNode = (Element) fieldNodes.item(j);
+                        if (i == 0) {
+                            String fieldName = fieldNode.getNodeName();
+                            fields.names.add(fieldName);
+                            if (fieldName.equals(fields.lon)) fields.lonIndex = cnt;
+                            if (fieldName.equals(fields.lat)) fields.latIndex = cnt;
+                        }
+                        row.add(fieldNode.getTextContent());
+                        cnt++;
+                    }
+                }
+
+                fields.rows.add(row);
+            }
+
+            return fields;
+        }
+
