@@ -1,0 +1,72 @@
+    /**
+     * Do an initial scan of a bundle index to determine the row and column coverage contained in
+     * the bundle and create a bundle object for subsequent access
+     *
+     * @param bundleName -- path/name of the bundle file
+     * @param rowStart -- hex string yields the "base" row number for this bundle
+     * @param colStart -- hex string yields the "base" column number for this bundle
+     */
+    private void parseBundle(String bundleName, String rowStart, String colStart) {
+
+        // get the starting row and column number for this bundle/index pair
+        long baseRow = Long.parseLong(rowStart, HEXADECIMAL);
+        long baseColumn = Long.parseLong(colStart, HEXADECIMAL);
+
+        // as long as row and column are in allowable range ...
+        if (baseRow <= max_row_column && baseColumn <= max_row_column) {
+
+            TPKBundle bundle =
+                    new TPKBundle(
+                            bundleName,
+                            null,
+                            baseColumn,
+                            baseRow,
+                            this::TPKSupplier,
+                            this::zipEntryMapSupplier);
+
+            long indexReadOffset = DATA_HEADER_LENGTH; // skip first 64 bytes of index
+            for (int row = 0; row < BUNDLE_DIMENSION; row++) { // 128 columns of 128 rows
+                for (int col = 0; col < BUNDLE_DIMENSION; col++) {
+
+                    // calculate row and column this index entry is for
+                    long thisRow = baseRow + row;
+                    long thisColumn = baseColumn + col;
+
+                    // read the index entry and convert it to a data file offset
+                    TPKTile.TileInfo tileInfo = getTileInfo(bundle, indexReadOffset);
+
+                    // make sure the row and column are "in bounds" for this zoom level
+                    if (thisColumn <= max_row_column && thisRow <= max_row_column) {
+
+                        thisRow = max_row_column - thisRow;
+
+                        // if the tile is zero then the tile does not exist
+                        if (tileInfo.tileLength > 0) {
+                            // update min/max values for this bundle
+                            bundle.minRow = Math.min(bundle.minRow, thisRow);
+                            bundle.maxRow = Math.max(bundle.maxRow, thisRow);
+                            bundle.minColumn = Math.min(bundle.minColumn, thisColumn);
+                            bundle.maxColumn = Math.max(bundle.maxColumn, thisColumn);
+                        }
+                    }
+
+                    // quit early??
+                    if (thisRow == max_row_column && thisColumn > max_row_column) {
+                        col = BUNDLE_DIMENSION;
+                        row = BUNDLE_DIMENSION;
+                    }
+
+                    indexReadOffset += INDEX_ENTRY_LENGTH; // next slot in bundle index
+                }
+            }
+
+            // update min/max values for the zoom level
+            this.minRow = Math.min(this.minRow, bundle.minRow);
+            this.maxRow = Math.max(this.maxRow, bundle.maxRow);
+            this.minColumn = Math.min(this.minColumn, bundle.minColumn);
+            this.maxColumn = Math.max(this.maxColumn, bundle.maxColumn);
+
+            bundles.add(bundle);
+        }
+    }
+

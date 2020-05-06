@@ -1,0 +1,49 @@
+    /**
+     * Read the bundle index for the given set of tiles and return a corresponding list of TPKTile
+     * objects. Note that we read the index in the optimal order for this cache format
+     *
+     * @param top -- topmost row of coverage
+     * @param bottom -- bottommost row of coverage
+     * @param left -- leftmost column of coverage
+     * @param right -- rightmost column of coverage
+     * @param format -- format tile data is in (JPEG, PNG)
+     * @return -- list of TPKTile objects
+     */
+    private List<TPKTile> makeTileSet(long top, long bottom, long left, long right, String format) {
+        TPKBundle bundle = bundles.get(0);
+        int bundleIndex = 0;
+        List<TPKTile> tiles = new ArrayList<>();
+        for (long row = top; row >= bottom; row--) {
+            for (long col = left; col <= right; col++) {
+
+                // find bundle for tile
+                if (!bundle.inBundle(col, row)) {
+                    final long c = col;
+                    final long r = row;
+                    TPKBundle saveBundle = bundle;
+                    bundle =
+                            bundles.stream().filter(b -> b.inBundle(c, r)).findFirst().orElse(null);
+                    if (bundle == null) {
+                        bundle = saveBundle;
+                        continue;
+                    }
+                    bundleIndex = bundles.indexOf(bundle);
+                }
+
+                // calculate position of the tile index
+                long bundleRow = (max_row_column - row) - bundle.baseRow;
+                long indexReadOffset =
+                        DATA_HEADER_LENGTH
+                                + ((bundleRow * BUNDLE_DIMENSION) + (col - bundle.baseColumn))
+                                        * INDEX_ENTRY_LENGTH;
+
+                // read the tile index and get the offset to the tile data
+                TPKTile.TileInfo ti = getTileInfo(bundle, indexReadOffset);
+
+                TPKTile tile = new TPKTile(zoomLevel, col, row, format, ti, bundleIndex);
+                tiles.add(tile);
+            }
+        }
+        return tiles;
+    }
+
