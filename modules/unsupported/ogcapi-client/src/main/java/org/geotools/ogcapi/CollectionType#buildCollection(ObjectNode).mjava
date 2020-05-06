@@ -1,0 +1,57 @@
+    static CollectionType buildCollection(ObjectNode node) throws IOException {
+        CollectionType ret = new CollectionType();
+
+        if (node.has("links")) {
+            JsonNode links = node.get("links");
+            for (JsonNode link : links) {
+                ret.links.add(Link.buildLink((ObjectNode) link));
+            }
+        }
+        ret.setIdentifier(node.get("id").asText());
+        if (node.has("title")) {
+            ret.setTitle(node.get("title").asText());
+        }
+        if (node.has("description")) {
+            ret.setDescription(node.get("description").asText());
+        }
+        if (node.has("extent")) {
+            JsonNode spatial = node.get("extent").get("spatial");
+            CoordinateReferenceSystem crs = OgcApiUtils.parseCRS(spatial.get("crs").asText());
+
+            double[] coords = new double[4];
+            int i = 0;
+            ArrayNode box = (ArrayNode) spatial.get("bbox");
+            for (JsonNode c : box.get(0)) { // TODO - figure out how to pick the right
+                // element of the array
+                coords[i++] = c.asDouble();
+            }
+
+            ret.setExtent(new ReferencedEnvelope(coords[0], coords[2], coords[1], coords[3], crs));
+        }
+
+        if (node.has("crs")) {
+            JsonNode crs = node.get("crs");
+            for (JsonNode c : crs) {
+                ret.crs.add(OgcApiUtils.parseCRS(c.asText()));
+            }
+        }
+        if (node.has("styles")) {
+            // read array of styles
+            for (JsonNode s : node.get("styles")) {
+                StyleType style = new StyleType();
+                style.setIdentifier(s.get("id").asText());
+                style.setTitle(s.get("title").asText());
+                JsonNode links = s.get("links");
+                for (JsonNode l : links) {
+                    if ("stylesheet".equalsIgnoreCase(l.get("rel").asText())
+                            && "application/vnd.ogc.sld+xml"
+                                    .equalsIgnoreCase(l.get("type").asText())) {
+                        style.setSld(new URL(l.get("href").asText()));
+                    }
+                }
+                ret.styles.add(style);
+            }
+        }
+        return ret;
+    }
+
