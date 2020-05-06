@@ -1,0 +1,60 @@
+    /**
+     * @throws MalformedURLException
+     * @throws IOException
+     */
+    public void init() throws IOException {
+        map = new MapContent();
+
+        map.setTitle("Quickstart");
+
+        crs = DefaultGeographicCRS.WGS84;
+        ReferencedEnvelope env = new ReferencedEnvelope(-180, 180, -90, 90, crs);
+
+        map.getViewport().setCoordinateReferenceSystem(crs);
+        map.getViewport().setBounds(env);
+        URL f = this.getClass().getResource("data/110m_coastline.shp");
+
+        FileDataStore store = FileDataStoreFinder.getDataStore(URLs.urlToFile(f));
+        SimpleFeatureSource featureSource = store.getFeatureSource();
+        Style style = SLD.createSimpleStyle(featureSource.getSchema());
+        Layer layer = new FeatureLayer(featureSource, style);
+        map.addLayer(layer);
+        frame = new JMapFrame();
+        frame.setSize(1000, 450);
+
+        frame.setMapContent(map);
+        frame.setTitle("API Test Viewer");
+        ImageIcon imageIcon = new ImageIcon(this.getClass().getResource("add.png"));
+        layerDialog = new LayerDialog(this, "Select a layer");
+        JButton button = new JButton(imageIcon);
+        button.addActionListener(
+                new ActionListener() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        layerDialog.updateLayers(collections);
+                        layerDialog.setVisible(true);
+                        String newLayer = layerDialog.getLayer();
+                        if (newLayer != null && !newLayer.isEmpty()) {
+                            SwingUtilities.invokeLater(
+                                    new Runnable() {
+                                        public void run() {
+                                            try {
+                                                addLayer(newLayer);
+                                            } catch (IOException
+                                                    | SAXException
+                                                    | ParserConfigurationException e1) {
+                                                e1.printStackTrace();
+                                            }
+                                        }
+                                    });
+                        }
+                    }
+                });
+        frame.enableToolBar(true);
+        frame.enableStatusBar(true);
+
+        frame.getToolBar().add(button);
+
+        frame.setVisible(true);
+    }
+

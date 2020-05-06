@@ -1,0 +1,52 @@
+    /**
+     * Transforms the specified (<var>x</var>,<var>y</var>) coordinates and stores the result in
+     * {@code ptDst}.
+     */
+    protected Point2D inverseTransformNormalized(double x, double y, final Point2D ptDst)
+            throws ProjectionException {
+
+        double[] interruptions;
+        double[] central_merids;
+        double offset = computeOffset();
+        int i = 0;
+        double central_merid = 0;
+        Point2D p;
+        Point2D shift;
+        double thresh_map = LAT_THRESH; // spherical model
+
+        if (y >= 0) {
+            central_merids = CENTRAL_MERID_NORTH;
+            interruptions = new double[INTERRUP_NORTH.length];
+            for (int j = 0; j < INTERRUP_NORTH.length; j++)
+                interruptions[j] = sinu.transformNormalized(INTERRUP_NORTH[j], 0, null).getX();
+        } else {
+            central_merids = CENTRAL_MERID_SOUTH;
+            offset = -offset;
+            interruptions = new double[INTERRUP_SOUTH.length];
+            for (int j = 0; j < INTERRUP_SOUTH.length; j++)
+                interruptions[j] = sinu.transformNormalized(INTERRUP_SOUTH[j], 0, null).getX();
+        }
+
+        if (x >= interruptions[interruptions.length - 1]) i = interruptions.length - 1;
+        else if (x < interruptions[0]) i = 1;
+        else while (x >= interruptions[i]) i++;
+
+        central_merid = central_merids[i - 1];
+        shift = sinu.transformNormalized(central_merid, 0, null);
+
+        if (y > thresh_map || y < -thresh_map) { // Mollweide
+            p = moll.inverseTransformNormalized(x - shift.getX(), y + offset, ptDst);
+        } else { // Sinusoidal in spherical mode
+            p = new Point2D.Double((x - shift.getX()) / Math.cos(y), y);
+        }
+
+        p.setLocation(p.getX() + central_merid, p.getY());
+
+        if (ptDst != null) {
+            ptDst.setLocation(p.getX(), p.getY());
+            return ptDst;
+        } else {
+            return p;
+        }
+    }
+

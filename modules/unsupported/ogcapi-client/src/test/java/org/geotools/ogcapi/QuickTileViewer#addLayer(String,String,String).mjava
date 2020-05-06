@@ -1,0 +1,61 @@
+    void addLayer(String identifier, String style, String format)
+            throws IOException, SAXException, ParserConfigurationException {
+        CollectionType col = collections.collections.get(identifier);
+        for (Link l : col.links) {
+            if ("items".equalsIgnoreCase(l.rel) && format.equalsIgnoreCase(l.type)) {
+                DataStore ds = null;
+                URL url = new URL(l.href);
+                File tempFile;
+                switch (l.type) {
+                    case APPLICATION_JSON:
+                        ds = new GeoJSONDataStore(url);
+                        break;
+                    case APPLICATION_GEOPKG:
+                        // Fetch file to temp disk
+                        tempFile = File.createTempFile("TileViewer", ".gpkg");
+                        tempFile.deleteOnExit();
+                        try (ReadableByteChannel rbc = Channels.newChannel(url.openStream());
+                                FileOutputStream fos = new FileOutputStream(tempFile)) {
+                            fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
+
+                            Map<String, Object> params = new HashMap<String, Object>();
+                            params.put(
+                                    GeoPkgDataStoreFactory.DBTYPE.key,
+                                    GeoPkgDataStoreFactory.DBTYPE.sample);
+                            params.put(GeoPkgDataStoreFactory.DATABASE.key, tempFile);
+                            params.put(GeoPkgDataStoreFactory.READ_ONLY.key, true);
+                            ds = DataStoreFinder.getDataStore(params);
+                        }
+                        break;
+                    case APPLICATION_MVT:
+                        throw new UnsupportedImplementationException(
+                                APPLICATION_MVT + " is not currently supported");
+                    case APPLICATION_KML:
+                        throw new UnsupportedImplementationException(
+                                APPLICATION_KML + " is not currently supported");
+                    case APPLICATION_GML_32:
+                        throw new UnsupportedImplementationException(
+                                APPLICATION_GML_32 + " is not currently supported");
+
+                    default:
+                        throw new RuntimeException("Unknown mime/type requested " + format);
+                }
+                String name = ds.getTypeNames()[0];
+                SimpleFeatureSource featureSource = ds.getFeatureSource(name);
+                Style sld = null;
+                if (style == null || style.isEmpty()) {
+                    sld = col.styles.get(0).sld;
+                } else {
+                    for (StyleType s : col.styles) {
+                        if (s.getIdentifier().equalsIgnoreCase(style)) {
+                            sld = s.sld;
+                            break;
+                        }
+                    }
+                }
+                Layer layer = new FeatureLayer(featureSource, sld);
+                map.addLayer(layer);
+            }
+        }
+    }
+

@@ -1,0 +1,41 @@
+    @Test
+    public void testNPEOutsideValidArea() throws Exception {
+        StreamingRendererTester tester = new StreamingRendererTester();
+        String wkt =
+                "PROJCS[\"Homolosine\",GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563 ] ], PRIMEM[\"Greenwich\",0.0], UNIT[\"degree\",0.01745329251994328 ]],PROJECTION[\"Goode_Homolosine\"],UNIT[\"m\",1.0] ]";
+        CoordinateReferenceSystem homolosine = CRS.parseWKT(wkt);
+        ReferencedEnvelope re = new ReferencedEnvelope(-180, -170, -90, -80, WGS84);
+        ReferencedEnvelope cornerHomolosine = re.transform(homolosine, true);
+        // move it outside of valid space
+        cornerHomolosine.translate(0, -cornerHomolosine.getHeight() * 2);
+
+        // create the map content
+        SimpleFeatureCollection lines = createLineCollection();
+        Style lineStyle = createLineStyle();
+        MapContent mapContent = new MapContent();
+        mapContent.addLayer(new FeatureLayer(lines, lineStyle));
+
+        // render
+        StreamingRenderer sr = new StreamingRenderer();
+        Map hints = new HashMap();
+        hints.put(StreamingRenderer.ADVANCED_PROJECTION_HANDLING_KEY, true);
+        hints.put(StreamingRenderer.ADVANCED_PROJECTION_DENSIFICATION_KEY, true);
+        sr.setRendererHints(hints);
+        sr.addRenderListener(
+                new RenderListener() {
+                    public void featureRenderer(SimpleFeature feature) {
+                        features++;
+                    }
+
+                    public void errorOccurred(Exception e) {
+                        errors++;
+                    }
+                });
+        errors = 0;
+        sr.setMapContent(mapContent);
+        BufferedImage image = new BufferedImage(200, 200, BufferedImage.TYPE_4BYTE_ABGR);
+        sr.paint((Graphics2D) image.getGraphics(), new Rectangle(200, 200), cornerHomolosine);
+        mapContent.dispose();
+        assertEquals(0, errors);
+    }
+
