@@ -1,0 +1,55 @@
+    /**
+     * GeoServer can't display PolygonZ shapefile
+     *
+     * @throws ShapefileException
+     * @throws IOException
+     */
+    @Test
+    public void testGeot6599() throws ShapefileException, IOException {
+        URL url = TestData.url(ShapefileDataStore.class, "mzvalues/building.shp");
+        ShapefileDataStore store = new ShapefileDataStore(url);
+        SimpleFeature feature = DataUtilities.first(store.getFeatureSource().getFeatures());
+
+        Double[][] expected = {
+            {-72.7143910882242, 41.7223262507114, 0.0},
+            {-72.7144337255386, 41.7223237677143, 73.2161},
+            {-72.7144418180624, 41.7223378289697, 77.1782},
+            {-72.7144182172218, 41.7223454525823, 67.7665},
+            {-72.7143004326287, 41.7223834996066, 68.0616},
+            {-72.7142721209997, 41.7223343062061, 69.9239},
+            {-72.7143910882242, 41.7223262507114, 0.0}
+        };
+
+        MultiPolygon geom = (MultiPolygon) feature.getDefaultGeometry();
+
+        for (int i = 0; i < expected.length; i++) {
+            Coordinate coordinate = geom.getCoordinates()[i];
+            assertEquals("wrong x", expected[i][0], coordinate.getX(), 0.001);
+            assertEquals("wrong y", expected[i][1], coordinate.getY(), 0.001);
+            assertEquals("wrong z", expected[i][2], coordinate.getZ(), 0.00001);
+        }
+
+        Query q = new Query(store.getTypeNames()[0]);
+
+        if (q.getHints() == null) {
+            q.setHints(new Hints(Hints.FEATURE_2D, Boolean.TRUE));
+        } else {
+            q.getHints().put(Hints.FEATURE_2D, Boolean.TRUE);
+        }
+        try (SimpleFeatureIterator itr = store.getFeatureSource().getFeatures(q).features()) {
+            while (itr.hasNext()) {
+                feature = itr.next();
+                geom = (MultiPolygon) feature.getDefaultGeometry();
+                // System.out.println(feature.getID());
+                if (geom != null) {
+                    // System.out.println(geom.getDimension());
+                    // System.out.println(geom.getCoordinate());
+                    Geometry geometry = LiteCoordinateSequence.cloneGeometry(geom);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            fail();
+        }
+    }
+
