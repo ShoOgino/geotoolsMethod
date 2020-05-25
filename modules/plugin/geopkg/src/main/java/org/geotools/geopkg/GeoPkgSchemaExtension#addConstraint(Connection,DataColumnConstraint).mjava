@@ -1,0 +1,50 @@
+    public void addConstraint(Connection cx, DataColumnConstraint constraint) throws SQLException {
+        String constraintName = constraint.getName();
+        String sql =
+                format(
+                        "INSERT INTO %s VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+                        GeoPackage.DATA_COLUMN_CONSTRAINTS);
+        if (constraint instanceof DataColumnConstraint.Enum) {
+            DataColumnConstraint.Enum cEnum = (DataColumnConstraint.Enum) constraint;
+            for (Map.Entry<String, String> entry : cEnum.getValues().entrySet()) {
+                try (PreparedStatement ps = cx.prepareStatement(sql)) {
+                    ps.setString(1, constraintName);
+                    ps.setString(2, "enum");
+                    ps.setString(3, entry.getKey());
+                    ps.setObject(4, null);
+                    ps.setObject(5, null);
+                    ps.setObject(6, null);
+                    ps.setObject(7, null);
+                    ps.setString(8, entry.getValue());
+                    ps.executeUpdate();
+                }
+            }
+        } else if (constraint instanceof DataColumnConstraint.Glob) {
+            try (PreparedStatement ps = cx.prepareStatement(sql)) {
+                ps.setString(1, constraintName);
+                ps.setString(2, "glob");
+                ps.setString(3, ((DataColumnConstraint.Glob) constraint).getGlob());
+                ps.setObject(4, null);
+                ps.setObject(5, null);
+                ps.setObject(6, null);
+                ps.setObject(7, null);
+                ps.setString(8, null);
+                ps.executeUpdate();
+            }
+        } else if (constraint instanceof DataColumnConstraint.Range) {
+            DataColumnConstraint.Range rangeConstraint = (DataColumnConstraint.Range) constraint;
+            NumberRange range = rangeConstraint.getRange();
+            try (PreparedStatement ps = cx.prepareStatement(sql)) {
+                ps.setString(1, constraintName);
+                ps.setString(2, "glob");
+                ps.setString(3, null);
+                ps.setDouble(4, range.getMinimum());
+                ps.setBoolean(5, range.isMinIncluded());
+                ps.setDouble(6, range.getMaximum());
+                ps.setBoolean(7, range.isMaxIncluded());
+                ps.setString(8, null);
+                ps.executeUpdate();
+            }
+        }
+    }
+

@@ -1,0 +1,26 @@
+    @Override
+    public Filter getRestrictions(ResultSet columns, Connection cx) throws SQLException {
+        String tbl = columns.getString("TABLE_NAME");
+        String col = columns.getString("COLUMN_NAME");
+
+        // if it's an enumeration, switch data type to string
+        GeoPackage geoPackage = geopkg();
+        try {
+            GeoPkgSchemaExtension schemas = geoPackage.getExtension(GeoPkgSchemaExtension.class);
+            List<DataColumn> dataColumns = schemas.getDataColumns(tbl);
+            for (DataColumn dataColumn : dataColumns) {
+                if (col.equals(dataColumn.getColumnName())) {
+                    DataColumnConstraint constraint = dataColumn.getConstraint();
+                    if (constraint instanceof DataColumnConstraint.Enum) {
+                        DataColumnConstraint.Enum ec = (DataColumnConstraint.Enum) constraint;
+                        return FeatureTypes.createFieldOptions(ec.getValues().values());
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throwSQLException(e);
+        }
+
+        return null;
+    }
+

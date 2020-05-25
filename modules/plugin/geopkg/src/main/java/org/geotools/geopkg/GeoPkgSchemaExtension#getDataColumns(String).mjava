@@ -1,0 +1,46 @@
+    public List<DataColumn> getDataColumns(String tableName) throws IOException {
+        List<DataColumn> result = new ArrayList<>();
+        if (!isRegistered()) {
+            return Collections.emptyList();
+        }
+        try (Connection cx = geoPackage.connPool.getConnection()) {
+            String sql =
+                    format(
+                            "SELECT *"
+                                    + " FROM %s"
+                                    + " WHERE table_name = ? order by table_name, column_name",
+                            GeoPackage.DATA_COLUMNS);
+
+            try (PreparedStatement ps = cx.prepareStatement(sql)) {
+                ps.setString(1, tableName);
+
+                Map<String, String> enumValues = null;
+                try (ResultSet rs = ps.executeQuery()) {
+                    String columnNamePrev = null;
+                    while (rs.next()) {
+                        DataColumn dc = new DataColumn();
+                        String columnName = rs.getString("column_name");
+
+                        dc.setColumnName(columnName);
+                        dc.setName(rs.getString("column_name"));
+                        dc.setTitle(rs.getString("title"));
+                        dc.setDescription(rs.getString("description"));
+                        dc.setMimeType(rs.getString("mime_type"));
+
+                        String constraintName = rs.getString("constraint_name");
+                        if (constraintName != null) {
+                            dc.setConstraint(getConstraint(constraintName));
+                        }
+
+                        result.add(dc);
+                    }
+                }
+            }
+
+        } catch (SQLException e) {
+            throw new IOException(e);
+        }
+
+        return result;
+    }
+

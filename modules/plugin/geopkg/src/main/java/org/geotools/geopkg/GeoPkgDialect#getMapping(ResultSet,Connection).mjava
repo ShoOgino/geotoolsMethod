@@ -16,8 +16,7 @@
             LOGGER.fine(String.format("%s; 1=%s, 2=%s", sql, tbl, col));
         }
 
-        PreparedStatement ps = cx.prepareStatement(sql);
-        try {
+        try (PreparedStatement ps = cx.prepareStatement(sql)) {
             ps.setString(1, tbl);
             ps.setString(2, col);
 
@@ -33,8 +32,23 @@
             } finally {
                 dataStore.closeSafe(rs);
             }
-        } finally {
-            dataStore.closeSafe(ps);
+        }
+
+        // if it's an enumeration, switch data type to string
+        GeoPackage geoPackage = geopkg();
+        try {
+            GeoPkgSchemaExtension extension = geoPackage.getExtension(GeoPkgSchemaExtension.class);
+            List<DataColumn> dataColumns = extension.getDataColumns(tbl);
+            for (DataColumn dataColumn : dataColumns) {
+                if (col.equals(dataColumn.getColumnName())) {
+                    DataColumnConstraint constraint = dataColumn.getConstraint();
+                    if (constraint instanceof DataColumnConstraint.Enum) {
+                        return String.class;
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throwSQLException(e);
         }
 
         return null;

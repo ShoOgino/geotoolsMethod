@@ -56,5 +56,39 @@
         } catch (IOException e) {
             throw new SQLException(e);
         }
+
+        // check if enum columns need to be declared, and do so
+        for (AttributeDescriptor ad : featureType.getAttributeDescriptors()) {
+            DataColumn dc = (DataColumn) ad.getUserData().get(GeoPackage.DATA_COLUMN);
+            if (dc != null) {
+                if (!ad.getLocalName().equals(dc.getColumnName())) {
+                    throw new IllegalArgumentException(
+                            "Expected column name "
+                                    + ad.getLocalName()
+                                    + " but got"
+                                    + dc.getColumnName());
+                }
+                geopkg.getExtension(GeoPkgSchemaExtension.class)
+                        .addDataColumn(featureType.getTypeName(), dc);
+            } else {
+                List<?> options = FeatureTypes.getFieldOptions(ad);
+                if (options != null && !options.isEmpty()) {
+                    dc = new DataColumn();
+                    dc.setColumnName(ad.getLocalName());
+                    dc.setName(ad.getLocalName());
+                    Map<String, String> optionsMap = new LinkedHashMap<>();
+                    for (int i = 0; i < options.size(); i++) {
+                        optionsMap.put(String.valueOf(i), String.valueOf(options.get(i)));
+                    }
+                    String constraintName =
+                            featureType.getTypeName() + "_" + ad.getLocalName() + "_enum";
+                    DataColumnConstraint.Enum dcc =
+                            new DataColumnConstraint.Enum(constraintName, optionsMap);
+                    dc.setConstraint(dcc);
+                    geopkg.getExtension(GeoPkgSchemaExtension.class)
+                            .addDataColumn(featureType.getTypeName(), dc);
+                }
+            }
+        }
     }
 
