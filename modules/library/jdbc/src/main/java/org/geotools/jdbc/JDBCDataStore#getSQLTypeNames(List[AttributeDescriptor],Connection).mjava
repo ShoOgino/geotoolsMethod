@@ -4,18 +4,25 @@
      * <p>This method uses a combination of dialect mappings and database metadata to determine
      * which sql types map to the specified classes.
      */
-    private String[] getSQLTypeNames(Class[] classes, Connection cx) throws SQLException {
+    private String[] getSQLTypeNames(List<AttributeDescriptor> descriptors, Connection cx)
+            throws SQLException {
         // figure out what the sql types are corresponding to the feature type
         // attributes
-        int[] sqlTypes = new int[classes.length];
+        int[] sqlTypes = new int[descriptors.size()];
         String[] sqlTypeNames = new String[sqlTypes.length];
 
-        for (int i = 0; i < classes.length; i++) {
-            Class clazz = classes[i];
-            Integer sqlType = getMapping(clazz);
+        for (int i = 0; i < descriptors.size(); i++) {
+            AttributeDescriptor ad = descriptors.get(i);
+            Class clazz = ad.getType().getBinding();
+            Integer sqlType = dialect.getSQLType(ad);
 
             if (sqlType == null) {
-                LOGGER.warning("No sql type mapping for: " + clazz);
+                sqlType = getMapping(clazz);
+            }
+
+            if (sqlType == null) {
+                LOGGER.warning(
+                        "No sql type mapping for: " + ad.getLocalName() + " of type " + clazz);
                 sqlType = Types.OTHER;
             }
 

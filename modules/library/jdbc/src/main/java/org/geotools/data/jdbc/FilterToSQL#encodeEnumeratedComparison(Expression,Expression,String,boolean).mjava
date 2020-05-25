@@ -1,0 +1,70 @@
+    private void encodeEnumeratedComparison(
+            Expression right, Expression left, String type, boolean matchCase) throws IOException {
+        EnumMapper mapper = getEnumMapper(right);
+        if (mapper != null) {
+            PropertyName rightName = (PropertyName) right;
+            if (left instanceof Literal) {
+                String value = left.evaluate(null, String.class);
+                Integer code = mapper.fromString(value, matchCase);
+                if (code == null) {
+                    out.write("FALSE");
+                } else {
+                    out.write(String.valueOf(code));
+                    out.write(" " + type + " ");
+                    writeEncodedField(
+                            Integer.class,
+                            rightName,
+                            (AttributeDescriptor) right.evaluate(featureType));
+                }
+            } else {
+                out.write("CASE ");
+                if (!matchCase) {
+                    out.write("lower(");
+                    writeBinaryExpressionMember(left, Integer.class);
+                    out.write(")");
+                }
+                for (Map.Entry<String, Integer> entry : mapper.getStringToInteger().entrySet()) {
+                    out.write("WHEN '" + entry.getKey() + "' THEN " + entry.getValue() + "\n");
+                }
+                out.write("END");
+                out.write(" " + type + " ");
+                writeEncodedField(
+                        Integer.class,
+                        rightName,
+                        (AttributeDescriptor) right.evaluate(featureType));
+            }
+        } else {
+            mapper = getEnumMapper(left);
+
+            PropertyName leftName = (PropertyName) left;
+            if (right instanceof Literal) {
+                String value = right.evaluate(null, String.class);
+                Integer code = mapper.fromString(value, matchCase);
+                if (code == null) {
+                    out.write("FALSE");
+                } else {
+                    writeEncodedField(
+                            Integer.class,
+                            leftName,
+                            (AttributeDescriptor) left.evaluate(featureType));
+                    out.write(" " + type + " ");
+                    out.write(String.valueOf(code));
+                }
+            } else {
+                writeEncodedField(
+                        Integer.class, leftName, (AttributeDescriptor) left.evaluate(featureType));
+                out.write(" " + type + " ");
+                out.write("CASE ");
+                if (!matchCase) {
+                    out.write("lower(");
+                    writeBinaryExpressionMember(right, Integer.class);
+                    out.write(")");
+                }
+                for (Map.Entry<String, Integer> entry : mapper.getStringToInteger().entrySet()) {
+                    out.write("WHEN '" + entry.getKey() + "' THEN " + entry.getValue() + "\n");
+                }
+                out.write("END");
+            }
+        }
+    }
+
