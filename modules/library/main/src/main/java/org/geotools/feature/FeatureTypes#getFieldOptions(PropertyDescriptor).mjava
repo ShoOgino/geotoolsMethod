@@ -1,0 +1,60 @@
+    /**
+     * Returns the eventual list of possible values accepted by this
+     *
+     * @param descriptor
+     * @return
+     */
+    public static List<?> getFieldOptions(PropertyDescriptor descriptor) {
+        PropertyType type = descriptor.getType();
+        List<Object> options = null;
+        while (type != null) {
+            // TODO: We should really go through all the restrictions and find
+            // the minimum of all the length restrictions; for now we assume an
+            // override behavior.
+            for (Filter f : type.getRestrictions()) {
+                List filterLength = null;
+                List<Object> currentOptions = null;
+                boolean foundOptionsPattern = true;
+                if (f == null) {
+                    continue;
+                }
+                if (f instanceof PropertyIsEqualTo) {
+                    Object value = getOption((PropertyIsEqualTo) f);
+                    if (value != null) {
+                        currentOptions = Collections.singletonList(value);
+                    } else {
+                        continue;
+                    }
+                } else if (f instanceof Or) {
+                    Or or = (Or) f;
+                    currentOptions = new ArrayList<>();
+                    for (Filter child : or.getChildren()) {
+                        if (child instanceof PropertyIsEqualTo) {
+                            Object value = getOption((PropertyIsEqualTo) child);
+                            if (value != null) {
+                                currentOptions.add(value);
+                            } else {
+                                foundOptionsPattern = false;
+                                continue;
+                            }
+                        } else {
+                            foundOptionsPattern = false;
+                        }
+                    }
+                }
+
+                if (foundOptionsPattern) {
+                    // intersect all options patterns
+                    if (options != null) {
+                        options.retainAll(currentOptions);
+                    } else {
+                        options = currentOptions;
+                    }
+                }
+            }
+            type = type.getSuper();
+        }
+
+        return options != null && !options.isEmpty() ? options : null;
+    }
+
