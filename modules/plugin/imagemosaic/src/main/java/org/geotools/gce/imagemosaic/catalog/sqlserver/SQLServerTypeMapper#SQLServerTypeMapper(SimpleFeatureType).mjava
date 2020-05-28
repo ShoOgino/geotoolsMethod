@@ -1,0 +1,31 @@
+    /** Create a new {@link SQLServerTypeMapper} on top of the original featureType provided */
+    public SQLServerTypeMapper(SimpleFeatureType featureType) throws CQLException {
+        wrappedFeatureType = featureType;
+        originalName = featureType.getName();
+        // When the geometry index will be created on the table, it will have an identifier
+        // as featureType name + "_" + geometryName + "_index" so that the max
+        // characters limit will be passed again. Thus the remap of the name takes
+        // the length of geometry index name in consideration
+        String indexPart = "_" + featureType.getGeometryDescriptor().getLocalName() + "_index";
+        mappedName = originalName.getLocalPart();
+        mappedName = remap(mappedName, MAX_LENGTH - indexPart.toCharArray().length);
+        List<AttributeDescriptor> attributes = featureType.getAttributeDescriptors();
+        definitions = new LinkedList<Definition>();
+        definitionsMapping = new HashMap<Name, Definition>();
+
+        // Loop over attributes and prepare the definitions
+        for (AttributeDescriptor attribute : attributes) {
+            final String originalAttribute = attribute.getLocalName();
+            final AttributeType type = attribute.getType();
+            final Class<?> binding = type.getBinding();
+            String attributeName = remap(originalAttribute);
+
+            // Create the definition to map the original attribute to the SQLServer specific one
+            final Definition definition =
+                    new Definition(originalAttribute, ECQL.toExpression(attributeName), binding);
+            definitions.add(definition);
+            definitionsMapping.put(attribute.getName(), definition);
+        }
+        remapFeatureType();
+    }
+
