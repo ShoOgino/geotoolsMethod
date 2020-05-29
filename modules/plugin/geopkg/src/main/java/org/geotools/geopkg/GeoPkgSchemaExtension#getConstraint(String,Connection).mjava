@@ -1,0 +1,56 @@
+    DataColumnConstraint getConstraint(String contraintName, Connection cx) throws SQLException {
+        if (!isRegistered(cx)) {
+            return null;
+        }
+        String sql =
+                format(
+                        "SELECT *" + " FROM %s dcc " + " WHERE dcc.constraint_name = ?",
+                        GeoPackage.DATA_COLUMN_CONSTRAINTS);
+
+        DataColumnConstraint constraint = null;
+        try (PreparedStatement ps = cx.prepareStatement(sql)) {
+            ps.setString(1, contraintName);
+
+            Map<String, String> enumValues = null;
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String constraintName = rs.getString("constraint_name");
+                    String constraintType = rs.getString("constraint_type");
+
+                    if (constraint == null) {
+                        if ("enum".equals(constraintType)) {
+                            // enum values to be populated later
+                            enumValues = new LinkedHashMap<>();
+                            constraint = new DataColumnConstraint.Enum(constraintName, enumValues);
+                        } else if ("glob".equals(constraintType)) {
+                            constraint =
+                                    new DataColumnConstraint.Glob(
+                                            constraintName, rs.getString("value"));
+                        } else if ("range".equals(constraintType)) {
+                            Double min = rs.getDouble("min");
+                            boolean minInclusve = rs.getBoolean("min_is_inclusive");
+                            Double max = rs.getDouble("max");
+                            boolean maxInclusve = rs.getBoolean("max_is_inclusive");
+                            NumberRange<Double> range =
+                                    new NumberRange<Double>(
+                                            Double.class, min, minInclusve, max, maxInclusve);
+                            constraint =
+                                    new DataColumnConstraint.Range<Double>(constraintName, range);
+                        } else {
+                            LOGGER.warning(
+                                    "Cannot process a constraint of type "
+                                            + constraintType
+                                            + ", ignoring");
+                        }
+                    }
+
+                    if ("enum".equals(constraintType)) {
+                        // just collecting values for the enum
+                        enumValues.put(rs.getString("value"), rs.getString("description"));
+                    }
+                }
+            }
+        }
+        return constraint;
+    }
+

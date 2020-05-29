@@ -1,0 +1,36 @@
+    @Test
+    public void testCreateFeatureEntryExclusive() throws Exception {
+        // custom configuration optimizing write performance for a straigth GeoPackage creation,
+        // e.g., the use case of the GeoPackage WPS process in GeoServer
+        SQLiteConfig config = new SQLiteConfig();
+        config.setJournalMode(SQLiteConfig.JournalMode.MEMORY);
+        config.setPragma(SQLiteConfig.Pragma.SYNCHRONOUS, "OFF");
+        config.setTransactionMode(SQLiteConfig.TransactionMode.DEFERRED);
+        config.setReadUncommited(true);
+        config.setLockingMode(SQLiteConfig.LockingMode.EXCLUSIVE);
+
+        // create a geopackage that will be accessed in creation mode
+        File tempFile = File.createTempFile("geopkg-exclusive", "db", new File("target"));
+        try (GeoPackage geopkg = new GeoPackage(tempFile, config)) {
+            geopkg.init();
+
+            ShapefileDataStore shp = new ShapefileDataStore(setUpShapefile());
+
+            FeatureEntry entry = new FeatureEntry();
+            fs = shp.getFeatureSource();
+            entry.setBounds(fs.getBounds());
+            geopkg.add(entry, shp.getFeatureSource(), null);
+            geopkg.createSpatialIndex(entry);
+
+            // check contents
+            try (SimpleFeatureReader re = Features.simple(shp.getFeatureReader());
+                    SimpleFeatureReader ra = geopkg.reader(entry, null, null)) {
+
+                while (re.hasNext()) {
+                    assertTrue(ra.hasNext());
+                    assertSimilar(re.next(), ra.next());
+                }
+            }
+        }
+    }
+

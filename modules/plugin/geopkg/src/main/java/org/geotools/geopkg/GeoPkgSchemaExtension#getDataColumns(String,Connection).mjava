@@ -1,0 +1,40 @@
+    List<DataColumn> getDataColumns(String tableName, Connection cx)
+            throws IOException, SQLException {
+        List<DataColumn> result = new ArrayList<>();
+        if (!isRegistered(cx)) {
+            return Collections.emptyList();
+        }
+        String sql =
+                format(
+                        "SELECT *"
+                                + " FROM %s"
+                                + " WHERE table_name = ? order by table_name, column_name",
+                        GeoPackage.DATA_COLUMNS);
+
+        try (PreparedStatement ps = cx.prepareStatement(sql)) {
+            ps.setString(1, tableName);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    DataColumn dc = new DataColumn();
+                    String columnName = rs.getString("column_name");
+
+                    dc.setColumnName(columnName);
+                    dc.setName(rs.getString("column_name"));
+                    dc.setTitle(rs.getString("title"));
+                    dc.setDescription(rs.getString("description"));
+                    dc.setMimeType(rs.getString("mime_type"));
+
+                    String constraintName = rs.getString("constraint_name");
+                    if (constraintName != null) {
+                        dc.setConstraint(getConstraint(constraintName, cx));
+                    }
+
+                    result.add(dc);
+                }
+            }
+        }
+
+        return result;
+    }
+
