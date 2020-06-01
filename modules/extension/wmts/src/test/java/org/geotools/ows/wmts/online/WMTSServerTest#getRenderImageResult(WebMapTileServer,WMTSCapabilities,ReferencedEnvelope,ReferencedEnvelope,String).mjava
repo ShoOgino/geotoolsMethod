@@ -1,0 +1,29 @@
+    private RenderedImage getRenderImageResult(
+            WebMapTileServer wmts,
+            WMTSCapabilities capabilities,
+            ReferencedEnvelope bboxes,
+            ReferencedEnvelope requested,
+            String layerName)
+            throws IOException {
+
+        WMTSLayer layer = capabilities.getLayer(layerName);
+        assertNotNull(layer);
+        layer.setBoundingBoxes(new CRSEnvelope(bboxes));
+        layer.setSrs(layer.getBoundingBoxes().keySet());
+
+        WMTSMapLayer mapLayer = new WMTSMapLayer(wmts, layer);
+        WMTSCoverageReader wmtsReader = mapLayer.getReader();
+        Rectangle rectangle = new Rectangle(0, 0, 768, 589);
+        GridGeometry2D grid = new GridGeometry2D(new GridEnvelope2D(rectangle), requested);
+        final Parameter<Interpolation> readInterpolation =
+                (Parameter<Interpolation>) AbstractGridFormat.INTERPOLATION.createValue();
+        readInterpolation.setValue(Interpolation.getInstance(Interpolation.INTERP_NEAREST));
+        Parameter<GridGeometry2D> readGG =
+                (Parameter<GridGeometry2D>) AbstractGridFormat.READ_GRIDGEOMETRY2D.createValue();
+        readGG.setValue(grid);
+
+        return wmtsReader
+                .read(new GeneralParameterValue[] {readGG, readInterpolation})
+                .getRenderedImage();
+    }
+
