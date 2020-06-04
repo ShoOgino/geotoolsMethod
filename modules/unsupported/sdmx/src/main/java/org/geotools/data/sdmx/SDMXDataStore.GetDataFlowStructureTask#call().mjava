@@ -1,0 +1,36 @@
+        public String call() {
+            DataFlowStructure dfs = null;
+            try {
+                dfs =
+                        SDMXClientFactory.createClient(this.ds.provider)
+                                .getDataFlowStructure(df.getDsdIdentifier(), true);
+            } catch (SdmxException e) {
+                LOGGER.log(Level.SEVERE, "SDMX Error during retrieval of dataflow structuree", e);
+            }
+            synchronized (this.ds.dataflowStructures) {
+                this.ds.dataflowStructures.put(dfKey, dfs);
+            }
+
+            String ftypeName = SDMXDataStore.composeDataflowTypeName(dfKey);
+            Name name = new NameImpl(ds.namespace.toExternalForm(), ftypeName);
+            ContentEntry entry = new ContentEntry(this.ds, name);
+            synchronized (this.ds.entries) {
+                this.ds.entries.put(name, entry);
+            }
+
+            // Adds the dimension typename
+            String dimName = SDMXDataStore.composeDimensionTypeName(dfKey);
+            LOGGER.log(
+                    Level.INFO,
+                    String.format("Added SDMX feature types: %s, %s", ftypeName, dimName));
+
+            ContentEntry dimEntry =
+                    new ContentEntry(this.ds, new NameImpl(ds.namespace.toExternalForm(), dimName));
+            synchronized (this.ds.entries) {
+                this.ds.entries.put(
+                        new NameImpl(this.ds.namespace.toExternalForm(), dimName), dimEntry);
+            }
+
+            return this.dfKey;
+        }
+

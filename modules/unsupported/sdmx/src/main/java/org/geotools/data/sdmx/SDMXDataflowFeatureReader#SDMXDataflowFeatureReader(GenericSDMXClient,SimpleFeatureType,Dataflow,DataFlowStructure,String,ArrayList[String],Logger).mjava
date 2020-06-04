@@ -1,0 +1,37 @@
+    public SDMXDataflowFeatureReader(
+            GenericSDMXClient clientIn,
+            SimpleFeatureType featureTypeIn,
+            Dataflow dataflowIn,
+            DataFlowStructure dfStructureIn,
+            String sdmxConstraints,
+            ArrayList<String> sdmxTimePeriods,
+            Logger logger)
+            throws IOException, SdmxException {
+
+        super(clientIn, featureTypeIn, dataflowIn, dfStructureIn, logger);
+
+        try {
+            this.tsIter =
+                    this.client
+                            .getTimeSeries(
+                                    dataflowIn,
+                                    dfStructureIn,
+                                    sdmxConstraints,
+                                    sdmxTimePeriods.size() > 1 ? sdmxTimePeriods.get(0) : null,
+                                    sdmxTimePeriods.size() > 1 ? sdmxTimePeriods.get(1) : null,
+                                    false,
+                                    null,
+                                    false)
+                            .iterator();
+        } catch (SdmxException e) {
+            if (e instanceof SdmxResponseException
+                    && ((SdmxResponseException) e).getResponseCode()
+                            == SDMXDataStore.ERROR_NORESULTS) {
+                this.empty = true;
+            } else {
+                logger.log(Level.SEVERE, e.getMessage(), e);
+                throw new IOException(e);
+            }
+        }
+    }
+

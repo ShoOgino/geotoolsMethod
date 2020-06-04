@@ -1,0 +1,30 @@
+    @Override
+    protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query)
+            throws IOException {
+
+        if (this.schema == null) {
+            this.buildFeatureType();
+        }
+
+        Map<String, String> expressions =
+                (Map<String, String>)
+                        query.getFilter()
+                                .accept(
+                                        new SDMXDimensionFeatureSource.VisitFilter(),
+                                        new HashMap<String, String>());
+
+        try {
+            return new SDMXDimensionFeatureReader(
+                    this.dataStore.getSDMXClient(),
+                    this.schema,
+                    this.dataflow,
+                    this.dataflowStructure,
+                    expressions.get(SDMXDataStore.DIMENSIONS_EXPR),
+                    this.dataStore.getLogger());
+        } catch (SdmxException e) {
+            // FIXME: re-hash the exception into an IOEXception
+            this.dataStore.getLogger().log(Level.SEVERE, e.getMessage(), e);
+            throw new IOException(e);
+        }
+    }
+
