@@ -1,0 +1,38 @@
+    /**
+     * Add to the dataFlowStructures map the DataflowStructure of Dataflow df using the key dfKey
+     *
+     * @param dfKey Dataflow key to use in the map
+     * @param df Dataflow
+     * @return
+     * @throws SdmxException
+     */
+    private String setDataFlowStructure(String dfKey, Dataflow df) throws SdmxException {
+
+        DataFlowStructure dfs =
+                SDMXClientFactory.createClient(this.provider)
+                        .getDataFlowStructure(df.getDsdIdentifier(), true);
+        synchronized (this.dataflowStructures) {
+            this.dataflowStructures.put(dfKey, dfs);
+        }
+
+        String ftypeName = SDMXDataStore.composeDataflowTypeName(dfKey);
+        Name name = new NameImpl(this.namespace.toExternalForm(), ftypeName);
+        ContentEntry entry = new ContentEntry(this, name);
+        synchronized (this.entries) {
+            this.entries.put(name, entry);
+        }
+
+        // Adds the dimension typename
+        String dimName = SDMXDataStore.composeDimensionTypeName(dfKey);
+        LOGGER.log(
+                Level.INFO, String.format("Added SDMX feature types: %s, %s", ftypeName, dimName));
+
+        ContentEntry dimEntry =
+                new ContentEntry(this, new NameImpl(this.namespace.toExternalForm(), dimName));
+        synchronized (this.entries) {
+            this.entries.put(new NameImpl(this.namespace.toExternalForm(), dimName), dimEntry);
+        }
+
+        return dfKey;
+    }
+

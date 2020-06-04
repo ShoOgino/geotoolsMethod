@@ -1,0 +1,41 @@
+    /**
+     * @throws IOException
+     * @see FeatureReader#next()
+     */
+    @Override
+    public SimpleFeature next() throws NoSuchElementException, IOException {
+
+        if (this.hasNext() == false) {
+            return null;
+        }
+
+        if (this.timeIter.hasNext() == false && this.tsIter.hasNext() == true) {
+            this.ts = this.tsIter.next();
+            this.timeIter = this.ts.getTimeSlots().iterator();
+            this.obsIter = this.ts.getObservations().iterator();
+        }
+
+        if (this.timeIter.hasNext() == false) {
+            return null;
+        }
+
+        SimpleFeatureBuilder builder = new SimpleFeatureBuilder(this.featureType);
+        builder.set(SDMXDataStore.GEOMETRY_ATTR, null);
+        builder.set(SDMXDataStore.TIME_KEY, this.timeIter.next());
+
+        this.ts
+                .getDimensions()
+                .forEach(
+                        (dimIn) -> {
+                            if (dimIn != null) {
+                                DimensionValue dimValue = new DimensionValue(dimIn);
+                                builder.set(dimValue.name, dimValue.value);
+                            }
+                        });
+
+        builder.set(SDMXDataStore.MEASURE_KEY, this.obsIter.next());
+
+        return builder.buildFeature(
+                (new FeatureIdImpl(String.valueOf(this.ts.hashCode()))).toString());
+    }
+

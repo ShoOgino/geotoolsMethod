@@ -2,27 +2,35 @@
     protected int getCountInternal(Query query) throws IOException {
 
         Count cnt;
-        List<NameValuePair> params = new ArrayList<>();
-        params.addAll(DEFAULT_PARAMS);
-        params.add(new BasicNameValuePair(COUNT_PARAM, "true"));
-        params.add(
-                new BasicNameValuePair(
-                        GEOMETRY_PARAM, this.composeExtent(this.getBoundsInternal(query))));
+        Map<String, Object> params =
+                new HashMap<String, Object>(ArcGISRestDataStore.DEFAULT_PARAMS);
+        params.put(ArcGISRestDataStore.COUNT_PARAM, true);
+        params.put(
+                ArcGISRestDataStore.GEOMETRY_PARAM,
+                this.composeExtent(this.getBoundsInternal(query)));
+        try {
+            params.put(
+                    ArcGISRestDataStore.GEOMETRYSRS_PARAM,
+                    CRS.lookupEpsgCode(
+                            this.getBoundsInternal(query).getCoordinateReferenceSystem(), true));
+        } catch (FactoryException e) {
+            throw new IOException(String.format("Unknown CRS %s", e.getMessage()));
+        }
 
         try {
             cnt =
                     (new Gson())
                             .fromJson(
-                                    ArcGISRestDataStore.inputStreamToString(
+                                    ArcGISRestDataStore.InputStreamToString(
                                             this.dataStore.retrieveJSON(
                                                     "POST",
                                                     (new URL(this.composeQueryURL())),
                                                     params)),
                                     Count.class);
-        } catch (JsonSyntaxException e) {
-            throw new IOException(String.format("Error %s", e.getMessage()));
+        } catch (HTTPException e) {
+            throw new IOException(String.format("Error %d %s", e.getStatusCode(), e.getMessage()));
         }
 
-        return cnt == null ? -1 : cnt.getCount();
+        return (cnt == null) ? -1 : cnt.getCount();
     }
 

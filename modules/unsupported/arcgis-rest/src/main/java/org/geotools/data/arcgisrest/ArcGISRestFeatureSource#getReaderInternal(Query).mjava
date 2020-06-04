@@ -2,23 +2,35 @@
     protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query)
             throws IOException {
 
-        List<NameValuePair> params = new ArrayList<>();
-        params.addAll(ArcGISRestDataStore.DEFAULT_GETFEATURES_PARAMS);
-
+        Map<String, Object> params =
+                new HashMap<String, Object>(ArcGISRestDataStore.DEFAULT_PARAMS);
         InputStream result;
 
-        params.add(
-                new BasicNameValuePair(GEOMETRY_PARAM, this.composeExtent(this.getBounds(query))));
+        params.put(ArcGISRestDataStore.GEOMETRY_PARAM, this.composeExtent(this.getBounds(query)));
+        try {
+            params.put(
+                    ArcGISRestDataStore.GEOMETRYSRS_PARAM,
+                    CRS.lookupEpsgCode(
+                            this.getBoundsInternal(query).getCoordinateReferenceSystem(), true));
+        } catch (FactoryException e) {
+            throw new IOException(String.format("Unknown CRS %s", e.getMessage()));
+        }
 
         // TODO: currently it sets _only_ the BBOX query
-        params.add(
-                new BasicNameValuePair(GEOMETRY_PARAM, this.composeExtent(this.getBounds(query))));
+        params.put(ArcGISRestDataStore.GEOMETRY_PARAM, this.composeExtent(this.getBounds(query)));
 
         // Sets the atttributes to return
-        params.add(new BasicNameValuePair(ATTRIBUTES_PARAM, this.composeAttributes(query)));
+        params.put(ArcGISRestDataStore.ATTRIBUTES_PARAM, this.composeAttributes(query));
+
+        // Sets the outpout to GeoJSON
+        params.put(ArcGISRestDataStore.FORMAT_PARAM, ArcGISRestDataStore.FORMAT_GEOJSON);
 
         // Executes the request
-        result = this.dataStore.retrieveJSON("POST", (new URL(this.composeQueryURL())), params);
+        try {
+            result = this.dataStore.retrieveJSON("POST", (new URL(this.composeQueryURL())), params);
+        } catch (HTTPException e) {
+            throw new IOException(String.format("Error %d %s", e.getStatusCode(), e.getMessage()));
+        }
 
         // Returns a reader for the result
         return new ArcGISRestFeatureReader(this.schema, result, this.dataStore.getLogger());
