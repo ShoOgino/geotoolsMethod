@@ -1,0 +1,28 @@
+    @Override
+    protected ContentFeatureSource createFeatureSource(ContentEntry entry) throws IOException {
+
+        ContentFeatureSource featureSource = this.featureSources.get(entry.getName());
+        if (featureSource == null) {
+            try {
+                Dataflow df =
+                        this.dataflows.get(
+                                SDMXDataStore.extractDataflowName(entry.getName().getLocalPart()));
+
+                // Returns different feature sources depending on the the entry
+                // referring to a datflow or a dimension
+                if (SDMXDataStore.isDataflowName(entry.getName().getLocalPart())) {
+                    featureSource = new SDMXDataflowFeatureSource(entry, df, new Query());
+                } else {
+                    featureSource = new SDMXDimensionFeatureSource(entry, df, new Query());
+                }
+
+            } catch (FactoryException e) {
+                LOGGER.log(Level.SEVERE, "Cannot create CRS", e);
+                throw (new IOException(e));
+            }
+            this.featureSources.put(entry.getName(), featureSource);
+        }
+
+        return featureSource;
+    }
+
