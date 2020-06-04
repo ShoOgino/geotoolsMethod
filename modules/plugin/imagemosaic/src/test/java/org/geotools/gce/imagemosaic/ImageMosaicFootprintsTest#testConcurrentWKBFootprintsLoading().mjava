@@ -1,0 +1,59 @@
+    @Test
+    public void testConcurrentWKBFootprintsLoading() throws Exception {
+        WKBLoaderSPI loaderSPI = new WKBLoaderSPI();
+        FootprintLoader loader = loaderSPI.createLoader();
+        File newFolder = folder.newFolder();
+
+        // Get a sample WKB file and its footprint geometry
+        File footprintFile = TestData.file(this, "footprint_wkbs/r1c1.wkb");
+        String footprintPath = footprintFile.getAbsolutePath();
+        String fileName = FilenameUtils.getName(footprintPath);
+        footprintPath = footprintPath.substring(0, footprintPath.length() - 4);
+        Geometry footprint = loader.loadFootprint(footprintPath);
+
+        int numberOfSamples = 60;
+        String[] testFiles = new String[numberOfSamples];
+
+        // Let's copy the sample WKB to N different files
+        for (int i = 0; i < numberOfSamples; i++) {
+            String newName = fileName.replace("c1", String.format("c%03d", i));
+            File ithFile = new File(newFolder, newName);
+            FileUtils.copyFile(footprintFile, ithFile);
+            File ithFootprintFile = new File(newFolder, FilenameUtils.getBaseName(newName));
+            testFiles[i] = ithFootprintFile.getAbsolutePath();
+        }
+
+        // Concurrently load the footprints of these sample WKB files
+        // and add the results to a Geometries list, also counting
+        // any error occurred during footprint parsing
+        ExecutorService service = Executors.newFixedThreadPool(numberOfSamples / 2);
+        CountDownLatch latch = new CountDownLatch(numberOfSamples);
+        List<Geometry> geometries = new ArrayList<>(numberOfSamples);
+        AtomicInteger errors = new AtomicInteger();
+        try {
+            for (int i = 0; i < numberOfSamples; i++) {
+                int finalI = i;
+                service.submit(
+                        () -> {
+                            try {
+                                geometries.add(loader.loadFootprint(testFiles[finalI]));
+                            } catch (Exception e) {
+                                errors.getAndIncrement();
+                            }
+                            latch.countDown();
+                        });
+            }
+            latch.await();
+        } finally {
+            folder.delete();
+        }
+
+        // Make sure that no errors occurred
+        assertEquals(0, errors.get());
+
+        // Make sure that the loaded geometries match the sample footprint
+        for (Geometry geometry : geometries) {
+            assertEquals(geometry, footprint);
+        }
+    }
+
