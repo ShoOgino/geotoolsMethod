@@ -1,0 +1,60 @@
+    protected void encodeBinaryComparisonOperator(
+            BinaryComparisonOperator filter,
+            Object extraData,
+            Expression left,
+            Expression right,
+            Class leftContext,
+            Class rightContext) {
+        // case sensitivity
+        boolean matchCase = true;
+        if (!filter.isMatchingCase()) {
+            // we only do for = and !=
+            if (filter instanceof PropertyIsEqualTo || filter instanceof PropertyIsNotEqualTo) {
+                // and only for strings
+                if (String.class.equals(leftContext) || String.class.equals(rightContext)) {
+                    matchCase = false;
+                }
+            }
+        }
+
+        String type = (String) extraData;
+
+        try {
+            // for comparisons with enumerated types, back-map the values to numbers, to allow
+            // database index usage
+            if (isEnumerated(right) || isEnumerated(left)) {
+                encodeEnumeratedComparison(right, left, type, matchCase);
+                return;
+            }
+
+            if (matchCase) {
+                writeBinaryExpressionMember(left, leftContext);
+                out.write(" " + type + " ");
+                writeBinaryExpressionMember(right, rightContext);
+            } else {
+                // wrap both sides in "lower"
+                FunctionImpl f =
+                        new FunctionImpl() {
+                            {
+                                functionName =
+                                        new FunctionNameImpl(
+                                                "lower",
+                                                parameter("lowercase", String.class),
+                                                parameter("string", String.class));
+                            }
+                        };
+                f.setName("lower");
+
+                f.setParameters(Arrays.asList(left));
+                f.accept(this, Arrays.asList(leftContext));
+
+                out.write(" " + type + " ");
+
+                f.setParameters(Arrays.asList(right));
+                f.accept(this, Arrays.asList(rightContext));
+            }
+        } catch (java.io.IOException ioe) {
+            throw new RuntimeException(IO_ERROR, ioe);
+        }
+    }
+
