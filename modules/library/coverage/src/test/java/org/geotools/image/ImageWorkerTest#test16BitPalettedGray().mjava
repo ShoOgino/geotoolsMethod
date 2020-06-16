@@ -1,0 +1,36 @@
+    @Test
+    public void test16BitPalettedGray() throws Exception {
+        byte[] red = new byte[65536];
+        byte[] green = new byte[65536];
+        byte[] blue = new byte[65536];
+        byte[] alpha = new byte[65536];
+        byte value;
+        for (int i = 0; i < 65536; i++) {
+            value = (byte) ((i / 256) & 0xFF);
+            red[i] = value;
+            green[i] = value;
+            blue[i] = value;
+            alpha[i] = (byte) (0xFF);
+        }
+        alpha[0] = 0;
+
+        IndexColorModel icm = new IndexColorModel(16, 65536, red, green, blue, alpha);
+        SampleModel sm =
+                new ComponentSampleModel(DataBuffer.TYPE_USHORT, 50, 50, 1, 50, new int[] {0});
+        WritableRaster raster = RasterFactory.createWritableRaster(sm, null);
+        BufferedImage bi = new BufferedImage(icm, raster, false, null);
+
+        assertEquals(65536, icm.getMapSize());
+
+        ImageWorker worker = new ImageWorker(bi).forceComponentColorModel();
+        RenderedImage ri = worker.getRenderedImage();
+
+        // we expect a gray one
+        ComponentColorModel ccm = (ComponentColorModel) ri.getColorModel();
+        sm = ri.getSampleModel();
+        assertEquals(1, ccm.getNumColorComponents());
+        assertTrue(ccm.hasAlpha());
+        assertEquals(DataBuffer.TYPE_USHORT, sm.getDataType());
+        assertArrayEquals(new int[] {16, 16}, sm.getSampleSize());
+    }
+
