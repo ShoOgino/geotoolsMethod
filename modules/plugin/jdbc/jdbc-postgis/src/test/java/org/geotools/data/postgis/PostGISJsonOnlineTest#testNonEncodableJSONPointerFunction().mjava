@@ -1,0 +1,28 @@
+    @Test
+    public void testNonEncodableJSONPointerFunction() throws Exception {
+        // tests that with a propertyName involved in the production of the
+        // json pointer string, the filter is not encoded to PostGIS SQL dialect
+        ContentFeatureSource fs = dataStore.getFeatureSource(tname("jsontest"));
+        FilterFactory ff = dataStore.getFilterFactory();
+        Function concat1 =
+                ff.function("strConcat", ff.property("name"), ff.literal("/nestedObj2/strProp"));
+        Function concat2 = ff.function("strConcat", ff.literal("/"), concat1);
+        Function pointer = ff.function("jsonPointer", ff.property("jsonColumn"), concat2);
+        Filter filter = ff.equals(pointer, ff.literal("stringValue2"));
+        Query q = new Query(tname("jsontest"), filter);
+        try (FeatureReader reader = fs.getDataStore().getFeatureReader(q, null)) {
+            // reader is instanceof FilteringFeatureReader so Filter has not been encoded
+            assertTrue(reader instanceof FilteringFeatureReader);
+        }
+        FeatureCollection collection = fs.getFeatures(q);
+        try (FeatureIterator it = collection.features()) {
+            int size = 0;
+            while (it.hasNext()) {
+                Feature f = it.next();
+                assertEquals(pointer.evaluate(f), "stringValue2");
+                size++;
+            }
+            assertEquals(2, size);
+        }
+    }
+
