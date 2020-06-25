@@ -1,0 +1,27 @@
+    @Override
+    public SimpleFeatureCollection getGranules(Query q, Transaction t) throws IOException {
+        Utilities.ensureNonNull("query", q);
+        q = mergeHints(q);
+        String typeName = q.getTypeName();
+        checkStore();
+
+        //
+        // Load tiles informations, especially the bounds, which will be
+        // reused
+        //
+        final SimpleFeatureSource featureSource = getTileIndexStore().getFeatureSource(typeName);
+        if (featureSource == null) {
+            throw new NullPointerException(
+                    "The provided SimpleFeatureSource is null, it's impossible to create an index!");
+        }
+        if (t != null && t != Transaction.AUTO_COMMIT) {
+            if (featureSource instanceof SimpleFeatureStore) {
+                ((SimpleFeatureStore) featureSource).setTransaction(t);
+            } else {
+                throw new IllegalArgumentException(
+                        "A transaction has been specified, but the delegate tile index store is not writable");
+            }
+        }
+        return featureSource.getFeatures(q);
+    }
+

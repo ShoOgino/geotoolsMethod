@@ -1,4 +1,57 @@
     public SQLServerDatastoreWrapper(DataStore datastore, String location) {
         super(datastore, location);
+
+        // check if the geometry metadata table is present, if not, create and configure
+        // it, to make usage of SQL Server transparent (otherwise the property file would have
+        // needed the setup of the geometry metadata table for mosaic to work at all, the
+        // CRS of geometries is lost otherwise at the default isolation level)
+        try {
+            if (datastore instanceof JDBCDataStore) {
+                JDBCDataStore jdbcDataStore = (JDBCDataStore) this.datastore;
+
+                SQLDialect dialect = jdbcDataStore.getSQLDialect();
+                String metadataTable =
+                        (String) BeanUtils.getProperty(dialect, METADATA_TABLE_PROPERTY);
+                if (metadataTable == null) {
+                    metadataTable = DEFAULT_METADATA_TABLE;
+                    BeanUtils.setProperty(dialect, METADATA_TABLE_PROPERTY, DEFAULT_METADATA_TABLE);
+                }
+                String databaseSchema = jdbcDataStore.getDatabaseSchema();
+
+                try (Connection cx = jdbcDataStore.getConnection(Transaction.AUTO_COMMIT);
+                        Statement st = cx.createStatement()) {
+                    boolean createMetadataTable = true;
+                    DatabaseMetaData metaData = cx.getMetaData();
+
+                    // get the schema.metadata qualified and quoted string for use in direct SQL
+                    StringBuffer qualifiedTableName = new StringBuffer();
+                    if (databaseSchema != null) {
+                        dialect.encodeTableName(databaseSchema, qualifiedTableName);
+                        qualifiedTableName.append(".");
+                    }
+                    dialect.encodeTableName(metadataTable, qualifiedTableName);
+
+                    // check if it's already there
+                    try (ResultSet res =
+                            metaData.getTables(
+                                    null, databaseSchema, metadataTable, new String[] {"TABLE"})) {
+                        createMetadataTable = !res.next();
+                    }
+                    // it not create
+                    if (createMetadataTable) {
+                        st.executeUpdate(String.format(CREATE_METADATA_TABLE, qualifiedTableName));
+                    }
+                }
+            }
+        } catch (SQLException
+                | IOException
+                | IllegalAccessException
+                | InvocationTargetException
+                | NoSuchMethodException e) {
+            LOGGER.log(
+                    Level.FINE,
+                    "Failed to assess/create the metadata geometry table, this could lead to lost geometry SRIDs on table creation",
+                    e);
+        }
     }
 

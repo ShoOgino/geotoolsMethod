@@ -1,0 +1,44 @@
+    @Override
+    public int removeGranules(Query query, Transaction transaction) {
+        Utilities.ensureNonNull("query", query);
+        query = mergeHints(query);
+        // check if the index has been cleared
+        checkStore();
+        String typeName = query.getTypeName();
+        SimpleFeatureStore fs = null;
+        try {
+            // create a writer that appends this features
+            fs = (SimpleFeatureStore) getTileIndexStore().getFeatureSource(typeName);
+            boolean rollback = true;
+            Transaction t =
+                    transaction == null || transaction == Transaction.AUTO_COMMIT
+                            ? new DefaultTransaction()
+                            : transaction;
+            try {
+                fs.setTransaction(t);
+                final int retVal = fs.getFeatures(query).size(); // ensures we get a value
+                if (retVal > 0) {
+                    fs.removeFeatures(query.getFilter());
+                    t.commit();
+                }
+                rollback = false;
+
+                return retVal;
+            } finally {
+                // rollback/close only if the transaction was created locally, otherwise leave
+                // the caller providing the transaction in control
+                if (t != transaction) {
+                    if (rollback) {
+                        t.rollback();
+                    }
+                    t.close();
+                }
+            }
+
+        } catch (Throwable e) {
+            if (LOGGER.isLoggable(Level.SEVERE))
+                LOGGER.log(Level.SEVERE, e.getLocalizedMessage(), e);
+            return -1;
+        }
+    }
+
