@@ -26,12 +26,9 @@
         // Checking params
         //
         // /////////////////////////////////////////////////////////////////////
-        Color outputTransparentColor =
-                (Color) ImageMosaicJDBCFormat.OUTPUT_TRANSPARENT_COLOR.getDefaultValue();
-
-        Color backgroundColor = (Color) ImageMosaicJDBCFormat.BACKGROUND_COLOR.getDefaultValue();
-
-        Rectangle dim = null;
+        state.setBackgroundColor((Color) ImageMosaicJDBCFormat.BACKGROUND_COLOR.getDefaultValue());
+        state.setOutputTransparentColor(
+                (Color) ImageMosaicJDBCFormat.OUTPUT_TRANSPARENT_COLOR.getDefaultValue());
 
         if (params != null) {
             for (GeneralParameterValue generalParameterValue : params) {
@@ -43,7 +40,12 @@
                         .equals(AbstractGridFormat.READ_GRIDGEOMETRY2D.getName().toString())) {
                     final GridGeometry2D gg = (GridGeometry2D) param.getValue();
                     state.setRequestedEnvelope((GeneralEnvelope) gg.getEnvelope());
-                    dim = gg.getGridRange2D().getBounds();
+                    state.setRenderedImageRectangle(gg.getGridRange2D().getBounds());
+                } else if (param.getDescriptor()
+                        .getName()
+                        .getCode()
+                        .equals(ImageMosaicJDBCFormat.BACKGROUND_COLOR.getName().toString())) {
+                    state.setBackgroundColor((Color) param.getValue());
                 } else if (param.getDescriptor()
                         .getName()
                         .getCode()
@@ -51,12 +53,7 @@
                                 ImageMosaicJDBCFormat.OUTPUT_TRANSPARENT_COLOR
                                         .getName()
                                         .toString())) {
-                    outputTransparentColor = (Color) param.getValue();
-                } else if (param.getDescriptor()
-                        .getName()
-                        .getCode()
-                        .equals(ImageMosaicJDBCFormat.BACKGROUND_COLOR.getName().toString())) {
-                    backgroundColor = (Color) param.getValue();
+                    state.setOutputTransparentColor((Color) param.getValue());
                 }
             }
         }
@@ -66,7 +63,7 @@
         // Loading tiles trying to optimize as much as possible
         //
         // /////////////////////////////////////////////////////////////////////
-        GridCoverage2D coverage = loadTiles(backgroundColor, outputTransparentColor, dim, state);
+        GridCoverage2D coverage = loadTiles(state);
         LOGGER.info(
                 "Mosaic Reader needs : "
                         + ((new Date()).getTime() - start.getTime())

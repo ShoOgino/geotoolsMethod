@@ -3,6 +3,8 @@
         BufferedImage image = null;
 
         TileQueueElement queueObject = null;
+        LinkedBlockingQueue<TileQueueElement> tileQueue = state.getTileQueue();
+        GeneralEnvelope rete = state.getRequestedEnvelopeTransformedExpanded();
 
         try {
             while ((queueObject = tileQueue.take()).isEndElement() == false) {
@@ -13,47 +15,63 @@
 
                 int posx =
                         (int)
-                                ((queueObject.getEnvelope().getMinimum(0)
-                                                - requestEnvelope.getMinimum(0))
-                                        / levelInfo.getResX());
+                                (Math.round(
+                                        (queueObject.getEnvelope().getMinimum(0)
+                                                        - rete.getMinimum(0))
+                                                / state.getImageLevelInfo().getResX()));
                 int posy =
                         (int)
-                                ((requestEnvelope.getMaximum(1)
-                                                - queueObject.getEnvelope().getMaximum(1))
-                                        / levelInfo.getResY());
+                                (Math.round(
+                                        (rete.getMaximum(1)
+                                                        - queueObject.getEnvelope().getMaximum(1))
+                                                / state.getImageLevelInfo().getResY()));
 
                 image.getRaster().setRect(posx, posy, queueObject.getTileImage().getRaster());
             }
+        } catch (OutOfMemoryError e) {
+            LOGGER.warning(
+                    "Out of memory when trying to render coverage '"
+                            + state.getImageLevelInfo().getCoverageName()
+                            + "'.");
+            LOGGER.warning(
+                    "Tips: increase memory, add coarser dataset overviews, or do not zoom that out.");
+            // return no image
+            gridCoverage2D = null;
+            return;
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
 
-        if (image == null) // no tiles ??
-        image = getStartImage(ImageMosaicJDBCReader.DEFAULT_IMAGE_TYPE);
+        if (image == null) {
+            // no tiles ??
+            image = getStartImage(ImageMosaicJDBCReader.DEFAULT_IMAGE_TYPE);
+        }
 
         GeneralEnvelope resultEnvelope = null;
 
-        if (xAxisSwitch) {
+        if (state.isXAxisSwitch()) {
             Rectangle2D tmp =
                     new Rectangle2D.Double(
-                            requestEnvelope.getMinimum(1),
-                            requestEnvelope.getMinimum(0),
-                            requestEnvelope.getSpan(1),
-                            requestEnvelope.getSpan(0));
+                            rete.getMinimum(1),
+                            rete.getMinimum(0),
+                            rete.getSpan(1),
+                            rete.getSpan(0));
             resultEnvelope = new GeneralEnvelope(tmp);
-            resultEnvelope.setCoordinateReferenceSystem(
-                    requestEnvelope.getCoordinateReferenceSystem());
+            resultEnvelope.setCoordinateReferenceSystem(rete.getCoordinateReferenceSystem());
         } else {
-            resultEnvelope = requestEnvelope;
+            resultEnvelope = state.getRequestedEnvelopeTransformed();
         }
 
         image = rescaleImageViaPlanarImage(image);
-        if (outputTransparentColor == null)
+        if (state.getOutputTransparentColor() == null) {
             gridCoverage2D =
                     coverageFactory.create(config.getCoverageName(), image, resultEnvelope);
-        else {
-            if (LOGGER.isLoggable(Level.FINE)) LOGGER.fine("Support for alpha on final mosaic");
-            RenderedImage result = ImageUtilities.maskColor(outputTransparentColor, image);
+        } else {
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine("Support for alpha on final mosaic");
+            }
+            RenderedImage result =
+                    ImageUtilities.maskColor(state.getOutputTransparentColor(), image);
             gridCoverage2D =
                     coverageFactory.create(config.getCoverageName(), result, resultEnvelope);
         }

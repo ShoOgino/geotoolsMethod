@@ -1,0 +1,43 @@
+    protected BufferedImage rescaleImageViaPlanarImage(BufferedImage image) {
+        int interpolation = Interpolation.INTERP_NEAREST;
+        if (config.getInterpolation().intValue() == 2) {
+            interpolation = Interpolation.INTERP_BILINEAR;
+        }
+        if (config.getInterpolation().intValue() == 3) {
+            interpolation = Interpolation.INTERP_BICUBIC;
+        }
+
+        GeneralEnvelope ret = state.getRequestedEnvelopeTransformed();
+        GeneralEnvelope rete = state.getRequestedEnvelopeTransformedExpanded();
+        Rectangle rir = state.getRenderedImageRectangle();
+        // On GetServiceInfo requests, 'rir' is not located at (0,0).
+        Rectangle rirO = new Rectangle(rir);
+        rirO.setLocation(0, 0);
+
+        double resRequestedX = ret.getSpan(0) / rir.getWidth();
+        double resRequestedY = ret.getSpan(1) / rir.getHeight();
+
+        PlanarImage planarImage = new TiledImage(image, image.getWidth(), image.getHeight());
+        ImageWorker w = new ImageWorker(planarImage);
+        w.scale(
+                state.getImageLevelInfo().getResX() / resRequestedX,
+                state.getImageLevelInfo().getResY() / resRequestedY,
+                (rete.getMinimum(0) - ret.getMinimum(0)) / resRequestedX,
+                (ret.getMaximum(1) - rete.getMaximum(1)) / resRequestedY,
+                Interpolation.getInstance(interpolation));
+        RenderedOp result = w.getRenderedOperation();
+        Raster scaledImageRaster = result.getData(rirO);
+        if (!(scaledImageRaster instanceof WritableRaster)) {
+            scaledImageRaster =
+                    result.copyData(scaledImageRaster.createCompatibleWritableRaster(rirO));
+        }
+
+        BufferedImage scaledImage =
+                new BufferedImage(
+                        image.getColorModel(),
+                        (WritableRaster) scaledImageRaster,
+                        image.isAlphaPremultiplied(),
+                        null);
+        return scaledImage;
+    }
+
