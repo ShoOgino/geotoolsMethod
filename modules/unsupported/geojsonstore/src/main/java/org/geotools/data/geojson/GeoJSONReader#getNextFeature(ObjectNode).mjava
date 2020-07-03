@@ -12,6 +12,8 @@
             builder = getBuilder(props);
         }
         boolean restart = true;
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JtsModule());
         SimpleFeature feature = null;
         while (restart) {
             restart = false;
@@ -37,13 +39,16 @@
                     builder.set(n.getKey(), n.getValue().asDouble());
                 } else if (binding == String.class) {
                     builder.set(n.getKey(), n.getValue().textValue());
+                } else if (binding.isAssignableFrom(Geometry.class)) {
+                    GeometryParser<Geometry> gParser = new GenericGeometryParser(gFac);
+                    Geometry g = gParser.geometryFromJson(n.getValue());
+                    builder.set(n.getKey(), g);
                 } else {
+                    LOGGER.warning("Unable to parse object of type " + binding);
                     builder.set(n.getKey(), n.getValue().toString());
                 }
             }
             JsonNode geom = node.get("geometry");
-            ObjectMapper mapper = new ObjectMapper();
-            mapper.registerModule(new JtsModule());
             GeometryParser<Geometry> gParser = new GenericGeometryParser(gFac);
             Geometry g = gParser.geometryFromJson(geom);
             builder.set(GEOMETRY_NAME, g);
