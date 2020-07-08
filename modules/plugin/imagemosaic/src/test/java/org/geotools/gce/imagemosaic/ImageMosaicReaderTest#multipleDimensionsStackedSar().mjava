@@ -1,7 +1,5 @@
     /** Simple test method accessing time and 2 custom dimensions for the sample dataset */
     @Test
-    // @Ignore
-    @SuppressWarnings("rawtypes")
     public void multipleDimensionsStackedSar() throws Exception {
 
         final URL sourceURL = TestData.file(this, "merge").toURI().toURL();
@@ -41,12 +39,7 @@
         final SimpleDateFormat formatD = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
         formatD.setTimeZone(TimeZone.getTimeZone("GMT"));
         final Date timeD = formatD.parse("2012-01-01T00:00:00.000Z");
-        time.setValue(
-                new ArrayList() {
-                    {
-                        add(timeD);
-                    }
-                });
+        time.setValue(Arrays.asList(timeD));
 
         // specify additional Dimensions
         Set<ParameterDescriptor<List>> params = reader.getDynamicParameters();
@@ -54,14 +47,7 @@
         for (ParameterDescriptor param : params) {
             if (param.getName().getCode().equalsIgnoreCase("POLARIZATION")) {
                 polariz = param.createValue();
-                polariz.setValue(
-                        new ArrayList<String>() {
-                            {
-                                add("HH");
-                                add("HV");
-                                add("VV");
-                            }
-                        });
+                polariz.setValue(Arrays.asList("HH", "HV", "VV"));
             }
         }
 
@@ -69,16 +55,51 @@
         final ParameterValue<String> paramStacked = ImageMosaicFormat.MERGE_BEHAVIOR.createValue();
         paramStacked.setValue(MergeBehavior.STACK.toString());
 
+        // Ensure predictable order with a sort
+        final ParameterValue<String> sort = ImageMosaicFormat.SORT_BY.createValue();
+        sort.setValue("polarization A");
+
         // Test the output coverage
         GeneralParameterValue[] values =
-                new GeneralParameterValue[] {useJai, tileSize, time, polariz, paramStacked};
+                new GeneralParameterValue[] {useJai, tileSize, time, polariz, paramStacked, sort};
         final GridCoverage2D coverage = TestUtils.getCoverage(reader, values, false);
         assertNotNull(coverage);
+
+        // Check that we got the expected files as inputs to the coverage. It's a comma separated
+        // value, test it so that it won't fail even if the directories contain a comma inside them.
+        // Also ensure the other file was not used
+        String fileLocation =
+                (String) coverage.getProperty(AbstractGridCoverage2DReader.FILE_SOURCE_PROPERTY);
+        assertThat(fileLocation, containsString("imagery_HH_2012.tif,"));
+        assertThat(fileLocation, containsString("imagery_HV_2012.tif,"));
+        assertThat(fileLocation, endsWith("imagery_VV_2012.tif"));
+        assertThat(fileLocation, not(containsString("imagery_VH_2012.tif")));
 
         // inspect reanderedImage
         final RenderedImage image = coverage.getRenderedImage();
         assertEquals("wrong number of bands detected", 3, image.getSampleModel().getNumBands());
         assertEquals(DataBuffer.TYPE_SHORT, image.getSampleModel().getDataType());
+
+        // grab a reference for the first band, and make sure the values are the same
+        GeneralParameterValue[] valuesHH = {
+            useJai, tileSize, time, dynamicParameter(reader, "polarization", "HH")
+        };
+        final GridCoverage2D coverageHH = TestUtils.getCoverage(reader, valuesHH, false);
+        assertBandEqual(image, 0, coverageHH.getRenderedImage());
+
+        // do the same for the second
+        GeneralParameterValue[] valuesHV = {
+            useJai, tileSize, time, dynamicParameter(reader, "polarization", "HV")
+        };
+        final GridCoverage2D coverageHV = TestUtils.getCoverage(reader, valuesHV, false);
+        assertBandEqual(image, 1, coverageHV.getRenderedImage());
+
+        // do the same for the third
+        GeneralParameterValue[] valuesVV = {
+            useJai, tileSize, time, dynamicParameter(reader, "polarization", "VV")
+        };
+        final GridCoverage2D coverageVV = TestUtils.getCoverage(reader, valuesVV, false);
+        assertBandEqual(image, 2, coverageVV.getRenderedImage());
 
         reader.dispose();
     }
