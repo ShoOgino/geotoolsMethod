@@ -1,0 +1,37 @@
+    /**
+     * Updates a metadata reference in the pacakge
+     *
+     * @param reference
+     * @throws SQLException
+     */
+    public void updateReference(GeoPkgMetadataReference reference) throws SQLException {
+        String sql =
+                String.format(
+                        "UPDATE %s set reference_scope = ?, "
+                                + "table_name = ?, "
+                                + "column_name = ?, "
+                                + "row_id_value = ?, "
+                                + "timestamp = ?, "
+                                + "md_file_id = ?,"
+                                + "md_parent_id = ? "
+                                + "where rowid = ?",
+                        METADATA_REFERENCE);
+        try (Connection cx = getConnection();
+                PreparedStatement ps = cx.prepareStatement(sql)) {
+            ps.setString(1, reference.getScope().getSqlValue());
+            ps.setString(2, reference.getTable());
+            ps.setString(3, reference.getColumn());
+            ps.setObject(4, reference.getRowId());
+            ps.setString(5, GeoPackage.getDateFormat().format(reference.getTimestamp()));
+            ps.setLong(6, reference.getMetadata().getId());
+            GeoPkgMetadata metadataParent = reference.getMetadataParent();
+            if (metadataParent != null) {
+                ps.setLong(7, metadataParent.getId());
+            } else {
+                ps.setNull(7, Types.BIGINT);
+            }
+            ps.setLong(8, reference.getId());
+            ps.executeUpdate();
+        }
+    }
+
