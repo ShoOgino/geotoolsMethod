@@ -1,0 +1,110 @@
+    /**
+     * Returns the mapping JTS geometry type for the ArcSDE Shape type given by the bitmask <code>
+     * seShapeType</code>
+     *
+     * <p>This bitmask is composed of a combination of the following shape types, as defined in the
+     * ArcSDE Java API:
+     *
+     * <pre>
+     * SE_NIL_TYPE_MASK = 1;
+     * SE_POINT_TYPE_MASK = 2;
+     * SE_LINE_TYPE_MASK = 4;
+     * SE_AREA_TYPE_MASK = 16;
+     * SE_MULTIPART_TYPE_MASK = 262144;
+     * </pre>
+     *
+     * (Note that the type SE_SIMPLE_LINE_TYPE_MASK is not used)
+     */
+    public static Class<? extends Geometry> getGeometryTypeFromLayerMask(int seShapeType) {
+        Class<? extends Geometry> clazz;
+        final int MULTIPART_MASK = SeLayer.SE_MULTIPART_TYPE_MASK;
+        final int POINT_MASK = SeLayer.SE_POINT_TYPE_MASK;
+        final int SIMPLE_LINE_MASK = SeLayer.SE_SIMPLE_LINE_TYPE_MASK;
+        final int LINESTRING_MASK = SeLayer.SE_LINE_TYPE_MASK;
+        final int AREA_MASK = SeLayer.SE_AREA_TYPE_MASK;
+
+        // if (seShapeType == SeLayer.TYPE_NIL) {
+        // // do nothing
+        // } else if (seShapeType == SeLayer.TYPE_MULTI_MASK) {
+        // clazz = GeometryCollection.class;
+        // } else if (seShapeType == SeLayer.TYPE_LINE || seShapeType ==
+        // SeLayer.TYPE_SIMPLE_LINE) {
+        // clazz = LineString.class;
+        // } else if (seShapeType == SeLayer.TYPE_MULTI_LINE
+        // || seShapeType == SeLayer.TYPE_MULTI_SIMPLE_LINE) {
+        // clazz = MultiLineString.class;
+        // } else if (seShapeType == SeLayer.TYPE_MULTI_POINT) {
+        // clazz = MultiPoint.class;
+        // } else if (seShapeType == SeLayer.TYPE_MULTI_POLYGON) {
+        // clazz = MultiPolygon.class;
+        // } else if (seShapeType == SeLayer.TYPE_POINT) {
+        // clazz = Point.class;
+        // } else if (seShapeType == SeLayer.TYPE_POLYGON) {
+        // clazz = Polygon.class;
+        // } else {
+        // in all this assignments, 1 means true and 0 false
+        final int isCollection = ((seShapeType & MULTIPART_MASK) == MULTIPART_MASK) ? 1 : 0;
+
+        final int isPoint = ((seShapeType & POINT_MASK) == POINT_MASK) ? 1 : 0;
+
+        final int isLineString =
+                (((seShapeType & SIMPLE_LINE_MASK) == SIMPLE_LINE_MASK)
+                                || ((seShapeType & LINESTRING_MASK) == LINESTRING_MASK))
+                        ? 1
+                        : 0;
+
+        final int isPolygon = ((seShapeType & AREA_MASK) == AREA_MASK) ? 1 : 0;
+
+        // first check if the shape type supports more than one geometry
+        // type.
+        // In that case, it is *highly* recomended that it support all the
+        // geometry types, so we can safely return Geometry.class. If this
+        // is not the case and the shape type supports just a few geometry types,
+        // then we give it a chance and return Geometry.class anyway, but be
+        // aware that transactions over that layer could fail if a Geometry that
+        // is not supported is tried for insertion.
+        if ((isPoint + isLineString + isPolygon) > 1) {
+            clazz = Geometry.class;
+
+            if (4 < (isCollection + isPoint + isLineString + isPolygon)) {
+                LOGGER.warning(
+                        "Be careful!! we're mapping an ArcSDE Shape type "
+                                + "to the generic Geometry class, but the shape type "
+                                + "does not really allows all geometry types!: "
+                                + "isCollection="
+                                + isCollection
+                                + ", isPoint="
+                                + isPoint
+                                + ", isLineString="
+                                + isLineString
+                                + ", isPolygon="
+                                + isPolygon);
+            } else {
+                LOGGER.fine("safely mapping SeShapeType to abstract Geometry");
+            }
+        } else if (isCollection == 1) {
+            if (isPoint == 1) {
+                clazz = MultiPoint.class;
+            } else if (isLineString == 1) {
+                clazz = MultiLineString.class;
+            } else if (isPolygon == 1) {
+                clazz = MultiPolygon.class;
+            } else {
+                throw new IllegalStateException("this shouldn't happen!");
+            }
+        } else {
+            if (isPoint == 1) {
+                clazz = Point.class;
+            } else if (isLineString == 1) {
+                clazz = LineString.class;
+            } else if (isPolygon == 1) {
+                clazz = Polygon.class;
+            } else {
+                throw new IllegalStateException("this shouldn't happen!");
+            }
+        }
+
+        // }
+        return clazz;
+    }
+

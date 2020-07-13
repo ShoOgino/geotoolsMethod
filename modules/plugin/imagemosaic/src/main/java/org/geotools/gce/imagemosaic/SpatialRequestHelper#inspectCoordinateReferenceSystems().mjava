@@ -5,13 +5,24 @@
         //
         // Check if the request CRS is different from the coverage native CRS
         //
-        if (!CRS.equalsIgnoreMetadata(requestCRS, coverageProperties.crs2D))
+        CoordinateReferenceSystem referenceCRS = getReferenceCRS(false);
+        if (!CRS.equalsIgnoreMetadata(requestCRS, referenceCRS)) {
             try {
                 destinationToSourceTransform =
-                        CRS.findMathTransform(requestCRS, coverageProperties.crs2D, true);
+                        CRS.findMathTransform(requestCRS, referenceCRS, true);
+                if (isSupportingAlternativeCRSOutput) {
+                    MathTransform2D alternativeTransform =
+                            (MathTransform2D)
+                                    CRS.findMathTransform(requestCRS, getReferenceCRS(true), true);
+                    alternativeProperties.setGridToWorld2D(alternativeTransform);
+                    alternativeProperties.setReprojectionNeeded(
+                            alternativeTransform != null && !alternativeTransform.isIdentity());
+                }
             } catch (FactoryException e) {
                 throw new DataSourceException("Unable to inspect request CRS", e);
             }
+        }
+
         // now transform the requested envelope to source crs
         if (destinationToSourceTransform != null) {
             if (destinationToSourceTransform.isIdentity()) {
@@ -20,11 +31,10 @@
                 destinationToSourceTransform = null;
 
                 // we need to use the coverage one for the requested bbox to avoid problems later on
-                this.requestedBBox =
-                        new ReferencedEnvelope(requestedBBox, coverageProperties.crs2D);
+                this.requestedBBox = new ReferencedEnvelope(requestedBBox, referenceCRS);
             } else {
                 // we do need to reproject
-                needsReprojection = true;
+                coverageProperties.setReprojectionNeeded(true);
 
                 //
                 // k, the transformation between the various CRS is not null or the
@@ -59,7 +69,7 @@
 
                     // now clean up all the traces of the transformations
                     destinationToSourceTransform = null;
-                    needsReprojection = false;
+                    coverageProperties.setReprojectionNeeded(false);
                 }
             }
         }

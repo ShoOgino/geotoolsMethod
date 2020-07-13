@@ -1,0 +1,32 @@
+    @Test
+    public void testRasterToTransformVectorPastDateline() throws Exception {
+        Style style = RendererBaseTest.loadStyle(this, "coverageCenter.sld");
+
+        GeoTiffReader reader = new GeoTiffReader(TestData.copy(this, "geotiff/world.tiff"));
+
+        MapContent mc = new MapContent();
+        mc.addLayer(new GridCoverageLayer(reader.read(null), style));
+
+        StreamingRenderer renderer = new StreamingRenderer();
+        Map<Object, Object> rendererParams = new HashMap<>();
+        rendererParams.put(StreamingRenderer.ADVANCED_PROJECTION_HANDLING_KEY, true);
+        rendererParams.put(StreamingRenderer.CONTINUOUS_MAP_WRAPPING, true);
+        renderer.setRendererHints(rendererParams);
+        renderer.setMapContent(mc);
+
+        ReferencedEnvelope reWgs84 =
+                new ReferencedEnvelope(-70, 70, 200, 520, CRS.decode("EPSG:4326"));
+        ReferencedEnvelope re = reWgs84.transform(CRS.decode("EPSG:3857"), true);
+
+        BufferedImage image =
+                RendererBaseTest.showRender("Lines with circle stroke", renderer, TIME, re);
+        // if everything worked we are going to have a red dot in the middle of the map
+        assertEquals(Color.RED, getPixelColor(image, image.getWidth() / 2, image.getHeight() / 2));
+        assertEquals(
+                Color.WHITE, getPixelColor(image, image.getWidth() / 4, image.getHeight() / 2));
+        assertEquals(
+                Color.WHITE, getPixelColor(image, image.getWidth() / 2, image.getHeight() / 4));
+        assertEquals(
+                Color.WHITE, getPixelColor(image, image.getWidth() / 4, image.getHeight() / 4));
+    }
+

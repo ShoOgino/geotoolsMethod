@@ -26,7 +26,7 @@
         // go to component color model if needed
         ColorModel cm = image.getColorModel();
         final boolean hasAlpha = cm.hasAlpha();
-        forceComponentColorModel();
+        forceComponentColorModel(false, true, true);
         cm = image.getColorModel();
 
         // rescale to 8 bit
@@ -66,62 +66,58 @@
 
         // Compression is available on both lib
         final ImageWriteParam iwp = writer.getDefaultWriteParam();
-        final ImageOutputStream outStream = ImageIOExt.createImageOutputStream(image, destination);
-        if (outStream == null) {
-            throw new IIOException(Errors.format(ErrorKeys.NULL_ARGUMENT_$1, "stream"));
-        }
 
-        iwp.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-        iwp.setCompressionType(compression); // Lossy compression.
-        iwp.setCompressionQuality(compressionRate); // We can control quality here.
-        if (iwp instanceof JPEGImageWriteParam) {
-            final JPEGImageWriteParam param = (JPEGImageWriteParam) iwp;
-            param.setOptimizeHuffmanTables(true);
-            try {
-                param.setProgressiveMode(JPEGImageWriteParam.MODE_DEFAULT);
-            } catch (UnsupportedOperationException e) {
-                throw new IOException(e);
+        try (ImageOutputStream outStream = ImageIOExt.createImageOutputStream(image, destination)) {
+            if (outStream == null) {
+                throw new IIOException(Errors.format(ErrorKeys.NULL_ARGUMENT_$1, "stream"));
             }
-        }
 
-        if (LOGGER.isLoggable(Level.FINE)) {
-            LOGGER.fine("Writing out...");
-        }
-
-        try {
-
-            writer.setOutput(outStream);
-            // the JDK writer has problems with images that do not start at minx==miny==0
-            // while the clib writer has issues with tiled images
-            if ((!nativeAcc && (image.getMinX() != 0 || image.getMinY() != 0))
-                    || (nativeAcc && (image.getNumXTiles() > 1 || image.getNumYTiles() > 1))) {
-                final BufferedImage finalImage =
-                        new BufferedImage(
-                                image.getColorModel(),
-                                ((WritableRaster) image.getData())
-                                        .createWritableTranslatedChild(0, 0),
-                                image.getColorModel().isAlphaPremultiplied(),
-                                null);
-
-                writer.write(null, new IIOImage(finalImage, null, null), iwp);
-            } else {
-                writer.write(null, new IIOImage(image, null, null), iwp);
+            iwp.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            iwp.setCompressionType(compression); // Lossy compression.
+            iwp.setCompressionQuality(compressionRate); // We can control quality here.
+            if (iwp instanceof JPEGImageWriteParam) {
+                final JPEGImageWriteParam param = (JPEGImageWriteParam) iwp;
+                param.setOptimizeHuffmanTables(true);
+                try {
+                    param.setProgressiveMode(JPEGImageWriteParam.MODE_DEFAULT);
+                } catch (UnsupportedOperationException e) {
+                    throw new IOException(e);
+                }
             }
-        } finally {
-            try {
-                writer.dispose();
-            } catch (Throwable e) {
-                if (LOGGER.isLoggable(Level.FINEST))
-                    LOGGER.log(Level.FINEST, e.getLocalizedMessage(), e);
-            }
-            try {
-                outStream.close();
-            } catch (Throwable e) {
-                if (LOGGER.isLoggable(Level.FINEST))
-                    LOGGER.log(Level.FINEST, e.getLocalizedMessage(), e);
-            }
+
             if (LOGGER.isLoggable(Level.FINE)) {
-                LOGGER.fine("Writing out... Done!");
+                LOGGER.fine("Writing out...");
+            }
+
+            try {
+
+                writer.setOutput(outStream);
+                // the JDK writer has problems with images that do not start at minx==miny==0
+                // while the clib writer has issues with tiled images
+                if ((!nativeAcc && (image.getMinX() != 0 || image.getMinY() != 0))
+                        || (nativeAcc && (image.getNumXTiles() > 1 || image.getNumYTiles() > 1))) {
+                    final BufferedImage finalImage =
+                            new BufferedImage(
+                                    image.getColorModel(),
+                                    ((WritableRaster) image.getData())
+                                            .createWritableTranslatedChild(0, 0),
+                                    image.getColorModel().isAlphaPremultiplied(),
+                                    null);
+
+                    writer.write(null, new IIOImage(finalImage, null, null), iwp);
+                } else {
+                    writer.write(null, new IIOImage(image, null, null), iwp);
+                }
+            } finally {
+                try {
+                    writer.dispose();
+                } catch (Throwable e) {
+                    if (LOGGER.isLoggable(Level.FINEST))
+                        LOGGER.log(Level.FINEST, e.getLocalizedMessage(), e);
+                }
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.fine("Writing out... Done!");
+                }
             }
         }
     }

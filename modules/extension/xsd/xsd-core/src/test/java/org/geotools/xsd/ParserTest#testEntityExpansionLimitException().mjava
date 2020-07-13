@@ -1,0 +1,44 @@
+    /** Tests returned exception caused by entity expansion limit configuration on Parser. */
+    @Test
+    public void testEntityExpansionLimitException() throws Exception {
+        final StringBuffer sb = new StringBuffer();
+        XSD xsd =
+                new XSD() {
+                    @Override
+                    public String getSchemaLocation() {
+                        return ParserTest.class.getResource("mixed.xsd").getFile();
+                    }
+
+                    @Override
+                    public String getNamespaceURI() {
+                        return "http://geotools.org/test";
+                    }
+                };
+        Configuration cfg =
+                new Configuration(xsd) {
+                    @Override
+                    protected void registerBindings(Map bindings) {
+                        bindings.put(
+                                new QName("http://geotools.org/test", "MixedType"),
+                                new MixedTypeBinding(sb));
+                    }
+
+                    @Override
+                    protected void configureParser(Parser parser) {
+                        parser.setHandleMixedContent(true);
+                    }
+                };
+
+        Parser p = new Parser(cfg);
+        p.setEntityExpansionLimit(1);
+        SAXParseException expected = null;
+        try {
+            p.parse(getClass().getResourceAsStream("entityExpansionLimit.xml"));
+        } catch (SAXParseException ex) {
+            expected = ex;
+        }
+        assertNotNull(expected);
+        // check for the entity expansion limit error code in exception message
+        assertTrue(expected.getMessage().contains("JAXP00010001"));
+    }
+

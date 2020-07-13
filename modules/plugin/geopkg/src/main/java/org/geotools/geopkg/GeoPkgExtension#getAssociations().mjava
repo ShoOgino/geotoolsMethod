@@ -1,0 +1,33 @@
+    /**
+     * Returns the list of {@link Association} between this extension and table/columns in the
+     * database
+     */
+    public List<Association> getAssociations() throws IOException {
+        try {
+            try (Connection cx = getConnection()) {
+                String sql =
+                        format(
+                                "SELECT table_name, column_name "
+                                        + " FROM %s"
+                                        + " WHERE extension_name = ?",
+                                GeoPackage.EXTENSIONS);
+
+                try (PreparedStatement ps = cx.prepareStatement(sql)) {
+                    ps.setString(1, name);
+
+                    List<Association> result = new ArrayList<>();
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            String tableName = rs.getString(1);
+                            String columnName = rs.getString(2);
+                            result.add(new Association(tableName, columnName));
+                        }
+                    }
+                    return result;
+                }
+            }
+        } catch (SQLException e) {
+            throw new IOException(e);
+        }
+    }
+

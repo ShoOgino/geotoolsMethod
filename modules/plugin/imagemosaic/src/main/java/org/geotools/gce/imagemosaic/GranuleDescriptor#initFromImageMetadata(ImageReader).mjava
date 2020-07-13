@@ -1,0 +1,34 @@
+    private void initFromImageMetadata(ImageReader reader) throws IOException {
+        // grabbing the nodata if possible
+        int index = 0;
+        if (originator != null) {
+            Object imageIndex = originator.getAttribute("imageindex");
+            if (imageIndex instanceof Integer) {
+                index = (Integer) imageIndex;
+            }
+        }
+        try {
+            IIOMetadata metadata = reader.getImageMetadata(index);
+            if (metadata instanceof CoreCommonImageMetadata) {
+                CoreCommonImageMetadata ccm = (CoreCommonImageMetadata) metadata;
+
+                double[] noData = ccm.getNoData();
+                if (noData != null) {
+                    this.noData = new NoDataContainer(noData);
+                }
+
+                this.scales = ccm.getScales();
+                this.offsets = ccm.getOffsets();
+            }
+        } catch (UnsupportedOperationException e) {
+            // some imageio-ext plugin throw this because they do not support getting the metadata
+            // instead of returning null
+            if (LOGGER.isLoggable(Level.FINER)) {
+                LOGGER.log(
+                        Level.FINER,
+                        "Failed to gather metadata, might not be fatal, some readers do not support it",
+                        e);
+            }
+        }
+    }
+

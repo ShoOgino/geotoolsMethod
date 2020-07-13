@@ -1,0 +1,36 @@
+    public Filter[] splitFilter(Filter filter, SimpleFeatureType schema) {
+
+        PostPreProcessFilterSplittingVisitor splitter =
+                new PostPreProcessFilterSplittingVisitor(
+                        dataStore.getFilterCapabilities(), schema, null) {
+
+                    @Override
+                    public Object visit(Function expression, Object notUsed) {
+                        if (expression instanceof JsonPointerFunction) {
+                            // takes the json pointer param to check if
+                            // can be encoded
+                            Expression param = expression.getParameters().get(1);
+                            if (!(param instanceof Literal)) {
+                                expression = constantParameterToLiteral(expression, param, 1);
+                            }
+                        }
+                        return super.visit(expression, notUsed);
+                    }
+
+                    @Override
+                    protected boolean supports(Object value) {
+                        if (value instanceof JsonPointerFunction) {
+                            Expression param = ((Function) value).getParameters().get(1);
+                            return param instanceof Literal;
+                        } else return super.supports(value);
+                    }
+                };
+        filter.accept(splitter, null);
+
+        Filter[] split = new Filter[2];
+        split[0] = splitter.getFilterPre();
+        split[1] = splitter.getFilterPost();
+
+        return split;
+    }
+

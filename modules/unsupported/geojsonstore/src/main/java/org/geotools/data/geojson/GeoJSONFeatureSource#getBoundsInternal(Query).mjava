@@ -1,12 +1,19 @@
     @Override
     protected ReferencedEnvelope getBoundsInternal(Query query) throws IOException {
+        ReferencedEnvelope env = new ReferencedEnvelope(getDataStore().getCrs());
 
-        collection = fetchFeatures();
-        FeatureCollection<?, ?> sub = collection.subCollection(query.getFilter());
-        ReferencedEnvelope bounds = sub.getBounds();
-        if (bounds.getCoordinateReferenceSystem() == null) {
-            bounds = new ReferencedEnvelope(bounds, DefaultGeographicCRS.WGS84);
+        if (query.getFilter() == Filter.INCLUDE) {
+
+            try (GeoJSONReader reader = getDataStore().read()) {
+                try (FeatureIterator<SimpleFeature> itr = reader.getIterator()) {
+                    while (itr.hasNext()) {
+                        SimpleFeature f = itr.next();
+                        env.expandToInclude(
+                                ((Geometry) f.getDefaultGeometry()).getEnvelopeInternal());
+                    }
+                }
+            }
         }
-        return bounds;
+        return env;
     }
 

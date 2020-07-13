@@ -1,28 +1,29 @@
     @Test
     public void copyContent() throws Exception {
         File directory = tmp;
-        Map<String, Serializable> params = new HashMap<String, Serializable>();
-        params.put("url", url);
-        DataStore store = DataStoreFinder.getDataStore(params);
+        Map<String, Serializable> params = new HashMap<>();
+        params.put(GeoJSONDataStoreFactory.URL_PARAM.key, url);
+        DataStore store = fac.createDataStore(params);
         SimpleFeatureType featureType = store.getSchema("locations");
 
-        File file2 = new File(directory, "duplicate.json");
-        Map<String, Serializable> params2 = new HashMap<String, Serializable>();
-        params2.put("url", URLs.fileToUrl(file2));
+        File file2 = new File(directory, "duplicate.geojson");
+
+        // System.out.println("copying to " + file2);
+        Map<String, Serializable> params2 = new HashMap<>();
+        params2.put(GeoJSONDataStoreFactory.FILE_PARAM.key, file2);
 
         GeoJSONDataStoreFactory factory = new GeoJSONDataStoreFactory();
         DataStore duplicate = factory.createNewDataStore(params2);
         duplicate.createSchema(featureType);
 
-        FeatureReader<SimpleFeatureType, SimpleFeature> reader;
-        FeatureWriter<SimpleFeatureType, SimpleFeature> writer;
         SimpleFeature feature, newFeature;
 
         Query query = new Query(featureType.getTypeName(), Filter.INCLUDE);
-        reader = store.getFeatureReader(query, Transaction.AUTO_COMMIT);
-
-        writer = duplicate.getFeatureWriterAppend("duplicate", Transaction.AUTO_COMMIT);
-        try {
+        assertNotNull(duplicate);
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                        store.getFeatureReader(query, Transaction.AUTO_COMMIT);
+                FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
+                        duplicate.getFeatureWriterAppend("duplicate", Transaction.AUTO_COMMIT)) {
             while (reader.hasNext()) {
                 feature = reader.next();
                 newFeature = writer.next();
@@ -30,9 +31,6 @@
                 newFeature.setAttributes(feature.getAttributes());
                 writer.write();
             }
-        } finally {
-            reader.close();
-            writer.close();
         }
 
         // test the new store is the same as the original
@@ -50,14 +48,18 @@
             while (original.hasNext() && dups.hasNext()) {
                 SimpleFeature o = original.next();
                 SimpleFeature d = dups.next();
+
                 for (int i = 0; i < o.getAttributeCount(); i++) {
-                    assertTrue(DataUtilities.attributesEqual(o.getAttribute(i), d.getAttribute(i)));
+                    assertTrue(
+                            "" + o.getAttribute(i) + " doesn't equal " + d.getAttribute(i),
+                            DataUtilities.attributesEqual(o.getAttribute(i), d.getAttribute(i)));
                 }
             }
 
         } finally {
             original.close();
             dups.close();
+            store.dispose();
         }
     }
 

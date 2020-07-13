@@ -1,0 +1,45 @@
+    @Test
+    public void testTextFont() {
+        // check the json
+        MBLayer fontLayer = (SymbolMBLayer) fontStyle.layer("text-font");
+        assertEquals(
+                true, ((JSONObject) fontLayer.getLayout().get("text-font")).containsKey("stops"));
+        JSONArray stops =
+                (JSONArray) ((JSONObject) fontLayer.getLayout().get("text-font")).get("stops");
+        assertEquals("Apple-Chancery", ((JSONArray) ((JSONArray) stops.get(0)).get(1)).get(0));
+
+        // check the SLD
+        List<FeatureTypeStyle> featureTypeFont = fontLayer.transformInternal(fontStyle);
+        TextSymbolizer text =
+                (TextSymbolizer) featureTypeFont.get(0).rules().get(0).symbolizers().get(0);
+        Font font = text.fonts().get(0);
+        Expression family = font.getFamily().get(0);
+        assertThat(family, instanceOf(FontAlternativesFunction.class));
+        FontAlternativesFunction fontAlternatives = (FontAlternativesFunction) family;
+        assertThat(firstParameter(fontAlternatives), instanceOf(MapBoxFontBaseNameFunction.class));
+        MapBoxFontBaseNameFunction baseNameFunction = firstParameter(fontAlternatives);
+        assertEquals(
+                "Apple-Chancery",
+                ((CategorizeFunction) firstParameter(baseNameFunction))
+                        .getParameters()
+                        .get(1)
+                        .toString());
+        // weight
+        Expression weight = font.getWeight();
+        assertThat(weight, instanceOf(MapBoxFontWeightFunction.class));
+        MapBoxFontWeightFunction fontWeight = (MapBoxFontWeightFunction) weight;
+        assertEquals(
+                "Apple-Chancery",
+                ((CategorizeFunction) firstParameter(fontWeight))
+                        .getParameters()
+                        .get(1)
+                        .toString());
+        // style
+        Expression style = font.getStyle();
+        assertThat(style, instanceOf(MapBoxFontStyleFunction.class));
+        MapBoxFontStyleFunction fontStyle = (MapBoxFontStyleFunction) style;
+        assertEquals(
+                "Apple-Chancery",
+                ((CategorizeFunction) firstParameter(fontStyle)).getParameters().get(1).toString());
+    }
+

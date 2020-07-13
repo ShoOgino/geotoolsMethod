@@ -1,0 +1,38 @@
+    @Test
+    public void testGranuleSourceFileView() throws Exception {
+        File testDir = tempFolder.newFolder("multi-coverage-fileview");
+        URL testUrl = URLs.fileToUrl(testDir);
+        FileUtils.copyDirectory(TestData.file(this, "multi-coverage"), testDir);
+        ImageMosaicReader reader = new ImageMosaicReader(testUrl);
+        try {
+            assertNotNull(reader);
+
+            Query q = new Query();
+            q.setHints(new Hints(GranuleSource.FILE_VIEW, true));
+            GranuleSource source = reader.getGranules("air_temperature", true);
+            SimpleFeatureCollection granules = source.getGranules(q);
+
+            // many slices but only two files
+            assertEquals(2, granules.size());
+
+            SimpleFeatureType schema = granules.getSchema();
+            assertNull(schema.getDescriptor("location"));
+            assertNull(schema.getDescriptor("imageindex"));
+            assertNotNull(schema.getDescriptor("the_geom"));
+            assertNotNull(schema.getDescriptor("time"));
+
+            SimpleFeature nc1, nc2;
+            try (SimpleFeatureIterator it = granules.features()) {
+                nc1 = it.next();
+                nc2 = it.next();
+            }
+
+            assertEquals("2017-02-06 00:00:00.0", nc1.getAttribute("time").toString());
+            assertEquals("2017-02-06 12:00:00.0", nc2.getAttribute("time").toString());
+        } finally {
+            if (reader != null) {
+                reader.dispose();
+            }
+        }
+    }
+

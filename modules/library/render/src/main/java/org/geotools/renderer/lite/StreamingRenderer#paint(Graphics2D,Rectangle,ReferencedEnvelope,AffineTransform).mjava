@@ -159,6 +159,7 @@
                             graphics, paintArea, zGroupedMapContent);
 
             int layerCounter = 0;
+
             for (CompositingGroup compositingGroup : compositingGroups) {
                 MapContent currentMapContent = compositingGroup.mapContent;
                 Graphics2D compositingGraphic = compositingGroup.graphics;
@@ -169,6 +170,7 @@
                 // styles
                 //
                 // ////////////////////////////////////////////////////////////////////
+
                 labelCache.start();
                 if (labelCache instanceof LabelCacheImpl) {
                     ((LabelCacheImpl) labelCache)
@@ -177,6 +179,11 @@
                 }
 
                 for (Layer layer : currentMapContent.layers()) {
+                    try {
+                        renderListeners.forEach(l -> l.layerStart(layer));
+                    } catch (Exception e) {
+                        fireErrorEvent(e);
+                    }
                     layerCounter++;
                     String layerId = String.valueOf(layerCounter);
                     if (!layer.isVisible()) {
@@ -186,6 +193,12 @@
 
                     if (renderingStopRequested) {
                         return;
+                    }
+
+                    // handle the background color specification, if any
+                    Style style = layer.getStyle();
+                    if (style != null && style.getBackground() != null) {
+                        fillBackground(graphics, paintArea, style);
                     }
 
                     labelCache.startLayer(layerId);
@@ -216,6 +229,11 @@
                     }
 
                     labelCache.endLayer(layerId, graphics, screenSize);
+                    try {
+                        requests.put(new RenderTimeStatisticsRequest(renderListeners, layer));
+                    } catch (InterruptedException ex) {
+                        fireErrorEvent(ex);
+                    }
                 }
 
                 // have we been painting on a back buffer? If so, merge on the main graphic
@@ -259,7 +277,9 @@
         }
 
         if (!renderingStopRequested) {
+            renderListeners.forEach(l -> l.labellingStart());
             labelCache.end(graphics, paintArea);
+            renderListeners.forEach(l -> l.labellingEnd());
         } else {
             labelCache.clear();
         }

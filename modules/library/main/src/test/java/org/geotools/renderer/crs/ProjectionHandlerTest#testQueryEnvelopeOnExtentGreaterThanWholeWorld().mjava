@@ -1,0 +1,22 @@
+    @Test
+    public void testQueryEnvelopeOnExtentGreaterThanWholeWorld() throws Exception {
+        ReferencedEnvelope re = new ReferencedEnvelope(350, 1000, -40, 30, WGS84);
+        ProjectionHandler ph = ProjectionHandlerFinder.getHandler(re, OSM, true);
+        List<ReferencedEnvelope> queryEnvelopes = ph.getQueryEnvelopes();
+        ReferencedEnvelope qe = queryEnvelopes.get(queryEnvelopes.size() - 1);
+
+        // We should get back the whole 3857 domain of validity
+        // since we add at least a full whole world span
+        MathTransform transform = CRS.findMathTransform(WGS84, OSM);
+        Coordinate minX = JTS.transform(new Coordinate(-180, -85), null, transform);
+        Coordinate maxX = JTS.transform(new Coordinate(180, -85), null, transform);
+        assertEquals(minX.x, qe.getMinX(), 1e-3);
+        assertEquals(maxX.x, qe.getMaxX(), 1e-3);
+
+        ph = ProjectionHandlerFinder.getHandler(re, WGS84, true);
+        queryEnvelopes = ph.getQueryEnvelopes();
+        qe = queryEnvelopes.get(queryEnvelopes.size() - 1);
+        assertEquals(-180, qe.getMinX(), 1e-3);
+        assertEquals(180, qe.getMaxX(), 1e-3);
+    }
+

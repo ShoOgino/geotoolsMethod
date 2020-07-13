@@ -1,0 +1,37 @@
+    @Test
+    public void testQueryEnvelopeAcrossDateLineFarAway() throws Exception {
+        final double positiveMinX = 2170;
+        final double positiveMaxX = 2380;
+        // [2170, 2380] is the same as [10, 220] which can be split
+        // into [10, 180] AND [180, 220] which is the same as
+        // [10 , 180] AND [-180, -140]
+
+        final double negativeMinX = -2380;
+        final double negativeMaxX = -2170;
+        final double[] negatives = new double[] {negativeMinX, negativeMaxX};
+        final double[] positives = new double[] {positiveMinX, positiveMaxX};
+        final double[][] sets = new double[][] {negatives, positives};
+
+        boolean negative = true;
+        for (double[] set : sets) {
+            final double minX = set[0];
+            final double maxX = set[1];
+
+            ReferencedEnvelope re = new ReferencedEnvelope(minX, maxX, -40, 30, WGS84);
+            ProjectionHandler ph = ProjectionHandlerFinder.getHandler(re, WGS84, true);
+            List<ReferencedEnvelope> queryEnvelopes = ph.getQueryEnvelopes();
+            assertEquals(3, queryEnvelopes.size());
+            ReferencedEnvelope qe = queryEnvelopes.get(1);
+
+            final double wrappedMinX = minX % 360;
+            final double wrappedMaxX = maxX % 360;
+            assertEquals(-180, qe.getMinX(), 1e-3);
+            assertEquals(wrappedMaxX - (negative ? 0 : 360), qe.getMaxX(), 1e-3);
+
+            qe = queryEnvelopes.get(2);
+            assertEquals(wrappedMinX + (negative ? 360 : 0), qe.getMinX(), 1e-3);
+            assertEquals(180, qe.getMaxX(), 1e-3);
+            negative = false;
+        }
+    }
+

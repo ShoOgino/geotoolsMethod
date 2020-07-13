@@ -1,0 +1,87 @@
+    /**
+     * Extracts a sub-rule at the given z-index. Will return null if this rule has nothing at that
+     * specific z-index
+     */
+    public CssRule getSubRuleByZIndex(Integer zIndex, ZIndexMode zIndexMode) {
+        Map<PseudoClass, List<Property>> zProperties = new HashMap<>();
+        List<Integer> zIndexes = new ArrayList<>();
+        for (Map.Entry<PseudoClass, List<Property>> entry : this.getProperties().entrySet()) {
+            List<Property> props = entry.getValue();
+            collectZIndexesInProperties(props, zIndexes);
+            // the list of z-index values is positional, people will normally set them in
+            // increasing order, but we don't want to make assumptions... users could
+            // even repeat the same z-index multiple times, take care of that as well
+            ListIterator<Integer> it = zIndexes.listIterator();
+            while (it.hasNext()) {
+                int zIndexPosition = it.nextIndex();
+                Integer nextZIndex = it.next();
+                if (nextZIndex == NO_Z_INDEX) {
+                    if (zIndexMode == ZIndexMode.NoZIndexAll
+                            || !PseudoClass.ROOT.equals(entry.getKey())) {
+                        // this set of properties is z-index independent
+                        zProperties.put(entry.getKey(), new ArrayList<>(props));
+                    } else if (zIndex == 0) {
+                        zProperties.put(entry.getKey(), new ArrayList<>(props));
+                    }
+                } else if (nextZIndex == null || !nextZIndex.equals(zIndex)) {
+                    continue;
+                } else {
+                    // extract the property values at that position
+                    List<Property> zIndexProperties = new ArrayList<>();
+                    for (Property property : props) {
+                        if (isZIndex(property)) {
+                            continue;
+                        }
+                        List<Value> values = property.getValues();
+                        if (zIndexPosition < values.size()) {
+                            Property p =
+                                    new Property(
+                                            property.getName(),
+                                            Arrays.asList(values.get(zIndexPosition)));
+                            zIndexProperties.add(p);
+                        } else if (values.size() == 1) {
+                            // properties that does not have multiple values are bound to all levels
+                            zIndexProperties.add(property);
+                        }
+                    }
+                    // if we collected any, add to the result
+                    if (zIndexProperties.size() > 0) {
+                        zProperties.put(entry.getKey(), zIndexProperties);
+                    }
+                }
+            }
+        }
+
+        List<CssRule> nestedByZIndex = Collections.emptyList();
+        if (nestedRules != null) {
+            nestedByZIndex =
+                    nestedRules
+                            .stream()
+                            .map(r -> r.getSubRuleByZIndex(zIndex, zIndexMode))
+                            .filter(r -> r != null)
+                            .collect(Collectors.toList());
+        }
+
+        if (zProperties.size() > 0) {
+            // if the properties had an original z-index, mark it, we'll need it
+            // to figure out if a combination of rules can be applied at a z-index > 0, or not
+            if (zIndex != null && zIndexes.contains(zIndex)) {
+                List<Property> rootProperties = zProperties.get(PseudoClass.ROOT);
+                if (rootProperties == null) {
+                    rootProperties = new ArrayList<>();
+                    zProperties.put(PseudoClass.ROOT, rootProperties);
+                }
+                rootProperties.add(
+                        new Property(
+                                "z-index",
+                                Arrays.asList((Value) new Value.Literal(String.valueOf(zIndex)))));
+            }
+            CssRule zRule = new CssRule(this.getSelector(), zProperties, this.getComment());
+            zRule.nestedRules = nestedByZIndex;
+            zRule.ancestry = Arrays.asList(this);
+            return zRule;
+        } else {
+            return null;
+        }
+    }
+

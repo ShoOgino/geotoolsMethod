@@ -6,11 +6,15 @@
         Point ls = gf.createPoint(sf.create(new double[] {1, 1}, 2));
         DWithin f = ff.dwithin(ff.property("geo"), ff.literal(ls), 3, SI.METRE.getSymbol());
         SimpleFeatureCollection features = featureSource.getFeatures(f);
-        assertEquals(2, features.size());
-        SimpleFeatureIterator fsi = features.features();
-        assertTrue(fsi.hasNext());
-        assertEquals(fsi.next().getID(), "not-active.12");
-        assertTrue(fsi.hasNext());
-        assertEquals(fsi.next().getID(), "not-active.13");
+        try (final Stream<SimpleFeature> featureStream = FeatureStreams.toFeatureStream(features)) {
+            final List<SimpleFeature> featuresList = featureStream.collect(Collectors.toList());
+            assertEquals(5, featuresList.size());
+            assertTrue(
+                    "not-active.12 ID not found",
+                    featuresList.stream().anyMatch(x -> "not-active.12".equals(x.getID())));
+            assertTrue(
+                    "not-active.13 ID not found",
+                    featuresList.stream().anyMatch(x -> "not-active.13".equals(x.getID())));
+        }
     }
 

@@ -1,0 +1,35 @@
+    /**
+     * Forces adding ROI to the coverage in case it's missing. It will use the renderer image
+     * footprint.
+     */
+    private static GridCoverage2D addRoiIfMissing(
+            GridCoverage2D coverage, GridCoverageFactory gridCoverageFactory) {
+        RenderedImage input = coverage.getRenderedImage();
+        Object roiObject = input.getProperty("ROI");
+        Object gcRoiObject = coverage.getProperty("GC_ROI");
+        if (!(roiObject instanceof ROI) && !(gcRoiObject instanceof ROI)) {
+            Envelope env =
+                    new Envelope(
+                            input.getMinX(),
+                            input.getMinX() + input.getWidth(),
+                            input.getMinY(),
+                            input.getMinY() + input.getHeight());
+            ROI roi = new ROI(new ROIGeometry(JTS.toGeometry(env)).getAsImage());
+            PlanarImage pi = PlanarImage.wrapRenderedImage(input);
+            pi.setProperty("ROI", roi);
+            final Map sourceProperties = coverage.getProperties();
+            Map properties =
+                    sourceProperties == null ? new HashMap() : new HashMap(sourceProperties);
+            properties.put("GC_ROI", roi);
+            return gridCoverageFactory.create(
+                    coverage.getName(),
+                    pi,
+                    coverage.getGridGeometry(),
+                    coverage.getSampleDimensions(),
+                    new GridCoverage2D[] {coverage},
+                    properties);
+        } else {
+            return coverage;
+        }
+    }
+

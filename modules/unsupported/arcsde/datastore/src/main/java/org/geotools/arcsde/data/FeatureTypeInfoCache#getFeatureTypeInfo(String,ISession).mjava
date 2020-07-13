@@ -1,0 +1,28 @@
+    /**
+     * Used by feature reader and writer to get the schema information.
+     *
+     * <p>They are making use of this function because they already have their own Session to
+     * request the ftInfo if needed.
+     */
+    public FeatureTypeInfo getFeatureTypeInfo(final String typeName, final ISession session)
+            throws IOException {
+
+        FeatureTypeInfo typeInfo = getCachedTypeInfo(typeName);
+        if (typeInfo != null) {
+            return typeInfo;
+        }
+
+        cacheLock.writeLock().lock();
+        // Recheck so it hasn't been done already.
+        try {
+            typeInfo = featureTypeInfos.get(typeName);
+            if (typeInfo == null) {
+                typeInfo = ArcSDEAdapter.fetchSchema(typeName, this.namespace, session);
+                featureTypeInfos.put(typeName, typeInfo);
+            }
+        } finally {
+            cacheLock.writeLock().unlock();
+        }
+        return typeInfo;
+    }
+

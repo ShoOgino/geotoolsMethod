@@ -1,0 +1,25 @@
+        public AzimuthalEquidistantProjectionHandler(
+                CoordinateReferenceSystem sourceCRS,
+                Envelope validAreaBounds,
+                ReferencedEnvelope renderingEnvelope)
+                throws FactoryException, MismatchedDimensionException, TransformException {
+            super(sourceCRS, validAreaBounds, renderingEnvelope);
+
+            CoordinateReferenceSystem crs = renderingEnvelope.getCoordinateReferenceSystem();
+            Point2D.Double center = getCenter(crs);
+            initializeDatelineCutter(crs, center);
+            double radius = getRadius(crs, center);
+            renderingGeometry = JTS.toGeometry(renderingEnvelope);
+            if (!checkRenderingWithinRadius(center, radius)) {
+                renderingGeometryReduced = true;
+                Polygon azeqProjectedExtents = getAzeqProjectedExtents(radius);
+                Geometry intersection = renderingGeometry.intersection(azeqProjectedExtents);
+                if (intersection.isEmpty()) {
+                    renderingGeometry = null;
+                } else {
+                    List polygons = PolygonExtracter.getPolygons(intersection);
+                    renderingGeometry = (Polygon) polygons.get(0);
+                }
+            }
+        }
+

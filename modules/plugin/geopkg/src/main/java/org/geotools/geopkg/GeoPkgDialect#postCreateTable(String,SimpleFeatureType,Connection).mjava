@@ -19,21 +19,25 @@
 
         CoordinateReferenceSystem crs = featureType.getCoordinateReferenceSystem();
         if (crs != null) {
-            Integer epsgCode = null;
-            try {
-                epsgCode = CRS.lookupEpsgCode(crs, true);
-            } catch (FactoryException e) {
-                LOGGER.log(Level.WARNING, "Error looking up epsg code for " + crs, e);
-            }
-            if (epsgCode != null) {
-                fe.setSrid(epsgCode);
+            if (DefaultEngineeringCRS.GENERIC_2D == crs) {
+                fe.setSrid(GeoPackage.GENERIC_PROJECTED_SRID);
+            } else {
+                try {
+                    Integer epsgCode = CRS.lookupEpsgCode(crs, true);
+                    if (epsgCode != null) {
+                        fe.setSrid(epsgCode);
+                    }
+                } catch (FactoryException e) {
+                    LOGGER.log(Level.WARNING, "Error looking up epsg code for " + crs, e);
+                }
             }
         }
 
+        @SuppressWarnings("PMD.CloseResource") // using the pool of the store, no need to close
         GeoPackage geopkg = geopkg();
         try {
-            geopkg.addGeoPackageContentsEntry(fe);
-            geopkg.addGeometryColumnsEntry(fe);
+            geopkg.addGeoPackageContentsEntry(fe, cx);
+            geopkg.addGeometryColumnsEntry(fe, cx);
 
             // other geometry columns are possible
             for (PropertyDescriptor descr : featureType.getDescriptors()) {
@@ -45,12 +49,46 @@
                         fe1.setGeometryColumn(gd1.getLocalName());
                         fe1.setGeometryType(
                                 Geometries.getForBinding((Class) gd1.getType().getBinding()));
-                        geopkg.addGeometryColumnsEntry(fe1);
+                        geopkg.addGeometryColumnsEntry(fe1, cx);
                     }
                 }
             }
         } catch (IOException e) {
             throw new SQLException(e);
+        }
+
+        // check if enum columns need to be declared, and do so
+        for (AttributeDescriptor ad : featureType.getAttributeDescriptors()) {
+            DataColumn dc = (DataColumn) ad.getUserData().get(GeoPackage.DATA_COLUMN);
+            if (dc != null) {
+                if (!ad.getLocalName().equals(dc.getColumnName())) {
+                    throw new IllegalArgumentException(
+                            "Expected column name "
+                                    + ad.getLocalName()
+                                    + " but got"
+                                    + dc.getColumnName());
+                }
+                geopkg.getExtension(GeoPkgSchemaExtension.class)
+                        .addDataColumn(featureType.getTypeName(), dc, cx);
+            } else {
+                List<?> options = FeatureTypes.getFieldOptions(ad);
+                if (options != null && !options.isEmpty()) {
+                    dc = new DataColumn();
+                    dc.setColumnName(ad.getLocalName());
+                    dc.setName(ad.getLocalName());
+                    Map<String, String> optionsMap = new LinkedHashMap<>();
+                    for (int i = 0; i < options.size(); i++) {
+                        optionsMap.put(String.valueOf(i), String.valueOf(options.get(i)));
+                    }
+                    String constraintName =
+                            featureType.getTypeName() + "_" + ad.getLocalName() + "_enum";
+                    DataColumnConstraint.Enum dcc =
+                            new DataColumnConstraint.Enum(constraintName, optionsMap);
+                    dc.setConstraint(dcc);
+                    geopkg.getExtension(GeoPkgSchemaExtension.class)
+                            .addDataColumn(featureType.getTypeName(), dc, cx);
+                }
+            }
         }
     }
 

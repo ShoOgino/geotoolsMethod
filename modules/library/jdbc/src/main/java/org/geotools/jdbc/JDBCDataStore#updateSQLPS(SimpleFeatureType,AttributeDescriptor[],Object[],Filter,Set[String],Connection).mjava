@@ -69,15 +69,21 @@
             }
 
             Class binding = att.getType().getBinding();
+            Object value = values[i];
             if (Geometry.class.isAssignableFrom(binding)) {
-                Geometry g = (Geometry) values[i];
+                Geometry g = (Geometry) value;
                 dialect.setGeometryValue(
                         g, getDescriptorDimension(att), getDescriptorSRID(att), binding, ps, j + 1);
             } else {
-                dialect.setValue(values[i], binding, ps, j + 1, cx);
+                EnumMapper mapper = (EnumMapper) att.getUserData().get(JDBCDataStore.JDBC_ENUM_MAP);
+                if (mapper != null) {
+                    value = mapper.fromString(Converters.convert(value, String.class));
+                    binding = Integer.class;
+                }
+                dialect.setValue(value, binding, ps, j + 1, cx);
             }
             if (LOGGER.isLoggable(Level.FINE)) {
-                LOGGER.fine((j + 1) + " = " + values[i]);
+                LOGGER.fine((j + 1) + " = " + value);
             }
             // we do this only if we did not skip the exposed pk
             j++;

@@ -1,0 +1,58 @@
+    private double[] getGeneralizationSpans(
+            ReferencedEnvelope envelope,
+            MathTransform sourceToScreen,
+            AffineTransform worldToScreenTransform,
+            CoordinateReferenceSystem featureCRS,
+            Rectangle screen)
+            throws TransformException {
+        // can we cut on the valid area? No? well, let's hope for the best
+        try {
+            ProjectionHandler ph =
+                    ProjectionHandlerFinder.getHandler(
+                            new ReferencedEnvelope(featureCRS),
+                            envelope.getCoordinateReferenceSystem(),
+                            false);
+            if (isAdvancedProjectionHandlingEnabled() && ph != null) {
+
+                Polygon renderPolygon = JTS.toGeometry(envelope);
+                // make it cut to valid area
+                Geometry preProcessed = ph.preProcess(renderPolygon);
+                if (preProcessed != null && !preProcessed.isEmpty()) {
+                    LinearTransform w2s = ProjectiveTransform.create(worldToScreenTransform);
+                    Geometry screenGeometry = JTS.transform(preProcessed, w2s);
+                    Envelope screenEnvelope = screenGeometry.getEnvelopeInternal();
+                    int minX, minY, maxX, maxY;
+                    if (screenEnvelope.getWidth() > 1) {
+                        // ensure expansion does not bring it outside of the valid area
+                        minX = (int) Math.ceil(screenEnvelope.getMinX());
+                        maxX = (int) Math.floor(screenEnvelope.getMaxX());
+                    } else {
+                        double midPoint = (screenEnvelope.getMinX() + screenEnvelope.getMaxX()) / 2;
+                        minX = maxX = (int) Math.round(midPoint);
+                    }
+                    if (screenEnvelope.getHeight() > 1) {
+                        // ensure expansion does not bring it outside of the valid area
+                        minY = (int) Math.ceil(screenEnvelope.getMinY());
+                        maxY = (int) Math.floor(screenEnvelope.getMaxY());
+                    } else {
+                        double midPoint = (screenEnvelope.getMinY() + screenEnvelope.getMaxY()) / 2;
+                        minY = maxY = (int) Math.round(midPoint);
+                    }
+
+                    screen = new Rectangle(minX, minY, maxX - minX, maxY - minY);
+                }
+            }
+
+        } catch (FactoryException e) {
+            if (LOGGER.isLoggable(Level.FINE))
+                LOGGER.log(
+                        Level.INFO,
+                        "Failed to compute the generalization spans with projection handlers, falling back to full area evaluation",
+                        e);
+        }
+
+        // fallback, use the entire rendering area
+        return Decimator.computeGeneralizationDistances(
+                sourceToScreen.inverse(), screen, generalizationDistance);
+    }
+

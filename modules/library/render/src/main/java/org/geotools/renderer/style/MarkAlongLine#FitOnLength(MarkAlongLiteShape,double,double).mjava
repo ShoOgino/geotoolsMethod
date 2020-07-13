@@ -1,0 +1,36 @@
+    public static synchronized MarkAlongLiteShape FitOnLength(
+            MarkAlongLiteShape markAlongLiteShape, double length, double minScaleLimit) {
+
+        double scaleX = length / markAlongLiteShape.getBounds().width;
+        if (LOGGER.isLoggable(Level.FINE))
+            LOGGER.fine("Final Shape needs " + scaleX + " Scale X for Width Correction");
+        if (Double.isInfinite(scaleX)) return null;
+        AffineTransformation at = new AffineTransformation();
+        at.setToScale(scaleX, 1d);
+
+        // resize if scale limit is below the limit
+        // scaleX will never be above 1
+        if (scaleX >= minScaleLimit)
+            markAlongLiteShape.setGeometry(at.transform(markAlongLiteShape.getGeometry()));
+        else {
+            // resize envlope to meet line length
+            Geometry env = markAlongLiteShape.getGeometry().getEnvelope();
+            Geometry transformedEnv = at.transform(env);
+            Geometry clipped = markAlongLiteShape.getGeometry().intersection(transformedEnv);
+
+            if (clipped == null || clipped.isEmpty()) {
+                markAlongLiteShape.getHints().put(MarkAlongLiteShape.SKIP_ME, true);
+                return markAlongLiteShape;
+            }
+            // the left over part that exceeded the length
+            // keep it also, it will be used to continue drawing of the shape
+            // where it discontinued from
+            Geometry remainingGeom = markAlongLiteShape.getGeometry().difference(transformedEnv);
+            markAlongLiteShape.setGeometry(clipped);
+            markAlongLiteShape.setLeftOver(remainingGeom);
+            markAlongLiteShape.getHints().put(MarkAlongLiteShape.CLIPPED, true);
+        }
+
+        return markAlongLiteShape;
+    }
+

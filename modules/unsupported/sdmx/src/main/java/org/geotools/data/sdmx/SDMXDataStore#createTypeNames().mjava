@@ -1,0 +1,34 @@
+    @Override
+    protected List<Name> createTypeNames() {
+
+        // This is to avoid pining the SDMX server every time type names habe to be
+        // created
+        if (this.entries.isEmpty() == false) {
+            return new ArrayList<Name>(this.entries.keySet());
+        }
+
+        try {
+            dataflows = this.sdmxClient.getDataflows();
+        } catch (SdmxException e) {
+            LOGGER.log(Level.SEVERE, "Error while getting dataflows", e);
+            return new ArrayList<Name>();
+        }
+
+        List<GetDataFlowStructureTask> tasks = new ArrayList<GetDataFlowStructureTask>();
+        dataflows.forEach(
+                (s, d) -> {
+                    tasks.add(new GetDataFlowStructureTask(this, s, d));
+                });
+
+        this.dataflowStructures.clear();
+        ExecutorService executorService = Executors.newFixedThreadPool(this.getConcurrency());
+        try {
+            executorService.invokeAll(tasks, SDMXDataStore.TIMEOUT, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            LOGGER.log(Level.SEVERE, "Timeout error getting SDMX DSD", e);
+        }
+        executorService.shutdownNow();
+
+        return new ArrayList<Name>(this.entries.keySet());
+    }
+

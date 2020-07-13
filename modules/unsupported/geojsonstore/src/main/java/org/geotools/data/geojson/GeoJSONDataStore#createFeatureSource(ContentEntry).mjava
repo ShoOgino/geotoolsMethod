@@ -1,14 +1,16 @@
     @Override
     protected ContentFeatureSource createFeatureSource(ContentEntry entry) throws IOException {
-        // We can only really write to local files
-        String scheme = url.getProtocol();
-        String host = url.getHost();
-        if ("file".equalsIgnoreCase(scheme) && (host == null || host.isEmpty())) {
-            GeoJSONFeatureStore geoJSONFeatureStore = new GeoJSONFeatureStore(entry, Query.ALL);
-            return geoJSONFeatureStore;
-        } else {
-            GeoJSONFeatureSource geoJSONFeatureSource = new GeoJSONFeatureSource(entry, Query.ALL);
-            return geoJSONFeatureSource;
+        if ("file".equalsIgnoreCase(getUrl().getProtocol())) {
+            File f = URLs.urlToFile(getUrl());
+            if (!f.exists()) {
+                if (!f.createNewFile()) {
+                    return new GeoJSONFeatureSource(entry, Query.ALL);
+                }
+            }
+            if (f.canWrite()) {
+                return new GeoJSONFeatureStore(entry, Query.ALL);
+            }
         }
+        return new GeoJSONFeatureSource(entry, Query.ALL);
     }
 

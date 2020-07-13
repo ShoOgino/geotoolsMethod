@@ -1,0 +1,115 @@
+    /** @return the gridcoverage as the final result */
+    @SuppressFBWarnings("NP_NULL_PARAM_DEREF") // pixelDimension gets into the ImageComposerThread
+    // and is eventually dereferenced by some call to base constructor. Verified the bug is here,
+    // just don't know how to fix it
+    private GridCoverage2D loadTiles(ImageMosaicJDBCReaderState state) throws IOException {
+        Rectangle renderedImageRectangle = state.getRenderedImageRectangle();
+        if (LOGGER.isLoggable(Level.FINE)) {
+            LOGGER.fine(
+                    new StringBuffer("Creating mosaic to comply with envelope ")
+                            .append(
+                                    (state.getRequestedEnvelope() != null)
+                                            ? state.getRequestedEnvelope().toString()
+                                            : null)
+                            .append(" crs ")
+                            .append(crs.toWKT())
+                            .append(" dim ")
+                            .append(
+                                    (renderedImageRectangle == null)
+                                            ? " null"
+                                            : renderedImageRectangle.toString())
+                            .toString());
+        }
+
+        transformRequestedEnvelope(state);
+
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Check if we have something to load by intersecting the requested
+        // envelope with the bounds of the data set. If not, give warning
+        //
+        // /////////////////////////////////////////////////////////////////////
+        if (!state.getRequestedEnvelopeTransformed().intersects(this.originalEnvelope, true)) {
+            LOGGER.warning("The requested envelope does not intersect the envelope of this mosaic");
+            LOGGER.warning(state.getRequestedEnvelopeTransformed().toString());
+            LOGGER.warning(originalEnvelope.toString());
+
+            //            return coverageFactory.create(coverageName, getEmptyImage((int)
+            // pixelDimension
+            //                    .getWidth(), (int) pixelDimension.getHeight(), backgroundColor,
+            // outputTransparentColor), state
+            //                    .getRequestedEnvelope());
+            return null;
+        }
+
+        // /////////////////////////////////////////////////////////////////////
+        //
+        // Load feaures from the index
+        // In case there are no features under the requested bbox which is legal
+        // in case the mosaic is not a real sqare, we return a fake mosaic.
+        //
+        // /////////////////////////////////////////////////////////////////////
+        final ImageReadParam readP = new ImageReadParam();
+        Integer imageChoice = null;
+        if (renderedImageRectangle != null) {
+            try {
+                imageChoice =
+                        setReadParams(
+                                OverviewPolicy.getDefaultPolicy(),
+                                readP,
+                                state.getRequestedEnvelopeTransformed(),
+                                renderedImageRectangle);
+                readP.setSourceSubsampling(1, 1, 0, 0);
+            } catch (TransformException e) {
+                LOGGER.severe(e.getLocalizedMessage());
+                return coverageFactory.create(
+                        coverageName,
+                        getEmptyImage(
+                                (int) renderedImageRectangle.getWidth(),
+                                (int) renderedImageRectangle.getHeight(),
+                                state.getBackgroundColor(),
+                                state.getOutputTransparentColor()),
+                        state.getRequestedEnvelope());
+            }
+        }
+        if (imageChoice == null) {
+            imageChoice = Integer.valueOf(0);
+        }
+
+        ImageLevelInfo levelInfo = jdbcAccess.getLevelInfo(imageChoice.intValue());
+        state.setImageLevelInfo(levelInfo);
+        LOGGER.info(
+                "Coverage "
+                        + levelInfo.getCoverageName()
+                        + " using spatial table "
+                        + levelInfo.getSpatialTableName()
+                        + ", image table "
+                        + levelInfo.getTileTableName());
+
+        expandRequestedEnvelope(state);
+
+        ImageComposerThread imageComposerThread =
+                new ImageComposerThread(state, config, coverageFactory);
+        imageComposerThread.start();
+
+        jdbcAccess.startTileDecoders(
+                renderedImageRectangle,
+                state.getRequestedEnvelopeTransformedExpanded(),
+                levelInfo,
+                state.getTileQueue(),
+                coverageFactory);
+
+        try {
+            imageComposerThread.join();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+        GridCoverage2D result = imageComposerThread.getGridCoverage2D();
+        if (result == null) {
+            return null;
+        }
+
+        return transformResult(result, state);
+    }
+

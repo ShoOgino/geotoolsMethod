@@ -1,0 +1,33 @@
+    /** Checks that a query returns only the specified attributes. */
+    @Test
+    public void testRestrictsAttributes()
+            throws IOException, IllegalAttributeException, SeException {
+        final String typeName = testData.getTempTableName();
+        final DataStore ds = testData.getDataStore();
+        final SimpleFeatureType schema = ds.getSchema(typeName);
+        final int queriedAttributeCount = schema.getAttributeCount() - 3;
+        final String[] queryAtts = new String[queriedAttributeCount];
+
+        for (int i = 0; i < queryAtts.length; i++) {
+            queryAtts[i] = schema.getDescriptor(i).getLocalName();
+        }
+
+        // build the query asking for a subset of attributes
+        final Query query = new Query(typeName, Filter.INCLUDE, queryAtts);
+
+        FeatureReader<SimpleFeatureType, SimpleFeature> reader;
+        reader = ds.getFeatureReader(query, Transaction.AUTO_COMMIT);
+        SimpleFeatureType resultSchema;
+        try {
+            resultSchema = reader.getFeatureType();
+        } finally {
+            reader.close();
+        }
+
+        assertTrue(queriedAttributeCount == resultSchema.getAttributeCount());
+
+        for (int i = 0; i < queriedAttributeCount; i++) {
+            assertEquals(queryAtts[i], resultSchema.getDescriptor(i).getLocalName());
+        }
+    }
+

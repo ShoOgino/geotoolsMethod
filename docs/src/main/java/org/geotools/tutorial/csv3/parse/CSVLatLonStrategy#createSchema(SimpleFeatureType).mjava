@@ -1,0 +1,37 @@
+    // docs start createSchema
+    @Override
+    public void createSchema(SimpleFeatureType featureType) throws IOException {
+        this.featureType = featureType;
+
+        List<String> header = new ArrayList<String>();
+
+        GeometryDescriptor gd = featureType.getGeometryDescriptor();
+        CoordinateReferenceSystem crs = gd != null ? gd.getCoordinateReferenceSystem() : null;
+        if (gd != null
+                && CRS.equalsIgnoreMetadata(_CRS, crs)
+                && gd.getType().getBinding().isAssignableFrom(Point.class)) {
+            if (crs.getCoordinateSystem().getAxis(0).getDirection().equals(AxisDirection.NORTH)) {
+                header.add(this.latField);
+                header.add(this.lngField);
+            } else {
+                header.add(this.lngField);
+                header.add(this.latField);
+            }
+        } else {
+            throw new IOException(
+                    "Unable use " + this.latField + "/" + this.lngField + " to represent " + gd);
+        }
+        for (AttributeDescriptor descriptor : featureType.getAttributeDescriptors()) {
+            if (descriptor instanceof GeometryDescriptor) continue;
+            header.add(descriptor.getLocalName());
+        }
+        // Write out header, producing an empty file of the correct type
+        CsvWriter writer = new CsvWriter(new FileWriter(this.csvFileState.getFile()), ',');
+        try {
+            writer.writeRecord(header.toArray(new String[header.size()]));
+        } finally {
+            writer.close();
+        }
+    }
+    // docs end createSchema
+

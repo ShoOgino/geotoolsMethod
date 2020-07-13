@@ -1,0 +1,36 @@
+    @Test
+    public void testTransformWithGeneralizationHint() throws Exception {
+        // tests if geometry generalization happens when a rendering
+        // transformation is issued
+        Style style = getStyle("transformation_water.sld");
+        File file = URLs.urlToFile(getClass().getResource("madagascar.mbtiles"));
+        MBTilesDataStore store = new MBTilesDataStore(new MBTilesFile(file));
+
+        ContentFeatureSource fs = store.getFeatureSource("water");
+
+        FeatureLayer layer = new FeatureLayer(fs.getFeatures(), style);
+
+        MapContent mc = new MapContent();
+        mc.addLayer(layer);
+        StreamingRenderer renderer = new StreamingRenderer();
+        // exaggerate generalization distance till obtain a Kandisky'map
+        // to test that generalization happened
+        renderer.setGeneralizationDistance(50);
+        renderer.setMapContent(mc);
+        renderer.setJava2DHints(new RenderingHints(KEY_ANTIALIASING, VALUE_ANTIALIAS_ON));
+        int w = 300;
+        int h = 500;
+        final BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = (Graphics2D) image.getGraphics();
+        g.setColor(Color.white);
+        g.fillRect(0, 0, w, h);
+        renderer.paint(
+                g,
+                new Rectangle(0, 0, w, h),
+                new ReferencedEnvelope(4700000, 5700000, -3000000, -1300000, DEFAULT_CRS));
+        g.dispose();
+        File expected =
+                new File("src/test/resources/org/geotools/mbtiles/overgeneralized_madagascar.png");
+        ImageAssert.assertEquals(expected, image, (int) (w * h * 0.05));
+    }
+

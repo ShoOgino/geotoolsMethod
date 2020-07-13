@@ -1,0 +1,26 @@
+    public SimpleFeatureCollection getFeatures(MBTilesTile tile, String layerName)
+            throws IOException {
+        MBTilesTileLocation location = canonicalizer.unique(tile.toLocation());
+        Map<String, CollectionProvider> layers = cache.get(location);
+        if (layers == null) {
+            synchronized (location) {
+                layers = cache.get(location);
+                if (layers == null) {
+                    if (LOGGER.isLoggable(Level.FINE)) {
+                        LOGGER.log(
+                                Level.FINE,
+                                "Miss for " + tile + ", looking for layer " + layerName);
+                    }
+                    Map<String, List<VectorTileDecoder.Feature>> mvtFeaturesMap = fillCache(tile);
+                    layers = mapToProviders(location, mvtFeaturesMap);
+                    cache.put(location, layers);
+                }
+            }
+        } else if (LOGGER.isLoggable(Level.FINE)) {
+            LOGGER.log(Level.FINE, "Hit for " + tile + ", looking for layer " + layerName);
+        }
+        return Optional.ofNullable(layers.get(layerName))
+                .map(p -> p.getGeoToolsFeatures())
+                .orElse(null);
+    }
+

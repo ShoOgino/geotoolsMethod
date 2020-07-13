@@ -1,0 +1,113 @@
+    /**
+     * Transform MBStyle to a GeoTools StyledLayerDescriptor.
+     *
+     * @return StyledLayerDescriptor
+     */
+    public StyledLayerDescriptor transform() {
+        StyleFactory sf = parse.getStyleFactory();
+        StyledLayerDescriptor sld = sf.createStyledLayerDescriptor();
+
+        List<MBLayer> layers = layers();
+        if (layers.isEmpty()) {
+            throw new MBFormatException("layers empty");
+        }
+
+        // TODO: Just track last NamedLayer
+        NamedLayer currentNamedLayer = null;
+        String currentName = null;
+        BackgroundMBLayer background = null;
+        for (MBLayer layer : layers) {
+            List<FeatureTypeStyle> featureTypeStyles = new ArrayList<>();
+            MBObjectStops mbObjectStops = new MBObjectStops(layer);
+
+            int layerMaxZoom = layer.getMaxZoom();
+            int layerMinZoom = layer.getMinZoom();
+            Double layerMinScaleDenominator =
+                    layerMaxZoom == Integer.MAX_VALUE
+                            ? null
+                            : MBObjectStops.zoomLevelToScaleDenominator(
+                                    Math.min(25d, layerMaxZoom));
+            Double layerMaxScaleDenominator =
+                    layerMinZoom == Integer.MIN_VALUE
+                            ? null
+                            : MBObjectStops.zoomLevelToScaleDenominator(
+                                    Math.max(-25d, layerMinZoom));
+
+            if (layer.visibility()) {
+                // check for property and zoom functions, if true we will have a layer for each one
+                // that becomes a feature type style.
+                if (mbObjectStops.ls.zoomPropertyStops) {
+                    List<Double> stopLevels = mbObjectStops.stops;
+                    int i = 0;
+                    for (MBLayer l : mbObjectStops.layersForStop) {
+                        double s = stopLevels.get(i);
+                        double[] rangeForStopLevel =
+                                mbObjectStops.getRangeForStop(s, mbObjectStops.ranges);
+                        Double maxScaleDenominator =
+                                MBObjectStops.zoomLevelToScaleDenominator(rangeForStopLevel[0]);
+                        Double minScaleDenominator = null;
+                        if (rangeForStopLevel[1] != -1) {
+                            minScaleDenominator =
+                                    MBObjectStops.zoomLevelToScaleDenominator(rangeForStopLevel[1]);
+                        }
+
+                        featureTypeStyles.addAll(
+                                l.transform(this, minScaleDenominator, maxScaleDenominator));
+                        i++;
+                    }
+                } else if ((layer instanceof BackgroundMBLayer)) {
+                    background = (BackgroundMBLayer) layer;
+                } else {
+                    featureTypeStyles.addAll(
+                            layer.transform(
+                                    this, layerMinScaleDenominator, layerMaxScaleDenominator));
+                }
+            }
+
+            if (!featureTypeStyles.isEmpty()) {
+                if (!(layer instanceof BackgroundMBLayer)) {
+                    String sourceLayer = layer.getSourceLayer();
+                    if (sourceLayer == null) {
+                        // If source-layer is not set, assume the source just has one layer which
+                        // shares its name
+                        sourceLayer = layer.getSource();
+                    }
+                    // Append to existing namedlayer if source name is the same, otherwise create a
+                    // new one
+                    if (currentNamedLayer == null || !sourceLayer.equals(currentName)) {
+                        currentNamedLayer = sf.createNamedLayer();
+                        currentName = sourceLayer;
+                        currentNamedLayer.setName(currentName);
+                        // TODO: When NamedLayer supports description, use layer.getId() for
+                        // description
+
+                        Style style = sf.createStyle();
+                        currentNamedLayer.styles().add(style);
+
+                        sld.layers().add(currentNamedLayer);
+                    }
+                    // Add all featureTypeStyles to the first (and only) UserStyle
+                    currentNamedLayer.styles().get(0).featureTypeStyles().addAll(featureTypeStyles);
+                }
+            }
+        }
+
+        if (background != null) {
+            // attach to the first layer if possible
+            FilterFactory2 ff = parse.getFilterFactory();
+            if (sld.getStyledLayers().length > 0) {
+                NamedLayer layer = (NamedLayer) sld.getStyledLayers()[0];
+                Style firstStyle = layer.getStyles()[0];
+                firstStyle.setBackground(background.getFill(this));
+            } else {
+                // odd situation, the only spec is a background layer? build a fake SLD layer then
+                addLoneBackgroundLayer(sf, sld, background, ff);
+            }
+        } else if (sld.layers().isEmpty()) {
+            throw new MBFormatException("No visibile layers");
+        }
+
+        sld.setName(getName());
+        return sld;
+    }
+

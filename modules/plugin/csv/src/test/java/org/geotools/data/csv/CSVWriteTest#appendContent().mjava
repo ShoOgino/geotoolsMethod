@@ -1,0 +1,55 @@
+    @Test
+    public void appendContent() throws Exception {
+        File directory = tmp;
+        Map<String, Serializable> params = new HashMap<>();
+        params.put("file", statesfile);
+        DataStore store = DataStoreFinder.getDataStore(params);
+        SimpleFeatureType featureType = store.getSchema("locations");
+
+        File file2 = new File(directory, "duplicate.rst");
+        Map<String, Serializable> params2 = new HashMap<>();
+        params2.put("file", file2);
+
+        CSVDataStoreFactory factory = new CSVDataStoreFactory();
+        DataStore duplicate = factory.createNewDataStore(params2);
+        duplicate.createSchema(featureType);
+
+        FeatureReader<SimpleFeatureType, SimpleFeature> reader;
+        FeatureWriter<SimpleFeatureType, SimpleFeature> writer;
+        SimpleFeature feature, newFeature;
+
+        Query query = new Query(featureType.getTypeName(), Filter.INCLUDE);
+        reader = store.getFeatureReader(query, Transaction.AUTO_COMMIT);
+
+        writer = duplicate.getFeatureWriterAppend("duplicate", Transaction.AUTO_COMMIT);
+        try {
+            while (reader.hasNext()) {
+                feature = reader.next();
+                newFeature = writer.next();
+
+                newFeature.setAttributes(feature.getAttributes());
+                writer.write();
+            }
+        } finally {
+            reader.close();
+            writer.close();
+        }
+        assertTrue("Temp files being left behind", cleanedup());
+        // Test that content was appended
+        SimpleFeatureStore featureStore = (SimpleFeatureStore) store.getFeatureSource("locations");
+        assertEquals(9, featureStore.getFeatures().size());
+
+        // Compare the new file written to with the old one
+        ByteArrayOutputStream baos1 = new ByteArrayOutputStream();
+        ByteArrayOutputStream baos2 = new ByteArrayOutputStream();
+        Files.copy(statesfile.toPath(), baos1);
+        Files.copy(file2.toPath(), baos2);
+        String contents1 = new String(baos1.toByteArray(), StandardCharsets.UTF_8);
+        String contents2 = new String(baos2.toByteArray(), StandardCharsets.UTF_8);
+
+        // Making sure whitespace doesn't cause problems
+        // and adjust for potential windows line endings.
+        assertEqualsIgnoreWhitespace(
+                "Contents of both files should be the same", contents1, contents2);
+    }
+

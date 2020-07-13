@@ -1,0 +1,48 @@
+    /** Creates an ArcSDE version named {@code versionName} if it doesn't already exist */
+    public void createVersion(
+            final ISession session, final String versionName, final String parentVersionName)
+            throws IOException {
+
+        session.issue(
+                new Command<Void>() {
+
+                    @Override
+                    public Void execute(ISession session, SeConnection connection)
+                            throws SeException, IOException {
+
+                        final SeVersion parentVersion =
+                                session.issue(new GetVersionCommand(parentVersionName));
+                        SeVersion version = null;
+                        try {
+                            version = session.issue(new GetVersionCommand(versionName));
+                        } catch (ArcSdeException e) {
+                            // ignore
+                        }
+                        if (version != null) {
+                            // already exists, no need to create it
+                            return null;
+                        }
+
+                        SeVersion newVersion = new SeVersion(connection, parentVersionName);
+                        // newVersion.getInfo();
+                        newVersion.setName(versionName);
+                        newVersion.setOwner(session.getUser());
+                        newVersion.setParentName(parentVersionName);
+                        newVersion.setDescription(
+                                parentVersion.getName() + " child for GeoTools ArcSDE unit tests");
+                        // do not require ArcSDE to create a unique name if the
+                        // required
+                        // version already exists
+                        boolean uniqueName = false;
+                        try {
+                            newVersion.create(uniqueName, newVersion);
+                            // newVersion.alter();
+                            newVersion.getInfo();
+                        } catch (SeException e) {
+                            throw new ArcSdeException(e);
+                        }
+                        return null;
+                    }
+                });
+    }
+

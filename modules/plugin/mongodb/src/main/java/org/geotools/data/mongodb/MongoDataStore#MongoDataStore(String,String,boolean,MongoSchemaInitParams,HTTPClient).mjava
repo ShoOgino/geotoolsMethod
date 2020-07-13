@@ -1,0 +1,34 @@
+    public MongoDataStore(
+            String dataStoreURI,
+            String schemaStoreURI,
+            boolean createDatabaseIfNeeded,
+            MongoSchemaInitParams schemaInitParams,
+            HTTPClient httpClient) {
+
+        MongoClientURI dataStoreClientURI = createMongoClientURI(dataStoreURI);
+        dataStoreClient = createMongoClient(dataStoreClientURI);
+        dataStoreDB =
+                createDB(
+                        dataStoreClient, dataStoreClientURI.getDatabase(), !createDatabaseIfNeeded);
+
+        if (dataStoreDB == null) {
+            dataStoreClient.close(); // This smells bad...
+            throw new IllegalArgumentException(
+                    "Unknown mongodb database, \"" + dataStoreClientURI.getDatabase() + "\"");
+        }
+
+        this.deactivateOrNativeFilter = isMongoVersionLessThan2_6(dataStoreClientURI);
+        this.httpClient = httpClient;
+        schemaStore = createSchemaStore(schemaStoreURI);
+        if (schemaStore == null) {
+            dataStoreClient.close(); // This smells bad too...
+            throw new IllegalArgumentException(
+                    "Unable to initialize schema store with URI \"" + schemaStoreURI + "\"");
+        }
+
+        filterCapabilities = createFilterCapabilties();
+
+        if (schemaInitParams != null) this.schemaInitParams = schemaInitParams;
+        else this.schemaInitParams = MongoSchemaInitParams.builder().build();
+    }
+

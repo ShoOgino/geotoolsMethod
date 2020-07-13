@@ -1,0 +1,26 @@
+    @Override
+    protected FeatureReader<SimpleFeatureType, SimpleFeature> getReaderInternal(Query query)
+            throws IOException {
+        try {
+            long z = getTargetZLevel(query);
+            List<RectangleLong> tileBounds = getTileBoundsFor(query, z);
+            List<ReaderSupplier> suppliers =
+                    tileBounds
+                            .stream()
+                            .flatMap(tb -> getReaderSuppliersFor(z, tb).stream())
+                            .collect(Collectors.toList());
+
+            FeatureReader reader;
+            if (suppliers.isEmpty()) {
+                reader = new EmptyFeatureReader<>(getSchema());
+            } else {
+                reader = new CompositeSimpleFeatureReader(getSchema(), suppliers);
+            }
+
+            return reader;
+
+        } catch (SQLException e) {
+            throw new IOException(e);
+        }
+    }
+

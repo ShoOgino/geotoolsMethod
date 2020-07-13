@@ -2,8 +2,6 @@
      * This method is responsible for reading the CRS whhther a projection file is provided. If no
      * projection file is provided the second choice is the CRS supplied via the crs paramter. If
      * even this one is not avalaible we default to EPSG:4326.
-     *
-     * @throws IOException
      */
     private void readCRS() throws IOException {
 
@@ -33,10 +31,9 @@
             final File prjFile = new File(base.toString());
             if (prjFile.exists()) {
                 // it exists then we have top read it
-                PrjFileReader projReader = null;
-                try {
-                    final FileChannel channel = new FileInputStream(prjFile).getChannel();
-                    projReader = new PrjFileReader(channel);
+
+                try (FileChannel channel = new FileInputStream(prjFile).getChannel();
+                        PrjFileReader projReader = new PrjFileReader(channel)) {
                     crs = projReader.getCoordinateReferenceSystem();
                 } catch (FileNotFoundException e) {
                     // warn about the error but proceed, it is not fatal
@@ -50,15 +47,6 @@
                     // warn about the error but proceed, it is not fatal
                     // we have at least the default crs to use
                     LOGGER.log(Level.INFO, e.getLocalizedMessage(), e);
-                } finally {
-                    if (projReader != null)
-                        try {
-                            projReader.close();
-                        } catch (IOException e) {
-                            // warn about the error but proceed, it is not fatal
-                            // we have at least the default crs to use
-                            LOGGER.log(Level.SEVERE, e.getLocalizedMessage(), e);
-                        }
                 }
             }
         }

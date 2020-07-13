@@ -8,21 +8,29 @@
         params.put(
                 ArcGISRestDataStore.GEOMETRY_PARAM,
                 this.composeExtent(this.getBoundsInternal(query)));
+        try {
+            params.put(
+                    ArcGISRestDataStore.GEOMETRYSRS_PARAM,
+                    CRS.lookupEpsgCode(
+                            this.getBoundsInternal(query).getCoordinateReferenceSystem(), true));
+        } catch (FactoryException e) {
+            throw new IOException(String.format("Unknown CRS %s", e.getMessage()));
+        }
 
         try {
             cnt =
                     (new Gson())
                             .fromJson(
-                                    ArcGISRestDataStore.inputStreamToString(
+                                    ArcGISRestDataStore.InputStreamToString(
                                             this.dataStore.retrieveJSON(
                                                     "POST",
                                                     (new URL(this.composeQueryURL())),
                                                     params)),
                                     Count.class);
-        } catch (JsonSyntaxException e) {
-            throw new IOException("Error " + e.getMessage());
+        } catch (HTTPException e) {
+            throw new IOException(String.format("Error %d %s", e.getStatusCode(), e.getMessage()));
         }
 
-        return cnt == null ? -1 : cnt.getCount();
+        return (cnt == null) ? -1 : cnt.getCount();
     }
 

@@ -1,0 +1,48 @@
+    /**
+     * Displaces a list of coverages, using a ProjectionHandler to eventually split into proper
+     * envelopes.
+     */
+    public static List<GridCoverage2D> displace(
+            List<GridCoverage2D> coverages,
+            ProjectionHandler handler,
+            GeneralEnvelope destinationEnvelope,
+            CoordinateReferenceSystem sourceCRS,
+            CoordinateReferenceSystem targetCRS,
+            GridCoverageFactory gridCoverageFactory)
+            throws FactoryException, TransformException {
+        if (handler == null) {
+            return coverages;
+        }
+        List<GridCoverage2D> displacedCoverages = new ArrayList<GridCoverage2D>();
+        Envelope testEnvelope = ReferencedEnvelope.reference(destinationEnvelope);
+        MathTransform mt = CRS.findMathTransform(sourceCRS, targetCRS);
+        PolygonExtractor polygonExtractor = new PolygonExtractor();
+        for (GridCoverage2D coverage : coverages) {
+            org.locationtech.jts.geom.Polygon polygon =
+                    JTS.toGeometry((BoundingBox) coverage.getEnvelope2D());
+            Geometry postProcessed = handler.postProcess(mt, polygon);
+            // extract sub-polygons and displace
+            List<org.locationtech.jts.geom.Polygon> polygons =
+                    polygonExtractor.getPolygons(postProcessed);
+            for (Polygon displaced : polygons) {
+                // check we are really inside the display area before moving one
+                Envelope intersection = testEnvelope.intersection(displaced.getEnvelopeInternal());
+                if (intersection == null || intersection.isNull() || intersection.getArea() == 0) {
+                    continue;
+                }
+                if (displaced.equals(polygon)) {
+                    displacedCoverages.add(coverage);
+                } else {
+                    double[] tx = getTranslationFactors(polygon, displaced);
+                    if (tx != null) {
+                        GridCoverage2D displacedCoverage =
+                                GridCoverageRendererUtilities.displace(
+                                        coverage, tx[0], tx[1], gridCoverageFactory);
+                        displacedCoverages.add(displacedCoverage);
+                    }
+                }
+            }
+        }
+        return displacedCoverages;
+    }
+

@@ -1,0 +1,94 @@
+    /**
+     * Transform {@link LineMBLayer} to GeoTools FeatureTypeStyle.
+     *
+     * @param styleContext The MBStyle to which this layer belongs, used as a context for things
+     *     like resolving sprite and glyph names to full urls.
+     * @return FeatureTypeStyle
+     */
+    public List<FeatureTypeStyle> transformInternal(MBStyle styleContext) {
+        MBStyleTransformer transformer = new MBStyleTransformer(parse);
+        List<Symbolizer> symbolizers = new ArrayList<>();
+        org.geotools.styling.Stroke stroke =
+                sf.stroke(
+                        lineColor(),
+                        lineOpacity(),
+                        lineWidth(),
+                        lineJoin(),
+                        lineCap(),
+                        null,
+                        null); // last "offset" is really "dash offset"
+
+        stroke.setDashArray(scaleByWidth(lineDasharray(), lineWidth()));
+        LineSymbolizer ls =
+                sf.lineSymbolizer(
+                        getId(),
+                        null,
+                        sf.description(Text.text("line"), null),
+                        Units.PIXEL,
+                        stroke,
+                        lineOffset());
+
+        if (hasLinePattern()) {
+            ExternalGraphic eg =
+                    transformer.createExternalGraphicForSprite(linePattern(), styleContext);
+            GraphicFill fill =
+                    sf.graphicFill(Arrays.asList(eg), lineOpacity(), null, null, null, null);
+            stroke.setGraphicFill(fill);
+        }
+
+        if (hasLineGapWidth()) {
+            Expression topOffset =
+                    ff.add(
+                            lineOffset(),
+                            ff.divide(ff.add(lineGapWidth(), lineWidth()), ff.literal(2)));
+            Expression bottomOffset =
+                    ff.subtract(
+                            lineOffset(),
+                            ff.divide(ff.add(lineGapWidth(), lineWidth()), ff.literal(2)));
+
+            ls =
+                    sf.lineSymbolizer(
+                            getId(),
+                            null,
+                            sf.description(Text.text("line"), null),
+                            Units.PIXEL,
+                            stroke,
+                            topOffset);
+            LineSymbolizer bottomLine =
+                    sf.lineSymbolizer(
+                            getId(),
+                            null,
+                            sf.description(Text.text("line"), null),
+                            Units.PIXEL,
+                            stroke,
+                            bottomOffset);
+            symbolizers.add(bottomLine);
+        }
+        symbolizers.add(ls);
+
+        MBFilter filter = getFilter();
+        List<org.opengis.style.Rule> rules = new ArrayList<>();
+
+        Rule rule =
+                sf.rule(
+                        getId(),
+                        null,
+                        null,
+                        0.0,
+                        Double.POSITIVE_INFINITY,
+                        symbolizers,
+                        filter.filter());
+        rules.add(rule);
+
+        return Collections.singletonList(
+                sf.featureTypeStyle(
+                        getId(),
+                        sf.description(
+                                Text.text("MBStyle " + getId()),
+                                Text.text("Generated for " + getSourceLayer())),
+                        null,
+                        Collections.emptySet(),
+                        filter.semanticTypeIdentifiers(),
+                        rules));
+    }
+

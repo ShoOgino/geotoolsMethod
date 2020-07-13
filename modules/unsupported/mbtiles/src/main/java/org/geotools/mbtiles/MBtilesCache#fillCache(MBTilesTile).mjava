@@ -1,0 +1,29 @@
+    private Map<String, List<VectorTileDecoder.Feature>> fillCache(MBTilesTile tile)
+            throws IOException {
+        VectorTileDecoder decoder = new VectorTileDecoder();
+        decoder.setAutoScale(false);
+
+        byte[] gzippedData = getPbfFromTile(tile);
+        Map<String, List<VectorTileDecoder.Feature>> result = new HashMap<>();
+        for (VectorTileDecoder.Feature mvtFeature : decoder.decode(gzippedData)) {
+            String layer = mvtFeature.getLayerName();
+            // skip unknown layers, as a safety measure
+            if (schemas.get(layer) == null) {
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.log(
+                            Level.FINE,
+                            "Skipping unknown layer "
+                                    + layer
+                                    + " (not described in the json metadata entry)");
+                }
+                continue;
+            }
+            List<VectorTileDecoder.Feature> features =
+                    result.computeIfAbsent(layer, l -> new ArrayList<>());
+            features.add(mvtFeature);
+        }
+
+        // remap to a map from names to collections
+        return result;
+    }
+

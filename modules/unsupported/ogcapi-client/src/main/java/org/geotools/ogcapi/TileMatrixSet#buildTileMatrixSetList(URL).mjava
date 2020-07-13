@@ -1,0 +1,38 @@
+    /**
+     * @param url
+     * @throws IOException
+     * @throws JsonParseException
+     */
+    public static ArrayList<TileMatrixSet> buildTileMatrixSetList(URL url)
+            throws IOException, JsonParseException {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JtsModule());
+
+        try (JsonParser parser = factory.createParser(url)) {
+            JsonToken token = parser.nextToken(); // start 1st object
+            ArrayList<TileMatrixSet> ret = new ArrayList<>();
+            while (!parser.isClosed()) {
+                // We can now see title, description and links array
+                token = parser.nextToken();
+                if (token == null) {
+                    break;
+                }
+
+                if (JsonToken.FIELD_NAME.equals(token)
+                        && "tileMatrixSets".equalsIgnoreCase(parser.currentName())) {
+                    token = parser.nextToken();
+                    if (!JsonToken.START_ARRAY.equals(token)) {
+                        throw new UnsupportedOperationException("Was expecting an array of links");
+                    }
+                    while (parser.nextToken() == JsonToken.START_OBJECT) {
+
+                        ObjectNode node = mapper.readTree(parser);
+
+                        ret.add(TileMatrixSet.buildMatrixSet(node));
+                    }
+                }
+            }
+            return ret;
+        }
+    }
+

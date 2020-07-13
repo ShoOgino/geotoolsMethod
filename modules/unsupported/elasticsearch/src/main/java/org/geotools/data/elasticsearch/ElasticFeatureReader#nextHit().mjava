@@ -1,0 +1,77 @@
+    private String nextHit() {
+        final ElasticHit hit = searchHitIterator.next();
+        final SimpleFeatureType type = getFeatureType();
+        final Map<String, Object> source = hit.getSource();
+
+        final Float score;
+        final Float relativeScore;
+        if (hit.getScore() != null && !Float.isNaN(hit.getScore()) && maxScore > 0) {
+            score = hit.getScore();
+            relativeScore = score / maxScore;
+        } else {
+            score = null;
+            relativeScore = null;
+        }
+
+        for (final AttributeDescriptor descriptor : type.getAttributeDescriptors()) {
+            final String name = descriptor.getType().getName().getLocalPart();
+            final String sourceName =
+                    (String) descriptor.getUserData().get(ElasticConstants.FULL_NAME);
+
+            List<Object> values = hit.field(sourceName);
+            if (values == null && source != null) {
+                // read field from source
+                values = parserUtil.readField(source, sourceName);
+            }
+
+            if (values == null && sourceName.equals("_id")) {
+                builder.set(name, hit.getId());
+            } else if (values == null && sourceName.equals("_index")) {
+                builder.set(name, hit.getIndex());
+            } else if (values == null && sourceName.equals("_type")) {
+                builder.set(name, hit.getType());
+            } else if (values == null && sourceName.equals("_score")) {
+                builder.set(name, score);
+            } else if (values == null && sourceName.equals("_relative_score")) {
+                builder.set(name, relativeScore);
+            } else if (values != null
+                    && Geometry.class.isAssignableFrom(descriptor.getType().getBinding())) {
+                if (values.size() == 1) {
+                    builder.set(name, parserUtil.createGeometry(values.get(0)));
+                } else {
+                    builder.set(name, parserUtil.createGeometry(values));
+                }
+            } else if (values != null
+                    && Date.class.isAssignableFrom(descriptor.getType().getBinding())) {
+                Object dataVal = values.get(0);
+                if (dataVal instanceof Double) {
+                    builder.set(name, new Date(Math.round((Double) dataVal)));
+                } else if (dataVal instanceof Integer) {
+                    builder.set(name, new Date(((Integer) dataVal).longValue()));
+                } else if (dataVal instanceof Long) {
+                    builder.set(name, new Date((long) dataVal));
+                } else {
+                    final String format =
+                            (String) descriptor.getUserData().get(ElasticConstants.DATE_FORMAT);
+                    final DateTimeFormatter dateFormatter = Joda.forPattern(format).parser();
+
+                    Date date = dateFormatter.parseDateTime((String) dataVal).toDate();
+                    builder.set(name, date);
+                }
+            } else if (values != null && values.size() == 1) {
+                builder.set(name, values.get(0));
+            } else if (values != null && !name.equals("_aggregation")) {
+                final Object value;
+                if (arrayEncoding == ElasticDataStore.ArrayEncoding.CSV) {
+                    // only include first array element when using CSV array encoding
+                    value = values.get(0);
+                } else {
+                    value = values;
+                }
+                builder.set(name, value);
+            }
+        }
+
+        return state.getEntry().getTypeName() + "." + hit.getId();
+    }
+

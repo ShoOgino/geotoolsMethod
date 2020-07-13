@@ -1,0 +1,40 @@
+    /**
+     * Translates the map scale into a zoom-level for the map services.
+     *
+     * <p>The scale-factor (0-100) decides whether the tiles will be scaled down (100) or scaled up
+     * (0).
+     *
+     * @param scaleFactor Scale-factor (0-100)
+     * @return Zoom-level
+     */
+    public int getZoomLevelFromMapScale(
+            ScaleZoomLevelMatcher zoomLevelMatcher, double scaleFactor) {
+        // fallback scale-list
+        double[] scaleList = getScaleList();
+        assert (scaleList != null && scaleList.length > 0);
+
+        // during the calculations this list caches already calculated scales
+        double[] tempScaleList = new double[scaleList.length];
+        Arrays.fill(tempScaleList, Double.NaN);
+
+        int zoomLevel = zoomLevelMatcher.getZoomLevelFromScale(this, tempScaleList);
+
+        // Now apply the scale-factor
+        if (zoomLevel == 0) {
+            return zoomLevel;
+        } else {
+            int upperScaleIndex = zoomLevel - 1;
+            int lowerScaleIndex = zoomLevel;
+
+            double deltaScale = tempScaleList[upperScaleIndex] - tempScaleList[lowerScaleIndex];
+            double rangeScale = (scaleFactor / 100d) * deltaScale;
+            double limitScale = tempScaleList[lowerScaleIndex] + rangeScale;
+
+            if (zoomLevelMatcher.getScale() > limitScale) {
+                return upperScaleIndex;
+            } else {
+                return lowerScaleIndex;
+            }
+        }
+    }
+

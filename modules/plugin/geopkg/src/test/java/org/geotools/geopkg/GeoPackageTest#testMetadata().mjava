@@ -1,0 +1,39 @@
+    @Test
+    public void testMetadata() throws Exception {
+        // create a geopacakge from a shapefile
+        ShapefileDataStore shp = new ShapefileDataStore(setUpShapefile());
+        FeatureEntry entry = new FeatureEntry();
+        geopkg.add(entry, shp.getFeatureSource(), null);
+        assertTableExists("bugsites");
+
+        // grab the metadata extension, check it's initially empty
+        GeoPkgMetadataExtension ext = geopkg.getExtension(GeoPkgMetadataExtension.class);
+        assertEquals(Collections.emptyList(), ext.getMetadatas());
+
+        // add metadata
+        GeoPkgMetadata metadata =
+                new GeoPkgMetadata(
+                        GeoPkgMetadata.Scope.Dataset,
+                        "http://geotools.org/geopackage",
+                        "application/json",
+                        "{ \"metadata\" : \"on\"");
+        ext.addMetadata(metadata);
+        assertNotNull(metadata.getId());
+
+        // fetch it
+        List<GeoPkgMetadata> metadatas = ext.getMetadatas();
+        assertEquals(1, metadatas.size());
+        GeoPkgMetadata readMetadata = metadatas.get(0);
+        assertEquals(metadata, readMetadata);
+
+        // update it
+        metadata.setMetadata("{ \"metadata\" : \"updated\"");
+        ext.updateMetadata(metadata);
+        GeoPkgMetadata updatedMetadata = ext.getMetadatas().get(0);
+        assertEquals(metadata, updatedMetadata);
+
+        // clean up
+        ext.removeMetadata(metadata);
+        assertEquals(0, ext.getMetadatas().size());
+    }
+

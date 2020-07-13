@@ -1,0 +1,46 @@
+    private void generateInnerElementMultiValue(
+            Attribute target,
+            Object values,
+            final AttributeType targetNodeType,
+            StepList xpath,
+            Map<Name, Expression> clientPropsMappings) {
+        final Collection<MultiValueContainer> multiValues = (Collection) values;
+        // generate the parent attribute
+        final Attribute parentAttribute =
+                xpathAttributeBuilder.set(target, xpath, null, null, targetNodeType, false, null);
+        // add a metadata for unbounded sequences
+        final boolean allComplexNames =
+                clientPropsMappings
+                        .entrySet()
+                        .stream()
+                        .allMatch(e -> e.getKey() instanceof ComplexNameImpl);
+        if (!multiValues.isEmpty() && !clientPropsMappings.isEmpty() && allComplexNames) {
+            parentAttribute.getUserData().put(MULTI_VALUE_TYPE, UNBOUNDED_MULTI_VALUE);
+        }
+        // generate every child attributes
+        for (MultiValueContainer mv : multiValues) {
+            Map<Name, Expression> clientProperties = clientPropsMappings;
+            clientProperties = MultiValueContainer.resolve(filterFac, mv, clientProperties);
+            for (Entry<Name, Expression> entry : clientProperties.entrySet()) {
+                // create new xpath
+                final Step newStep =
+                        new Step(
+                                new QName(
+                                        entry.getKey().getNamespaceURI(),
+                                        entry.getKey().getLocalPart(),
+                                        xpath.get(0).getName().getPrefix()),
+                                xpath.size() + 1);
+                final StepList slist = xpath.clone();
+                slist.add(newStep);
+                xpathAttributeBuilder.set(
+                        parentAttribute,
+                        slist,
+                        entry.getValue(),
+                        null,
+                        targetNodeType,
+                        false,
+                        entry.getValue());
+            }
+        }
+    }
+

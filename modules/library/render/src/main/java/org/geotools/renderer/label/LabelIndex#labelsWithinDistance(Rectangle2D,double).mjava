@@ -2,10 +2,6 @@
      * Returns true if there is any label in the index within the specified distance from the
      * bounds. For speed reasons the bounds will be simply expanded by the distance, no curved
      * buffer will be generated
-     *
-     * @param bounds
-     * @param distance
-     * @return
      */
     @SuppressWarnings("unchecked")
     public boolean labelsWithinDistance(Rectangle2D bounds, double distance) {
@@ -13,14 +9,19 @@
 
         Envelope e = toEnvelope(bounds);
         e.expandBy(distance);
-        List<InterferenceItem> results = index.query(e);
-        if (results.size() == 0) return false;
-        for (Iterator<InterferenceItem> it = results.iterator(); it.hasNext(); ) {
-            InterferenceItem item = it.next();
-            if (item.env.intersects(e)) {
-                return true;
-            }
-        }
-        return false;
+        AtomicBoolean intersectionFound = new AtomicBoolean(false);
+        index.query(
+                e,
+                new ItemVisitor() {
+                    @Override
+                    public void visitItem(Object o) {
+                        if (intersectionFound.get()) return;
+                        InterferenceItem item = (InterferenceItem) o;
+                        if (item.env.intersects(e)) {
+                            intersectionFound.set(true);
+                        }
+                    }
+                });
+        return intersectionFound.get();
     }
 

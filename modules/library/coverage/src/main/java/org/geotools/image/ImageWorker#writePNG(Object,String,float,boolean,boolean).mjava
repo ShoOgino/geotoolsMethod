@@ -149,50 +149,47 @@
         LOGGER.fine("Setting write parameters for this writer");
 
         ImageWriteParam iwp = null;
-        final ImageOutputStream memOutStream =
-                ImageIOExt.createImageOutputStream(image, destination);
-        if (memOutStream == null) {
-            throw new IIOException(Errors.format(ErrorKeys.NULL_ARGUMENT_$1, "stream"));
-        }
-        if (CLIB_PNG_IMAGE_WRITER_SPI != null
-                && originatingProvider.getClass().equals(CLIB_PNG_IMAGE_WRITER_SPI.getClass())) {
-            // Compressing with native.
-            LOGGER.fine("Writer is native");
-            iwp = writer.getDefaultWriteParam();
-            // Define compression mode
-            iwp.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-            // best compression
-            iwp.setCompressionType(compression);
-            // we can control quality here
-            iwp.setCompressionQuality(compressionRate);
-            // destination image type
-            iwp.setDestinationType(
-                    new ImageTypeSpecifier(image.getColorModel(), image.getSampleModel()));
-        } else {
-            // Compressing with pure Java.
-            LOGGER.fine("Writer is NOT native");
-
-            // Instantiating PNGImageWriteParam
-            iwp = new PNGImageWriteParam();
-            // Define compression mode
-            iwp.setCompressionMode(ImageWriteParam.MODE_DEFAULT);
-        }
-        LOGGER.fine("About to write png image");
-        try {
-            writer.setOutput(memOutStream);
-            writer.write(null, new IIOImage(image, null, null), iwp);
-        } finally {
-            try {
-                writer.dispose();
-            } catch (Throwable e) {
-                if (LOGGER.isLoggable(Level.FINEST))
-                    LOGGER.log(Level.FINEST, e.getLocalizedMessage(), e);
+        try (ImageOutputStream memOutStream =
+                ImageIOExt.createImageOutputStream(image, destination)) {
+            if (memOutStream == null) {
+                throw new IIOException(Errors.format(ErrorKeys.NULL_ARGUMENT_$1, "stream"));
             }
+            if (CLIB_PNG_IMAGE_WRITER_SPI != null
+                    && originatingProvider
+                            .getClass()
+                            .equals(CLIB_PNG_IMAGE_WRITER_SPI.getClass())) {
+                // Compressing with native.
+                LOGGER.fine("Writer is native");
+                iwp = writer.getDefaultWriteParam();
+                // Define compression mode
+                iwp.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                // best compression
+                iwp.setCompressionType(compression);
+                // we can control quality here
+                iwp.setCompressionQuality(compressionRate);
+                // destination image type
+                iwp.setDestinationType(
+                        new ImageTypeSpecifier(image.getColorModel(), image.getSampleModel()));
+            } else {
+                // Compressing with pure Java.
+                LOGGER.fine("Writer is NOT native");
+
+                // Instantiating PNGImageWriteParam
+                iwp = new PNGImageWriteParam();
+                // Define compression mode
+                iwp.setCompressionMode(ImageWriteParam.MODE_DEFAULT);
+            }
+            LOGGER.fine("About to write png image");
             try {
-                memOutStream.close();
-            } catch (Throwable e) {
-                if (LOGGER.isLoggable(Level.FINEST))
-                    LOGGER.log(Level.FINEST, e.getLocalizedMessage(), e);
+                writer.setOutput(memOutStream);
+                writer.write(null, new IIOImage(image, null, null), iwp);
+            } finally {
+                try {
+                    writer.dispose();
+                } catch (Throwable e) {
+                    if (LOGGER.isLoggable(Level.FINEST))
+                        LOGGER.log(Level.FINEST, e.getLocalizedMessage(), e);
+                }
             }
         }
     }

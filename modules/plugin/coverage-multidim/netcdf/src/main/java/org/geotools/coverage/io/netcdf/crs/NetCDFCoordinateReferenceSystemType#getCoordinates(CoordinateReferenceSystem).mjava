@@ -1,0 +1,28 @@
+    /**
+     * Return the set of {@link NetCDFCoordinate}s for the current NetCDF CRS type, taking into
+     * account a reference crs.
+     */
+    public NetCDFCoordinate[] getCoordinates(CoordinateReferenceSystem crs) {
+        NetCDFCoordinate[] axisCoordinates = getCoordinates();
+        if (this != NetCDFCoordinateReferenceSystemType.WGS84) {
+            // NetCDF only support WGS84 and a few projections
+            // There might be the case that the projection contains a concatenatedTransform
+            // due to a specific unit in the coordinate axis (as an instance, km
+            // of classic meter).
+            // Extract the unit of measure from the actual coordinate axis in that case.
+            if (crs instanceof ProjectedCRS) {
+                ProjectedCRS projectedCrs = (ProjectedCRS) crs;
+                if (NetCDFCoordinateReferenceSystemType.hasConcatenatedTransform(projectedCrs)) {
+                    Unit unit = crs.getCoordinateSystem().getAxis(0).getUnit();
+                    NetCDFCoordinate[] newAxisCoordinates = new NetCDFCoordinate[2];
+                    for (int i = 0; i < 2; i++) {
+                        newAxisCoordinates[i] = new NetCDFCoordinate(axisCoordinates[i]);
+                        newAxisCoordinates[i].setUnits(unit.toString());
+                    }
+                    axisCoordinates = newAxisCoordinates;
+                }
+            }
+        }
+        return axisCoordinates;
+    }
+

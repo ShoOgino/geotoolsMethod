@@ -48,19 +48,7 @@
             }
             coverages = rh.readCoverages(readParams, handler, gridCoverageFactory);
         }
-
-        // check if we have to reproject
-        boolean reprojectionNeeded = false;
-        for (GridCoverage2D coverage : coverages) {
-            if (coverage == null) {
-                continue;
-            }
-            final CoordinateReferenceSystem coverageCRS = coverage.getCoordinateReferenceSystem();
-            if (!CRS.equalsIgnoreMetadata(coverageCRS, destinationCRS)) {
-                reprojectionNeeded = true;
-                break;
-            }
-        }
+        logCoverages("read", coverages);
 
         // establish the background values, and expand palettes if the bgcolor cannot be represented
         double[] bgValues = GridCoverageRendererUtilities.colorToArray(background);
@@ -94,138 +82,70 @@
 
         // if we need to reproject, we need to ensure that none of the pixels go out of
         // the projection valid area, not even slightly
-        if (reprojectionNeeded && handler != null && handler.getValidAreaBounds() != null) {
-            List<GridCoverage2D> cropped = new ArrayList<>();
-            ReferencedEnvelope validArea = handler.getValidAreaBounds();
-            GridGeometryReducer reducer = new GridGeometryReducer(validArea);
-            for (GridCoverage2D coverage : coverages) {
-                GridGeometry2D gg = coverage.getGridGeometry();
-                GridGeometry2D reduced = reducer.reduce(gg);
-                if (!reduced.equals(gg)) {
-                    GeneralEnvelope cutEnvelope = reducer.getCutEnvelope(reduced);
-                    GridCoverage2D croppedCoverage = crop(coverage, cutEnvelope, false, bgValues);
-                    if (croppedCoverage != null) {
-                        cropped.add(croppedCoverage);
-                    }
-                } else {
-                    cropped.add(coverage);
-                }
-            }
-            coverages = cropped;
-        }
+        coverages =
+                GridCoverageRendererUtilities.forceToValidBounds(
+                        coverages, handler, bgValues, destinationCRS, hints);
+        logCoverages("cropped", coverages);
 
         // reproject if needed
-        List<GridCoverage2D> reprojectedCoverages = new ArrayList<GridCoverage2D>();
-        for (GridCoverage2D coverage : coverages) {
-            if (coverage == null) {
-                continue;
-            }
-            final CoordinateReferenceSystem coverageCRS = coverage.getCoordinateReferenceSystem();
-            if (!CRS.equalsIgnoreMetadata(coverageCRS, destinationCRS)) {
-                GridCoverage2D reprojected = reproject(coverage, true, bgValues);
-                if (reprojected != null) {
-                    reprojectedCoverages.add(reprojected);
-                }
-            } else {
-                reprojectedCoverages.add(coverage);
-            }
-        }
+        List<GridCoverage2D> reprojectedCoverages =
+                GridCoverageRendererUtilities.reproject(
+                        coverages,
+                        destinationCRS,
+                        interpolation,
+                        destinationEnvelope,
+                        bgValues,
+                        gridCoverageFactory,
+                        hints);
+        logCoverages("reprojected", reprojectedCoverages);
 
         // displace them if needed via a projection handler
-        List<GridCoverage2D> displacedCoverages = new ArrayList<GridCoverage2D>();
-        if (handler != null) {
-            Envelope testEnvelope = ReferencedEnvelope.reference(destinationEnvelope);
-            MathTransform mt = CRS.findMathTransform(sourceCRS, targetCRS);
-            PolygonExtractor polygonExtractor = new PolygonExtractor();
-            for (GridCoverage2D coverage : reprojectedCoverages) {
-                // Check on the alpha band
-                Polygon polygon = JTS.toGeometry((BoundingBox) coverage.getEnvelope2D());
-                Geometry postProcessed = handler.postProcess(mt, polygon);
-                // extract sub-polygons and displace
-                List<Polygon> polygons = polygonExtractor.getPolygons(postProcessed);
-                for (Polygon displaced : polygons) {
-                    // check we are really inside the display area before moving one
-                    Envelope intersection =
-                            testEnvelope.intersection(displaced.getEnvelopeInternal());
-                    if (intersection == null
-                            || intersection.isNull()
-                            || intersection.getArea() == 0) {
-                        continue;
-                    }
-                    if (displaced.equals(polygon)) {
-                        displacedCoverages.add(coverage);
-                    } else {
-                        double[] tx = getTranslationFactors(polygon, displaced);
-                        if (tx != null) {
-                            GridCoverage2D displacedCoverage =
-                                    GridCoverageRendererUtilities.displace(
-                                            coverage, tx[0], tx[1], gridCoverageFactory);
-                            displacedCoverages.add(displacedCoverage);
-                        }
-                    }
-                }
-            }
-        } else {
-            displacedCoverages.addAll(reprojectedCoverages);
-        }
+        List<GridCoverage2D> displacedCoverages =
+                GridCoverageRendererUtilities.displace(
+                        reprojectedCoverages,
+                        handler,
+                        destinationEnvelope,
+                        sourceCRS,
+                        targetCRS,
+                        gridCoverageFactory);
 
-        // after reprojection and displacement we could have some coverage
-        // that are completely out of the destination area (due to numerical issues
-        // their source bbox was interesting the request area, but their reprojected version does
-        // not
-        for (Iterator<GridCoverage2D> it = displacedCoverages.iterator(); it.hasNext(); ) {
-            GridCoverage2D coverage = it.next();
-            ReferencedEnvelope re = ReferencedEnvelope.reference(coverage.getEnvelope2D());
-            if (!destinationEnvelope.intersects(re, false)) {
-                it.remove();
-            }
-        }
+        GridCoverageRendererUtilities.removeNotIntersecting(
+                displacedCoverages, destinationEnvelope);
+        logCoverages("displaced", displacedCoverages);
 
         // symbolize each bit (done here to make sure we can perform the warp/affine reduction)
         List<GridCoverage2D> symbolizedCoverages = new ArrayList<>();
-        for (GridCoverage2D displaced : displacedCoverages) {
-            GridCoverage2D symbolized = symbolize(displaced, finalSymbolizer, bgValues);
-            if (symbolized != null) {
-                symbolizedCoverages.add(symbolized);
+        if (finalSymbolizer != null) {
+            for (GridCoverage2D displaced : displacedCoverages) {
+                GridCoverage2D symbolized = symbolize(displaced, finalSymbolizer, bgValues);
+                if (symbolized != null) {
+                    symbolizedCoverages.add(symbolized);
+                }
             }
+        } else if (!coverages.isEmpty()
+                && !CRS.equalsIgnoreMetadata(
+                        coverages.get(0).getCoordinateReferenceSystem2D(), destinationCRS)) {
+            // do the affine step to allow warp/affine merging, in order to best preserve rotations
+            // in the warp in case of oversampling
+            for (GridCoverage2D displaced : displacedCoverages) {
+                final GridCoverage2D affined = affine(displaced, bgValues, symbolizer);
+                if (affined != null) {
+                    symbolizedCoverages.add(affined);
+                }
+            }
+        } else {
+            symbolizedCoverages.addAll(displacedCoverages);
         }
+
+        logCoverages("symbolized", symbolizedCoverages);
 
         // Parameters used for taking into account an optional removal of the alpha band
         // and an optional reindexing after color expansion
 
         // if more than one coverage, mosaic
-        GridCoverage2D mosaicked = null;
-        if (symbolizedCoverages.size() == 0) {
-            return null;
-        } else if (symbolizedCoverages.size() == 1) {
-            mosaicked = symbolizedCoverages.get(0);
-        } else {
-            // sort the coverages by size, avoid having a sliver coverage 1-2 px large or high
-            // first as it will have a skewed grid to world that will then be applied
-            // to all members of the mosaic
-            Comparator<GridCoverage2D> sliverComparator =
-                    (c1, c2) -> {
-                        RenderedImage r1 = c1.getRenderedImage();
-                        RenderedImage r2 = c2.getRenderedImage();
-                        // area2 - area1, largest first
-                        long areaDiff =
-                                ((long) r2.getWidth()) * r2.getHeight()
-                                        - ((long) r1.getWidth()) * r1.getHeight();
-                        return (int) Math.signum(areaDiff);
-                    };
-            Collections.sort(symbolizedCoverages, sliverComparator);
-
-            // do not expand index color models, we know they are all the same
-            Hints mosaicHints = new Hints(this.hints);
-            mosaicHints.put(JAI.KEY_REPLACE_INDEX_COLOR_MODEL, false);
-            mosaicked =
-                    GridCoverageRendererUtilities.mosaic(
-                            symbolizedCoverages,
-                            new ArrayList<GridCoverage2D>(),
-                            destinationEnvelope,
-                            mosaicHints,
-                            bgValues);
-        }
+        GridCoverage2D mosaicked =
+                GridCoverageRendererUtilities.mosaicSorted(
+                        symbolizedCoverages, destinationEnvelope, bgValues, this.hints);
 
         // the mosaicking can cut off images that are just slightly out of the
         // request (effect of the read buffer + a request touching the actual data area)

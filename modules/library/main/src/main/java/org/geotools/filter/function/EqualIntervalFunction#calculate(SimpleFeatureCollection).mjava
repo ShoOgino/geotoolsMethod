@@ -13,12 +13,25 @@
             featureCollection.accepts(maxVisit, progress);
             if (progress.isCanceled()) return null;
             globalMax = (Comparable) maxVisit.getResult().getValue();
-
-            if ((globalMin instanceof Number) && (globalMax instanceof Number)) {
-                return calculateNumerical(classNum, globalMin, globalMax);
-            } else {
-                return calculateNonNumerical(classNum, featureCollection);
+            RangedClassifier result;
+            boolean percentages = false;
+            if (getParameters().size() > 2) {
+                Literal literal = (Literal) getParameters().get(2);
+                percentages = ((Boolean) literal.getValue()).booleanValue();
             }
+            if ((globalMin instanceof Number) && (globalMax instanceof Number)) {
+                result = calculateNumerical(classNum, globalMin, globalMax);
+                if (percentages)
+                    result.setPercentages(
+                            getNumericalPercentages(classNum, result, featureCollection));
+            } else {
+                result = calculateNonNumerical(classNum, featureCollection);
+                if (percentages)
+                    result.setPercentages(
+                            getNotNumericalPercentages(classNum, featureCollection.size()));
+            }
+
+            return result;
         } catch (IllegalFilterException e) { // accepts exploded
             LOGGER.log(
                     Level.SEVERE,

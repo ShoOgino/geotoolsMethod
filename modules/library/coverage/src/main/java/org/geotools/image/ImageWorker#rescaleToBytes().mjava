@@ -17,7 +17,13 @@
 
         // this is to support 16 bits IndexColorModel
         forceComponentColorModel(true, true);
-
+        if (isBytes()) {
+            // there might be the case that we entered rescaleToBytes with a
+            // 16bits color-palette but the forceComponentColorModel call above
+            // already transformed it to RGB bytes, so no need to proceed with
+            // the rescale anymore
+            return this;
+        }
         final double[][] extrema = getExtremas();
         final int length = extrema[0].length;
         final double[] scale = new double[length];
@@ -26,15 +32,17 @@
                 (background != null && background.length > 0)
                         ? background[0]
                         : ((nodata != null && !nodata.contains(0)) ? 0d : Double.NaN);
+
         // If setting noData to zero, make sure the rescale doesn't map good values to zero.
         double offsetAdjustment = Math.abs(destNodata - 0) < 1E-6 ? 1 : 0;
 
         boolean computeRescale = false;
         for (int i = 0; i < length; i++) {
             final double delta = extrema[1][i] - extrema[0][i];
-            if (Math.abs(delta) > 1E-6 // maximum and minimum does not coincide
-                    && ((extrema[1][i] - 255 > 1E-6) // the maximum is greater than 255
-                            || (extrema[0][i] < -1E-6))) // the minimum is smaller than 0
+            if ((Math.abs(delta) > 1E-6 // maximum and minimum does not coincide
+                            && ((extrema[1][i] - 255 > 1E-6) // the maximum is greater than 255
+                                    || (extrema[0][i] < -1E-6))) // the minimum is smaller than 0
+                    || offsetAdjustment > 0) // noData has been remapped to byte
             {
                 // we need to rescale
                 computeRescale = true;

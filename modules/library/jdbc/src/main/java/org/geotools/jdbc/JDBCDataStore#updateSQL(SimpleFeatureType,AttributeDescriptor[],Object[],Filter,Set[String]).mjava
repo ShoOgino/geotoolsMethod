@@ -26,9 +26,11 @@
             dialect.encodeColumnName(null, attName, sql);
             sql.append(" = ");
 
-            if (Geometry.class.isAssignableFrom(att.getType().getBinding())) {
+            Class<?> binding = att.getType().getBinding();
+            Object value = values[i];
+            if (Geometry.class.isAssignableFrom(binding)) {
                 try {
-                    Geometry g = (Geometry) values[i];
+                    Geometry g = (Geometry) value;
                     int srid = getGeometrySRID(g, att);
                     int dimension = getGeometryDimension(g, att);
                     dialect.encodeGeometryValue(g, dimension, srid, sql);
@@ -36,7 +38,12 @@
                     throw new RuntimeException(e);
                 }
             } else {
-                dialect.encodeValue(values[i], att.getType().getBinding(), sql);
+                EnumMapper mapper = (EnumMapper) att.getUserData().get(JDBCDataStore.JDBC_ENUM_MAP);
+                if (mapper != null) {
+                    value = mapper.fromString(Converters.convert(value, String.class));
+                    binding = Integer.class;
+                }
+                dialect.encodeValue(value, binding, sql);
             }
 
             sql.append(",");

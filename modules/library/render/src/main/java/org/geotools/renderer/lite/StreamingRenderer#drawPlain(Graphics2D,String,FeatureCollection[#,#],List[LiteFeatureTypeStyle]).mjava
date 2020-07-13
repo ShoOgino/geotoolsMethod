@@ -18,6 +18,28 @@
                 boolean cloningRequired = isCloningRequired(lfts);
                 RenderableFeature rf = createRenderableFeature(layerId, cloningRequired);
                 rf.layer = liteFeatureTypeStyle.layer;
+
+                ProjectionHandler handler = liteFeatureTypeStyle.projectionHandler;
+                // Check if a reprojection has been made, in that case, let's update the projection
+                // Handler
+                CoordinateReferenceSystem featureCrs =
+                        features.getSchema().getCoordinateReferenceSystem();
+                if (liteFeatureTypeStyle.projectionHandler != null
+                        && featureCrs != null
+                        && !CRS.equalsIgnoreMetadata(
+                                liteFeatureTypeStyle.projectionHandler.getSourceCRS(),
+                                featureCrs)) {
+                    try {
+                        handler =
+                                ProjectionHandlerFinder.getHandler(
+                                        mapExtent,
+                                        features.getSchema().getCoordinateReferenceSystem(),
+                                        isMapWrappingEnabled());
+                    } catch (FactoryException e) {
+                        fireErrorEvent(e);
+                    }
+                }
+
                 rf.setScreenMap(liteFeatureTypeStyle.screenMap);
                 // loop exit condition tested inside try catch
                 // make sure we test hasNext() outside of the try/cath that follows, as that
@@ -26,7 +48,7 @@
                 // an infinite loop
                 while (featureIterator.hasNext() && !renderingStopRequested) {
                     rf.setFeature(featureIterator.next());
-                    processFeature(rf, liteFeatureTypeStyle);
+                    processFeature(rf, liteFeatureTypeStyle, handler);
                 }
             }
 

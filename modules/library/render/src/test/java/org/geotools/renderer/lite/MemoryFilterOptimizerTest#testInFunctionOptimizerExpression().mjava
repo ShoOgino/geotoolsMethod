@@ -1,0 +1,35 @@
+    public void testInFunctionOptimizerExpression() throws Exception {
+        String name = "name";
+        PropertyName property = ff.property(name);
+        FilterFunction_strConcat concat = new FilterFunction_strConcat();
+        List<Expression> propExpressions = new ArrayList<>();
+        propExpressions.add(property);
+        propExpressions.add(ff.literal("-id"));
+        concat.setParameters(propExpressions);
+        SimpleFeatureType subtype1 = SimpleFeatureTypeBuilder.retype(roadType, new String[] {name});
+        Filter nameR1 = ff.equal(concat, ff.literal("r1"), true);
+        Filter nameR2 = ff.equal(concat, ff.literal("r2"), true);
+        Filter nameR3 = ff.equal(concat, ff.literal("r3"), true);
+        List<Filter> filters = Arrays.asList(nameR1, nameR2, nameR3);
+        Or or = ff.or(filters);
+        MemoryFilterOptimizer optimizer =
+                new MemoryFilterOptimizer(subtype1, Collections.singleton(name));
+        Object object = or.accept(optimizer, null);
+        assertTrue(object instanceof PropertyIsEqualTo);
+        PropertyIsEqualTo eq = (PropertyIsEqualTo) object;
+        assertTrue(eq.getExpression1() instanceof InFunction);
+        InFunction inFunction = (InFunction) eq.getExpression1();
+        assertTrue(inFunction.getParameters().size() == 4);
+        assertTrue(inFunction.getParameters().get(0) instanceof FilterFunction_strConcat);
+        List<String> inLiterals =
+                inFunction
+                        .getParameters()
+                        .stream()
+                        .filter(ex -> ex instanceof Literal)
+                        .map(ex -> ((Literal) ex).evaluate(null, String.class))
+                        .collect(Collectors.toList());
+        assertTrue(inLiterals.contains("r1"));
+        assertTrue(inLiterals.contains("r2"));
+        assertTrue(inLiterals.contains("r3"));
+    }
+

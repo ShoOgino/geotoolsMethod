@@ -1,0 +1,24 @@
+    @Override
+    public SimpleFeatureIterator features() {
+        PushbackFeatureIterator pit = new PushbackFeatureIterator(delegate.features());
+        return new DecoratingSimpleFeatureIterator(pit) {
+
+            @Override
+            public SimpleFeature next() throws NoSuchElementException {
+                if (delegate == null || !hasNext()) throw new NoSuchElementException();
+                SimpleFeature sample = pit.next();
+                // eat away all features with the same location
+                String location = (String) sample.getAttribute(locationAttribute);
+                while (pit.hasNext()) {
+                    SimpleFeature next = pit.next();
+                    String nextLocation = (String) next.getAttribute(locationAttribute);
+                    if (!location.equals(nextLocation)) {
+                        pit.pushBack();
+                        break;
+                    }
+                }
+                return remapFeature(sample);
+            }
+        };
+    }
+

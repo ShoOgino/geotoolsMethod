@@ -1,0 +1,53 @@
+        /**
+         * Given the <code>Filter</code> passed to the constructor, unpacks it to three different
+         * filters, one for the supported SQL based filter, another for the supported Geometry based
+         * filter, and the last one for the unsupported filter. All of them can be retrieved from
+         * its corresponding getter.
+         */
+        private void createGeotoolsFilters() {
+            FilterToSQLSDE sqlEncoder = getSqlEncoder();
+
+            // first off, simplify the filter
+            ArcSdeSimplifyingFilterVisitor visitor =
+                    new ArcSdeSimplifyingFilterVisitor(featureType);
+            Filter simplified = (Filter) sourceFilter.accept(visitor, null);
+
+            // then perform the splits
+            PostPreProcessFilterSplittingVisitor unpacker =
+                    new PostPreProcessFilterSplittingVisitor(
+                            sqlEncoder.getCapabilities(), featureType, null);
+            simplified.accept(unpacker, null);
+
+            SimplifyingFilterVisitor filterSimplifier = new SimplifyingFilterVisitor();
+            final String typeName = this.featureType.getTypeName();
+            FIDValidator validator =
+                    new SimplifyingFilterVisitor.TypeNameDotNumberFidValidator(typeName);
+            filterSimplifier.setFIDValidator(validator);
+            filterSimplifier.setFeatureType(this.featureType);
+
+            this._sqlFilter = unpacker.getFilterPre();
+            this._sqlFilter = (Filter) this._sqlFilter.accept(filterSimplifier, null);
+
+            if (LOGGER.isLoggable(Level.FINE) && _sqlFilter != null)
+                LOGGER.fine("SQL portion of SDE Query: '" + _sqlFilter + "'");
+
+            Filter remainingFilter = unpacker.getFilterPost();
+
+            unpacker =
+                    new PostPreProcessFilterSplittingVisitor(
+                            GeometryEncoderSDE.getCapabilities(), featureType, null);
+            remainingFilter.accept(unpacker, null);
+
+            this.geometryFilter = unpacker.getFilterPre();
+            this.geometryFilter = (Filter) this.geometryFilter.accept(filterSimplifier, null);
+            if (LOGGER.isLoggable(Level.FINE) && geometryFilter != null)
+                LOGGER.fine("Spatial-Filter portion of SDE Query: '" + geometryFilter + "'");
+
+            this.unsupportedFilter = unpacker.getFilterPost();
+            if (LOGGER.isLoggable(Level.FINE) && unsupportedFilter != null)
+                LOGGER.fine(
+                        "Unsupported (and therefore ignored) portion of SDE Query: '"
+                                + unsupportedFilter
+                                + "'");
+        }
+

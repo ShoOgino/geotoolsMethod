@@ -1,0 +1,33 @@
+    @Test
+    public void testRetypeUserData() throws Exception {
+        // create base and derived feature type
+        SimpleFeatureType featureType =
+                DataUtilities.createType(
+                        "feature", "id:string,name:String,geometry:Point:srid=4326");
+        SimpleFeatureType targetType =
+                SimpleFeatureTypeBuilder.retype(featureType, new String[] {"id", "geometry"});
+        // create a feature collection wit a single feature
+        SimpleFeature feature = DataUtilities.createFeature(featureType, "1|foobar|POINT(1 2)");
+        feature.getUserData().put(UD_KEY, UD_VALUE);
+        ListFeatureCollection features = new ListFeatureCollection(featureType);
+        features.add(feature);
+        // test
+        int featuresCount = 0;
+        FeatureReader<SimpleFeatureType, SimpleFeature> delegate =
+                DataUtilities.reader((SimpleFeatureCollection) features);
+        try (ReTypeFeatureReader retyped = new ReTypeFeatureReader(delegate, targetType)) {
+            // check that the feature was correctly reprojected
+            SimpleFeature retypedFeature = retyped.next();
+            assertThat(retypedFeature, notNullValue());
+            // check the schema is the desired one
+            assertThat(retypedFeature.getFeatureType(), is(targetType));
+            assertThat(retypedFeature.getAttribute("name"), nullValue());
+            // check that the user data was preserved
+            assertThat(retypedFeature.getUserData().get("someKey"), is("someValue"));
+            // increment the features counter
+            featuresCount++;
+        }
+        // check that we iterate over the feature
+        assertThat(featuresCount, is(1));
+    }
+

@@ -1,0 +1,35 @@
+    @Override
+    protected int getCountInternal(Query query) throws IOException {
+        LOGGER.fine("getCountInternal");
+        int hits = 0;
+        final ElasticRequest searchRequest = prepareSearchRequest(query, false);
+        try {
+            if (!filterFullySupported) {
+                try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                        getReaderInternal(query)) {
+                    while (reader.hasNext()) {
+                        reader.next();
+                        hits++;
+                    }
+                }
+            } else {
+                searchRequest.setSize(0);
+                final ElasticDataStore dataStore = getDataStore();
+                final String docType = dataStore.getDocType(entry.getName());
+                final ElasticResponse sr =
+                        dataStore
+                                .getClient()
+                                .search(dataStore.getIndexName(), docType, searchRequest);
+                final int totalHits = (int) sr.getTotalNumHits();
+                final int size = getSize(query);
+                final int from = getStartIndex(query);
+                hits = Math.max(0, Math.min(totalHits - from, size));
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+            throw new IOException("Error executing count search", e);
+        }
+
+        return hits;
+    }
+

@@ -1,0 +1,26 @@
+    private static SimpleFeatureCollection getDelegateCollection(
+            GranuleCatalog catalog, Query query, RasterManager manager) throws IOException {
+        // the query needs to be sorted on location, for aggregation purposes, and
+        // by dimensions, just to avoid randomness in output (we pick the first granule in the list
+        // as the sample)
+        List<SortBy> sorts = new ArrayList<>();
+
+        // add the sort on location
+        String locationAttribute = manager.getLocationAttribute();
+        sorts.add(FF.sort(locationAttribute, SortOrder.ASCENDING));
+        // sort on anything else
+        manager.getDimensionDescriptors()
+                .stream()
+                .map(dd -> FF.sort(dd.getStartAttribute(), SortOrder.ASCENDING))
+                .forEach(sorts::add);
+
+        if (query.getSortBy() != null && query.getSortBy().length > 0) {
+            sorts.addAll(Arrays.asList(query.getSortBy()));
+        }
+
+        Query updated = new Query(query);
+        updated.setSortBy(sorts.toArray(new SortBy[sorts.size()]));
+
+        return catalog.getGranules(updated);
+    }
+

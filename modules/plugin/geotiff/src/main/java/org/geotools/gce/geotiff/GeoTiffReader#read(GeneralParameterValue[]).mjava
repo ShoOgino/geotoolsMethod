@@ -12,6 +12,7 @@
         Color inputTransparentColor = null;
         OverviewPolicy overviewPolicy = null;
         int[] suggestedTileSize = null;
+        boolean rescalePixels = AbstractGridFormat.RESCALE_PIXELS.getDefaultValue();
 
         //
         // Checking params
@@ -53,6 +54,9 @@
                         }
                     }
                     continue;
+                }
+                if (name.equals(AbstractGridFormat.RESCALE_PIXELS.getName())) {
+                    rescalePixels = Boolean.TRUE.equals(param.getValue());
                 }
             }
         }
@@ -133,9 +137,23 @@
         pbjRead.add(null);
         pbjRead.add(readP);
         pbjRead.add(READER_SPI.createReaderInstance());
-        RenderedOp coverageRaster =
-                JAI.create(
-                        "ImageRead", pbjRead, newHints != null ? (RenderingHints) newHints : null);
+        PlanarImage coverageRaster =
+                JAI.create("ImageRead", pbjRead, newHints != null ? newHints : null);
+
+        // applying rescale if needed
+        if (rescalePixels) {
+            if (!Double.isNaN(noData)) {
+                // Force nodata settings since JAI ImageRead may lost that
+                // We have to make sure that noData pixels won't be rescaled
+                PlanarImage t = PlanarImage.wrapRenderedImage(coverageRaster);
+                t.setProperty(NoDataContainer.GC_NODATA, new NoDataContainer(noData));
+                coverageRaster = t;
+            }
+            coverageRaster =
+                    PlanarImage.wrapRenderedImage(
+                            ImageUtilities.applyRescaling(
+                                    scales, offsets, coverageRaster, newHints));
+        }
 
         //
         // MASKING INPUT COLOR as indicated
@@ -155,7 +173,7 @@
         ROI roi = null;
         // Using MaskOvrProvider
         if (hasMaskOvrProvider) {
-            // Parameter definiton
+            // Parameter definition
             GridEnvelope ogr = getOriginalGridRange();
             Rectangle sourceRegion;
             if (readP.getSourceRegion() != null) {

@@ -7,6 +7,14 @@
         InputStream result;
 
         params.put(ArcGISRestDataStore.GEOMETRY_PARAM, this.composeExtent(this.getBounds(query)));
+        try {
+            params.put(
+                    ArcGISRestDataStore.GEOMETRYSRS_PARAM,
+                    CRS.lookupEpsgCode(
+                            this.getBoundsInternal(query).getCoordinateReferenceSystem(), true));
+        } catch (FactoryException e) {
+            throw new IOException(String.format("Unknown CRS %s", e.getMessage()));
+        }
 
         // TODO: currently it sets _only_ the BBOX query
         params.put(ArcGISRestDataStore.GEOMETRY_PARAM, this.composeExtent(this.getBounds(query)));
@@ -18,7 +26,11 @@
         params.put(ArcGISRestDataStore.FORMAT_PARAM, ArcGISRestDataStore.FORMAT_GEOJSON);
 
         // Executes the request
-        result = this.dataStore.retrieveJSON("POST", (new URL(this.composeQueryURL())), params);
+        try {
+            result = this.dataStore.retrieveJSON("POST", (new URL(this.composeQueryURL())), params);
+        } catch (HTTPException e) {
+            throw new IOException(String.format("Error %d %s", e.getStatusCode(), e.getMessage()));
+        }
 
         // Returns a reader for the result
         return new ArcGISRestFeatureReader(this.schema, result, this.dataStore.getLogger());

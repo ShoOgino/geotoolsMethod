@@ -1,0 +1,92 @@
+    private GridGeometry2D computeReadingGeometry(
+            GridGeometry2D gg,
+            CoordinateReferenceSystem readerCRS,
+            Polygon polygon,
+            ProjectionHandler handler,
+            GeneralParameterValue[] readParams)
+            throws TransformException, FactoryException, IOException {
+        GridGeometry2D readingGridGeometry;
+        MathTransform2D crsToGrid2D = gg.getCRSToGrid2D();
+        MathTransform2D gridToCRS2D = gg.getGridToCRS2D();
+        if (sameCRS) {
+            Envelope gridEnvelope = JTS.transform(polygon, crsToGrid2D).getEnvelopeInternal();
+            GridEnvelope2D gridRange =
+                    new GridEnvelope2D(
+                            (int) gridEnvelope.getMinX(),
+                            (int) gridEnvelope.getMinY(),
+                            (int) Math.round(gridEnvelope.getWidth()),
+                            (int) Math.round(gridEnvelope.getHeight()));
+            readingGridGeometry = new GridGeometry2D(gridRange, gridToCRS2D, readerCRS);
+        } else {
+            ReferencedEnvelope readEnvelope =
+                    new ReferencedEnvelope(polygon.getEnvelopeInternal(), readerCRS);
+            // while we want to read as much data as possible, and cut it only later
+            // to avoid warping edge effects later, the resolution needs to be
+            // computed against an area that's sane for the projection at hand
+            ReferencedEnvelope reducedEnvelope = reduceEnvelope(readEnvelope, handler);
+            if (reducedEnvelope == null) {
+                return null;
+            }
+            ReferencedEnvelope reducedEnvelopeInRequestedCRS =
+                    reducedEnvelope.transform(
+                            requestedGridGeometry.getCoordinateReferenceSystem(), true);
+            ReferencedEnvelope gridEnvelope =
+                    ReferencedEnvelope.reference(
+                            CRS.transform(crsToGrid2D, reducedEnvelopeInRequestedCRS));
+            GridEnvelope2D readingGridRange =
+                    new GridEnvelope2D(
+                            (int) gridEnvelope.getMinX(),
+                            (int) gridEnvelope.getMinY(),
+                            (int) gridEnvelope.getWidth(),
+                            (int) gridEnvelope.getHeight());
+            GridGeometry2D localGridGeometry =
+                    new GridGeometry2D(
+                            readingGridRange,
+                            gridToCRS2D,
+                            mapExtent.getCoordinateReferenceSystem());
+
+            double[][] resolutionLevels = reader.getResolutionLevels();
+            ReadResolutionCalculator calculator =
+                    new ReadResolutionCalculator(
+                            localGridGeometry,
+                            readerCRS,
+                            resolutionLevels != null ? resolutionLevels[0] : null);
+            final String name = "Accurate resolution computation";
+            boolean accurateResolution = true;
+            if (readParams != null) {
+                for (GeneralParameterValue gParam : readParams) {
+                    if (gParam != null
+                            && name.equalsIgnoreCase(gParam.getDescriptor().getName().toString())) {
+                        if (gParam instanceof ParameterValue<?>) {
+                            final ParameterValue<?> param = (ParameterValue<?>) gParam;
+                            final Object value = param.getValue();
+                            if (value != null) {
+                                accurateResolution = (Boolean) value;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            calculator.setAccurateResolution(
+                    accurateResolution && isAccurateResolutionComputationSafe(readEnvelope));
+            double[] readResolution = calculator.computeRequestedResolution(reducedEnvelope);
+            int width =
+                    (int)
+                            Math.max(
+                                    1,
+                                    Math.round(
+                                            readEnvelope.getWidth() / Math.abs(readResolution[0])));
+            int height =
+                    (int)
+                            Math.max(
+                                    1,
+                                    Math.round(
+                                            readEnvelope.getHeight()
+                                                    / Math.abs(readResolution[1])));
+            GridEnvelope2D gridRange = new GridEnvelope2D(0, 0, width, height);
+            readingGridGeometry = new GridGeometry2D(gridRange, readEnvelope);
+        }
+        return readingGridGeometry;
+    }
+

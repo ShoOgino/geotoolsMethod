@@ -1,0 +1,45 @@
+    @Test
+    public void replaceAll() throws Exception {
+        System.out.println("replaceAll start\n");
+        // replaceAll start
+        Map<String, Serializable> params = new HashMap<>();
+        params.put("file", file);
+        DataStore store = DataStoreFinder.getDataStore(params);
+
+        final SimpleFeatureType type = store.getSchema("locations");
+        final FeatureWriter<SimpleFeatureType, SimpleFeature> writer;
+        SimpleFeature f;
+        DefaultFeatureCollection collection = new DefaultFeatureCollection();
+
+        // 42.3601° N, 71.0589° W Boston 1300 2017
+        GeometryFactory gf = JTSFactoryFinder.getGeometryFactory();
+        Point boston = gf.createPoint(new Coordinate(-71.0589, 42.3601));
+        SimpleFeature bf =
+                SimpleFeatureBuilder.build(
+                        type, new Object[] {boston, "Boston", 1300, 2017}, "locations.1");
+        collection.add(bf);
+
+        writer = store.getFeatureWriter("locations", Transaction.AUTO_COMMIT);
+        try {
+            // remove all features
+            while (writer.hasNext()) {
+                writer.next();
+                writer.remove();
+            }
+            // copy new features in
+            SimpleFeatureIterator iterator = collection.features();
+            while (iterator.hasNext()) {
+                SimpleFeature feature = iterator.next();
+                SimpleFeature newFeature = writer.next(); // new blank feature
+                newFeature.setAttributes(feature.getAttributes());
+                writer.write();
+            }
+        } finally {
+            writer.close();
+        }
+        // replaceAll end
+        System.out.println("\nreplaceAll end\n");
+
+        fileContents("replaceAll", file);
+    }
+

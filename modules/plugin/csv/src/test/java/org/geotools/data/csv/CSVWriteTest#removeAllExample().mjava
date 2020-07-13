@@ -1,0 +1,36 @@
+    @Test
+    public void removeAllExample() throws Exception {
+        Map<String, Serializable> params = new HashMap<>();
+        params.put("file", statesfile);
+        DataStore store = DataStoreFinder.getDataStore(params);
+
+        Transaction t = new DefaultTransaction("locations");
+        try {
+            FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
+                    store.getFeatureWriter("locations", Filter.INCLUDE, t);
+
+            try {
+                while (writer.hasNext()) {
+                    writer.next();
+                    writer.remove(); // marking contents for removal
+                }
+            } finally {
+                writer.close();
+            }
+
+            // Test the contents have been removed
+            SimpleFeatureStore featureStore =
+                    (SimpleFeatureStore) store.getFeatureSource("locations");
+            assertEquals("featureStore should be empty", 0, featureStore.getFeatures().size());
+            // Make sure the file is empty
+            assertEquals("file should have no content", "", getFileContents(statesfile));
+            t.commit();
+        } catch (Throwable eek) {
+            t.rollback();
+        } finally {
+            t.close();
+            store.dispose();
+        }
+        assertTrue("Temp files being left behind", cleanedup());
+    }
+

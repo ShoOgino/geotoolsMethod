@@ -1,0 +1,48 @@
+    @Test
+    public void testGranuleFileViewPreserveAttributes() throws Exception {
+        // copy the data and get the reader
+        File directory =
+                setupTestDirectory(
+                        this, this.timeAdditionalDomainsURL, "additionalDomainsFileView");
+        ImageMosaicReader reader = getReader(directory);
+        try {
+            GranuleSource source = reader.getGranules(reader.getGridCoverageNames()[0], true);
+            assertThat(source.getSupportedHints(), hasItem(GranuleSource.FILE_VIEW));
+
+            Query q = new Query();
+            q.setHints(new Hints(GranuleSource.FILE_VIEW, true));
+            SimpleFeatureCollection granules = source.getGranules(q);
+
+            // no location attribute, just the geometry
+            SimpleFeatureType schema = granules.getSchema();
+            assertNull(schema.getDescriptor("location"));
+            assertNotNull(schema.getDescriptor("the_geom"));
+            assertNotNull(schema.getDescriptor("time"));
+            assertNotNull(schema.getDescriptor("date"));
+            assertNotNull(schema.getDescriptor("depth"));
+            // check the count, collect first
+            SimpleFeature first = null;
+            int count = 0;
+            try (SimpleFeatureIterator it = granules.features()) {
+                while (it.hasNext()) {
+                    count++;
+                    SimpleFeature next = it.next();
+                    if (first == null) first = next;
+                }
+            }
+            // all files present
+            assertEquals(4, count);
+
+            // check the first feature
+            assertEquals(20, first.getAttribute("depth"));
+            FileGroup groupFirst = (FileGroup) first.getUserData().get(GranuleSource.FILES);
+            assertNotNull(groupFirst);
+            assertThat(
+                    groupFirst.getMainFile().getPath(),
+                    endsWith("NCOM_wattemp_020_20081031T0000000_12.tiff"));
+            assertThat(groupFirst.getSupportFiles(), Matchers.nullValue());
+        } finally {
+            reader.dispose();
+        }
+    }
+

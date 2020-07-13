@@ -1,0 +1,37 @@
+    @Test
+    public void test_Constructor_ZIP_URL() throws Exception {
+        final String mockFileURL = "https://mock.url.com/schemas.zip";
+
+        MockHTTPClient mockHttpClient = new MockHTTPClient();
+        byte[] responseBytes = IOUtils.toByteArray(getClass().getResourceAsStream("schemas.zip"));
+        MockHttpResponse mockResponse = new MockHttpResponse(responseBytes, "application/zip");
+        mockHttpClient.expectGet(mockFileURL, mockResponse);
+        SchemaStoreDirectory directory = SchemaStoreDirectoryProvider.getLowestPriority();
+        File downloadedFile =
+                MongoUtil.downloadSchemaFile(
+                        "mockshema", new URL(mockFileURL), mockHttpClient, directory);
+        File extractedLocation =
+                MongoUtil.extractZipFile(downloadedFile.getParentFile(), downloadedFile);
+
+        MongoSchemaStore mss = new MongoSchemaFileStore(extractedLocation.toURI());
+        // retreive test
+        assertEquals(2, mss.typeNames().size());
+        SimpleFeatureType type = mss.retrieveSchema(new NameImpl("stations"));
+        assertNotNull(type);
+        SimpleFeatureType type2 = mss.retrieveSchema(new NameImpl("stations2"));
+        assertNotNull(type2);
+
+        // delete test
+        mss.deleteSchema(new NameImpl("stations2"));
+        assertEquals(1, mss.typeNames().size());
+
+        // store test
+        mss.storeSchema(type2);
+        assertEquals(2, mss.typeNames().size());
+        // cleanup
+        Files.walk(new File(directory.getDirectory(), "mockshema").toPath())
+                .sorted(Comparator.reverseOrder())
+                .map(Path::toFile)
+                .forEach(File::delete);
+    }
+

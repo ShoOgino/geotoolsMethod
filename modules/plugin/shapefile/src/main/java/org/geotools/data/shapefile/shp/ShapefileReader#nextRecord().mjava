@@ -1,7 +1,6 @@
     /**
      * Fetch the next record information.
      *
-     * @throws IOException
      * @return The record instance associated with this reader.
      */
     public Record nextRecord() throws IOException {
@@ -23,24 +22,24 @@
         if (!buffer.isReadOnly() && !useMemoryMappedBuffer) {
             // capacity is less than required for the record
             // copy the old into the newly allocated
-            if (buffer.capacity() < recordLength + 8) {
-                this.currentOffset += buffer.position();
+            if (((Buffer) buffer).capacity() < recordLength + 8) {
+                this.currentOffset += ((Buffer) buffer).position();
                 ByteBuffer old = buffer;
                 // ensure enough capacity for one more record header
                 buffer = ensureCapacity(buffer, recordLength + 8, useMemoryMappedBuffer);
                 buffer.put(old);
                 NIOUtilities.clean(old, useMemoryMappedBuffer);
                 fill(buffer, channel);
-                buffer.position(0);
+                ((Buffer) buffer).position(0);
             } else
             // remaining is less than record length
             // compact the remaining data and read again,
             // allowing enough room for one more record header
-            if (buffer.remaining() < recordLength + 8) {
-                this.currentOffset += buffer.position();
+            if (((Buffer) buffer).remaining() < recordLength + 8) {
+                this.currentOffset += ((Buffer) buffer).position();
                 buffer.compact();
                 fill(buffer, channel);
-                buffer.position(0);
+                ((Buffer) buffer).position(0);
             }
         }
 
@@ -60,7 +59,7 @@
         // peek at bounds, then reset for handler
         // many handler's may ignore bounds reading, but we don't want to
         // second guess them...
-        buffer.mark();
+        ((Buffer) buffer).mark();
         if (recordType.isMultiPoint()) {
             record.minX = buffer.getDouble();
             record.minY = buffer.getDouble();
@@ -70,7 +69,7 @@
             record.minX = record.maxX = buffer.getDouble();
             record.minY = record.maxY = buffer.getDouble();
         }
-        buffer.reset();
+        ((Buffer) buffer).reset();
 
         record.offset = record.end;
         // update all the record info.
@@ -78,9 +77,9 @@
         record.type = recordType;
         record.number = recordNumber;
         // remember, we read one int already...
-        record.end = this.toFileOffset(buffer.position()) + recordLength - 4;
+        record.end = this.toFileOffset(((Buffer) buffer).position()) + recordLength - 4;
         // mark this position for the reader
-        record.start = buffer.position();
+        record.start = ((Buffer) buffer).position();
         // clear any cached shape
         record.shape = null;
 

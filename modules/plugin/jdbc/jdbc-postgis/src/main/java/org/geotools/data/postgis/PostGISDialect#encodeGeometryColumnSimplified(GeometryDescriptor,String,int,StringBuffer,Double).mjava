@@ -1,52 +1,6 @@
     @Override
     public void encodeGeometryColumnSimplified(
             GeometryDescriptor gatt, String prefix, int srid, StringBuffer sql, Double distance) {
-        if (!isSimplifyEnabled()) {
-            super.encodeGeometryColumnSimplified(gatt, prefix, srid, sql, distance);
-        } else {
-            // add preserveCollapsed argument if it's supported (PostGIS 2.2+)
-            // http://postgis.net/docs/manual-2.2/ST_Simplify.html
-            boolean atLeast2_2_0 = version.compareTo(V_2_2_0) >= 0;
-
-            boolean geography =
-                    "geography".equals(gatt.getUserData().get(JDBCDataStore.JDBC_NATIVE_TYPENAME));
-
-            if (geography) {
-                // st_astwb and st_simplify do not accept a geography column
-                sql.append("encode(ST_AsBinary(");
-                encodeColumnName(prefix, gatt.getLocalName(), sql);
-                sql.append("),'base64')");
-            } else {
-                String preserveCollapsed = atLeast2_2_0 ? ", true" : "";
-                if (NON_CURVED_GEOMETRY_CLASSES.contains(gatt.getType().getBinding())) {
-                    if (atLeast2_2_0) {
-                        sql.append("encode(ST_AsTWKB(ST_Simplify(" + getForce2DFunction() + "(");
-                        encodeColumnName(prefix, gatt.getLocalName(), sql);
-                        sql.append(
-                                "), "
-                                        + distance
-                                        + preserveCollapsed
-                                        + "),"
-                                        + getTWKBDigits(distance)
-                                        + "),'base64')");
-                    } else {
-                        sql.append("encode(ST_AsBinary(ST_Simplify(" + getForce2DFunction() + "(");
-                        encodeColumnName(prefix, gatt.getLocalName(), sql);
-                        sql.append("), " + distance + preserveCollapsed + ")),'base64')");
-                    }
-                } else {
-                    // may have curves mixed in, cannot use TWKB and need to guard ST_Simplify
-                    sql.append("encode(ST_AsBinary(");
-                    sql.append("CASE WHEN ST_HasArc(");
-                    encodeColumnName(prefix, gatt.getLocalName(), sql);
-                    sql.append(") THEN ");
-                    encodeColumnName(prefix, gatt.getLocalName(), sql);
-                    sql.append(" ELSE ");
-                    sql.append("ST_Simplify(" + getForce2DFunction() + "(");
-                    encodeColumnName(prefix, gatt.getLocalName(), sql);
-                    sql.append("), " + distance + preserveCollapsed + ") END),'base64')");
-                }
-            }
-        }
+        getGeometryColumnEncoder().encode(gatt, prefix, sql, true, distance);
     }
 

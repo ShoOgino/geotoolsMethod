@@ -1,0 +1,25 @@
+    @Test
+    public void test16BitPaletted() throws Exception {
+        InputStream gzippedStream =
+                ImageWorkerTest.class.getResource("test-data/sf-sfdem.tif.gz").openStream();
+        try (ImageInputStream iis =
+                ImageIO.createImageInputStream(new GZIPInputStream(gzippedStream))) {
+            ImageReader reader = new TIFFImageReaderSpi().createReaderInstance(iis);
+            reader.setInput(iis);
+            BufferedImage bi = reader.read(0);
+            reader.dispose();
+            IndexColorModel icm = (IndexColorModel) bi.getColorModel();
+            assertEquals(65536, icm.getMapSize());
+            ImageWorker worker = new ImageWorker(bi).makeColorTransparent(Color.black);
+            RenderedImage ri = worker.rescaleToBytes().getRenderedImage();
+
+            // we expect a RGBA one
+            ComponentColorModel ccm = (ComponentColorModel) ri.getColorModel();
+            SampleModel sm = ri.getSampleModel();
+            assertEquals(3, ccm.getNumColorComponents());
+            assertTrue(ccm.hasAlpha());
+            assertEquals(DataBuffer.TYPE_BYTE, sm.getDataType());
+            assertArrayEquals(new int[] {8, 8, 8, 8}, sm.getSampleSize());
+        }
+    }
+

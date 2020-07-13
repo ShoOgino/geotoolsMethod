@@ -1,0 +1,36 @@
+    @Test
+    public void testRender() throws IOException {
+        // get a generic style that works will all layer types
+        URL styleResource = MBTilesRenderTest.class.getResource("generic.sld");
+        StyleFactory styleFactory = CommonFactoryFinder.getStyleFactory();
+        StyledLayerDescriptor sld = new SLDParser(styleFactory, styleResource).parseSLD();
+        Style style = ((NamedLayer) sld.getStyledLayers()[0]).getStyles()[0];
+
+        MapContent mc = new MapContent();
+        File file = URLs.urlToFile(getClass().getResource("madagascar.mbtiles"));
+        MBTilesDataStore store = new MBTilesDataStore(new MBTilesFile(file));
+        for (String typeName : store.getTypeNames()) {
+            ContentFeatureSource fs = store.getFeatureSource(typeName);
+            mc.addLayer(new FeatureLayer(fs, style));
+        }
+
+        StreamingRenderer renderer = new StreamingRenderer();
+        renderer.setMapContent(mc);
+        renderer.setJava2DHints(new RenderingHints(KEY_ANTIALIASING, VALUE_ANTIALIAS_ON));
+
+        int w = 300;
+        int h = 500;
+        final BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = (Graphics2D) image.getGraphics();
+        g.setColor(Color.white);
+        g.fillRect(0, 0, w, h);
+        renderer.paint(
+                g,
+                new Rectangle(0, 0, w, h),
+                new ReferencedEnvelope(4700000, 5700000, -3000000, -1300000, DEFAULT_CRS));
+        g.dispose();
+
+        File expected = new File("src/test/resources/org/geotools/mbtiles/madagascar.png");
+        ImageAssert.assertEquals(expected, image, (int) (w * h * 0.05));
+    }
+

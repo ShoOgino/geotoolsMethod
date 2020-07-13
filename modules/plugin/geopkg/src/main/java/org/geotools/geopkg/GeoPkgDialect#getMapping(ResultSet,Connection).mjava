@@ -2,6 +2,7 @@
     public Class<?> getMapping(ResultSet columns, Connection cx) throws SQLException {
         String tbl = columns.getString("TABLE_NAME");
         String col = columns.getString("COLUMN_NAME");
+        String typeName = columns.getString("TYPE_NAME");
 
         String sql =
                 format(
@@ -16,8 +17,7 @@
             LOGGER.fine(String.format("%s; 1=%s, 2=%s", sql, tbl, col));
         }
 
-        PreparedStatement ps = cx.prepareStatement(sql);
-        try {
+        try (PreparedStatement ps = cx.prepareStatement(sql)) {
             ps.setString(1, tbl);
             ps.setString(2, col);
 
@@ -33,9 +33,31 @@
             } finally {
                 dataStore.closeSafe(rs);
             }
-        } finally {
-            dataStore.closeSafe(ps);
         }
+
+        // if it's an enumeration, switch data type to string
+        @SuppressWarnings("PMD.CloseResource") // using the pool of the store, no need to close
+        GeoPackage geoPackage = geopkg();
+        try {
+            GeoPkgSchemaExtension extension = geoPackage.getExtension(GeoPkgSchemaExtension.class);
+            List<DataColumn> dataColumns = extension.getDataColumns(tbl, cx);
+            for (DataColumn dataColumn : dataColumns) {
+                if (col.equals(dataColumn.getColumnName())) {
+                    DataColumnConstraint constraint = dataColumn.getConstraint();
+                    if (constraint instanceof DataColumnConstraint.Enum) {
+                        return String.class;
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throwSQLException(e);
+        }
+
+        // handle GeoPackage integer type expectations
+        if ("TINYINT".equals(typeName)) return Byte.class;
+        else if ("SMALLINT".equals(typeName)) return Short.class;
+        else if ("MEDIUMINT".equals(typeName)) return Integer.class;
+        else if ("INT".equals(typeName) || "INTEGER".equals(typeName)) return Long.class;
 
         return null;
     }

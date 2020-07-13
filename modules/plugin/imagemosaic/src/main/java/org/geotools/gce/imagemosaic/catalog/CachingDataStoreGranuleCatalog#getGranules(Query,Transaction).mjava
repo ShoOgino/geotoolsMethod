@@ -1,0 +1,17 @@
+    @Override
+    public SimpleFeatureCollection getGranules(Query q, Transaction t) throws IOException {
+        boolean decorateWithBounds =
+                Boolean.TRUE.equals(q.getHints().get(GranuleSource.NATIVE_BOUNDS));
+        if (decorateWithBounds) {
+            // delegate down a version that won't decorate with bounds, we want to use the local
+            // granule descriptor cache
+            Query copy = new Query(q);
+            copy.getHints().remove(GranuleSource.NATIVE_BOUNDS);
+            q = copy;
+            SimpleFeatureCollection granules = adaptee.getGranules(q, t);
+            return new BoundsFeatureCollection(granules, this::getGranuleDescriptor);
+        } else {
+            return adaptee.getGranules(q, t);
+        }
+    }
+

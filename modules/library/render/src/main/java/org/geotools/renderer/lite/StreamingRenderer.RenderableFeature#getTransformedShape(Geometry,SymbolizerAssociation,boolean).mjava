@@ -1,0 +1,75 @@
+        private LiteShape2 getTransformedShape(
+                Geometry originalGeom, SymbolizerAssociation sa, boolean clone)
+                throws TransformException, FactoryException {
+            int idx = getGeometryIndex(originalGeom);
+            if (idx != -1) {
+                return (LiteShape2) shapes.get(idx);
+            }
+
+            // we need to clone if the clone flag is high or if the coordinate sequence is not the
+            // one we asked for
+            Geometry geom = originalGeom;
+            if (clone
+                    || !(geom.getFactory().getCoordinateSequenceFactory()
+                            instanceof LiteCoordinateSequenceFactory)) {
+                int dim = sa.crs != null ? sa.crs.getCoordinateSystem().getDimension() : 2;
+                geom = LiteCoordinateSequence.cloneGeometry(geom, dim);
+            }
+
+            LiteShape2 shape;
+            if (projectionHandler != null && sa != null) {
+                // first generalize and transform the geometry into the rendering CRS
+                geom = projectionHandler.preProcess(geom);
+                if (geom == null) {
+                    shape = null;
+                } else {
+                    // first generalize and transform the geometry into the rendering CRS
+                    Decimator d = getDecimator(sa.xform);
+                    geom = d.decimateTransformGeneralize(geom, sa.rxform);
+                    geom.geometryChanged();
+                    // then post process it (provide reverse transform if available)
+                    MathTransform reverse = null;
+                    if (sa.crsxform != null) {
+                        if (sa.crsxform instanceof ConcatenatedTransform
+                                && ((ConcatenatedTransform) sa.crsxform)
+                                                .transform1.getTargetDimensions()
+                                        >= 3
+                                && ((ConcatenatedTransform) sa.crsxform)
+                                                .transform2.getTargetDimensions()
+                                        == 2) {
+                            reverse =
+                                    null; // We are downcasting 3D data to 2D data so no inverse is
+                            // available
+                        } else {
+                            try {
+                                reverse = sa.crsxform.inverse();
+                            } catch (Exception cannotReverse) {
+                                reverse = null; // reverse transform not available
+                            }
+                        }
+                    }
+                    geom = projectionHandler.postProcess(reverse, geom);
+                    if (geom == null) {
+                        shape = null;
+                    } else {
+                        // apply the affine transform turning the coordinates into pixels
+                        d = new Decimator(-1, -1);
+                        geom = d.decimateTransformGeneralize(geom, sa.axform);
+
+                        // wrap into a lite shape
+                        geom.geometryChanged();
+                        shape = new LiteShape2(geom, null, null, false, false);
+                    }
+                }
+            } else {
+                MathTransform xform = null;
+                if (sa != null) xform = sa.xform;
+                shape = new LiteShape2(geom, xform, getDecimator(xform), false, false);
+            }
+
+            // cache the result
+            geometries.add(originalGeom);
+            shapes.add(shape);
+            return shape;
+        }
+

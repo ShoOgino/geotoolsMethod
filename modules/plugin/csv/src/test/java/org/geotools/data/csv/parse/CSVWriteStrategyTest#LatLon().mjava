@@ -1,0 +1,28 @@
+    // docs start latlon
+    @Test
+    public void LatLon() throws Exception {
+        CSVFileState fileState = new CSVFileState("LAT, LON, CITY, NUMBER, YEAR", "TEST");
+        CSVLatLonStrategy strategy = new CSVLatLonStrategy(fileState);
+
+        SimpleFeatureType featureType = strategy.buildFeatureType();
+        assertEquals("TEST", featureType.getName().getLocalPart());
+        // 4 because LAT/LON should be stored internally as POINT
+        assertEquals(4, featureType.getAttributeCount());
+
+        GeometryFactory gf = JTSFactoryFinder.getGeometryFactory();
+        Point trento;
+        if (CRS.getAxisOrder(CSVLatLonStrategy._CRS).equals(AxisOrder.NORTH_EAST)) {
+            trento = gf.createPoint(new Coordinate(46.066667, 11.116667));
+        } else {
+            trento = gf.createPoint(new Coordinate(11.116667, 46.066667));
+        }
+
+        SimpleFeature feature =
+                SimpleFeatureBuilder.build(
+                        featureType, new Object[] {trento, "Trento", 140, 2002}, "TEST-fid1");
+        String[] csvRecord = new String[] {"46.066667", "11.116667", "Trento", "140", "2002"};
+        SimpleFeature parsed = strategy.decode("fid1", csvRecord);
+        assertEquals(feature, parsed);
+    }
+    // docs end latlon
+

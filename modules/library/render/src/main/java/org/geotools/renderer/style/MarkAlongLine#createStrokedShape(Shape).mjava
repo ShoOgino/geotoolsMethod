@@ -1,0 +1,215 @@
+    @Override
+    public Shape createStrokedShape(Shape shape) {
+        GeneralPath newshape = new GeneralPath(); // Start with an empty shape
+
+        // array to store cuurent coordinates
+        float[] coords = new float[6];
+        // array to store coordinates from prev iteration
+        // used to define a line segment which will be used to create shape to drape
+        float[] prevcoords = new float[6];
+        boolean connectPrevious = false;
+        Coordinate lastShapeEndedAtCoordinate = null;
+        LineSegment nextLineSegment = null;
+        LineSegment previousLineSegment = null;
+        MarkAlongLiteShape drapeMe = null;
+        MarkAlongLiteShape previousDrapeMe = null;
+        double time = new Date().getTime();
+        boolean segmentsTouch = false;
+        int segments = 0;
+        int type = 0;
+        float projFactor = 0;
+        float turnAngle;
+        boolean insideTurn = false;
+        boolean isLinear = false;
+        // in case of multipolygon
+        // draw each polygon as a separate shape
+        // because we want to able to close the final path
+        List<LiteShape2> unpackedList;
+        try {
+            unpackedList = unPackMultiPolygon(shape);
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error unpacking Multi Polygon", e);
+            unpackedList = Arrays.asList((LiteShape2) shape);
+        }
+
+        for (LiteShape2 innerShape : unpackedList) {
+            for (PathIterator i = innerShape.getPathIterator(null); !i.isDone(); i.next()) {
+                type = i.currentSegment(coords);
+                segments++;
+                switch (type) {
+                    case PathIterator.SEG_MOVETO:
+                        newshape.moveTo(coords[0], coords[1]);
+                        break;
+                    case PathIterator.SEG_LINETO:
+                        if (LOGGER.isLoggable(Level.FINER))
+                            LOGGER.finer("------------------------------------");
+                        nextLineSegment =
+                                new LineSegment(
+                                        new Coordinate(prevcoords[0], prevcoords[1]),
+                                        new Coordinate(coords[0], coords[1]));
+                        if (previousLineSegment != null)
+                            if (LOGGER.isLoggable(Level.FINER))
+                                LOGGER.finer(
+                                        "Segments "
+                                                + previousLineSegment.toString()
+                                                + " --> "
+                                                + nextLineSegment.toString());
+
+                        // do they touch
+                        if (previousLineSegment == null) segmentsTouch = false;
+                        else segmentsTouch = segmentsTouch(nextLineSegment, previousLineSegment);
+                        // checking for sloppy connections
+                        // where previous shape and new shape might overlap
+                        // this will not occur on first segment
+                        // or if the segments dont touch
+                        if (previousDrapeMe != null && segmentsTouch) {
+                            if (previousDrapeMe.getLeftOver() != null
+                                    && previousDrapeMe.isClipped()) {
+                                connectPrevious = true;
+                                // project last coods to on to next segment to see if there is bad
+                                // overlap
+                                // bad overlap = tight turn angles (well below 90) and part of
+                                // next shape overlapping previous shape
+                                // but we have not drawn the next shape yet so only way to check is
+                                // to check projection factor of last drawn vertex on next segment
+                                // if its below 1,means the point lies around the next segment
+                                // also check the the angle between connecting segments
+                                // and if the point ended up inside the turn
+                                projFactor =
+                                        (float)
+                                                nextLineSegment.projectionFactor(
+                                                        lastShapeEndedAtCoordinate);
+                                Coordinate pointOnLine =
+                                        nextLineSegment.project(lastShapeEndedAtCoordinate);
+                                turnAngle =
+                                        angleBetweenSegments(previousLineSegment, nextLineSegment);
+                                insideTurn =
+                                        isInsideTurn(
+                                                previousLineSegment,
+                                                nextLineSegment,
+                                                lastShapeEndedAtCoordinate);
+                                isLinear = (Math.abs(turnAngle - 180) < LINEAR_ANGLE_TOLERANCE);
+                                if (LOGGER.isLoggable(Level.FINER)) {
+                                    LOGGER.finer(
+                                            "projection factor "
+                                                    + projFactor
+                                                    + " winding rule:"
+                                                    + i.getWindingRule());
+                                    LOGGER.finer("segments turning to " + turnAngle);
+                                    LOGGER.finer("is inside the turn " + insideTurn);
+                                    LOGGER.finer("is linear " + isLinear);
+                                }
+
+                                if ((projFactor < 1) || (insideTurn && !isLinear)) {
+
+                                    if (LOGGER.isLoggable(Level.FINER)) {
+                                        LOGGER.finer("shapes will overlap");
+                                        // update left over of previous
+                                        // draw line on to next segment to avoid sloppy connections
+                                        newshape.lineTo(pointOnLine.x, pointOnLine.y);
+                                        LOGGER.finer(
+                                                "Draw line "
+                                                        + new LineSegment(
+                                                                        new Coordinate(
+                                                                                prevcoords[0],
+                                                                                prevcoords[1]),
+                                                                        pointOnLine)
+                                                                .toString());
+                                    }
+
+                                    // update prev coordinates
+                                    prevcoords[0] = (float) pointOnLine.x;
+                                    prevcoords[1] = (float) pointOnLine.y;
+                                    // re-int next segment
+                                    nextLineSegment =
+                                            new LineSegment(
+                                                    new Coordinate(prevcoords[0], prevcoords[1]),
+                                                    new Coordinate(coords[0], coords[1]));
+                                    // previousDrapeMe=null;
+                                }
+                            }
+                        }
+                        // get shape for drapping over passed segment
+                        // the shape might include left over part for previous segment
+                        drapeMe =
+                                getShapeForSegment(
+                                        nextLineSegment, // the segment to drape on
+                                        previousDrapeMe // last drapped shape..which might have left
+                                        // over
+                                        );
+
+                        if (drapeMe == null) {
+                            // reset
+                            connectPrevious = false;
+                            previousDrapeMe = null;
+                            lastShapeEndedAtCoordinate = null;
+                            previousLineSegment = null;
+                            break;
+                        } else if ((boolean)
+                                drapeMe.getHints().getOrDefault(MarkAlongLiteShape.SKIP_ME, false))
+                            break;
+                        if (previousLineSegment != null && !connectPrevious) {
+                            LOGGER.finer(
+                                    "connect previous "
+                                            + connectPrevious
+                                            + ": segments touch:"
+                                            + segmentsTouch);
+                        }
+
+                        // finally draw
+                        previousDrapeMe =
+                                drape(
+                                        newshape,
+                                        drapeMe,
+                                        nextLineSegment.p0,
+                                        nextLineSegment.angle(),
+                                        lastShapeEndedAtCoordinate,
+                                        connectPrevious);
+
+                        // remember where the shape left off after being affine transformed
+                        lastShapeEndedAtCoordinate =
+                                new Coordinate(
+                                        previousDrapeMe.getEndofShapeCoords()[0],
+                                        previousDrapeMe.getEndofShapeCoords()[1]);
+                        // drop the flag
+                        connectPrevious = false;
+                        break;
+                    case PathIterator.SEG_QUADTO:
+                        newshape.quadTo(coords[0], coords[1], coords[2], coords[3]);
+                        break;
+                    case PathIterator.SEG_CUBICTO:
+                        newshape.curveTo(
+                                coords[0], coords[1], coords[2], coords[3], coords[4], coords[5]);
+                        break;
+                    case PathIterator.SEG_CLOSE:
+                        newshape.closePath();
+                        break;
+                }
+                prevcoords = coords.clone();
+                previousLineSegment = nextLineSegment;
+            }
+
+            if (innerShape.getGeometry() instanceof Polygon) {
+                // close the ring when finished drawing polygons
+                if (innerShape.getGeometry().getCoordinates().length > 2) {
+
+                    newshape.moveTo(lastShapeEndedAtCoordinate.x, lastShapeEndedAtCoordinate.y);
+                    newshape.lineTo(
+                            innerShape.getGeometry().getCoordinates()[0].x,
+                            innerShape.getGeometry().getCoordinates()[0].y);
+                }
+            }
+        }
+
+        // Finally, stroke the perturbed shape and return the result
+        if (LOGGER.isLoggable(Level.FINE)) {
+            LOGGER.fine(
+                    "Created "
+                            + segments
+                            + " in "
+                            + (new Date().getTime() - time)
+                            + " milliseconds");
+        }
+        return delegate.createStrokedShape(newshape);
+    }
+

@@ -1,0 +1,29 @@
+    /**
+     * Check if it's possible generate an IN function from the provided OR filter. If the OR filter
+     * doesn't accomplish the conditions, returns null.
+     */
+    private InFunction replaceWithInFilter(Or filter) {
+        List<Filter> children = filter.getChildren();
+        Expression expression = null;
+        List<Literal> literals = new ArrayList<Literal>(children.size());
+        for (Filter childFilter : children) {
+            if (!(childFilter instanceof PropertyIsEqualTo)) return null;
+            PropertyIsEqualTo eqto = (PropertyIsEqualTo) childFilter;
+            Pair<Expression, Literal> equalsParameters = getEqualsParameters(eqto);
+            if (equalsParameters == null) return null;
+            if (expression == null) {
+                expression = equalsParameters.getLeft();
+            } else {
+                if (!Objects.equals(expression, equalsParameters.getLeft())) return null;
+            }
+            literals.add(equalsParameters.getRight());
+        }
+        // create the IN function instance
+        List<Expression> inParameters = new ArrayList<>(literals.size() + 1);
+        inParameters.add(expression);
+        inParameters.addAll(literals);
+        InFunction inFunction = new InFunction();
+        inFunction.setParameters(inParameters);
+        return inFunction;
+    }
+

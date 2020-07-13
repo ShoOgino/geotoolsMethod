@@ -4,43 +4,40 @@
      *
      * <p>ServiceExceptions beyond the first can be accessed using ServiceException.next();
      *
-     * @param inputStream
-     * @throws JDOMException
-     * @throws IOException
+     * @param inputStream stream to parse the exception report from, not closed by this method
      */
-    public static ServiceException parse(InputStream inputStream)
-            throws JDOMException, IOException {
-        SAXBuilder builder = new SAXBuilder();
-        builder.setExpandEntities(false);
-        Document document = builder.build(inputStream);
+    public static ServiceException parse(InputStream inputStream) throws IOException {
+        List<ServiceException> exceptions = new ArrayList<>();
+        try {
+            XMLInputFactory inputFactory = XMLInputFactory.newInstance();
+            // disable resolving of external DTD entities (coalescing needs to be false)
+            inputFactory.setProperty(IS_COALESCING, false);
+            inputFactory.setProperty(IS_REPLACING_ENTITY_REFERENCES, false);
+            // disallow DTDs entirely
+            inputFactory.setProperty(SUPPORT_DTD, false);
 
-        Element root = document.getRootElement();
-        List<Element> serviceExceptions = root.getChildren("ServiceException");
-
+            XMLStreamReader reader = inputFactory.createXMLStreamReader(inputStream, "UTF-8");
+            int tag;
+            while ((tag = reader.next()) != END_DOCUMENT) {
+                if (tag == START_ELEMENT && reader.getLocalName().equals("ServiceException")) {
+                    String code = parseServiceExceptionCode(reader);
+                    String errorMessage = parseServiceExceptionMessage(reader);
+                    exceptions.add(new ServiceException(errorMessage, code));
+                }
+            }
+        } catch (XMLStreamException e) {
+            throw new IOException(e);
+        }
         /*
          * ServiceExceptions with codes get bumped to the top of the list.
          */
-        List<ServiceException> parsedExceptions =
-                serviceExceptions
-                        .stream()
-                        .map(ServiceExceptionParser::parseSE)
-                        .sorted(ServiceExceptionParser::compare)
-                        .collect(Collectors.toList());
+        Collections.sort(exceptions, ServiceExceptionParser::compare);
         /*
          * Now chain them.
          */
-        ServiceException firstException = null;
-        ServiceException recentException = null;
-        for (ServiceException exception : parsedExceptions) {
-            if (firstException == null) {
-                firstException = exception;
-                recentException = exception;
-            } else {
-                recentException.setNext(exception);
-                recentException = exception;
-            }
+        for (int i = 0; i < exceptions.size() - 1; i++) {
+            exceptions.get(i).setNext(exceptions.get(i + 1));
         }
-
-        return firstException;
+        return exceptions.isEmpty() ? null : exceptions.get(0);
     }
 

@@ -1,0 +1,92 @@
+    /**
+     * Used to set a value on an SeRow object. The values is converted to the appropriate type based
+     * on an inspection of the SeColumnDefintion object.
+     *
+     * <p>This method is intended to be called from inside a {@link Command#execute(Session,
+     * SeConnection)} method
+     *
+     * @param attName for feedback purposes only in case of failure
+     * @throws IOException if failed to set the row value
+     */
+    private static void setRowValue(
+            final SeRow row,
+            final int index,
+            final Object value,
+            final SeCoordinateReference coordRef,
+            final String attName)
+            throws IOException {
+
+        try {
+            final SeColumnDefinition seColumnDefinition = row.getColumnDef(index);
+
+            final int colType = seColumnDefinition.getType();
+
+            // the actual value to be set, converted to the appropriate type where
+            // needed
+            Object convertedValue = value;
+            if (colType == SeColumnDefinition.TYPE_INT16) {
+                convertedValue = Converters.convert(convertedValue, Short.class);
+                row.setShort(index, (Short) convertedValue);
+            } else if (colType == SeColumnDefinition.TYPE_INT32) {
+                convertedValue = Converters.convert(convertedValue, Integer.class);
+                row.setInteger(index, (Integer) convertedValue);
+            } else if (colType == SeColumnDefinition.TYPE_INT64) {
+                convertedValue = Converters.convert(convertedValue, Long.class);
+                row.setLong(index, (Long) convertedValue);
+            } else if (colType == SeColumnDefinition.TYPE_FLOAT32) {
+                convertedValue = Converters.convert(convertedValue, Float.class);
+                row.setFloat(index, (Float) convertedValue);
+            } else if (colType == SeColumnDefinition.TYPE_FLOAT64) {
+                convertedValue = Converters.convert(convertedValue, Double.class);
+                row.setDouble(index, (Double) convertedValue);
+            } else if (colType == SeColumnDefinition.TYPE_STRING
+                    || colType == SeColumnDefinition.TYPE_CLOB
+                    || colType == SeColumnDefinition.TYPE_NCLOB) {
+                convertedValue = Converters.convert(convertedValue, String.class);
+                row.setString(index, (String) convertedValue);
+            } else if (colType == SeColumnDefinition.TYPE_NSTRING) {
+                convertedValue = Converters.convert(convertedValue, String.class);
+                row.setNString(index, (String) convertedValue);
+            } else if (colType == SeColumnDefinition.TYPE_DATE) {
+                // @todo REVISIT: is converters already ready for date->calendar?
+                if (convertedValue != null) {
+                    Calendar calendar = Calendar.getInstance();
+                    calendar.setTime((Date) convertedValue);
+                    row.setTime(index, calendar);
+                } else {
+                    row.setTime(index, null);
+                }
+            } else if (colType == SeColumnDefinition.TYPE_SHAPE) {
+                if (convertedValue != null) {
+                    final Geometry geom = (Geometry) convertedValue;
+                    IsValidOp validator = new IsValidOp(geom);
+                    if (!validator.isValid()) {
+                        TopologyValidationError validationError = validator.getValidationError();
+                        String validationErrorMessage = validationError.getMessage();
+                        Coordinate coordinate = validationError.getCoordinate();
+                        String errorMessage =
+                                "Topology validation error at or near point "
+                                        + coordinate
+                                        + ": "
+                                        + validationErrorMessage;
+                        throw new DataSourceException(
+                                "Invalid geometry passed for "
+                                        + attName
+                                        + "\n Geomerty: "
+                                        + geom
+                                        + "\n"
+                                        + errorMessage);
+                    }
+                    ArcSDEGeometryBuilder geometryBuilder;
+                    geometryBuilder = ArcSDEGeometryBuilder.builderFor(geom.getClass());
+                    SeShape shape = geometryBuilder.constructShape(geom, coordRef);
+                    row.setShape(index, shape);
+                } else {
+                    row.setShape(index, null);
+                }
+            }
+        } catch (SeException e) {
+            throw new ArcSdeException(e);
+        }
+    }
+

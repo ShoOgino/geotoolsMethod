@@ -1,0 +1,23 @@
+    /**
+     * Wraps the provided delegate into a memoizing filter, if the filter in question is not using
+     * volatile functions and there is a suitable wrapper implementation, returns the original
+     * filter otherwise.
+     *
+     * @param <T>
+     */
+    public static <T extends Filter> T memoize(T delegate) {
+        // can it be memoized?
+        MemoizableExpressionChecker checker = new MemoizableExpressionChecker();
+        delegate.accept(new AbstractFilterVisitor(checker), null);
+        if (!checker.memoizable) {
+            return delegate;
+        }
+
+        // cache results using a memoizing proxy
+        return (T)
+                Proxy.newProxyInstance(
+                        FilterMemoizer.class.getClassLoader(),
+                        delegate.getClass().getInterfaces(),
+                        new MemoizingHandler(delegate));
+    }
+

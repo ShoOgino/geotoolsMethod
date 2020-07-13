@@ -2,11 +2,42 @@
         if (!isConnected()) {
             throw new IOException("not connected to " + url.toExternalForm());
         }
-        reader = new FeatureJSON();
-        LOGGER.fine("reading features from " + url.toExternalForm() + " inputstream");
-        FeatureCollection collection = reader.readFeatureCollection(inputStream);
-        inputStream.close();
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JtsModule());
+        List<SimpleFeature> features = new ArrayList<>();
+        builder = null;
+        while (!parser.isClosed()) {
+            JsonToken token = parser.nextToken();
+            if (token == null) {
+                break;
+            }
+            if (JsonToken.FIELD_NAME.equals(token)
+                    && "features".equalsIgnoreCase(parser.currentName())) {
+                token = parser.nextToken();
+                if (!JsonToken.START_ARRAY.equals(token) || token == null) {
+                    break;
+                }
+                while (parser.nextToken() == JsonToken.START_OBJECT) {
+                    ObjectNode node = mapper.readTree(parser);
 
-        return collection;
+                    SimpleFeature feature = getNextFeature(node);
+                    features.add(feature);
+                }
+            }
+        }
+        if (isSchemaChanged()) {
+            // retype the features if the schema changes
+            List<SimpleFeature> nFeatures = new ArrayList<>(features.size());
+            for (SimpleFeature feature : features) {
+                if (feature.getFeatureType() != schema) {
+                    SimpleFeature nFeature = DataUtilities.reType(schema, feature);
+                    nFeatures.add(nFeature);
+                } else {
+                    nFeatures.add(feature);
+                }
+            }
+            return DataUtilities.collection(nFeatures);
+        }
+        return DataUtilities.collection(features);
     }
 

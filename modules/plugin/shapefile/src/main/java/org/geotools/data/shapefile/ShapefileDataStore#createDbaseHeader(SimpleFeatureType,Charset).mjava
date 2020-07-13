@@ -1,0 +1,67 @@
+    /**
+     * Attempt to create a DbaseFileHeader for the FeatureType. Note, we cannot set the number of
+     * records until the write has completed.
+     */
+    protected static DbaseFileHeader createDbaseHeader(
+            SimpleFeatureType featureType, Charset charset) throws IOException, DbaseFileException {
+
+        DbaseFileHeader header = new DbaseFileHeader(charset);
+
+        for (int i = 0, ii = featureType.getAttributeCount(); i < ii; i++) {
+            AttributeDescriptor type = featureType.getDescriptor(i);
+
+            Class<?> colType = type.getType().getBinding();
+            String colName = type.getLocalName();
+
+            int fieldLen = FeatureTypes.getFieldLength(type);
+            if (fieldLen == FeatureTypes.ANY_LENGTH) fieldLen = 255;
+            if ((colType == Integer.class) || (colType == Short.class) || (colType == Byte.class)) {
+                header.addColumn(colName, 'N', Math.min(fieldLen, 9), 0);
+            } else if (colType == Long.class) {
+                header.addColumn(colName, 'N', Math.min(fieldLen, 19), 0);
+            } else if (colType == BigInteger.class) {
+                header.addColumn(colName, 'N', Math.min(fieldLen, 33), 0);
+            } else if (colType == Float.class) {
+                int l = Math.min(fieldLen, 24);
+                // GDAL format default is 15 decimal places of precision
+                // http://www.gdal.org/drv_shapefile.html
+                int d = Math.min(Math.max(l - 2, 0), 15);
+                header.addColumn(colName, 'N', l, d);
+            } else if (colType == Double.class) {
+                int l = Math.min(fieldLen, 33);
+                int d = Math.min(Math.max(l - 2, 0), 15);
+                header.addColumn(colName, 'N', l, d);
+            } else if (Number.class.isAssignableFrom(colType)) {
+                int l = Math.min(fieldLen, 33);
+                int d = Math.max(l - 2, 0);
+                header.addColumn(colName, 'N', l, d);
+                // This check has to come before the Date one or it is never reached
+                // also, this field is only activated with the following system property:
+                // org.geotools.shapefile.datetime=true
+            } else if (java.util.Date.class.isAssignableFrom(colType)
+                    && Boolean.getBoolean("org.geotools.shapefile.datetime")) {
+                header.addColumn(colName, '@', fieldLen, 0);
+            } else if (java.util.Date.class.isAssignableFrom(colType)
+                    || Calendar.class.isAssignableFrom(colType)) {
+                header.addColumn(colName, 'D', fieldLen, 0);
+            } else if (colType == Boolean.class) {
+                header.addColumn(colName, 'L', 1, 0);
+            } else if (CharSequence.class.isAssignableFrom(colType)
+                    || colType == java.util.UUID.class) {
+                // Possible fix for GEOT-42 : ArcExplorer doesn't like 0 length
+                // ensure that maxLength is at least 1
+                header.addColumn(colName, 'C', Math.min(254, fieldLen), 0);
+            } else if (Geometry.class.isAssignableFrom(colType)) {
+                continue;
+                // skip binary data types
+            } else if (colType == byte[].class) {
+                continue;
+            } else {
+                // Fallback to char columns
+                header.addColumn(colName, 'C', Math.min(254, fieldLen), 0);
+            }
+        }
+
+        return header;
+    }
+

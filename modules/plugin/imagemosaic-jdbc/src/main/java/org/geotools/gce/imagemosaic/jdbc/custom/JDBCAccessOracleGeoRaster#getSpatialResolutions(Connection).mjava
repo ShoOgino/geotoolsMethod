@@ -19,28 +19,22 @@
         LOGGER.fine("Sptial Reso SQL:" + sqlSpatialResolution);
 
         double[] spatialResolution = new double[2];
-        PreparedStatement stmt = null;
-        ResultSet rs = null;
-
-        try {
-            stmt = con.prepareStatement(sqlSpatialResolution);
+        try (PreparedStatement stmt = con.prepareStatement(sqlSpatialResolution)) {
             stmt.setString(1, getConfig().getCoverageName());
-            rs = stmt.executeQuery();
-            if (!rs.next()) {
-                throw new SQLException(
-                        "Query to get returned spatial resolutions did not return any result");
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (!rs.next()) {
+                    throw new SQLException(
+                            "Query to get returned spatial resolutions did not return any result");
+                }
+                Array array = rs.getArray(1);
+                BigDecimal[] javaArray = (BigDecimal[]) array.getArray();
+                spatialResolution[1] = javaArray[0].doubleValue();
+                spatialResolution[0] = javaArray[1].doubleValue();
+                LOGGER.fine("Assigned X Value: " + spatialResolution[0]);
+                LOGGER.fine("Assigned Y Value: " + spatialResolution[1]);
             }
-            Array array = rs.getArray(1);
-            BigDecimal[] javaArray = (BigDecimal[]) array.getArray();
-            spatialResolution[1] = javaArray[0].doubleValue();
-            spatialResolution[0] = javaArray[1].doubleValue();
-            LOGGER.fine("Assigned X Value: " + spatialResolution[0]);
-            LOGGER.fine("Assigned Y Value: " + spatialResolution[1]);
         } catch (Exception ex) {
             LOGGER.log(Level.SEVERE, "Failure getting spatial resolution", ex);
-        } finally {
-            closeResultSet(rs);
-            closePreparedStmt(stmt);
         }
 
         LOGGER.fine("getSpatialResolution Finished");

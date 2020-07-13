@@ -1,0 +1,51 @@
+    public void initalize(ReferencedEnvelope srcEnvelope, SimpleFeatureCollection features)
+            throws TransformException, FactoryException {
+        final List<Map<String, Object>> buckets = readFeatures(features);
+
+        final String firstGeohash = buckets.isEmpty() ? null : (String) buckets.get(0).get("key");
+        final int precision;
+        if (!isValid(firstGeohash)) {
+            LOGGER.fine("No aggregations found or missing/invalid geohash key");
+            precision = DEFAULT_PRECISION;
+        } else {
+            precision = ((String) buckets.get(0).get("key")).length();
+        }
+
+        cellWidth = GeoHash.widthDegrees(precision);
+        cellHeight = GeoHash.heightDegrees(precision);
+
+        if (srcEnvelope.getCoordinateReferenceSystem() != null) {
+            srcEnvelope = srcEnvelope.transform(DefaultGeographicCRS.WGS84, false);
+        }
+        computeMinLonOffset(srcEnvelope);
+        envelope = computeEnvelope(srcEnvelope, precision);
+
+        boundingBox =
+                new ReferencedEnvelope(
+                        envelope.getMinX() - cellWidth / 2.0,
+                        envelope.getMaxX() + cellWidth / 2.0,
+                        envelope.getMinY() - cellHeight / 2.0,
+                        envelope.getMaxY() + cellHeight / 2.0,
+                        DefaultGeographicCRS.WGS84);
+
+        final int numCol =
+                (int) Math.round((envelope.getMaxX() - envelope.getMinX()) / cellWidth + 1);
+        final int numRow =
+                (int) Math.round((envelope.getMaxY() - envelope.getMinY()) / cellHeight + 1);
+        grid = new float[numRow][numCol];
+        LOGGER.fine("Created grid with size (" + numCol + ", " + numRow + ")");
+
+        if (emptyCellValue != 0) {
+            for (float[] row : grid) Arrays.fill(row, emptyCellValue);
+        }
+        List<GridCell> cells = new ArrayList<>();
+        buckets.forEach(
+                bucket -> {
+                    Number rasterValue = computeCellValue(bucket);
+                    cells.add(new GridCell((String) bucket.get("key"), rasterValue));
+                    scale.prepareScale(rasterValue.floatValue());
+                });
+        cells.forEach(cell -> updateGrid(cell.getGeohash(), cell.getValue()));
+        LOGGER.fine("Read " + cells.size() + " aggregation buckets");
+    }
+

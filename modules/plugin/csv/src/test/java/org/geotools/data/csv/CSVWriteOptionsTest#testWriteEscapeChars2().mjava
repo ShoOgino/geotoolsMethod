@@ -1,0 +1,36 @@
+    @Test
+    public void testWriteEscapeChars2() throws IOException {
+        File file2 = File.createTempFile("CSVTest", ".csv");
+        Map<String, Serializable> params2 = new HashMap<>();
+        params2.put("file", file2);
+
+        params2.put(CSVDataStoreFactory.STRATEGYP.key, CSVDataStoreFactory.WKT_STRATEGY);
+        params2.put(CSVDataStoreFactory.WKTP.key, "the_geom_wkt");
+        params2.put(CSVDataStoreFactory.QUOTECHAR.key, '\'');
+        params2.put(CSVDataStoreFactory.ESCAPECHAR.key, '!');
+        String input =
+                CSVTestStrategySupport.buildInputString(
+                        "doubleval,\"int'val\",lat,stringval,lon",
+                        "3.8,7,73.28,\"f'oo\",-14.39",
+                        "9.12,-38,0,bar,29",
+                        "-37,0,49,baz,0");
+        CSVFileState fileState = new CSVFileState(input, "typename");
+
+        CSVLatLonStrategy strategy = new CSVLatLonStrategy(fileState);
+        CSVDataStore escapeStore = new CSVDataStore(fileState, strategy);
+        String contents = createOutputFile(file2, params2, escapeStore);
+        try (BufferedReader lineReader =
+                new BufferedReader(new CharArrayReader(contents.toCharArray()))) {
+            String line = lineReader.readLine(); // header
+            assertNotNull(line);
+
+            assertTrue("Header is not escaped", line.toLowerCase().contains("'int!'val'"));
+            line = lineReader.readLine();
+            assertNotNull(line);
+
+            assertTrue("Value is not escaped", line.contains("'f!'oo'"));
+
+            file2.delete();
+        }
+    }
+

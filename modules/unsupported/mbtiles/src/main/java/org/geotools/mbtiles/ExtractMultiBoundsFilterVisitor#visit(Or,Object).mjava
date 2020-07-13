@@ -1,0 +1,46 @@
+    @Override
+    public Object visit(Or filter, Object data) {
+        List<Envelope> envelopes = new ArrayList<>();
+        // when multiple envelopes are returned, they get or-ed
+        for (Filter f : filter.getChildren()) {
+            Object result = f.accept(this, data);
+            if (result instanceof Envelope) {
+                envelopes.add((Envelope) result);
+            } else if (result instanceof List) {
+                envelopes.addAll((List) result);
+            }
+        }
+
+        // now merge the ones that are overlapping
+        List<Envelope> result = new ArrayList<>();
+        for (Envelope envelope : envelopes) {
+            if (result.isEmpty()) {
+                result.add(envelope);
+                continue;
+            }
+
+            boolean mergedAny = false;
+            do {
+                // Find all envelopes found so far that overlap with the current one,
+                // include them in the current one and remove the from the result
+                // This expansion can cause envelopes not previously matching to overlap
+                // with the current envelope, so start back from the beginning until we
+                // can continue to merge the results
+                mergedAny = false;
+                ListIterator<Envelope> it = result.listIterator();
+                while (it.hasNext()) {
+                    Envelope next = it.next();
+                    if (next.intersects(envelope)) {
+                        it.remove();
+                        envelope.expandToInclude(next);
+                        mergedAny = true;
+                    }
+                }
+            } while (mergedAny);
+            // the envelope could not be merged with any of the ones in the result, add it
+            result.add(envelope);
+        }
+
+        return result;
+    }
+

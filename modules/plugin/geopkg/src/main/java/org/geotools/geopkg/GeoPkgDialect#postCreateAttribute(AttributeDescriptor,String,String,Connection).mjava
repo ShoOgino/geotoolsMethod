@@ -4,13 +4,14 @@
             throws SQLException {
         super.postCreateAttribute(att, tableName, schemaName, cx);
 
+        String attributeName = att.getLocalName();
         if (att instanceof GeometryDescriptor) {
             String sql =
                     "SELECT * FROM gpkg_extensions WHERE (lower(table_name)=lower('"
                             + tableName
                             + "') "
                             + "AND lower(column_name)=lower('"
-                            + att.getLocalName()
+                            + attributeName
                             + "') "
                             + "AND extension_name='gpkg_rtree_index')";
             try (Statement st = cx.createStatement();
@@ -19,6 +20,34 @@
                 boolean hasSpatialIndex = rs.next();
                 att.getUserData().put(HAS_SPATIAL_INDEX, hasSpatialIndex);
             }
+        }
+
+        try {
+            if (FeatureTypes.getFieldOptions(att) != null) {
+                List<DataColumn> dataColumns =
+                        geopkg().getExtension(GeoPkgSchemaExtension.class)
+                                .getDataColumns(tableName, cx);
+                for (DataColumn dataColumn : dataColumns) {
+                    // little hack here, GeoPackage schema extension is being evolved so that
+                    // an array of values can be stored as a JSON array, in that case the enum
+                    // is applied to every entry in the array, not to the whole string, so the
+                    // normal enum mapping does not apply. If a column declares a mime type, its
+                    // contents are likely complex, and the enum will have to be applied
+                    // to the items inside, not to the whole, so the EnumMapper must not be created.
+                    if (attributeName.equals(dataColumn.getColumnName())
+                            && dataColumn.getMimeType() == null) {
+                        DataColumnConstraint.Enum dcc =
+                                (DataColumnConstraint.Enum) dataColumn.getConstraint();
+                        EnumMapper mapper = new EnumMapper();
+                        for (Map.Entry<String, String> entry : dcc.getValues().entrySet()) {
+                            mapper.addMapping(Integer.valueOf(entry.getKey()), entry.getValue());
+                        }
+                        att.getUserData().put(JDBCDataStore.JDBC_ENUM_MAP, mapper);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throwSQLException(e);
         }
     }
 

@@ -1,0 +1,127 @@
+    /**
+     * Helper method for determining what the sql type names are for a set of classes.
+     *
+     * <p>This method uses a combination of dialect mappings and database metadata to determine
+     * which sql types map to the specified classes.
+     */
+    private String[] getSQLTypeNames(List<AttributeDescriptor> descriptors, Connection cx)
+            throws SQLException {
+        // figure out what the sql types are corresponding to the feature type
+        // attributes
+        int[] sqlTypes = new int[descriptors.size()];
+        String[] sqlTypeNames = new String[sqlTypes.length];
+
+        for (int i = 0; i < descriptors.size(); i++) {
+            AttributeDescriptor ad = descriptors.get(i);
+            Class clazz = ad.getType().getBinding();
+            Integer sqlType = dialect.getSQLType(ad);
+
+            if (sqlType == null) {
+                sqlType = getMapping(clazz);
+            }
+
+            if (sqlType == null) {
+                LOGGER.warning(
+                        "No sql type mapping for: " + ad.getLocalName() + " of type " + clazz);
+                sqlType = Types.OTHER;
+            }
+
+            sqlTypes[i] = sqlType;
+
+            // if this a geometric type, get the name from teh dialect
+            // if ( attributeType instanceof GeometryDescriptor ) {
+            if (Geometry.class.isAssignableFrom(clazz)) {
+                String sqlTypeName = dialect.getGeometryTypeName(sqlType);
+
+                if (sqlTypeName != null) {
+                    sqlTypeNames[i] = sqlTypeName;
+                }
+            }
+
+            // check types previously read from DB
+            String sqlTypeDBName = getDBsqlTypesCache().get(sqlType);
+            if (sqlTypeDBName != null) {
+                sqlTypeNames[i] = sqlTypeDBName;
+            }
+        }
+        // GEOT-6347 if all sql type names have been found in dialect dont
+        // go to database
+        boolean allTypesFound = !ArrayUtils.contains(sqlTypeNames, null);
+        if (!allTypesFound) {
+            LOGGER.log(Level.WARNING, "Fetching fields from Database");
+            // figure out the type names that correspond to the sql types from
+            // the database metadata
+            DatabaseMetaData metaData = cx.getMetaData();
+
+            /*
+            *      <LI><B>TYPE_NAME</B> String => Type name
+            *        <LI><B>DATA_TYPE</B> int => SQL data type from java.sql.Types
+            *        <LI><B>PRECISION</B> int => maximum precision
+            *        <LI><B>LITERAL_PREFIX</B> String => prefix used to quote a literal
+            *      (may be <code>null</code>)
+            *        <LI><B>LITERAL_SUFFIX</B> String => suffix used to quote a literal
+                (may be <code>null</code>)
+            *        <LI><B>CREATE_PARAMS</B> String => parameters used in creating
+            *      the type (may be <code>null</code>)
+            *        <LI><B>NULLABLE</B> short => can you use NULL for this type.
+            *      <UL>
+            *      <LI> typeNoNulls - does not allow NULL values
+            *      <LI> typeNullable - allows NULL values
+            *      <LI> typeNullableUnknown - nullability unknown
+            *      </UL>
+            *        <LI><B>CASE_SENSITIVE</B> boolean=> is it case sensitive.
+            *        <LI><B>SEARCHABLE</B> short => can you use "WHERE" based on this type:
+            *      <UL>
+            *      <LI> typePredNone - No support
+            *      <LI> typePredChar - Only supported with WHERE .. LIKE
+            *      <LI> typePredBasic - Supported except for WHERE .. LIKE
+            *      <LI> typeSearchable - Supported for all WHERE ..
+            *      </UL>
+            *        <LI><B>UNSIGNED_ATTRIBUTE</B> boolean => is it unsigned.
+            *        <LI><B>FIXED_PREC_SCALE</B> boolean => can it be a money value.
+            *        <LI><B>AUTO_INCREMENT</B> boolean => can it be used for an
+            *      auto-increment value.
+            *        <LI><B>LOCAL_TYPE_NAME</B> String => localized version of type name
+            *      (may be <code>null</code>)
+            *        <LI><B>MINIMUM_SCALE</B> short => minimum scale supported
+            *        <LI><B>MAXIMUM_SCALE</B> short => maximum scale supported
+            *        <LI><B>SQL_DATA_TYPE</B> int => unused
+            *        <LI><B>SQL_DATETIME_SUB</B> int => unused
+            *        <LI><B>NUM_PREC_RADIX</B> int => usually 2 or 10
+            */
+            ResultSet types = metaData.getTypeInfo();
+
+            try {
+                while (types.next()) {
+                    int sqlType = types.getInt("DATA_TYPE");
+                    String sqlTypeName = types.getString("TYPE_NAME");
+
+                    for (int i = 0; i < sqlTypes.length; i++) {
+                        // check if we already have the type name from the dialect
+                        if (sqlTypeNames[i] != null) {
+                            continue;
+                        }
+
+                        if (sqlType == sqlTypes[i]) {
+                            sqlTypeNames[i] = sqlTypeName;
+                            // GEOT-6347
+                            // cache the sqlType which required going to database for sql types
+                            getDBsqlTypesCache().putIfAbsent(sqlType, sqlTypeName);
+                        }
+                    }
+                }
+            } finally {
+                closeSafe(types);
+            }
+        }
+
+        // apply the overrides specified by the dialect
+        Map<Integer, String> overrides = getSqlTypeToSqlTypeNameOverrides();
+        for (int i = 0; i < sqlTypes.length; i++) {
+            String override = overrides.get(sqlTypes[i]);
+            if (override != null) sqlTypeNames[i] = override;
+        }
+
+        return sqlTypeNames;
+    }
+

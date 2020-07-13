@@ -1,0 +1,35 @@
+    /**
+     * Export the contents of a Literal Expresion
+     *
+     * @param expression the Literal to export
+     * @throws FilterToElasticException If there were io problems.
+     */
+    @Override
+    public Object visit(Literal expression, Object context) throws FilterToElasticException {
+        LOGGER.finest("exporting LiteralExpression");
+
+        // type to convert the literal to
+        Class<?> target = null;
+        if (context instanceof Class) {
+            target = (Class<?>) context;
+        }
+
+        try {
+            // evaluate the expression
+            Object literal = evaluateLiteral(expression, target);
+
+            // handle geometry case
+            if (literal instanceof Geometry) {
+                // call this method for backwards compatibility with subclasses
+                visitLiteralGeometry(filterFactory.literal(literal));
+            } else {
+                // write out the literal allowing subclasses to override this
+                // behaviour (for writing out dates and the like using the BDMS custom functions)
+                writeLiteral(literal);
+            }
+        } catch (IOException e) {
+            throw new FilterToElasticException("IO problems writing literal", e);
+        }
+        return context;
+    }
+

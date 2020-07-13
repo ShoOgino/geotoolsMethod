@@ -1,0 +1,29 @@
+    @Test
+    public void testJSONPointerFunctionWithConstantParam() throws Exception {
+        // test that with a constant expression as second param filter is encoded
+        // to PostGIS SQL dialect
+        ContentFeatureSource fs = dataStore.getFeatureSource(tname("jsontest"));
+        FilterFactory ff = dataStore.getFilterFactory();
+        // json pointer string obtained by a string concatenation
+        Function concat =
+                ff.function(
+                        "strConcat", ff.literal("/nestedObj"), ff.literal("/nestedObj2/strProp"));
+        Function pointer = ff.function("jsonPointer", ff.property("jsonColumn"), concat);
+        Filter filter = ff.equals(pointer, ff.literal("stringValue2"));
+        Query q = new Query(tname("jsontest"), filter);
+        try (FeatureReader reader = fs.getDataStore().getFeatureReader(q, null)) {
+            // reader is instanceof JDBCFeatureReader so Filter has been encoded
+            assertTrue(reader instanceof JDBCFeatureReader);
+        }
+        FeatureCollection collection = fs.getFeatures(q);
+        try (FeatureIterator it = collection.features()) {
+            int size = 0;
+            while (it.hasNext()) {
+                Feature f = it.next();
+                assertEquals(pointer.evaluate(f), "stringValue2");
+                size++;
+            }
+            assertEquals(2, size);
+        }
+    }
+

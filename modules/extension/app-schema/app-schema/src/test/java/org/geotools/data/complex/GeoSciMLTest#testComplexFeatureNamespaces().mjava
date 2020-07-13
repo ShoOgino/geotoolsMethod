@@ -1,0 +1,32 @@
+    /**
+     * Checks that declared namespaces are included on FeatureType's userData Map for the complex
+     * features collection.
+     */
+    @Test
+    public void testComplexFeatureNamespaces() throws Exception {
+        final Name typeName = Types.typeName(GSMLNS, "MappedFeature");
+        FeatureSource<FeatureType, Feature> source = mappingDataStore.getFeatureSource(typeName);
+        Query query = new Query();
+        query.setNamespace(new URI(typeName.getNamespaceURI()));
+        query.setTypeName(typeName.getLocalPart());
+        FeatureCollection<FeatureType, Feature> features = source.getFeatures(query);
+        assertNotNull(features);
+        try (final Stream<Feature> featureStream = toFeatureStream(features)) {
+            Optional<Feature> first = featureStream.findFirst();
+            Optional<Map<String, String>> mapOpt =
+                    first.map(Feature::getDescriptor)
+                            .map(AttributeDescriptor::getType)
+                            .map(AttributeType::getUserData)
+                            .map(m -> m.get(Types.DECLARED_NAMESPACES_MAP))
+                            .filter(v -> v instanceof Map)
+                            .map(x -> (Map<String, String>) x);
+            assertTrue(mapOpt.isPresent());
+            final Map<String, String> namespacesMap = mapOpt.get();
+            assertEquals(3, namespacesMap.keySet().size());
+            assertTrue(
+                    getExpectedNamespaces()
+                            .stream()
+                            .allMatch(ns -> namespacesMap.containsValue(ns)));
+        }
+    }
+

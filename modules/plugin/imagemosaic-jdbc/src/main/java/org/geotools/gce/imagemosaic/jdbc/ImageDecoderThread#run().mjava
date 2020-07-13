@@ -1,4 +1,3 @@
-    /** @see java.lang.Thread#run() */
     @Override
     public void run() {
         if ((imageBytes == null) || (imageBytes.length == 0)) { // nothing to do
@@ -7,58 +6,61 @@
 
         try {
 
-            BufferedImage bufferedImage = null;
+            BufferedImage dbTileImage = null;
 
             boolean triedFromStream = false;
             if (levelInfo.getCanImageIOReadFromInputStream()) {
-                bufferedImage = ImageIO.read(new ByteArrayInputStream(imageBytes));
+                dbTileImage = ImageIO.read(new ByteArrayInputStream(imageBytes));
                 triedFromStream = true;
             }
-            if (bufferedImage == null) {
-                if (triedFromStream)
+            if (dbTileImage == null) {
+                if (triedFromStream) {
                     LOGGER.warning("Could not read " + location + " from stream, switch to JAI");
-                bufferedImage = readImage2(imageBytes);
+                }
+                dbTileImage = readImage2(imageBytes);
             }
 
-            if (requestEnvelope.contains(tileEnvelope, true) == false) {
-                GeneralEnvelope savedTileEnvelope = new GeneralEnvelope(tileEnvelope);
-                tileEnvelope.intersect(requestEnvelope);
+            if (requestEnvelope.contains(dbTileEnvelope, true)) {
+                tileQueue.add(new TileQueueElement(location, dbTileImage, dbTileEnvelope));
+            } else {
+                GeneralEnvelope intersectionEnvelope = new GeneralEnvelope(dbTileEnvelope);
+                intersectionEnvelope.intersect(requestEnvelope);
 
-                double scaleX = savedTileEnvelope.getSpan(0) / bufferedImage.getWidth();
-                double scaleY = savedTileEnvelope.getSpan(1) / bufferedImage.getHeight();
-                int x =
+                // x and y refers here to Image coordinates (so y is inverted wrt Envelope)
+                int xmin =
                         (int)
                                 (Math.round(
-                                        (tileEnvelope.getMinimum(0)
-                                                        - savedTileEnvelope.getMinimum(0))
-                                                / scaleX));
-                int y =
+                                        (intersectionEnvelope.getMinimum(0)
+                                                        - dbTileEnvelope.getMinimum(0))
+                                                / levelInfo.getResX()));
+                int ymin =
                         (int)
                                 (Math.round(
-                                        (savedTileEnvelope.getMaximum(1)
-                                                        - tileEnvelope.getMaximum(1))
-                                                / scaleY));
-                int width =
+                                        (dbTileEnvelope.getMaximum(1)
+                                                        - intersectionEnvelope.getMaximum(1))
+                                                / levelInfo.getResY()));
+                int xmax =
                         (int)
                                 (Math.round(
-                                        bufferedImage.getWidth()
-                                                / savedTileEnvelope.getSpan(0)
-                                                * tileEnvelope.getSpan(0)));
-                int height =
+                                        (intersectionEnvelope.getMaximum(0)
+                                                        - dbTileEnvelope.getMinimum(0))
+                                                / levelInfo.getResX()));
+                int ymax =
                         (int)
                                 (Math.round(
-                                        bufferedImage.getHeight()
-                                                / savedTileEnvelope.getSpan(1)
-                                                * tileEnvelope.getSpan(1)));
+                                        (dbTileEnvelope.getMaximum(1)
+                                                        - intersectionEnvelope.getMinimum(1))
+                                                / levelInfo.getResY()));
+                int width = xmax - xmin;
+                int height = ymax - ymin;
 
                 if ((width > 0) && (height > 0)) {
 
-                    BufferedImage clippedImage = bufferedImage.getSubimage(x, y, width, height);
+                    BufferedImage clippedImage = dbTileImage.getSubimage(xmin, ymin, width, height);
 
-                    tileQueue.add(new TileQueueElement(location, clippedImage, tileEnvelope));
+                    tileQueue.add(
+                            new TileQueueElement(location, clippedImage, intersectionEnvelope));
                 }
-            } else {
-                tileQueue.add(new TileQueueElement(location, bufferedImage, tileEnvelope));
             }
         } catch (IOException ex) {
             LOGGER.severe("Decorde error for tile " + location);

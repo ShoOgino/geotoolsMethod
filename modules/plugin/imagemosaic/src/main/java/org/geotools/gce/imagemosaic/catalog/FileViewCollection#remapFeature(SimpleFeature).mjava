@@ -1,0 +1,28 @@
+    private SimpleFeature remapFeature(SimpleFeature feature) {
+        String location = (String) feature.getAttribute(locationAttribute);
+        URL path = pathType.resolvePath(parentLocation, location);
+
+        schema.getAttributeDescriptors()
+                .stream()
+                .filter(d -> !location.equals(d.getLocalName()))
+                .forEach(
+                        d ->
+                                featureBuilder.set(
+                                        d.getLocalName(), feature.getAttribute(d.getLocalName())));
+        File mainFile = URLs.urlToFile(path);
+        if (mainFile != null) {
+            SupportFilesCollector collector = SupportFilesCollector.getCollectorFor(mainFile);
+            List<File> supportFiles = Collections.emptyList();
+            if (collector != null) {
+                supportFiles = collector.getSupportFiles(mainFile.getPath());
+            }
+            featureBuilder.featureUserData(
+                    GranuleSource.FILES,
+                    new FileGroupProvider.FileGroup(
+                            mainFile, supportFiles, Collections.emptyMap()));
+        } else {
+            featureBuilder.featureUserData(GranuleSource.FILES, path);
+        }
+        return featureBuilder.buildFeature(feature.getID());
+    }
+

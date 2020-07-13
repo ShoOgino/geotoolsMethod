@@ -1,0 +1,31 @@
+    @Test
+    public void testJSONPointerFunctionNestedObject() throws Exception {
+        ContentFeatureSource fs = dataStore.getFeatureSource(tname("jsontest"));
+        FilterFactory ff = dataStore.getFilterFactory();
+        Function pointer =
+                ff.function(
+                        "jsonPointer",
+                        ff.property("jsonColumn"),
+                        ff.literal("/nestedObj/nestedObj2/strProp"));
+        Filter filter = ff.equals(pointer, ff.literal("stringValue2"));
+        Function pointer2 =
+                ff.function(
+                        "jsonPointer",
+                        ff.property("jsonColumn"),
+                        ff.literal("/nestedObj/nestedObj2/numProp"));
+        Filter filter2 = ff.greater(pointer2, ff.literal(3));
+        And and = ff.and(filter, filter2);
+        Query q = new Query(tname("jsontest"), and);
+        FeatureCollection collection = fs.getFeatures(q);
+        try (FeatureIterator it = collection.features()) {
+            int size = 0;
+            while (it.hasNext()) {
+                Feature f = it.next();
+                assertEquals(pointer.evaluate(f), "stringValue2");
+                assertTrue(((Integer) pointer2.evaluate(f)).doubleValue() > 3);
+                size++;
+            }
+            assertEquals(1, size);
+        }
+    }
+

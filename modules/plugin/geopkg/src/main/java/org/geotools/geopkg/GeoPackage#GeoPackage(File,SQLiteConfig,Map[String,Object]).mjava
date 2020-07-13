@@ -1,0 +1,23 @@
+    public GeoPackage(File file, SQLiteConfig config, Map<String, Object> storeParams)
+            throws IOException {
+        this.file = file;
+
+        // enrich params with the basics
+        Map<String, Object> params =
+                new HashMap(storeParams != null ? storeParams : Collections.emptyMap());
+        params.put(GeoPkgDataStoreFactory.DATABASE.key, file.getPath());
+        params.put(GeoPkgDataStoreFactory.DBTYPE.key, GeoPkgDataStoreFactory.DBTYPE.sample);
+
+        // setup pool and store honoring the params
+        GeoPkgDataStoreFactory factory = new GeoPkgDataStoreFactory(writerConfig);
+        this.connPool = factory.createDataSource(params);
+        params.put(GeoPkgDataStoreFactory.DATASOURCE.key, this.connPool);
+        this.dataStore = factory.createDataStore(params);
+
+        // add connection properties to respect the sqlite config
+        for (Map.Entry e : config.toProperties().entrySet()) {
+            ((BasicDataSource) connPool)
+                    .addConnectionProperty((String) e.getKey(), (String) e.getValue());
+        }
+    }
+

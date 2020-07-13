@@ -1,0 +1,36 @@
+    @SuppressWarnings("PMD.CloseResource") // wrapped and returned
+    public CSVReader openCSVReader() throws IOException, CsvValidationException {
+        Reader reader = null;
+
+        if (file != null) {
+            reader = new BufferedReader(new FileReader(file));
+        } else {
+            reader = new StringReader(dataInput);
+        }
+
+        final CSVParser parser =
+                new CSVParserBuilder()
+                        .withSeparator(separator)
+                        .withEscapeChar(escapechar)
+                        .withQuoteChar(quotechar)
+                        .withIgnoreLeadingWhiteSpace(true)
+                        .build();
+        final CSVReader csvReader = new CSVReaderBuilder(reader).withCSVParser(parser).build();
+
+        String[] tnames;
+        if ((tnames = csvReader.readNext()) == null) {
+            reader.close();
+            throw new IOException("Error reading csv headers");
+        } else {
+            if (headers == null) {
+                synchronized (this) {
+                    for (int i = 0; i < tnames.length; ++i) {
+                        tnames[i] = tnames[i].trim();
+                    }
+                    headers = tnames;
+                }
+            }
+        }
+        return csvReader;
+    }
+

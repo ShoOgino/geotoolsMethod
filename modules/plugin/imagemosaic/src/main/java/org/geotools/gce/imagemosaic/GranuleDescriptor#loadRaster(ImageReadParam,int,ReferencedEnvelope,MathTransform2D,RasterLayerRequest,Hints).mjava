@@ -79,6 +79,8 @@
             return null;
         }
 
+        // eventually gets closed in finally block, if possible (not deferred loading)
+        @SuppressWarnings("PMD.CloseResource")
         ImageInputStream inStream = null;
         ImageReader reader = null;
         boolean cleanupInFinally = request.getReadType() != ReadType.JAI_IMAGEREAD;
@@ -205,7 +207,7 @@
             // it.
             Rectangle2D r2d = CRS.transform(cropWorldToGrid, intersection).toRectangle2D();
             // if we are reading basically nothing, bail out immediately
-            if (r2d.getWidth() < 0.1 || r2d.getHeight() < 0.1) {
+            if (r2d.getWidth() < READ_THRESHOLD || r2d.getHeight() < READ_THRESHOLD) {
                 cleanupInFinally = true;
                 return null;
             }
@@ -305,13 +307,13 @@
             // handles bands selection, if more readers start to support it a decent approach should
             // be used to know if the low level reader already performed the bands selection or if
             // image mosaic is responsible for do it
-            if (request.getBands() != null && !reader.getFormatName().equalsIgnoreCase("netcdf")) {
+            int[] bands = request.getBands();
+            if (bands != null && !reader.getFormatName().equalsIgnoreCase("netcdf")) {
                 // if we are expanding the color model, do so before selecting the bands
                 if (raster.getColorModel() instanceof IndexColorModel && expandToRGB) {
                     raster = new ImageWorker(raster).forceComponentColorModel().getRenderedImage();
                 }
 
-                int[] bands = request.getBands();
                 // delegate the band selection operation on JAI BandSelect operation
                 raster = new ImageWorker(raster).retainBands(bands).getRenderedImage();
                 ColorModel colorModel = raster.getColorModel();
@@ -331,6 +333,19 @@
                                         .getRenderedImage();
                     }
                 }
+            }
+
+            // apply rescaling
+            if (request.isRescalingEnabled()) {
+                if (noData != null && request.getReadType() == ReadType.JAI_IMAGEREAD) {
+                    // Force nodata settings since JAI ImageRead may lost that
+                    // We have to make sure that noData pixels won't be rescaled
+                    PlanarImage t = PlanarImage.wrapRenderedImage(raster);
+                    t.setProperty(NoDataContainer.GC_NODATA, noData);
+                    raster = t;
+                }
+
+                raster = rescale(raster, hints, bands);
             }
 
             // use fixed source area
@@ -355,7 +370,6 @@
                         forceVirtualNativeResolution(
                                 raster, request, virtualNativeResolution, selectedlevel, hints);
             }
-
             double decimationScaleX = ((1.0 * sourceArea.width) / raster.getWidth());
             double decimationScaleY = ((1.0 * sourceArea.height) / raster.getHeight());
             final AffineTransform decimationScaleTranform =
@@ -527,6 +541,11 @@
                 }
 
                 ImageWorker iw = new ImageWorker(raster);
+                if (virtualNativeResolution != null
+                        && !Double.isNaN(virtualNativeResolution[0])
+                        && !Double.isNaN(virtualNativeResolution[1])) {
+                    localHints.add(new RenderingHints(ImageWorker.PRESERVE_CHAINED_AFFINES, true));
+                }
                 iw.setRenderingHints(localHints);
                 if (iw.getNoData() == null && this.noData != null) {
                     iw.setNoData(this.noData.getAsRange());

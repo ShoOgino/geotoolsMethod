@@ -1,0 +1,43 @@
+    /**
+     * Builds the SDMX expression to reflect the GeoTools query give as input
+     *
+     * @param query GeoTools query to transform into SDMX constraints
+     * @return The SDMX expression
+     */
+    public String buildConstraints(Query query) throws SdmxException {
+
+        // Check tha MEASUREs are not in there, Add "All" for the MEASURE dimension
+        Map<String, String> expressions;
+        ArrayList<String> constraints =
+                new ArrayList<String>(this.dataflowStructure.getDimensions().size());
+
+        // All-in query
+        if (Query.ALL.equals(query)) {
+            this.dataflowStructure
+                    .getDimensions()
+                    .forEach(
+                            dim -> {
+                                constraints.add(SDMXDataStore.ALLCODES_EXP);
+                            });
+            // Builds a non-all-in query
+        } else {
+            expressions =
+                    (Map<String, String>)
+                            query.getFilter()
+                                    .accept(
+                                            new SDMXDataflowFeatureSource.VisitFilter(),
+                                            new HashMap<String, String>());
+            this.dataflowStructure
+                    .getDimensions()
+                    .forEach(
+                            dim -> {
+                                constraints.add(
+                                        expressions.get(dim.getId()) == null
+                                                ? SDMXDataStore.ALLCODES_EXP
+                                                : (String) expressions.get(dim.getId()));
+                            });
+        }
+
+        return String.join(SDMXDataStore.SEPARATOR_EXP, constraints);
+    }
+

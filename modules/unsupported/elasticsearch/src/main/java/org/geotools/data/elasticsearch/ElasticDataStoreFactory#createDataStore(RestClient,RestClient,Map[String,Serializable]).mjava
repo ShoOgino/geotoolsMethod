@@ -1,0 +1,33 @@
+    public DataStore createDataStore(
+            RestClient client, RestClient proxyClient, Map<String, Serializable> params)
+            throws IOException {
+        final String indexName = (String) INDEX_NAME.lookUp(params);
+        final String arrayEncoding = getValue(ARRAY_ENCODING, params);
+        final boolean runAsGeoServerUser = getValue(RUNAS_GEOSERVER_USER, params);
+        if (isForceRunas() && !runAsGeoServerUser) {
+            throw new IllegalArgumentException(
+                    RUNAS_GEOSERVER_USER.key
+                            + " is disabled but "
+                            + FORCE_RUNAS_PROPERTY
+                            + " is set. "
+                            + "Enable "
+                            + RUNAS_GEOSERVER_USER.key
+                            + " or unset "
+                            + FORCE_RUNAS_PROPERTY
+                            + " in the system environment.");
+        }
+
+        final ElasticDataStore dataStore =
+                new ElasticDataStore(client, proxyClient, indexName, runAsGeoServerUser);
+        dataStore.setDefaultMaxFeatures(getValue(DEFAULT_MAX_FEATURES, params));
+        dataStore.setSourceFilteringEnabled(getValue(SOURCE_FILTERING_ENABLED, params));
+        dataStore.setScrollEnabled(getValue(SCROLL_ENABLED, params));
+        dataStore.setScrollSize(((Number) getValue(SCROLL_SIZE, params)).longValue());
+        dataStore.setScrollTime(getValue(SCROLL_TIME_SECONDS, params));
+        dataStore.setArrayEncoding(
+                ElasticDataStore.ArrayEncoding.valueOf(arrayEncoding.toUpperCase()));
+        dataStore.setGridSize((Long) GRID_SIZE.lookUp(params));
+        dataStore.setGridThreshold((Double) GRID_THRESHOLD.lookUp(params));
+        return dataStore;
+    }
+

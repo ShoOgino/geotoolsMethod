@@ -6,7 +6,6 @@
      * @param params Request parameters
      * @return A string representing the JSON, null
      * @throws IOException
-     * @throws InterruptedException
      */
     public InputStream retrieveJSON(String methType, URL url, Map<String, Object> params)
             throws IOException {
@@ -20,6 +19,9 @@
         } else {
             meth = new PostMethod();
         }
+        HttpMethodParams methParams = new HttpMethodParams();
+        methParams.setCookiePolicy(CookiePolicy.BROWSER_COMPATIBILITY);
+        meth.setParams(methParams);
 
         // Sets the URI, request parameters and request body (depending on method
         // type)
@@ -38,13 +40,16 @@
             uri.setQuery(meth.getQueryString());
             this.LOGGER.log(
                     Level.FINER,
-                    "About to query GET " + url.toString() + "?" + meth.getQueryString());
+                    String.format(
+                            "About to query GET '%s?%s'", url.toString(), meth.getQueryString()));
         } else {
             ((PostMethod) (meth)).setContentChunked(true);
             ((PostMethod) (meth)).setRequestBody(kvps);
             this.LOGGER.log(
                     Level.FINER,
-                    "About to query POST " + url.toString() + " with body: " + params.toString());
+                    String.format(
+                            "About to query POST '%s' with body: %s",
+                            url.toString(), params.toString()));
         }
 
         meth.setURI(uri);
@@ -63,13 +68,7 @@
 
             // If HTTP error, throws an exception
             if (status != HttpStatus.SC_OK) {
-                throw new IOException(
-                        "HTTP Status: "
-                                + status
-                                + " for URL: "
-                                + uri
-                                + " response: "
-                                + meth.getResponseBodyAsString());
+                throw new IOException(String.format("HTTP Status: %d for URL: %s", status, uri));
             }
 
             // Retrieve the wait period is returned by the server

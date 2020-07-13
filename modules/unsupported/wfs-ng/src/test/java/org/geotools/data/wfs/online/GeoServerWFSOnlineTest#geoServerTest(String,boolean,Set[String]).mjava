@@ -1,0 +1,67 @@
+    /** */
+    private void geoServerTest(String version, boolean get, Set<String> expected)
+            throws IOException {
+        Properties fixture = getFixture();
+
+        String getCapabilities =
+                fixture.getProperty(
+                                WFSDataStoreFactory.URL.key, "http://localhost:8080/geoserver/wfs?")
+                        + "REQUEST=GetCapabilities&SERVICE=WFS&VERSION="
+                        + version;
+
+        Map<String, Object> connectionParameters = new HashMap<String, Object>();
+        connectionParameters.put(WFSDataStoreFactory.URL.key, getCapabilities);
+        connectionParameters.put(
+                WFSDataStoreFactory.LENIENT.key,
+                Boolean.valueOf(fixture.getProperty(WFSDataStoreFactory.LENIENT.key, "true")));
+        connectionParameters.put(
+                WFSDataStoreFactory.TIMEOUT.key,
+                Integer.valueOf(fixture.getProperty(WFSDataStoreFactory.TIMEOUT.key, "30")));
+
+        if (get) {
+            connectionParameters.put(WFSDataStoreFactory.PROTOCOL.key, Boolean.FALSE);
+        }
+        // Attempt to connect to the datastore.
+        WFSDataStore data = (WFSDataStore) DataStoreFinder.getDataStore(connectionParameters);
+        assertEquals(version, data.getInfo().getVersion());
+
+        String typeName = "topp:states";
+        SimpleFeatureSource source = data.getFeatureSource(typeName);
+
+        FilterFactory ff = CommonFactoryFinder.getFilterFactory(GeoTools.getDefaultHints());
+        Filter filter =
+                ff.between(ff.property("LAND_KM"), ff.literal(100_000), ff.literal(150_000));
+
+        Query query = new Query();
+        query.setTypeName(typeName);
+
+        query.setFilter(filter);
+        SimpleFeatureCollection features = source.getFeatures(query);
+        int size = features.size();
+
+        assertTrue(size > 10);
+        // Iterator through all the features and print them out.
+        int count = 0;
+        try (SimpleFeatureIterator iterator = features.features()) {
+            while (iterator.hasNext() && count < 10) {
+                SimpleFeature feature = iterator.next();
+                assertTrue(
+                        "unexpected feature " + feature.getID(),
+                        expected.contains(feature.getID()));
+                count++;
+            }
+        }
+
+        query.setMaxFeatures(10);
+        features = source.getFeatures(query);
+        size = features.size();
+        assertEquals(10, size);
+        // Iterator through all the features and print them out.
+        try (SimpleFeatureIterator iterator = features.features()) {
+            while (iterator.hasNext()) {
+                SimpleFeature feature = iterator.next();
+                assertTrue(expected.contains(feature.getID()));
+            }
+        }
+    }
+

@@ -1,0 +1,64 @@
+    /** transforms (if neccessairy) the requested envelope into the CRS used by this reader. */
+    private void transformRequestedEnvelope(ImageMosaicJDBCReaderState state)
+            throws DataSourceException {
+
+        if (CRS.equalsIgnoreMetadata(
+                state.getRequestedEnvelope().getCoordinateReferenceSystem(), crs)) {
+            state.setRequestedEnvelopeTransformed(state.getRequestedEnvelope());
+
+            return; // and finish
+        }
+
+        try {
+            /** Buffered factory for coordinate operations. */
+
+            // transforming the envelope back to the dataset crs in
+            CoordinateOperation op =
+                    operationFactory.createOperation(
+                            state.getRequestedEnvelope().getCoordinateReferenceSystem(), crs);
+
+            if (op.getMathTransform().isIdentity()) { // Identity Transform ?
+                state.setRequestedEnvelopeTransformed(state.getRequestedEnvelope());
+                return; // and finish
+            }
+
+            state.setRequestedEnvelopeTransformed(CRS.transform(op, state.getRequestedEnvelope()));
+            state.getRequestedEnvelopeTransformed().setCoordinateReferenceSystem(crs);
+
+            if (config.getIgnoreAxisOrder() == false) { // check for axis order required
+                int indexX = indexOfX(crs);
+                int indexY = indexOfY(crs);
+                int indexRequestedX =
+                        indexOfX(state.getRequestedEnvelope().getCoordinateReferenceSystem());
+                int indexRequestedY =
+                        indexOfY(state.getRequestedEnvelope().getCoordinateReferenceSystem());
+
+                // x Axis problem ???
+                if (indexX == indexRequestedY && indexY == indexRequestedX) {
+                    state.setXAxisSwitch(true);
+                    Rectangle2D tmp =
+                            new Rectangle2D.Double(
+                                    state.getRequestedEnvelopeTransformed().getMinimum(1),
+                                    state.getRequestedEnvelopeTransformed().getMinimum(0),
+                                    state.getRequestedEnvelopeTransformed().getSpan(1),
+                                    state.getRequestedEnvelopeTransformed().getSpan(0));
+                    state.setRequestedEnvelopeTransformed(new GeneralEnvelope(tmp));
+                    state.getRequestedEnvelopeTransformed().setCoordinateReferenceSystem(crs);
+                } else if (indexX != indexRequestedX || indexY != indexRequestedY) {
+                    throw new DataSourceException("Unable to resolve the X Axis problem");
+                }
+            }
+
+            if (LOGGER.isLoggable(Level.FINE)) {
+                LOGGER.fine(
+                        new StringBuffer("Reprojected envelope ")
+                                .append(state.getRequestedEnvelope().toString())
+                                .append(" crs ")
+                                .append(crs.toWKT())
+                                .toString());
+            }
+        } catch (Exception e) {
+            throw new DataSourceException("Unable to create a coverage for this source", e);
+        }
+    }
+

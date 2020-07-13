@@ -3,16 +3,9 @@
      *
      * <p>This is an internal method and should only be called by processStylers.
      *
-     * @param currLayer
-     * @param graphics
      * @param drawMe The feature to be rendered
      * @param symbolizers An array of symbolizers which actually perform the rendering. The scale
      *     range we are working on... provided in order to make the style factory happy
-     * @param shape
-     * @param destinationCrs
-     * @param layerId
-     * @throws TransformException
-     * @throws FactoryException
      */
     private int processSymbolizers(
             final Graphics2D graphics,
@@ -152,6 +145,18 @@
                             OffsetCurveBuilder offseter = new OffsetCurveBuilder(offset);
                             g = offseter.offset(g);
                         }
+                    } else if (style instanceof LineStyle2D) {
+                        if (((LineStyle2D) style).getStroke() instanceof MarkAlongLine) {
+                            double simplificationFactor =
+                                    ((MarkAlongLine) ((LineStyle2D) style).getStroke())
+                                            .getSimplificatorFactor();
+                            if (simplificationFactor != 0) {
+                                Decimator d =
+                                        new Decimator(simplificationFactor, simplificationFactor);
+                                g = source;
+                                d.decimate(g);
+                            }
+                        }
                     }
                     if (g == null) {
                         continue;
@@ -163,6 +168,12 @@
                             new PaintShapeRequest(graphics, shape, style, scaleDenominator);
                     if (symbolizer.hasOption("labelObstacle")) {
                         paintShapeRequest.setLabelObstacle(true);
+                    }
+                    Polygon clip = getClip(drawMe);
+                    if (clip != null) {
+                        LiteShape2 clipShape =
+                                drawMe.getShape(null, worldToScreenTransform, clip, true);
+                        paintShapeRequest.setClipShape(clipShape);
                     }
                     requests.put(paintShapeRequest);
                     paintCommands++;

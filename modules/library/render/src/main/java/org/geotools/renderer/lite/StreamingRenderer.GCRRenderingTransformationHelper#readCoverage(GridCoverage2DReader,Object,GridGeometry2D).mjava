@@ -1,0 +1,44 @@
+        @Override
+        protected GridCoverage2D readCoverage(
+                GridCoverage2DReader reader, Object readParams, GridGeometry2D readGG)
+                throws IOException {
+            Interpolation interpolation = getRenderingInterpolation(layer);
+            RenderingHints interpolationHints =
+                    new RenderingHints(JAI.KEY_INTERPOLATION, interpolation);
+            final GridCoverageRenderer gcr;
+
+            try {
+                Rectangle mapRasterArea = readGG.getGridRange2D();
+                final AffineTransform worldToScreen =
+                        RendererUtilities.worldToScreenTransform(mapExtent, mapRasterArea);
+                gcr =
+                        new GridCoverageRenderer(
+                                mapExtent.getCoordinateReferenceSystem(),
+                                mapExtent,
+                                mapRasterArea,
+                                worldToScreen,
+                                interpolationHints);
+                gcr.setAdvancedProjectionHandlingEnabled(isAdvancedProjectionHandlingEnabled());
+                gcr.setWrapEnabled(isMapWrappingEnabled());
+                RenderedImage ri =
+                        gcr.renderImage(
+                                reader,
+                                (GeneralParameterValue[]) readParams,
+                                null,
+                                interpolation,
+                                null,
+                                256,
+                                256);
+                if (ri != null) {
+                    PlanarImage pi = PlanarImage.wrapRenderedImage(ri);
+                    GridCoverage2D gc2d =
+                            (GridCoverage2D)
+                                    pi.getProperty(GridCoverageRenderer.PARENT_COVERAGE_PROPERTY);
+                    return gc2d;
+                }
+                return null;
+            } catch (TransformException | NoninvertibleTransformException | FactoryException e) {
+                throw new IOException("Failure rendering the coverage", e);
+            }
+        }
+

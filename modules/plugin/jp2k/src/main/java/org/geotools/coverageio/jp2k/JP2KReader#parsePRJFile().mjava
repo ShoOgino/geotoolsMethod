@@ -1,8 +1,6 @@
     /**
      * Gets the coordinate reference system that will be associated to the {@link GridCoverage} by
      * looking for a related PRJ.
-     *
-     * @throws UnsupportedEncodingException
      */
     protected void parsePRJFile() throws UnsupportedEncodingException {
         String prjPath =
@@ -16,12 +14,9 @@
         final File prjFile = new File(prjPath);
         if (prjFile.exists()) {
             // it exists then we have top read it
-            PrjFileReader projReader = null;
-            FileInputStream instream = null;
-            try {
-                instream = new FileInputStream(prjFile);
-                final FileChannel channel = instream.getChannel();
-                projReader = new PrjFileReader(channel);
+            try (FileInputStream instream = new FileInputStream(prjFile);
+                    FileChannel channel = instream.getChannel();
+                    PrjFileReader projReader = new PrjFileReader(channel)) {
                 crs = projReader.getCoordinateReferenceSystem();
                 // using a default CRS
             } catch (FileNotFoundException e) {
@@ -35,24 +30,6 @@
             } catch (FactoryException e) {
                 if (LOGGER.isLoggable(Level.WARNING)) {
                     LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
-                }
-            } finally {
-                if (projReader != null) {
-                    try {
-                        projReader.close();
-                    } catch (IOException e) {
-                        if (LOGGER.isLoggable(Level.WARNING)) {
-                            LOGGER.log(Level.WARNING, e.getLocalizedMessage(), e);
-                        }
-                    }
-                    if (instream != null)
-                        try {
-                            instream.close();
-                        } catch (IOException ioe) {
-                            // warn about the error but proceed, it is not fatal
-                            // we have at least the default crs to use
-                            LOGGER.log(FINE, ioe.getLocalizedMessage(), ioe);
-                        }
                 }
             }
         }

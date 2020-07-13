@@ -1,0 +1,26 @@
+    private void processNamespaces(String baseURL, String filename, Set<String> evaluatedURLs) {
+        try {
+            XMLConfigDigester configReader = new XMLConfigDigester();
+            URI baseUri = new URL(baseURL).toURI();
+            URL url = baseUri.resolve(filename).toURL();
+            if (evaluatedURLs.contains(url.toExternalForm())) return;
+            else evaluatedURLs.add(url.toExternalForm());
+            AppSchemaDataAccessDTO config = configReader.parse(url);
+            for (Iterator it = config.getNamespaces().entrySet().iterator(); it.hasNext(); ) {
+                Map.Entry entry = (Entry) it.next();
+                String prefix = (String) entry.getKey();
+                String namespace = (String) entry.getValue();
+                if (namespaces.getURI(prefix) == null) namespaces.declarePrefix(prefix, namespace);
+            }
+            if (config.getIncludes() != null && !config.getIncludes().isEmpty()) {
+                for (String fname : config.getIncludes()) {
+                    processNamespaces(config.getBaseSchemasUrl(), fname, evaluatedURLs);
+                }
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } catch (URISyntaxException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
