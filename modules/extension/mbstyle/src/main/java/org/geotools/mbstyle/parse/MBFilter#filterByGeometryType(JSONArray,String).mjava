@@ -1,0 +1,35 @@
+    private Filter filterByGeometryType(JSONArray json, String operator) {
+        List<Filter> typeFilters = new ArrayList<>();
+        List<?> types = json.subList(2, json.size());
+        for (Object type : types) {
+            Filter typeFilter = null;
+            if (type instanceof String) {
+                typeFilter = translateType((String) type);
+            }
+            if (typeFilter == null) {
+                throw new MBFormatException(
+                        "\"$type\" limited to Point, LineString, Polygon: " + type);
+            }
+            typeFilters.add(typeFilter);
+        }
+        if ("==".equals(operator)) {
+            if (typeFilters.size() != 1) {
+                throw new MBFormatException(
+                        "[\"==\",\"$type\", ...] limited one geometry type, to test more than one use \"in\" operator.");
+            }
+            return typeFilters.get(0);
+        } else if ("!=".equals(operator)) {
+            if (typeFilters.size() != 1) {
+                throw new MBFormatException(
+                        "[\"!=\",\"$type\", ...] limited one geometry type, to test more than one use \"!in\" operator.");
+            }
+            return ff.not(typeFilters.get(0));
+        } else if ("in".equals(operator)) {
+            return ff.or(typeFilters);
+        } else if ("!in".equals(operator)) {
+            return ff.not(ff.or(typeFilters));
+        } else {
+            throw new MBFormatException("Unsupported $type operator \"" + json + "\"");
+        }
+    }
+

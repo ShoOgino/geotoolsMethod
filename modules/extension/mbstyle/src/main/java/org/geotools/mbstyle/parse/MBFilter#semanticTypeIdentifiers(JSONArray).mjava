@@ -1,7 +1,8 @@
     /**
      * Utility method to convert json to set of {@link SemanticType}.
      *
-     * <p>This method recursively calls itself to handle all and any operators.
+     * <p>This method is called recursively to handle <code>all</code> and <code>any</code> filter
+     * operators.
      *
      * @param array JSON array defining filter
      * @return SemanticTypes from provided json, may be nested
@@ -15,82 +16,16 @@
                         || "!=".equals(operator)
                         || "in".equals(operator)
                         || "!in".equals(operator))
+                && parse.isString(array, 1)
                 && "$type".equals(parse.get(array, 1))) {
-
-            if ("in".equals(operator) || "==".equals(operator)) {
-                Set<SemanticType> semanticTypes = new HashSet<>();
-                List<?> types = array.subList(2, array.size());
-                for (Object type : types) {
-                    if (type instanceof String) {
-                        String jsonText = (String) type;
-                        SemanticType semanticType = translateSemanticType(jsonText);
-                        semanticTypes.add(semanticType);
-                    } else {
-                        throw new MBFormatException(
-                                "[\"in\",\"$type\", ...] limited to Point, LineString, Polygon: "
-                                        + type);
-                    }
-                }
-                if ("==".equals(operator) && types.size() != 1) {
-                    throw new MBFormatException(
-                            "[\"==\",\"$type\", ...] limited one geometry type, to test more than one use \"in\" operator.");
-                }
-                return semanticTypes;
-            } else if ("!in".equals(operator) || "!=".equals(operator)) {
-                Set<SemanticType> semanticTypes =
-                        new HashSet<>(Arrays.asList(SemanticType.values()));
-                List<?> types = array.subList(2, array.size());
-                for (Object type : types) {
-                    if (type instanceof String) {
-                        String jsonText = (String) type;
-                        SemanticType semanticType = translateSemanticType(jsonText);
-                        semanticTypes.remove(semanticType);
-                    } else {
-                        throw new MBFormatException(
-                                "[\"!in\",\"$type\", ...] limited to Point, LineString, Polygon: "
-                                        + type);
-                    }
-                }
-                if ("!=".equals(operator) && types.size() != 1) {
-                    throw new MBFormatException(
-                            "[\"!=\",\"$type\", ...] limited one geometry type, to test more than one use \"!in\" operator.");
-                }
-                return semanticTypes;
-            }
+            return semanticTypeByGeometryType(array, operator);
         }
-
         if ("all".equals(operator)) {
-            Set<SemanticType> semanticTypes = new HashSet<>();
-            for (int i = 1; i < array.size(); i++) {
-                JSONArray alternative = (JSONArray) array.get(i);
-                Set<SemanticType> types = semanticTypeIdentifiers(alternative);
-                if (types.isEmpty()) {
-                    continue;
-                } else {
-                    if (semanticTypes.isEmpty()) {
-                        // exactly one alternative is okay
-                        semanticTypes.addAll(types);
-                    } else {
-                        throw new MBFormatException(
-                                "Only one \"all\" alternative may be a $type filter");
-                    }
-                }
-            }
-            return semanticTypes;
+            return semanticTypeAll(array);
         } else if ("any".equals(operator)) {
-            Set<SemanticType> semanticTypes = new HashSet<>();
-            for (int i = 1; i < array.size(); i++) {
-                Set<SemanticType> types = semanticTypeIdentifiers((JSONArray) array.get(i));
-                semanticTypes.addAll(types);
-            }
-            return semanticTypes;
+            return semanticTypeAny(array);
         } else if ("none".equals(operator)) {
-            Set<SemanticType> semanticTypes = new HashSet<>(Arrays.asList(SemanticType.values()));
-            for (int i = 1; i < array.size(); i++) {
-                Set<SemanticType> types = semanticTypeIdentifiers((JSONArray) array.get(i));
-                semanticTypes.removeAll(types);
-            }
-            return semanticTypes;
+            return semanticTypeNone(array);
         }
         return Collections.emptySet();
     }
