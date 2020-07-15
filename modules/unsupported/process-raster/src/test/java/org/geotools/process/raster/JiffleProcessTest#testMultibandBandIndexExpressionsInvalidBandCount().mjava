@@ -1,0 +1,28 @@
+    @Test
+    public void testMultibandBandIndexExpressionsInvalidBandCount() {
+        GridCoverage2D c1 = buildCoverage(ONE_DIAGONAL);
+        GridCoverage2D c2 = buildCoverage(TWO_SOLID);
+
+        Process jiffle = Processors.createProcess(new NameImpl("ras", "Jiffle"));
+        Map<String, Object> inputs = new HashMap<>();
+        inputs.put(JiffleProcess.IN_SOURCE_NAME, new String[] {"a", "b"});
+        inputs.put(JiffleProcess.IN_COVERAGE, new GridCoverage2D[] {c1, c2});
+        String script =
+                "dest[x() % 2 == 0 ? 0 : 1] = a;\n"
+                        + "dest[x() % 2 == 0 ? 1 : 0] = b;\n"
+                        + "dest[2] = b - a;";
+        inputs.put(JiffleProcess.IN_SCRIPT, script);
+        // band count mandatory, but we're feeding in the wrong value
+        inputs.put(JiffleProcess.OUTPUT_BAND_COUNT, 2);
+        try {
+            Map<String, Object> output = jiffle.execute(inputs, null);
+            GridCoverage2D result = (GridCoverage2D) output.get(JiffleProcess.OUT_RESULT);
+            
+            // need to force fetch the data in order to trigger actual computation
+            result.getRenderedImage().getData();
+            fail("Should not have reached here");
+        } catch (ArrayIndexOutOfBoundsException e) {
+            assertThat(e.getMessage(), CoreMatchers.containsString("2"));
+        }
+    }
+
