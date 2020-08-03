@@ -1,0 +1,25 @@
+    /** Test PostGIS simplified geometries without topology preservation (GEOT-6663) */
+    public void testSimplificationDontPreserveTopology() throws Exception {
+        SimpleFeatureSource fs = dataStore.getFeatureSource(tname("simplify_polygon_topology"));
+
+        if (fs.getSupportedHints().contains(Hints.GEOMETRY_SIMPLIFICATION) == false) return;
+
+        Query query = new Query();
+        Hints hints = new Hints(Hints.GEOMETRY_SIMPLIFICATION, 1.5);
+        query.setHints(hints);
+
+        SimpleFeatureCollection fColl = fs.getFeatures(query);
+        SimpleFeatureIterator iterator = fColl.features();
+
+        Geometry simplified = null;
+        try {
+            if (iterator.hasNext()) simplified = (Geometry) iterator.next().getDefaultGeometry();
+        } finally {
+            iterator.close();
+        }
+
+        assertNotNull("Simplified geometry is null", simplified);
+        assertTrue(simplified instanceof Polygon);
+        assertEquals(0, ((Polygon) simplified).getNumInteriorRing());
+    }
+
