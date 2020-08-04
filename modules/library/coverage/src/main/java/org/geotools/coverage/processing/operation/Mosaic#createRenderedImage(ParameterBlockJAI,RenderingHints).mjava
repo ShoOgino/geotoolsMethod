@@ -3,7 +3,7 @@
      * management)
      */
     protected RenderedImage createRenderedImage(
-            final ParameterBlockJAI parameters, final RenderingHints hints) {
+            final ParameterBlockJAI parameters, RenderingHints hints) {
         parameters.getSources();
         RenderedImage[] images =
                 (RenderedImage[])
@@ -16,6 +16,20 @@
         double[][] thresholds = getParameter(parameters, THRESHOLD_PARAM);
         Range[] noData = getParameter(parameters, NODATA_RANGE_PARAM);
         double[] backgrounds = getParameter(parameters, BACKGROUND_PARAM);
+
+        // the background value defaults to <code>new double[] {0}</code>, which makes
+        // the ImageWorker use it and not set the ROI in output, as they are supposed to
+        // be filled with background values.... which in turn causes black output since
+        // the default JAI background value is zero instead of <code>null</code>.
+        // If there are actual ROIs attached to the images, we need to use them and preserve
+        // their overlay in output
+        if (rois != null && rois.length > 0 && Arrays.stream(rois).anyMatch(r -> r != null)) {
+            RenderingHints newHints = new RenderingHints(Collections.emptyMap());
+            newHints.putAll(hints);
+            newHints.put(ImageWorker.FORCE_MOSAIC_ROI_PROPERTY, true);
+            hints = newHints;
+        }
+
         ImageWorker iw = new ImageWorker();
         iw.setRenderingHints(hints);
         iw.setBackground(backgrounds);

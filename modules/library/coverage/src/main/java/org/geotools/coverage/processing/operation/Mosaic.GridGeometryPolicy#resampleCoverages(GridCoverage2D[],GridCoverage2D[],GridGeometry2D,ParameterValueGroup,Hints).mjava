@@ -115,32 +115,46 @@
                         fillValue = nodata;
                     }
 
-                    // Resample to the new resolution
-                    rasters[i] =
-                            GridCoverage2DRIA.create(
-                                    coverage,
-                                    newGG,
-                                    fillValue,
-                                    hints,
-                                    CoverageUtilities.getROIProperty(coverage));
-                    // Resample also the alpha band
-                    if (hasAlpha && alphas[i] != null) {
-                        checkAlpha(coverage, alphas[i]);
-                        RenderedImage al =
+                    if (newGG.equals(coverage.getGridGeometry())) {
+                        rasters[i] = coverage.getRenderedImage();
+                        if (hasAlpha && alphas[i] != null) {
+                            alphaArray[i] =
+                                    PlanarImage.wrapRenderedImage(alphas[i].getRenderedImage());
+                        }
+                    } else {
+                        rasters[i] =
                                 GridCoverage2DRIA.create(
-                                        alphas[i],
+                                        coverage,
                                         newGG,
-                                        new double[1],
+                                        fillValue,
                                         hints,
                                         CoverageUtilities.getROIProperty(coverage));
-                        alphaArray[i] = PlanarImage.wrapRenderedImage(al);
+                        // Resample also the alpha band
+                        if (hasAlpha && alphas[i] != null) {
+                            checkAlpha(coverage, alphas[i]);
+                            RenderedImage al =
+                                    GridCoverage2DRIA.create(
+                                            alphas[i],
+                                            newGG,
+                                            new double[1],
+                                            hints,
+                                            CoverageUtilities.getROIProperty(coverage));
+                            alphaArray[i] = PlanarImage.wrapRenderedImage(al);
+                        }
                     }
+
                     backgrounds[i] = fillValue[0];
                     // Resample to the new resolution
-                    GridCoverage2DRIA.GridCoverage2DRIAPropertyGenerator propertyGenerator =
-                            new GridCoverage2DRIA.GridCoverage2DRIAPropertyGenerator();
-                    Object property = propertyGenerator.getProperty("roi", rasters[i]);
-                    ROI roi = (property != null && property instanceof ROI) ? (ROI) property : null;
+                    ROI roi;
+                    if (rasters[i] instanceof GridCoverage2DRIA) {
+                        GridCoverage2DRIA.GridCoverage2DRIAPropertyGenerator propertyGenerator =
+                                new GridCoverage2DRIA.GridCoverage2DRIAPropertyGenerator();
+                        Object property = propertyGenerator.getProperty("roi", rasters[i]);
+                        roi = (property != null && property instanceof ROI) ? (ROI) property : null;
+                    } else {
+                        Object property = rasters[i].getProperty("roi");
+                        roi = (property != null && property instanceof ROI) ? (ROI) property : null;
+                    }
                     rois[i] = roi;
                     // Get NoData as property if present
                     NoDataContainer noDataProperty = CoverageUtilities.getNoDataProperty(coverage);
