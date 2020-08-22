@@ -1,0 +1,38 @@
+    /**
+     * Determines if the filter and all its sub filters are supported. Is most important for logic
+     * filters, as they are the only ones with subFilters. Null filters should not be used here, if
+     * nothing should be filtered than Filter.INCLUDE can be used. Embedded nulls can be a
+     * particular source of problems, buried in logic filters.
+     *
+     * @param filter the filter to be tested.
+     * @return true if all sub filters are supported, false otherwise.
+     * @throws IllegalArgumentException If a null filter is passed in. As this function is recursive
+     *     a null in a logic filter will also cause an error.
+     */
+    public boolean fullySupports(org.opengis.filter.Filter filter) {
+        boolean supports = true;
+
+        if (filter == null) {
+            throw new IllegalArgumentException(
+                    "Null filters can not be " + "unpacked, did you mean " + "Filter.INCLUDE?");
+        }
+
+        if (filter instanceof BinaryLogicOperator) {
+            BinaryLogicOperator lf = (BinaryLogicOperator) filter;
+            for (Filter testFilter : lf.getChildren()) {
+                if (!(this.fullySupports(testFilter))) {
+                    supports = false;
+                    break;
+                }
+            }
+        } else if (filter instanceof Not) {
+            Not lf = (Not) filter;
+            if (!(this.fullySupports(lf.getFilter()))) {
+                supports = false;
+            }
+        } else {
+            supports = this.supports(filter);
+        }
+        return supports;
+    }
+

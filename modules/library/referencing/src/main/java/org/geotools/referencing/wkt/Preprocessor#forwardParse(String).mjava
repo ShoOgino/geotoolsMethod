@@ -1,0 +1,34 @@
+    /**
+     * Parses a WKT. This method delegates the work to the {@link #parser}, but catch the exception
+     * in case of failure. The exception is rethrown with the {@linkplain
+     * ParseException#getErrorIndex error index} adjusted in order to point to the character in the
+     * original text (before substitutions).
+     *
+     * @param text The WKT to parse.
+     * @return The object.
+     * @throws ParseException if the parsing failed.
+     */
+    private Object forwardParse(final String text) throws ParseException {
+        try {
+            return parser.parseObject(text);
+        } catch (ParseException exception) {
+            int shift = 0;
+            int errorOffset = exception.getErrorOffset();
+            for (Replacement r = replacements; r != null; r = r.next) {
+                if (errorOffset < r.lower) {
+                    break;
+                }
+                if (errorOffset < r.upper) {
+                    errorOffset = r.lower;
+                    break;
+                }
+                shift += r.shift;
+            }
+            final ParseException adjusted =
+                    new ParseException(exception.getLocalizedMessage(), errorOffset - shift);
+            adjusted.setStackTrace(exception.getStackTrace());
+            adjusted.initCause(exception.getCause());
+            throw adjusted;
+        }
+    }
+
