@@ -9,12 +9,37 @@
                 Geometry difference = renderingGeometry.difference(bufferedDateline);
                 List<Polygon> polygons = PolygonExtracter.getPolygons(difference);
                 for (Polygon p : polygons) {
-                    Geometry transformed =
-                            JTS.transform(
-                                    p,
-                                    CRS.findMathTransform(
-                                            renderingEnvelope.getCoordinateReferenceSystem(),
-                                            sourceCRS));
+                    Geometry transformed = null;
+                    try {
+                        transformed =
+                                JTS.transform(
+                                        p,
+                                        CRS.findMathTransform(
+                                                renderingEnvelope.getCoordinateReferenceSystem(),
+                                                sourceCRS));
+                    } catch (TransformException e) {
+                        // uh oh, got into a special case of the target projection... go step by
+                        // step
+                        Geometry polygonWGS84 =
+                                JTS.transform(
+                                        p,
+                                        CRS.findMathTransform(
+                                                renderingEnvelope.getCoordinateReferenceSystem(),
+                                                DefaultGeographicCRS.WGS84));
+                        ProjectionHandler handler =
+                                ProjectionHandlerFinder.getHandler(
+                                        new ReferencedEnvelope(sourceCRS),
+                                        DefaultGeographicCRS.WGS84,
+                                        false);
+                        if (handler == null) throw e;
+                        Geometry preProcessed = handler.preProcess(polygonWGS84);
+                        transformed =
+                                JTS.transform(
+                                        preProcessed,
+                                        CRS.findMathTransform(
+                                                renderingEnvelope.getCoordinateReferenceSystem(),
+                                                sourceCRS));
+                    }
                     // the back-transform can literally make the inner rings bigger than the
                     // outer ones, be careful computing the envelope
                     Envelope envelope = getFullEnvelope(transformed);
