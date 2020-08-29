@@ -1,0 +1,32 @@
+        @Override
+        protected Point2D inverseTransformNormalized(double x, double y, Point2D ptDst)
+                throws ProjectionException {
+            double lam, phi;
+            if (abs(y = latitudeOfOrigin + y) <= EPSILON) {
+                lam = x;
+                phi = 0.;
+            } else {
+                phi = y;
+                double B = x * x + y * y;
+                int i = MAXIMUM_ITERATIONS;
+                while (true) {
+                    double tp = tan(phi);
+                    double dphi =
+                            (y * (phi * tp + 1.) - phi - .5 * (phi * phi + B) * tp)
+                                    / ((phi - y) / tp - 1.);
+                    phi -= dphi;
+                    if (!(abs(dphi) > ITERATION_TOLERANCE)) break;
+                    --i;
+                    if (i == 0) {
+                        throw new ProjectionException(ErrorKeys.NO_CONVERGENCE);
+                    }
+                }
+                lam = asin(x * tan(phi)) / sin(phi);
+            }
+            if (ptDst != null) {
+                ptDst.setLocation(lam, phi);
+                return ptDst;
+            }
+            return new Point2D.Double(lam, phi);
+        }
+

@@ -1,9 +1,9 @@
     /**
-     * Convert the value in the provided JSONArray at index to a string Expression, or a function.
+     * Convert the value in the provided JSONArray at index to a string Literal, or a Function.
      *
      * @param json The JSONArray in which to look up the value
      * @param index The index in the JSONArray at which to look up the value
-     * @return Expression based on provided json, or literal if json was null.
+     * @return String GeoTools Expression based on provided json, or literal if json was null.
      */
     public Expression string(JSONArray json, int index) {
         Object obj = json.get(index);
@@ -22,17 +22,28 @@
             MBFunction function = new MBFunction(this, (JSONObject) obj);
             return function.function(String.class);
         } else if (obj instanceof JSONArray) {
-            if (((JSONArray) obj).get(0) instanceof String
-                    && MBExpression.canCreate(((JSONArray) obj).get(0).toString())) {
-                return MBExpression.transformExpression((JSONArray) obj);
+            JSONArray array = (JSONArray) obj;
+            if (isString(array, 0)) {
+                String expressionName = get(array, 0);
+                if (MBExpression.canCreate(expressionName)) {
+                    return MBExpression.transformExpression(array);
+                } else {
+                    throw new MBFormatException(
+                            context
+                                    + " string unavailable: data expression \""
+                                    + expressionName
+                                    + "\" invalid. It may be misspelled or not supported by this implementation");
+                }
             } else {
-                throw new MBFormatException(context + " string from JSONArray not supported");
+                throw new MBFormatException(
+                        context
+                                + " string unavailable: Conversion from a JSONArray not a supported: "
+                                + array);
             }
         } else {
             throw new IllegalArgumentException(
-                    "json contents invalid, "
-                            + context
-                            + " value limited to String, Number, Boolean, JSONArray or JSONObject but was "
+                    context
+                            + " string unavailable: json contents invalid - value limited to String, Number, Boolean, JSONArray or JSONObject but was "
                             + obj.getClass().getSimpleName());
         }
     }

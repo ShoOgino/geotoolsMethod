@@ -1,0 +1,40 @@
+    @Test
+    public void testPreserveROI() throws Exception {
+        // Creates coverages with model space coordinates, mind the ROI, it's in raster space
+        // The two coverages are side by side, the ROIs cover the second half of the first
+        // image, and the first half of the second:
+        // +---------------+---------------+
+        // |       xxxxxxxx|xxxxxxxx       |
+        // |       xxxxxxxx|xxxxxxxx       |
+        // |       xxxxxxxx|xxxxxxxx       |
+        // |       xxxxxxxx|xxxxxxxx       |
+        // |       xxxxxxxx|xxxxxxxx       |
+        // +---------------|---------------|
+        GridCoverage2D c1 =
+                createGradientCoverage(0, 0, 50, 50, new ROIShape(new Rectangle(25, 0, 25, 50)));
+        GridCoverage2D c2 =
+                createGradientCoverage(50, 0, 50, 50, new ROIShape(new Rectangle(0, 0, 25, 50)));
+
+        // setup the mosaic
+        ParameterValueGroup param = processor.getOperation("Mosaic").getParameters();
+        List<GridCoverage2D> sources = new ArrayList<>(2);
+        sources.add(c1);
+        sources.add(c2);
+        param.parameter("Sources").setValue(sources);
+
+        GridCoverage2D mosaic = (GridCoverage2D) processor.doOperation(param);
+
+        Object roiObject = mosaic.getRenderedImage().getProperty("roi");
+        assertThat(roiObject, CoreMatchers.instanceOf(ROI.class));
+
+        ROI roi = (ROI) roiObject;
+        assertFalse(roi.contains(15, 5));
+        assertFalse(roi.contains(15, 45));
+        assertTrue(roi.contains(45, 5));
+        assertTrue(roi.contains(45, 45));
+        assertTrue(roi.contains(55, 5));
+        assertTrue(roi.contains(55, 45));
+        assertFalse(roi.contains(85, 5));
+        assertFalse(roi.contains(85, 45));
+    }
+

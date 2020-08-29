@@ -1,0 +1,51 @@
+    @Test
+    public void testMultibandBandIndexExpressions() {
+        GridCoverage2D c1 = buildCoverage(ONE_DIAGONAL);
+        GridCoverage2D c2 = buildCoverage(TWO_SOLID);
+
+        Process jiffle = Processors.createProcess(new NameImpl("ras", "Jiffle"));
+        Map<String, Object> inputs = new HashMap<>();
+        inputs.put(JiffleProcess.IN_SOURCE_NAME, new String[] {"a", "b"});
+        inputs.put(JiffleProcess.IN_COVERAGE, new GridCoverage2D[] {c1, c2});
+        String script =
+                "dest[x() % 2 == 0 ? 0 : 1] = a;\n"
+                        + "dest[x() % 2 == 0 ? 1 : 0] = b;\n"
+                        + "dest[2] = b - a;";
+        inputs.put(JiffleProcess.IN_SCRIPT, script);
+        // band count mandatory, the lookup is not smart enough to figure out
+        inputs.put(JiffleProcess.OUTPUT_BAND_COUNT, 3);
+        Map<String, Object> output = jiffle.execute(inputs, null);
+        GridCoverage2D result = (GridCoverage2D) output.get(JiffleProcess.OUT_RESULT);
+
+        // compare results band by band, has a where x is even, b where x is odd
+        assertArrayEquals(
+                new float[][] {
+                    {1, 2, 0},
+                    {0, 2, 0},
+                    {0, 2, 1},
+                },
+                data(result, 0));
+        // compare results band by band, has b where x is even, a where x is odd
+        assertArrayEquals(
+                new float[][] {
+                    {2, 0, 2},
+                    {2, 1, 2},
+                    {2, 0, 2},
+                },
+                data(result, 1));
+        // thid band, difference
+        assertArrayEquals(
+                new float[][] {
+                    {1, 2, 2},
+                    {2, 1, 2},
+                    {2, 2, 1},
+                },
+                data(result, 2));
+
+        // check band names
+        GridSampleDimension[] sampleDimensions = result.getSampleDimensions();
+        assertEquals("jiffle1", sampleDimensions[0].getDescription().toString());
+        assertEquals("jiffle2", sampleDimensions[1].getDescription().toString());
+        assertEquals("jiffle3", sampleDimensions[2].getDescription().toString());
+    }
+
