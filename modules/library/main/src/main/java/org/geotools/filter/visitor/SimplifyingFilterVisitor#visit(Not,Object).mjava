@@ -30,10 +30,19 @@
             } else if (simplified == Filter.EXCLUDE) {
                 return Filter.INCLUDE;
             } else if (simplified instanceof PropertyIsBetween) {
+                List<Filter> orFilters = new ArrayList<>();
                 PropertyIsBetween pb = (PropertyIsBetween) simplified;
                 Filter lt = ff.less(pb.getExpression(), pb.getLowerBoundary());
                 Filter gt = ff.greater(pb.getExpression(), pb.getUpperBoundary());
-                return ff.or(lt, gt);
+                orFilters.add(lt);
+                orFilters.add(gt);
+                PropertyName pn = (PropertyName) pb.getExpression();
+                String pName = pn.getPropertyName();
+                if (isNillable(pName)) {
+                    // the property may have a NULL value, we need to vouch for it
+                    orFilters.add(ff.isNull(pb.getExpression()));
+                }
+                return ff.or(orFilters);
             } else if (simplified instanceof PropertyIsEqualTo) {
                 PropertyIsEqualTo pe = (PropertyIsEqualTo) simplified;
                 return ff.notEqual(pe.getExpression1(), pe.getExpression2(), pe.isMatchingCase());

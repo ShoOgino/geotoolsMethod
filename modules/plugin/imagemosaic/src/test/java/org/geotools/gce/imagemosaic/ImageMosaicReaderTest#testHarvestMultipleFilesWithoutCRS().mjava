@@ -1,0 +1,30 @@
+    @Test
+    public void testHarvestMultipleFilesWithoutCRS() throws Exception {
+        // force mosaic creation
+        MultipleHarvestSetup multipleHarvestSetup = new MultipleHarvestSetup().invoke();
+        Collection<File> files = multipleHarvestSetup.getFiles();
+        ImageMosaicReader tempReader = multipleHarvestSetup.getReader();
+        File directory = URLs.urlToFile((URL) tempReader.getSource());
+        tempReader.dispose();
+
+        // remove the MosaicCRS property from the mosaic configuration
+        File config = new File(directory, directory.getName() + ".properties");
+        Properties p = new Properties();
+        try (FileInputStream fis = new FileInputStream(config)) {
+            p.load(fis);
+        }
+        p.remove(Prop.MOSAIC_CRS);
+        try (FileOutputStream fos = new FileOutputStream(config)) {
+            p.store(fos, null);
+        }
+
+        // open it again, it will have to work against the stored config without the CRS
+        ImageMosaicReader reader = multipleHarvestSetup.getReader();
+        GranuleCatalog originalCatalog = reader.granuleCatalog;
+        try {
+            assertMultipleFileHarvest(files, reader, originalCatalog);
+        } finally {
+            reader.dispose();
+        }
+    }
+

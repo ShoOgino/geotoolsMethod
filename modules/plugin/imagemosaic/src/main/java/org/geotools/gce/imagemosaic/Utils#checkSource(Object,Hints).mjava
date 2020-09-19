@@ -37,32 +37,26 @@
 
                 // this can be used to look for properties files that do NOT
                 // define a datastore
-                final File[] properties =
-                        sourceFile.listFiles(
-                                (FilenameFilter)
-                                        FileFilterUtils.and(
-                                                FileFilterUtils.notFileFilter(
-                                                        FileFilterUtils.nameFileFilter(
-                                                                "datastore.properties")),
-                                                FileFilterUtils.makeFileOnly(
-                                                        FileFilterUtils.suffixFileFilter(
-                                                                ".properties"))));
 
                 // do we have a valid datastore + mosaic properties pair?
+                File[] properties = null;
                 if (Utils.checkFileReadable(dataStoreProperties)) {
                     // we have a datastore.properties file
                     datastoreFound = true;
 
                     // check the first valid mosaic properties
-                    boolean found = false;
-                    for (File propFile : properties)
-                        if (Utils.checkFileReadable(propFile)) {
-                            // load it
-                            if (null != Utils.loadMosaicProperties(URLs.fileToUrl(propFile))) {
-                                found = true;
-                                break;
+                    boolean found = null != Utils.lookForMosaicConfig(sourceURL);
+                    if (!found) {
+                        properties = lookForPropertiesFiles(sourceFile);
+                        for (File propFile : properties)
+                            if (Utils.checkFileReadable(propFile)) {
+                                // load it
+                                if (null != Utils.loadMosaicProperties(URLs.fileToUrl(propFile))) {
+                                    found = true;
+                                    break;
+                                }
                             }
-                        }
+                    }
 
                     // we did not find any good candidate for mosaic.properties
                     // file, this will signal it
@@ -80,6 +74,8 @@
                 //
                 File shapeFile = null;
                 if (!datastoreFound) {
+                    properties =
+                            properties == null ? lookForPropertiesFiles(sourceFile) : properties;
                     for (File propFile : properties) {
 
                         // load properties
