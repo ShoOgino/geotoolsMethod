@@ -1,0 +1,94 @@
+    private static void writeComplexType(
+            ComplexType complexType, Schema schema, PrintHandler ph, Map<String, Object> hints)
+            throws IOException {
+        AttributesImpl ai = new AttributesImpl();
+
+        if ((complexType.getId() != null) && (!complexType.getId().isEmpty())) {
+            ai.addAttribute("", "id", "", "ID", complexType.getId());
+        }
+
+        if ((complexType.getName() != null) && (!complexType.getName().isEmpty())) {
+            ai.addAttribute("", "name", "", "NCName", complexType.getName());
+        }
+
+        if (complexType.isAbstract()) {
+            ai.addAttribute("", "abstract", "", "boolean", "true");
+        }
+
+        if (complexType.getFinal() != Schema.NONE) {
+            ai.addAttribute(
+                    "",
+                    "final",
+                    "",
+                    "NMTOKENS",
+                    ComplexTypeHandler.writeFinal(complexType.getFinal()));
+        }
+
+        if (complexType.getBlock() != Schema.NONE) {
+            ai.addAttribute(
+                    "",
+                    "block",
+                    "",
+                    "NMTOKENS",
+                    ComplexTypeHandler.writeBlock(complexType.getBlock()));
+        }
+
+        if (complexType.isMixed()) {
+            ai.addAttribute("", "mixed", "", "boolean", "true");
+        }
+
+        ph.startElement(XSISimpleTypes.NAMESPACE, "complexType", ai);
+
+        ElementGrouping egs = complexType.getChild();
+        complexType.getChild();
+
+        // TODO determine if this complexType isDerived ... and make a complexContent or
+        // Simplecontent to match
+        if (egs != null) {
+            switch (egs.getGrouping()) {
+                    // TODO determine if this will work
+                    //                    	case ElementGrouping.COMPLEXCONTENT:
+                    //                    	    writeAny((ComplexContent)egs,schema,ph,hints);
+                    //                    	    break;
+                    //                    	case ElementGrouping.SIMPLECONTENT:
+                    //                    	    writeAny((SimpleContent)egs,schema,ph,hints);
+                    //                    	    break;
+                case ElementGrouping.ALL:
+                    writeAll((All) egs, schema, ph, hints);
+
+                    break;
+
+                case ElementGrouping.CHOICE:
+                    writeChoice((Choice) egs, schema, ph, hints);
+
+                    break;
+
+                case ElementGrouping.GROUP:
+                    writeGroup((Group) egs, schema, ph, hints);
+
+                    break;
+
+                case ElementGrouping.SEQUENCE:
+                    writeSequence((Sequence) egs, schema, ph, hints);
+
+                    break;
+            }
+        }
+
+        if (complexType.getAnyAttributeNameSpace() != null) {
+            ai = new AttributesImpl();
+            ai.addAttribute("", "namespace", "", "special", complexType.getAnyAttributeNameSpace());
+            ph.element(XSISimpleTypes.NAMESPACE, "anyAttribute", ai);
+        }
+
+        // TODO think about checking for attribute groupings?
+        // add a Attribute.getParentGroup() ... null or Group
+        if (complexType.getAttributes() != null) {
+            Attribute[] attrs = complexType.getAttributes();
+
+            for (int i = 0; i < attrs.length; i++) writeAttribute(attrs[i], schema, ph, hints);
+        }
+
+        ph.endElement(XSISimpleTypes.NAMESPACE, "complexType");
+    }
+
