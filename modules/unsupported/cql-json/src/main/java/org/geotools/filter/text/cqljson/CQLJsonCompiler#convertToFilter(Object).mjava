@@ -1,0 +1,178 @@
+    // --------------Internal-----------------------------------------------
+    private Filter convertToFilter(Object predicates) throws ParseException {
+        Filter out = null;
+        Object processedNotNull = null;
+        try {
+            processedNotNull = getNonNull(predicates);
+        } catch (IntrospectionException e) {
+            throw new CQLException(e.getMessage());
+        } catch (InvocationTargetException e) {
+            throw new CQLException(e.getMessage());
+        } catch (IllegalAccessException e) {
+            throw new CQLException(e.getMessage());
+        }
+        if (processedNotNull != null) {
+            switch (processedNotNull.getClass().getSimpleName()) {
+                case "And":
+                    And and = (And) processedNotNull;
+                    List<Filter> filters =
+                            (List)
+                                    and.stream()
+                                            .map(
+                                                    a -> {
+                                                        try {
+                                                            return convertToFilter(a);
+                                                        } catch (ParseException e) {
+                                                            e.printStackTrace();
+                                                        }
+                                                        return a;
+                                                    })
+                                            .collect(Collectors.toList());
+                    out = builder.convertAnd(filters);
+                    break;
+                case "Or":
+                    Or or = (Or) processedNotNull;
+                    List<Filter> filtersOr =
+                            (List)
+                                    or.stream()
+                                            .map(
+                                                    a -> {
+                                                        try {
+                                                            return convertToFilter(a);
+                                                        } catch (ParseException e) {
+                                                            e.printStackTrace();
+                                                        }
+                                                        return a;
+                                                    })
+                                            .collect(Collectors.toList());
+                    out = builder.convertOr(filtersOr);
+                    break;
+                case "Predicates": // This is Not, which can apply to any predicates
+                    Filter notFilter = convertToFilter((Predicates) processedNotNull);
+                    out = builder.convertNot(notFilter);
+                    break;
+                case "Lte":
+                    out = builder.convertLte((Lte) processedNotNull);
+                    break;
+                default:
+                case "Eq":
+                    out = builder.convertEq((Eq) processedNotNull);
+                    break;
+                case "Lt":
+                    out = builder.convertLt((Lt) processedNotNull);
+                    break;
+                case "Gte":
+                    out = builder.convertGte((Gte) processedNotNull);
+                    break;
+                case "Gt":
+                    out = builder.convertGt((Gt) processedNotNull);
+                    break;
+                case "Between":
+                    out = builder.convertBetween((Between) processedNotNull);
+                    break;
+                case "Like":
+                    out = builder.convertLike((Like) processedNotNull);
+                    break;
+                case "In":
+                    out = builder.convertIn((In) processedNotNull);
+                    break;
+                case "Equals":
+                    try {
+                        out = builder.convertEquals((Equals) processedNotNull);
+                    } catch (ParseException e) {
+                        throw new CQLException(e.getMessage());
+                    }
+                    break;
+                case "Disjoint":
+                    try {
+                        out = builder.convertDisjoint((Disjoint) processedNotNull);
+                    } catch (ParseException e) {
+                        throw new CQLException(e.getMessage());
+                    }
+                    break;
+                case "Touches":
+                    try {
+                        out = builder.convertTouches((Touches) processedNotNull);
+                    } catch (ParseException e) {
+                        throw new CQLException(e.getMessage());
+                    }
+                    break;
+                case "Within":
+                    try {
+                        out = builder.convertWithin((Within) processedNotNull);
+                    } catch (ParseException e) {
+                        throw new CQLException(e.getMessage());
+                    }
+                    break;
+                case "Overlaps":
+                    try {
+                        out = builder.convertOverlaps((Overlaps) processedNotNull);
+                    } catch (ParseException e) {
+                        throw new CQLException(e.getMessage());
+                    }
+                    break;
+                case "Crosses":
+                    try {
+                        out = builder.convertCrosses((Crosses) processedNotNull);
+                    } catch (ParseException e) {
+                        throw new CQLException(e.getMessage());
+                    }
+                    break;
+                case "Intersects":
+                    try {
+                        out = builder.convertIntersects((Intersects) processedNotNull);
+                    } catch (ParseException e) {
+                        throw new CQLException(e.getMessage());
+                    }
+                    break;
+                case "Contains":
+                    try {
+                        out = builder.convertContains((Contains) processedNotNull);
+                    } catch (ParseException e) {
+                        throw new CQLException(e.getMessage());
+                    }
+                    break;
+                case "After":
+                    out = builder.convertAfter((After) processedNotNull);
+                    break;
+                case "Before":
+                    out = builder.convertBefore((Before) processedNotNull);
+                    break;
+                case "Begins":
+                    out = builder.convertBegins((Begins) processedNotNull);
+                    break;
+                case "Begunby":
+                    out = builder.convertBegunby((Begunby) processedNotNull);
+                    break;
+                case "Tcontains":
+                    out = builder.convertTContains((TContains) processedNotNull);
+                    break;
+                case "During":
+                    out = builder.convertDuring((During) processedNotNull);
+                    break;
+                case "Endedby":
+                    out = builder.convertEndedBy((Endedby) processedNotNull);
+                    break;
+                case "Ends":
+                    out = builder.convertEnds((Ends) processedNotNull);
+                    break;
+                case "Tequals":
+                    out = builder.convertTEquals((Tequals) processedNotNull);
+                    break;
+                case "Meets":
+                    out = builder.convertMeets((Meets) processedNotNull);
+                    break;
+                case "Metby":
+                    out = builder.convertMetBy((Metby) processedNotNull);
+                    break;
+                case "Toverlaps":
+                    out = builder.convertTOverlaps((Toverlaps) processedNotNull);
+                    break;
+                case "Overlappedby":
+                    out = builder.convertOverlappedBy((Overlappedby) processedNotNull);
+                    break;
+            }
+        }
+        return out;
+    }
+
