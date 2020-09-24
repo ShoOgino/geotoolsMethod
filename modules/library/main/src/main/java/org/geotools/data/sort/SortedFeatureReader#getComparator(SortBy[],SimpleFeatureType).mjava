@@ -1,0 +1,37 @@
+    /** Builds a comparator that can be used to sort SimpleFeature instances in memory */
+    public static Comparator<SimpleFeature> getComparator(
+            SortBy[] sortBy, SimpleFeatureType schema) {
+        // handle the easy cases, no sorting or natural sorting
+        if (sortBy == SortBy.UNSORTED || sortBy == null) {
+            return null;
+        }
+
+        // build a list of comparators
+        List<Comparator<SimpleFeature>> comparators = new ArrayList<Comparator<SimpleFeature>>();
+        for (SortBy sb : sortBy) {
+            if (sb == SortBy.NATURAL_ORDER) {
+                comparators.add(new FidComparator(true));
+            } else if (sb == SortBy.REVERSE_ORDER) {
+                comparators.add(new FidComparator(false));
+            } else {
+                String name = sb.getPropertyName().getPropertyName();
+                boolean ascending = sb.getSortOrder() == SortOrder.ASCENDING;
+                Comparator comparator;
+                if (schema == null) {
+                    comparator = new PropertyComparator(name, ascending);
+                } else {
+                    int idx = schema.indexOf(name);
+                    comparator = new IndexedPropertyComparator(idx, ascending);
+                }
+                comparators.add(comparator);
+            }
+        }
+
+        // return the final comparator
+        if (comparators.size() == 1) {
+            return comparators.get(0);
+        } else {
+            return new CompositeComparator(comparators);
+        }
+    }
+
