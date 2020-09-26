@@ -1,0 +1,30 @@
+    /** Parses a JSON string, meant to be a JSON array, into a Java array */
+    public <T> T[] parse(String json, Class<T> type, EnumMapper mapper) {
+        List<T> result = new ArrayList<>();
+        try (JsonParser parser = factory.createParser(json)) {
+            JsonToken token = parser.nextToken();
+            if (token.id() != JsonTokenId.ID_START_ARRAY) {
+                throw new IllegalArgumentException("Not a JSON array: " + json);
+            }
+            while ((token = parser.nextToken()).id() != JsonTokenId.ID_END_ARRAY) {
+                if (token.isScalarValue()) {
+                    if (mapper != null) {
+                        result.add((T) mapper.fromInteger(parser.getIntValue()));
+                    } else {
+                        result.add(Converters.convert(parser.getText(), type));
+                    }
+                } else {
+                    throw new IllegalArgumentException("Unexpected nested object found");
+                }
+            }
+        } catch (IOException e) {
+            throw new IllegalArgumentException(e);
+        }
+
+        Object array = Array.newInstance(type, result.size());
+        for (int i = 0; i < result.size(); i++) {
+            Array.set(array, i, result.get(i));
+        }
+        return (T[]) array;
+    }
+
