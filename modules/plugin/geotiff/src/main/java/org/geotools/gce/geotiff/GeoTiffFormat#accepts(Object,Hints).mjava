@@ -18,35 +18,39 @@
         ImageInputStream inputStream = null;
         boolean closeMe = true;
         try {
-            if (o instanceof URL) {
-                // /////////////////////////////////////////////////////////////
-                //
-                // URL management
-                // In case the URL points to a file we need to get to the fie
-                // directly and avoid caching. In case it points to http or ftp
-                // or it is an opnen stream we have very small to do and we need
-                // to enable caching.
-                //
-                // /////////////////////////////////////////////////////////////
-                final URL url = (URL) o;
-                o = URLs.urlToFile(url);
+            if (o instanceof CogSourceSPIProvider) {
+                inputStream = ((CogSourceSPIProvider) o).getStream();
+                reader = COG_IMAGE_READER_SPI.createReaderInstance();
             } else if (o instanceof ImageInputStream) {
                 closeMe = false;
+                inputStream = (ImageInputStream) o;
+            } else {
+                if (o instanceof URL) {
+                    // /////////////////////////////////////////////////////////////
+                    //
+                    // URL management
+                    // In case the URL points to a file we need to get to the fie
+                    // directly and avoid caching. In case it points to http or ftp
+                    // or it is an opnen stream we have very small to do and we need
+                    // to enable caching.
+                    //
+                    // /////////////////////////////////////////////////////////////
+                    final URL url = (URL) o;
+                    o = URLs.urlToFile(url);
+                }
+                inputStream = ImageIO.createImageInputStream(o);
             }
-            // get a stream
-            inputStream =
-                    (ImageInputStream)
-                            ((o instanceof ImageInputStream)
-                                    ? o
-                                    : ImageIO.createImageInputStream(o));
+
             if (inputStream == null) {
                 if (LOGGER.isLoggable(Level.FINE)) LOGGER.fine("Unable to get an ImageInputStream");
                 return false;
             }
 
             // get a reader
-            if (!IMAGEIO_READER_FACTORY.canDecodeInput(inputStream)) return false;
-            reader = IMAGEIO_READER_FACTORY.createReaderInstance();
+            if (reader == null) {
+                if (!IMAGEIO_READER_FACTORY.canDecodeInput(inputStream)) return false;
+                reader = IMAGEIO_READER_FACTORY.createReaderInstance();
+            }
 
             inputStream.mark();
             reader.setInput(inputStream);
