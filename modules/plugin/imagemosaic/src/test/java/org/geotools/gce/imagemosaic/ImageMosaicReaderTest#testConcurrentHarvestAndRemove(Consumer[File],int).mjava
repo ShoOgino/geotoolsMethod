@@ -51,36 +51,35 @@
             CountDownLatch latch = new CountDownLatch(1);
             for (File file : files) {
                 Filter filter = FF.like(FF.property("location"), "*" + file.getName() + "*");
-                Callable callable =
-                        (Callable<Integer>)
-                                () -> {
-                                    // make all callables start toghether
-                                    latch.await();
-                                    int removedCount = 0;
+                Callable<Integer> callable =
+                        () -> {
+                            // make all callables start toghether
+                            latch.await();
+                            int removedCount = 0;
 
-                                    // remove if necessary
-                                    GranuleStore store =
-                                            (GranuleStore) reader.getGranules(coverageName, false);
+                            // remove if necessary
+                            GranuleStore store =
+                                    (GranuleStore) reader.getGranules(coverageName, false);
 
-                                    for (int i = 0; i < loops; i++) {
-                                        final Query query = new Query(null, filter);
-                                        if (store.getCount(query) > 0) {
-                                            store.removeGranules(filter);
-                                            removedCount++;
-                                        }
-                                        // and harvest back
-                                        final List<HarvestedSource> harvested =
-                                                reader.harvest(coverageName, file, null);
-                                        assertThat(harvested, hasSize(1));
-                                        assertTrue(
-                                                "Feature not found after successful harvest? Loop is "
-                                                        + i
-                                                        + " and filter "
-                                                        + filter,
-                                                store.getCount(query) > 0);
-                                    }
-                                    return removedCount;
-                                };
+                            for (int i = 0; i < loops; i++) {
+                                final Query query = new Query(null, filter);
+                                if (store.getCount(query) > 0) {
+                                    store.removeGranules(filter);
+                                    removedCount++;
+                                }
+                                // and harvest back
+                                final List<HarvestedSource> harvested =
+                                        reader.harvest(coverageName, file, null);
+                                assertThat(harvested, hasSize(1));
+                                assertTrue(
+                                        "Feature not found after successful harvest? Loop is "
+                                                + i
+                                                + " and filter "
+                                                + filter,
+                                        store.getCount(query) > 0);
+                            }
+                            return removedCount;
+                        };
                 final Future<Integer> future = executor.submit(callable);
                 futures.add(future);
             }
