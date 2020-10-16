@@ -1,0 +1,50 @@
+    public Query invertQuery(
+            @DescribeParameter(
+                        name = "operationAttribute",
+                        description =
+                                "The feature's attribute to be used to compute the aggregation",
+                        min = 1
+                    )
+                    String operationAttribute,
+            @DescribeParameter(
+                        name = "groupingAttributes",
+                        description =
+                                "The feature's attributes defining groups for which perform the filtering based on the aggregation operation and the operation attribute."
+                                        + "Consistent results are guaranteed only if the vector process is fed with features already sorted  by these attributes",
+                        min = 1
+                    )
+                    List<String> groupingAttributes,
+            Query targetQuery,
+            GridGeometry gridGeometry) {
+
+        // optimize the query adding the needed property name to it
+
+        List<PropertyName> properties = targetQuery.getProperties();
+        SortBy[] sorts = targetQuery.getSortBy();
+
+        Query q = targetQuery != null ? new Query(targetQuery) : new Query();
+        // add the sortBy if not present
+        SortBy[] sortBy = buildNewSortBy(sorts, groupingAttributes);
+        q.setSortBy(sortBy);
+
+        // produces new PropertyName to add to the query
+        List<PropertyName> propertiesToAdd =
+                Stream.of(sortBy).map(s -> s.getPropertyName()).collect(Collectors.toList());
+        propertiesToAdd.add(ff.property(operationAttribute));
+
+        // eventually merge with existing ones
+        List<PropertyName> pns = getNewProperties(propertiesToAdd, properties);
+        q.setProperties(pns);
+
+        // features with null values for groupingAttributes and operationAttribute
+        // will not be rendered. Adding not null filters to delegate to the db.
+        List<Filter> filters = new ArrayList<>();
+        for (PropertyName pn : propertiesToAdd) {
+            filters.add(ff.not(ff.isNull(pn)));
+        }
+        Filter original = q.getFilter();
+        if (original != null && !original.equals(Filter.INCLUDE)) filters.add(q.getFilter());
+        q.setFilter(ff.and(filters));
+        return q;
+    }
+
