@@ -2,8 +2,8 @@
             final BoundingBox granuleBBOX,
             final URL granuleUrl,
             final AbstractGridFormat suggestedFormat,
-            final ImageReaderSpi suggestedSPI,
-            final ImageInputStreamSpi suggestedIsSPI,
+            ImageReaderSpi suggestedSPI,
+            ImageInputStreamSpi suggestedIsSPI,
             final MultiLevelROI roiProvider,
             final boolean heterogeneousGranules,
             final boolean handleArtifactsFiltering,
@@ -15,84 +15,63 @@
         this.hints = new Hints(hints);
         filterMe = handleArtifactsFiltering && roiProvider != null;
 
-        // When looking for formats which may parse this file, make sure to exclude the
-        // ImageMosaicFormat as return
-        if (suggestedFormat != null && suggestedFormat.accepts(granuleUrl, EXCLUDE_MOSAIC)) {
-            this.format = suggestedFormat;
-        } else {
-            this.format = GridFormatFinder.findFormat(granuleUrl, EXCLUDE_MOSAIC);
-        }
-
-        // create the base grid to world transformation
+        Object input = granuleUrl;
         AbstractGridCoverage2DReader gcReader = null;
         ImageInputStream inStream = null;
-        ImageReader reader = null;
-        try {
+        ImageReader imageReader = null;
 
-            gcReader = format.getReader(granuleUrl, hints);
-            // Getting Dataset Layout
-            layout = gcReader.getDatasetLayout();
+        // Check for an externally specified provider
+        try {
+            Object providerHint =
+                    Utils.getHintIfAvailable(hints, GranuleAccessProvider.GRANULE_ACCESS_PROVIDER);
+            if (providerHint != null) {
+                granuleAccessProvider = (GranuleAccessProvider) providerHint;
+                granuleAccessProvider.setGranuleInput(granuleUrl);
+            } else {
+                granuleAccessProvider =
+                        getDefaultProvider(
+                                input, suggestedFormat, suggestedSPI, suggestedIsSPI, hints);
+            }
+
+            this.format = granuleAccessProvider.getFormat();
+            gcReader = granuleAccessProvider.getGridCoverageReader();
+            ovrProvider = granuleAccessProvider.getMaskOverviewsProvider();
+
             if (heterogeneousGranules) {
                 // do not trust the index, use the reader instead (reprojection might be involved)
                 this.granuleBBOX = ReferencedEnvelope.reference(gcReader.getOriginalEnvelope());
             }
 
-            //
-            // get info about the raster we have to read
-            //
-            SpiHelper spiProvider = new SpiHelper(granuleUrl, suggestedSPI, suggestedIsSPI);
-            boolean isMultidim = spiProvider.isMultidim();
-            if (!isMultidim) {
-                this.granuleEnvelope = gcReader.getOriginalEnvelope();
+            if (granuleAccessProvider instanceof GranuleDescriptorModifier) {
+                ((GranuleDescriptorModifier) granuleAccessProvider).update(this, hints);
             }
-
-            ovrProvider = new MaskOverviewProvider(layout, granuleUrl, spiProvider);
 
             // get a stream
             if (cachedStreamSPI == null) {
-                cachedStreamSPI = ovrProvider.getInputStreamSpi();
+                cachedStreamSPI = granuleAccessProvider.getInputStreamSpi();
             }
             assert cachedStreamSPI != null : "no cachedStreamSPI available!";
             if (inStream == null) {
-                inStream =
-                        cachedStreamSPI.createInputStreamInstance(
-                                granuleUrl, ImageIO.getUseCache(), ImageIO.getCacheDirectory());
-                if (inStream == null) {
-                    final File file = URLs.urlToFile(granuleUrl);
-                    if (file != null) {
-                        if (LOGGER.isLoggable(Level.WARNING)) {
-                            LOGGER.log(Level.WARNING, Utils.getFileInfo(file));
-                        }
-                    }
-                    throw new IllegalArgumentException(
-                            "Unable to get an input stream for the provided file "
-                                    + granuleUrl.toString());
-                }
+                inStream = granuleAccessProvider.getImageInputStream();
             }
 
             // get a reader and try to cache the suggested SPI first
             if (cachedReaderSPI == null) {
-                cachedReaderSPI = ovrProvider.getImageReaderSpi();
+                cachedReaderSPI = granuleAccessProvider.getImageReaderSpi();
             }
-            if (reader == null) {
-                if (cachedReaderSPI == null) {
-                    throw new IllegalArgumentException(
-                            "Unable to get a ReaderSPI for the provided input: "
-                                    + granuleUrl.toString());
-                }
-                reader = cachedReaderSPI.createReaderInstance();
-            }
-
-            if (reader == null)
+            if (cachedReaderSPI == null) {
                 throw new IllegalArgumentException(
-                        "Unable to get an ImageReader for the provided file "
+                        "Unable to get a ReaderSPI for the provided input: "
                                 + granuleUrl.toString());
-
-            boolean ignoreMetadata =
-                    isMultidim ? customizeReaderInitialization(reader, hints) : false;
-            reader.setInput(inStream, false, ignoreMetadata);
+            }
+            imageReader = granuleAccessProvider.getImageReader();
+            boolean ignoreMetadata = false;
+            if (imageReader instanceof InitializingReader) {
+                ignoreMetadata = ((InitializingReader) imageReader).init(hints);
+            }
+            imageReader.setInput(inStream, false, ignoreMetadata);
             // get selected level and base level dimensions
-            final Rectangle originalDimension = Utils.getDimension(0, reader);
+            final Rectangle originalDimension = Utils.getDimension(0, imageReader);
 
             // build the g2W for this tile, in principle we should get it
             // somehow from the tile itself or from the index, but at the moment
@@ -155,7 +134,7 @@
             }
 
             // handle the nodata and rescaling if available
-            initFromImageMetadata(reader);
+            initFromImageMetadata(imageReader);
         } catch (IllegalStateException e) {
             throw new IllegalArgumentException(e);
 
@@ -170,8 +149,8 @@
             } catch (Throwable e) {
                 throw new IllegalArgumentException(e);
             } finally {
-                if (reader != null) {
-                    reader.dispose();
+                if (imageReader != null) {
+                    imageReader.dispose();
                 }
             }
             if (gcReader != null) {
