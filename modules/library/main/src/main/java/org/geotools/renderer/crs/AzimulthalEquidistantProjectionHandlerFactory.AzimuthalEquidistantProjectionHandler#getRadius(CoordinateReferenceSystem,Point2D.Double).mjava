@@ -1,13 +1,33 @@
         private double getRadius(CoordinateReferenceSystem crs, Point2D.Double center)
                 throws TransformException, FactoryException {
-            final double lon1 = center.x;
-            final double lon2 = (lon1 + 180) % 360;
-            final double lat1 = center.y;
-            final double lat2 = -center.y;
-            final double[] line = new double[] {lon1, lat1, lon2, lat2};
-            CRS.findMathTransform(DefaultGeographicCRS.WGS84, crs).transform(line, 0, line, 0, 2);
-            final double dx = line[2] - line[0];
-            final double dy = line[3] - line[1];
-            return Math.sqrt(dx * dx + dy * dy);
+            // the extreme points are sitting around 180 - center.x, -center.y, but each
+            // need to be perturbated a bit to create the 4 cardinal points...
+            double eps = 1e-3;
+            double x = center.x > 0 ? (-180 + center.x) : (180 + center.x);
+            double y = -center.y;
+            final double[] line =
+                    new double[] {
+                        center.x,
+                        center.y, //
+                        x,
+                        y, //
+                        rollLongitude(x - eps),
+                        validLat(y - eps), //
+                        rollLongitude(x - eps),
+                        validLat(y + eps), //
+                        rollLongitude(x + eps),
+                        validLat(y - eps), //
+                        rollLongitude(x + eps),
+                        validLat(y + eps)
+                    };
+            CRS.findMathTransform(DefaultGeographicCRS.WGS84, crs).transform(line, 0, line, 0, 6);
+            double radius = 0;
+            for (int i = 1; i <= 5; i++) {
+                final double dx = line[i * 2] - line[0];
+                final double dy = line[i * 2 + 1] - line[1];
+                final double r = Math.sqrt(dx * dx + dy * dy);
+                if (r > radius) radius = r;
+            }
+            return radius;
         }
 
