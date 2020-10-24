@@ -23,27 +23,31 @@
         }
 
         try {
-            if (FeatureTypes.getFieldOptions(att) != null) {
-                List<DataColumn> dataColumns =
-                        geopkg().getExtension(GeoPkgSchemaExtension.class)
-                                .getDataColumns(tableName, cx);
-                for (DataColumn dataColumn : dataColumns) {
+            List<DataColumn> dataColumns =
+                    geopkg().getExtension(GeoPkgSchemaExtension.class)
+                            .getDataColumns(tableName, cx);
+            for (DataColumn dataColumn : dataColumns) {
+                if (attributeName.equals(dataColumn.getColumnName())) {
                     // little hack here, GeoPackage schema extension is being evolved so that
                     // an array of values can be stored as a JSON array, in that case the enum
                     // is applied to every entry in the array, not to the whole string, so the
                     // normal enum mapping does not apply. If a column declares a mime type, its
-                    // contents are likely complex, and the enum will have to be applied
-                    // to the items inside, not to the whole, so the EnumMapper must not be created.
-                    if (attributeName.equals(dataColumn.getColumnName())
-                            && dataColumn.getMimeType() == null) {
+                    // contents are likely complex, and the enum will have to be applied to the
+                    // items inside, not to the whole, so the EnumMapper must not be created.
+                    if (dataColumn.getConstraint() instanceof DataColumnConstraint.Enum) {
                         DataColumnConstraint.Enum dcc =
                                 (DataColumnConstraint.Enum) dataColumn.getConstraint();
                         EnumMapper mapper = new EnumMapper();
                         for (Map.Entry<String, String> entry : dcc.getValues().entrySet()) {
                             mapper.addMapping(Integer.valueOf(entry.getKey()), entry.getValue());
                         }
-                        att.getUserData().put(JDBCDataStore.JDBC_ENUM_MAP, mapper);
+                        if (dataColumn.getMimeType() == null) {
+                            att.getUserData().put(JDBCDataStore.JDBC_ENUM_MAP, mapper);
+                        } else {
+                            att.getUserData().put(GPKG_ARRAY_ENUM_MAP, mapper);
+                        }
                     }
+                    att.getUserData().put(DATA_COLUMN, dataColumn);
                 }
             }
         } catch (IOException e) {

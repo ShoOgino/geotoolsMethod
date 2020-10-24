@@ -300,8 +300,8 @@
 
         if (targetProjection != null) {
             // the points intersecting the rays emanating from the center of the projection in polar
-            // stereographic
-            // and other projections is a maximum deformation point, add those to the envelope too
+            // stereographic and other projections is a maximum deformation point,
+            // add those to the envelope too
             getProjectionCenterLonLat(targetCRS, centerPt);
             // now try to intesect the source envelope with the center point
             if (isPole(centerPt, DefaultGeographicCRS.WGS84)) {
@@ -335,7 +335,44 @@
                 } catch (FactoryException | TransformException e) {
                     LOGGER.log(
                             Level.FINE,
-                            "Failed to transform from source to WGS84 to further enlarge the envelope on extreme points, proceeding without expansion",
+                            "Failed to transform from source to WGS84 to further enlarge the "
+                                    + "envelope on extreme points, proceeding without expansion",
+                            e);
+                }
+            }
+
+            // Azimuthal equidistant is weird, the extreme points in the output map are close
+            // to the negated center latitude so in WGS84 they might be in the middle of the box,
+            // whilst so far we are mostly considering the border
+            if (targetProjection instanceof AzimuthalEquidistant.Abstract) {
+                getProjectionCenterLonLat(targetCRS, centerPt);
+                try {
+                    MathTransform geoToTarget;
+                    Envelope geoEnvelope;
+                    if (sourceCRS instanceof GeographicCRS) {
+                        // this is a simplification to avoid dateline flips due to datum differences
+                        geoToTarget = findMathTransform(sourceCRS, targetCRS);
+                        geoEnvelope = envelope;
+                    } else {
+                        MathTransform mtWgs84 =
+                                findMathTransform(sourceCRS, DefaultGeographicCRS.WGS84);
+                        geoToTarget = findMathTransform(DefaultGeographicCRS.WGS84, targetCRS);
+                        geoEnvelope = transform(mtWgs84, envelope, null);
+                    }
+                    double nagativeMeridian = -centerPt.getOrdinate(1);
+
+                    if (geoEnvelope.getMinimum(1) <= nagativeMeridian
+                            && geoEnvelope.getMaximum(1) >= nagativeMeridian) {
+                        expandOnMeridian(
+                                transformed, geoToTarget, geoEnvelope, nagativeMeridian - 1e-6, 50);
+                        expandOnMeridian(
+                                transformed, geoToTarget, geoEnvelope, nagativeMeridian + 1e-6, 50);
+                    }
+                } catch (FactoryException | TransformException e) {
+                    LOGGER.log(
+                            Level.FINE,
+                            "Failed to transform from source to WGS84 to further enlarge the "
+                                    + "envelope on extreme points, proceeding without expansion",
                             e);
                 }
             }

@@ -4,50 +4,20 @@
             if (renderingGeometry == null) {
                 return Collections.emptyList();
             }
+            List<ReferencedEnvelope> results = new ArrayList<>();
             if (simplifiedDateline.intersects(renderingGeometry)) {
-                List<ReferencedEnvelope> results = new ArrayList<>();
                 Geometry difference = renderingGeometry.difference(bufferedDateline);
                 @SuppressWarnings("unchecked")
                 List<Polygon> polygons = PolygonExtracter.getPolygons(difference);
                 for (Polygon p : polygons) {
-                    Geometry transformed = null;
-                    try {
-                        transformed =
-                                JTS.transform(
-                                        p,
-                                        CRS.findMathTransform(
-                                                renderingEnvelope.getCoordinateReferenceSystem(),
-                                                sourceCRS));
-                    } catch (TransformException e) {
-                        // uh oh, got into a special case of the target projection... go step by
-                        // step
-                        Geometry polygonWGS84 =
-                                JTS.transform(
-                                        p,
-                                        CRS.findMathTransform(
-                                                renderingEnvelope.getCoordinateReferenceSystem(),
-                                                DefaultGeographicCRS.WGS84));
-                        ProjectionHandler handler =
-                                ProjectionHandlerFinder.getHandler(
-                                        new ReferencedEnvelope(sourceCRS),
-                                        DefaultGeographicCRS.WGS84,
-                                        false);
-                        if (handler == null) throw e;
-                        Geometry preProcessed = handler.preProcess(polygonWGS84);
-                        transformed =
-                                JTS.transform(
-                                        preProcessed,
-                                        CRS.findMathTransform(
-                                                renderingEnvelope.getCoordinateReferenceSystem(),
-                                                sourceCRS));
-                    }
+                    Geometry transformed =
+                            transformGeometry(
+                                    p, renderingEnvelope.getCoordinateReferenceSystem(), sourceCRS);
                     // the back-transform can literally make the inner rings bigger than the
                     // outer ones, be careful computing the envelope
                     Envelope envelope = getFullEnvelope(transformed);
                     results.add(new ReferencedEnvelope(envelope, sourceCRS));
                 }
-                mergeEnvelopes(results);
-                return results;
             } else if (renderingGeometryReduced) {
                 MathTransform mt =
                         CRS.findMathTransform(
@@ -57,9 +27,18 @@
                 // outer ones, be careful computing the envelope
                 Envelope envelope = getFullEnvelope(transformed);
                 ReferencedEnvelope re = new ReferencedEnvelope(envelope, sourceCRS);
-                return Collections.singletonList(re);
+                results.add(re);
             } else {
-                return super.getQueryEnvelopes();
+                results = super.getQueryEnvelopes();
             }
+
+            results.forEach(
+                    e -> {
+                        expandIfIncluded(e, north, 0, 90);
+                        expandIfIncluded(e, south, 0, -90);
+                    });
+
+            mergeEnvelopes(results);
+            return results;
         }
 
