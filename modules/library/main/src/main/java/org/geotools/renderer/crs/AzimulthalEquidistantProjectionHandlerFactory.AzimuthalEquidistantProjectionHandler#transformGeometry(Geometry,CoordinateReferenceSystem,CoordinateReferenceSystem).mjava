@@ -1,0 +1,33 @@
+        private Geometry transformGeometry(
+                Geometry g,
+                CoordinateReferenceSystem sourceCRS,
+                CoordinateReferenceSystem targetCRS)
+                throws FactoryException, TransformException {
+            Geometry transformed = null;
+            try {
+                transformed = JTS.transform(g, CRS.findMathTransform(sourceCRS, targetCRS));
+            } catch (TransformException e) {
+                // uh oh, got into a special case of the target projection... go step by step
+                Geometry polygonWGS84 =
+                        JTS.transform(
+                                g,
+                                CRS.findMathTransform(
+                                        renderingEnvelope.getCoordinateReferenceSystem(),
+                                        DefaultGeographicCRS.WGS84));
+                ProjectionHandler handler =
+                        ProjectionHandlerFinder.getHandler(
+                                new ReferencedEnvelope(sourceCRS),
+                                DefaultGeographicCRS.WGS84,
+                                false);
+                if (handler == null) throw e;
+                Geometry preProcessed = handler.preProcess(polygonWGS84);
+                transformed =
+                        JTS.transform(
+                                preProcessed,
+                                CRS.findMathTransform(
+                                        renderingEnvelope.getCoordinateReferenceSystem(),
+                                        sourceCRS));
+            }
+            return transformed;
+        }
+

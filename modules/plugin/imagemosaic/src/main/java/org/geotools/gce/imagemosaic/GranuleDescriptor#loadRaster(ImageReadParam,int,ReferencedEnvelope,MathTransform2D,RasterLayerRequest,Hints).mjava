@@ -141,29 +141,34 @@
                     return null;
                 }
                 // set input
-                reader.setInput(inStream, false, false);
+                boolean ignoreMetadata = false;
+                if (reader instanceof InitializingReader) {
+                    ignoreMetadata = ((InitializingReader) reader).init(hints);
+                }
+                reader.setInput(inStream, false, ignoreMetadata);
                 // External Overview index
                 ovrIndex = ovrProvider.getOverviewIndex(imageIndex);
 
             } else {
                 ovrIndex = ovrProvider.getOverviewIndex(imageIndex);
 
-                // get a stream
+                // get a stream from the granuleAccessProvider
                 assert cachedStreamSPI != null : "no cachedStreamSPI available!";
-                inStream =
-                        cachedStreamSPI.createInputStreamInstance(
-                                granuleUrl, ImageIO.getUseCache(), ImageIO.getCacheDirectory());
+                inStream = granuleAccessProvider.getImageInputStream();
+
                 if (inStream == null) return null;
 
                 // get a reader and try to cache the relevant SPI
                 if (cachedReaderSPI == null) {
                     reader = ImageIOExt.getImageioReader(inStream);
                     if (reader != null) cachedReaderSPI = reader.getOriginatingProvider();
-                } else reader = cachedReaderSPI.createReaderInstance();
+                } else {
+                    reader = granuleAccessProvider.getImageReader();
+                }
                 if (reader == null) {
                     if (LOGGER.isLoggable(java.util.logging.Level.WARNING)) {
                         LOGGER.warning(
-                                new StringBuilder("Unable to get s reader for granuleDescriptor ")
+                                new StringBuilder("Unable to get a reader for granuleDescriptor ")
                                         .append(this.toString())
                                         .append(" with request ")
                                         .append(request.toString())
@@ -174,7 +179,9 @@
                 }
             }
             // set input
-            customizeReaderInitialization(reader, hints);
+            if (reader instanceof InitializingReader) {
+                ((InitializingReader) reader).init(hints);
+            }
             reader.setInput(inStream);
 
             // check if the reader wants to be aware of the current request
@@ -508,35 +515,24 @@
                     layout.setTileHeight(tileDimensions.width).setTileWidth(tileDimensions.height);
                     localHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout));
                 } else {
-                    if (hints != null && hints.containsKey(JAI.KEY_IMAGE_LAYOUT)) {
-                        final Object layout = hints.get(JAI.KEY_IMAGE_LAYOUT);
-                        if (layout != null && layout instanceof ImageLayout) {
-                            localHints.add(
-                                    new RenderingHints(
-                                            JAI.KEY_IMAGE_LAYOUT, ((ImageLayout) layout).clone()));
-                        }
+                    ImageLayout layout = Utils.getImageLayoutHint(hints);
+                    if (layout != null) {
+                        localHints.add(new RenderingHints(JAI.KEY_IMAGE_LAYOUT, layout.clone()));
                     }
                 }
-                if (hints != null && hints.containsKey(JAI.KEY_TILE_CACHE)) {
-                    final Object cache = hints.get(JAI.KEY_TILE_CACHE);
-                    if (cache != null && cache instanceof TileCache)
-                        localHints.add(new RenderingHints(JAI.KEY_TILE_CACHE, cache));
+                final TileCache cache = Utils.getTileCacheHint(hints);
+                if (cache != null) {
+                    localHints.add(new RenderingHints(JAI.KEY_TILE_CACHE, cache));
                 }
-                if (hints != null && hints.containsKey(JAI.KEY_TILE_SCHEDULER)) {
-                    final Object scheduler = hints.get(JAI.KEY_TILE_SCHEDULER);
-                    if (scheduler != null && scheduler instanceof TileScheduler)
-                        localHints.add(new RenderingHints(JAI.KEY_TILE_SCHEDULER, scheduler));
+                final TileScheduler scheduler = Utils.getTileSchedulerHint(hints);
+                if (scheduler != null) {
+                    localHints.add(new RenderingHints(JAI.KEY_TILE_SCHEDULER, scheduler));
                 }
-                boolean addBorderExtender = true;
-                if (hints != null && hints.containsKey(JAI.KEY_BORDER_EXTENDER)) {
-                    final Object extender = hints.get(JAI.KEY_BORDER_EXTENDER);
-                    if (extender != null && extender instanceof BorderExtender) {
-                        localHints.add(new RenderingHints(JAI.KEY_BORDER_EXTENDER, extender));
-                        addBorderExtender = false;
-                    }
-                }
-                // BORDER extender
-                if (addBorderExtender) {
+
+                final BorderExtender extender = Utils.getBorderExtenderHint(hints);
+                if (extender != null) {
+                    localHints.add(new RenderingHints(JAI.KEY_BORDER_EXTENDER, extender));
+                } else {
                     localHints.add(ImageUtilities.BORDER_EXTENDER_HINTS);
                 }
 
@@ -558,8 +554,7 @@
                                         && ((ROIGeometry) roi).getAsGeometry().isEmpty())
                         || (roi instanceof ROI && ((ROI) roi).getBounds().isEmpty())) {
                     // JAI not only transforms the ROI, but may also apply clipping to the image
-                    // boundary
-                    // this results in an empty ROI in some edge cases
+                    // boundary.  this results in an empty ROI in some edge cases
                     return null;
                 }
                 // Propagate NoData
