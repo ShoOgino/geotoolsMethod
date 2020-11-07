@@ -1,0 +1,61 @@
+    public FeatureCollection execute(
+            @DescribeParameter(name = "data", description = "Input feature collection")
+                    FeatureCollection features,
+            @DescribeParameter(
+                        name = "aggregation",
+                        description =
+                                "The aggregate operation to be computed, it can be MAX or MIN",
+                        min = 1
+                    )
+                    String aggregation,
+            @DescribeParameter(
+                        name = "operationAttribute",
+                        description =
+                                "The feature's attribute to be used to compute the aggregation",
+                        min = 1
+                    )
+                    String operationAttribute,
+            @DescribeParameter(
+                        name = "groupingAttributes",
+                        description =
+                                "The feature's attributes defining groups for which perform the filtering based on the aggregation operation and the operation attribute."
+                                        + "Consistent results are guaranteed only if the vector process is fed with features already sorted  by these attributes",
+                        min = 1
+                    )
+                    List<String> groupingAttributes) {
+        try {
+            if (features == null) {
+                throw new ProcessException(Errors.format(ErrorKeys.NULL_ARGUMENT_$1, "features"));
+            }
+            if (operationAttribute == null) {
+                throw new ProcessException(
+                        Errors.format(ErrorKeys.NULL_ARGUMENT_$1, "operationAttribute"));
+            }
+            if (groupingAttributes == null || groupingAttributes.size() == 0) {
+                throw new ProcessException(
+                        Errors.format(ErrorKeys.NULL_ARGUMENT_$1, "groupingAttributes"));
+            }
+            if (aggregation == null) {
+                throw new ProcessException(
+                        Errors.format(ErrorKeys.NULL_ARGUMENT_$1, "aggregation"));
+            }
+            Operations op = Operations.valueOf(aggregation);
+            FeatureType schema = features.getSchema();
+            NamespaceSupport ns = declareNamespaces(schema);
+            List<PropertyName> groupingPn =
+                    groupingAttributes
+                            .stream()
+                            .map(
+                                    g ->
+                                            validatePropertyName(
+                                                    new AttributeExpressionImpl(g, ns), schema))
+                            .collect(Collectors.toList());
+            PropertyName opValue =
+                    validatePropertyName(ff.property(operationAttribute, ns), schema);
+            return new GroupCandidateSelectionFeatureCollection(features, groupingPn, opValue, op);
+        } catch (IllegalArgumentException e) {
+            throw new ProcessException(
+                    Errors.format(ErrorKeys.BAD_PARAMETER_$2, "aggregation", aggregation));
+        }
+    }
+
