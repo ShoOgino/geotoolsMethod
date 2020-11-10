@@ -1,0 +1,45 @@
+    @Test
+    public void testCogOverview() throws URISyntaxException, IOException {
+        GeoTiffReader reader = new GeoTiffReader(getInputProvider());
+        assertEquals(
+                "LC08_L1TP_153075_20190515_20190515_01_RT_B2", reader.getGridCoverageNames()[0]);
+
+        GeneralParameterValue[] params = new GeneralParameterValue[1];
+        // Define a GridGeometry in order to reduce the output
+        final ParameterValue<GridGeometry2D> gg =
+                AbstractGridFormat.READ_GRIDGEOMETRY2D.createValue();
+        final GeneralEnvelope envelope = reader.getOriginalEnvelope();
+        final Dimension dim = new Dimension();
+        dim.setSize(
+                reader.getOriginalGridRange().getSpan(0) / 24,
+                reader.getOriginalGridRange().getSpan(1) / 24);
+        final Rectangle rasterArea = ((GridEnvelope2D) reader.getOriginalGridRange());
+        rasterArea.setSize(dim);
+        final GridEnvelope2D range = new GridEnvelope2D(rasterArea);
+        gg.setValue(new GridGeometry2D(range, envelope));
+        params[0] = gg;
+
+        GridCoverage2D coverage = reader.read(params);
+        assertNotNull(coverage);
+        RenderedImage image = coverage.getRenderedImage();
+        int numTileX = image.getNumXTiles();
+        int numTileY = image.getNumYTiles();
+
+        CogImageReader imageReader = (CogImageReader) image.getProperty("JAI.ImageReader");
+        Object input = imageReader.getInput();
+        assertTrue(input instanceof DefaultCogImageInputStream);
+        DefaultCogImageInputStream inputStream = (DefaultCogImageInputStream) input;
+        String url = inputStream.getUrl();
+
+        // The reader is using the .ovr file as input, it's using the overviews
+        assertTrue(url.endsWith(".ovr"));
+
+        // Reading the whole bbox resulted in only 1 tile:
+        // It's using the overview
+        assertEquals(1, numTileX);
+        assertEquals(1, numTileY);
+
+        Raster raster = image.getTile(numTileX / 2, numTileY / 2);
+        assertEquals(1, raster.getNumBands());
+    }
+
