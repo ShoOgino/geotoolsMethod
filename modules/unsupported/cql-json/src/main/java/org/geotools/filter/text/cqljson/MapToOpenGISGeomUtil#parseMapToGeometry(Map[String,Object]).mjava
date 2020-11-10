@@ -6,16 +6,32 @@
      * @return Geometry for filter creation
      * @throws ParseException
      */
-    public static org.opengis.geometry.Geometry parseMapToGeometry(Map<String, Object> geoJsonAsMap)
+    public static Geometry parseMapToGeometry(Map<String, Object> geoJsonAsMap)
             throws ParseException {
         String type = "Bbox";
-        ArrayList coordinates = null;
+        List<Double> coordinatesSingle = null;
+        List<List<Double>> coordinatesMulti = null;
         if (geoJsonAsMap.get("bbox") != null) {
-            coordinates = (ArrayList<Double>) geoJsonAsMap.get("bbox");
+            coordinatesSingle = convertToArrayList(geoJsonAsMap.get("bbox"));
+            return parseSingleDimensionGeometry(type, coordinatesSingle);
         } else {
             type = (String) geoJsonAsMap.get("type");
-            coordinates = (ArrayList<Double>) geoJsonAsMap.get("coordinates");
+            Object coordinates = geoJsonAsMap.get("coordinates");
+            if (type.equals("Point")) {
+                coordinatesSingle = convertToArrayList(coordinates);
+                return parseSingleDimensionGeometry(type, coordinatesSingle);
+            } else if (type.equals("Polygon") || type.equals("MultiLineString")) {
+                List<List<List<Double>>> coordinatesThree =
+                        convertToArrayListArrayListArrayList(coordinates);
+                return parseThreeDimensionGeometry(type, coordinatesThree);
+            } else if (type.equals("MultiPolygon")) {
+                List<List<List<List<Double>>>> coordinatesFour =
+                        convertToArrayListArrayListArrayListArrayList(coordinates);
+                return parseFourDimensionGeometry(type, coordinatesFour);
+            } else {
+                coordinatesMulti = convertToArrayListArrayList(coordinates);
+                return parseTwoDimensionGeometry(type, coordinatesMulti);
+            }
         }
-        return parseGeometry(type, coordinates);
     }
 
