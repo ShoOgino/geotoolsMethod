@@ -1,0 +1,45 @@
+    protected JDBCDataStore createDataStoreInternal(JDBCDataStore dataStore, Map<String, ?> params)
+            throws IOException {
+
+        // make the schema uppercase if it's not already
+        if (dataStore.getDatabaseSchema() != null) {
+            dataStore.setDatabaseSchema(dataStore.getDatabaseSchema().toUpperCase());
+        }
+
+        // setup loose bbox
+        OracleDialect dialect = (OracleDialect) dataStore.getSQLDialect();
+        Boolean loose = (Boolean) LOOSEBBOX.lookUp(params);
+        dialect.setLooseBBOXEnabled(loose == null || Boolean.TRUE.equals(loose));
+
+        // check the estimated extents
+        Boolean estimated = (Boolean) ESTIMATED_EXTENTS.lookUp(params);
+        dialect.setEstimatedExtentsEnabled(estimated == null || Boolean.TRUE.equals(estimated));
+
+        // check the geometry metadata table
+        String metadataTable = (String) GEOMETRY_METADATA_TABLE.lookUp(params);
+        dialect.setGeometryMetadataTable(metadataTable);
+
+        // check the metadata bbox option
+        Boolean metadateBbox = (Boolean) METADATA_BBOX.lookUp(params);
+        dialect.setMetadataBboxEnabled(Boolean.TRUE.equals(metadateBbox));
+
+        if (dataStore.getFetchSize() <= 0) {
+            // Oracle is dead slow with the fetch size at 0, let's have a sane default
+            dataStore.setFetchSize(200);
+        }
+
+        Connection cx = dataStore.getConnection(Transaction.AUTO_COMMIT);
+        try {
+            dialect.unwrapConnection(cx);
+            dialect.initVersion(cx);
+        } catch (SQLException e) {
+            throw new IOException(
+                    "Unable to obtain Oracle Connection require for SDO Geometry access)."
+                            + "Check connection pool implementation to unsure unwrap is available",
+                    e);
+        } finally {
+            dataStore.closeSafe(cx);
+        }
+        return dataStore;
+    }
+
