@@ -4,19 +4,44 @@
      */
     public static Object getValue(Object object, String jsonPath) {
         // let's make sure we have a feature
-        Feature feature = extractFeature(object, jsonPath);
-        if (feature instanceof MongoFeature) {
-            // no a nested element mongo feature
-            MongoFeature mongoFeature = (MongoFeature) feature;
-            return getValue(mongoFeature.getMongoObject(), jsonPath);
+        if (!(object instanceof Feature)) {
+            // not a feature so nothing to do
+            throw invalidFeature(object, jsonPath);
         }
-        if (feature instanceof MongoCollectionFeature) {
+        Feature feature = (Feature) object;
+        // try before to resolve jsonpath against the feature. If it is SimpleFeature
+        // and we are on the root appSchema object there is no need to retrieve attributes
+        // from the DBObject
+        if (feature instanceof SimpleFeature) {
+            SimpleFeature sf = (SimpleFeature) feature;
+            Object value = sf.getAttribute(jsonPath);
+            if (value != null) return value;
+        }
+
+        Feature extracted = extractFeature(feature, jsonPath);
+
+        if (extracted instanceof MongoFeature) {
+            // no a nested element mongo feature
+            MongoFeature mongoFeature = (MongoFeature) extracted;
+
+            // if the feature is a MongoFeature then the geometry attribute
+            // needs no reprojection
+            Supplier<GeometryCoordinateSequenceTransformer> transformer =
+                    feature instanceof MongoFeature ? null : getTransformer(feature, mongoFeature);
+
+            return getValue(mongoFeature.getMongoObject(), jsonPath, transformer);
+        }
+        if (extracted instanceof MongoCollectionFeature) {
             // a mongo feature in the context of a nested element
-            MongoCollectionFeature collectionFeature = (MongoCollectionFeature) object;
+            MongoCollectionFeature collectionFeature = (MongoCollectionFeature) extracted;
+            MongoFeature mongoFeature = collectionFeature.getMongoFeature();
+            Supplier<GeometryCoordinateSequenceTransformer> transformer =
+                    getTransformer(feature, mongoFeature);
             return getValue(
                     collectionFeature.getMongoFeature().getMongoObject(),
                     collectionFeature.getCollectionsIndexes(),
-                    jsonPath);
+                    jsonPath,
+                    transformer);
         }
         // could not find a mongo feature, we can do nothing
         throw invalidFeature(feature, jsonPath);

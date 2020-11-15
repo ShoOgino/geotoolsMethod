@@ -1,7 +1,8 @@
     /**
      * Helper method that checks if a mongodb value is a geometry and perform the proper conversion.
      */
-    private static Object convertGeometry(Object value) {
+    private static Object convertGeometry(
+            Object value, Supplier<GeometryCoordinateSequenceTransformer> transformer) {
         if (!(value instanceof DBObject) || value instanceof List) {
             // not a mongodb object or a list of values so nothing to do
             return value;
@@ -16,7 +17,11 @@
         MongoGeometryBuilder builder = new MongoGeometryBuilder();
         try {
             // return the converted geometry
-            return builder.toGeometry(object);
+            Geometry geom = builder.toGeometry(object);
+            if (transformer != null) {
+                geom = transformer.get().transform(geom);
+            }
+            return geom;
         } catch (Exception exception) {
             // well could not convert the mongo db object to a geometry
         }
