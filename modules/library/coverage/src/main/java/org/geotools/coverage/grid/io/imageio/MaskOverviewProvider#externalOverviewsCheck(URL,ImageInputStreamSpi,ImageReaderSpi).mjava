@@ -1,0 +1,42 @@
+    private SourceSPIProvider externalOverviewsCheck(
+            URL inputFile, ImageInputStreamSpi streamSpi, ImageReaderSpi readerSpi)
+            throws IOException {
+        SourceSPIProvider ovrProvider;
+        ovrURL = new URL(inputFile.toString() + OVR_EXTENSION);
+        if (hasDatasetLayout && layout.getExternalOverviews() != null) {
+            ovrURL = URLs.fileToUrl(layout.getExternalOverviews());
+        }
+        // Creating overview file URL
+        overviewStreamSpi = streamSpi == null ? getInputStreamSPIFromURL(ovrURL) : streamSpi;
+        ImageInputStream ovrStream = null;
+        ovrProvider = sourceSpiProvider.getCompatibleSourceProvider(ovrURL);
+        try {
+            ovrStream = ovrProvider.getStream();
+            if (ovrStream == null) {
+                // No Overview file so we fall back to the original file spis
+                overviewStreamSpi = streamSpi;
+                overviewReaderSpi = readerSpi;
+                ovrProvider = null;
+            } else {
+                overviewReaderSpi = getReaderSpiFromStream(null, ovrStream);
+                ovrProvider.setReaderSpi(overviewReaderSpi);
+            }
+        } catch (Exception e) {
+            if (LOGGER.isLoggable(Level.WARNING)) {
+                LOGGER.log(Level.WARNING, "Unable to create a Reader for: " + ovrURL, e);
+            }
+            throw new IllegalArgumentException(e);
+        } finally {
+            if (ovrStream != null) {
+                try {
+                    ovrStream.close();
+                } catch (Exception e) {
+                    if (LOGGER.isLoggable(Level.SEVERE)) {
+                        LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                    }
+                }
+            }
+        }
+        return ovrProvider;
+    }
+
