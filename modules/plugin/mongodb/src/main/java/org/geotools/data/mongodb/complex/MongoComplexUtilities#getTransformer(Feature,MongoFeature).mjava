@@ -1,0 +1,44 @@
+    static Supplier<GeometryCoordinateSequenceTransformer> getTransformer(
+            Feature feature, MongoFeature mongoFeature) {
+        // helper method to retrieve a transformation if the CRS between the Feature
+        // object and the MongoFeature is different. This might happen if a ComplexFeature
+        // is reprojected. In that case the feature is rebuilt with the MongoFeature
+        // still having a not reprojected geometry.
+        // The method return a Supplier to allow lazy evaluation and cache the transformer
+        // in a ThreadLocal to avoid the creation of a new object for each feature.
+
+        Supplier<GeometryCoordinateSequenceTransformer> transformerSupplier = null;
+        CoordinateReferenceSystem crs = mongoFeature.getOriginalCRS();
+        CoordinateReferenceSystem target =
+                feature.getDefaultGeometryProperty().getDescriptor().getCoordinateReferenceSystem();
+        Pair<CoordinateReferenceSystem, GeometryCoordinateSequenceTransformer> pair =
+                transformerLocal.get();
+        if (pair != null && pair.getLeft().equals(target)) {
+            final GeometryCoordinateSequenceTransformer cachedTransformer = pair.getRight();
+            return () -> cachedTransformer;
+        }
+        pair = new MutablePair<>(target, null);
+        try {
+            if (crs != null && target != null && !crs.equals(target)) {
+                MathTransform transform = findMathTransform(crs, target);
+                GeometryCoordinateSequenceTransformer transformer =
+                        new GeometryCoordinateSequenceTransformer();
+                transformer.setMathTransform(transform);
+                pair.setValue(transformer);
+                // return a supplier to allow lazy evaluation
+                transformerSupplier = () -> transformer;
+            }
+        } catch (FactoryException e) {
+            LOG.log(
+                    Level.WARNING,
+                    "Unable to find transformation for "
+                            + crs.getName().getCode()
+                            + "and "
+                            + target.getName().getCode());
+        }
+        transformerLocal.set(pair);
+        // store the CRS in the featureType to avoid the rebuilding of the transformer
+        // for each feature
+        return transformerSupplier;
+    }
+

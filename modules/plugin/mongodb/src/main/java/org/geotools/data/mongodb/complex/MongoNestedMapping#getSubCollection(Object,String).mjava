@@ -1,14 +1,32 @@
     private List getSubCollection(Object feature, String collectionPath) {
-        feature = MongoComplexUtilities.extractFeature(feature, collectionPath);
-        if (feature instanceof MongoFeature) {
-            DBObject mongoObject = ((MongoFeature) feature).getMongoObject();
-            return getSubCollection(mongoObject, collectionPath, Collections.emptyMap());
-        } else if (feature instanceof MongoCollectionFeature) {
-            MongoCollectionFeature collectionFeature = (MongoCollectionFeature) feature;
+        // let's make sure we have a feature
+        // we should have a feature
+        if (!(feature instanceof Feature)) {
+            // not a feature so nothing to do
+            throw invalidFeature(feature, collectionPath);
+        }
+        Feature f = (Feature) feature;
+        Feature extracted = extractFeature(feature, collectionPath);
+
+        if (extracted instanceof MongoFeature) {
+            MongoFeature mongoFeature = (MongoFeature) extracted;
+            DBObject mongoObject = mongoFeature.getMongoObject();
+            Supplier<GeometryCoordinateSequenceTransformer> transformer =
+                    getTransformer(f, mongoFeature);
+
             return getSubCollection(
-                    collectionFeature.getMongoFeature().getMongoObject(),
+                    mongoObject, collectionPath, Collections.emptyMap(), transformer);
+        } else if (extracted instanceof MongoCollectionFeature) {
+            MongoCollectionFeature collectionFeature = (MongoCollectionFeature) extracted;
+            MongoFeature mongoFeature = collectionFeature.getMongoFeature();
+            Supplier<GeometryCoordinateSequenceTransformer> transformer =
+                    getTransformer(f, mongoFeature);
+
+            return getSubCollection(
+                    mongoFeature.getMongoObject(),
                     collectionPath,
-                    collectionFeature.getCollectionsIndexes());
+                    collectionFeature.getCollectionsIndexes(),
+                    transformer);
         }
         throw new RuntimeException("MongoDB nesting only works with MongoDB features.");
     }

@@ -11,43 +11,8 @@
         // Handling Overviews
         hasDatasetLayout = layout != null;
         boolean hasExternalOverviews = false;
-        if (!skipExternalLookup) {
-            ovrURL = new URL(inputFile.toString() + OVR_EXTENSION);
-            if (hasDatasetLayout && layout.getExternalOverviews() != null) {
-                ovrURL = URLs.fileToUrl(layout.getExternalOverviews());
-            }
-            // Creating overview file URL
-            overviewStreamSpi = streamSpi == null ? getInputStreamSPIFromURL(ovrURL) : streamSpi;
-            ImageInputStream ovrStream = null;
-            try {
-                ovrStream =
-                        overviewStreamSpi.createInputStreamInstance(
-                                ovrURL, ImageIO.getUseCache(), ImageIO.getCacheDirectory());
-                if (ovrStream == null) {
-                    // No Overview file so we fall back to the original file spis
-                    overviewStreamSpi = streamSpi;
-                    overviewReaderSpi = readerSpi;
-                } else {
-                    overviewReaderSpi = getReaderSpiFromStream(null, ovrStream);
-                    hasExternalOverviews = true;
-                }
-            } catch (Exception e) {
-                if (LOGGER.isLoggable(Level.WARNING)) {
-                    LOGGER.log(Level.WARNING, "Unable to create a Reader for File: " + ovrURL, e);
-                }
-                throw new IllegalArgumentException(e);
-            } finally {
-                if (ovrStream != null) {
-                    try {
-                        ovrStream.close();
-                    } catch (Exception e) {
-                        if (LOGGER.isLoggable(Level.SEVERE)) {
-                            LOGGER.log(Level.SEVERE, e.getMessage(), e);
-                        }
-                    }
-                }
-            }
-        }
+        SourceSPIProvider ovrProvider = null;
+
         // Getting number of Overviews
         int numOverviews = 0;
         if (hasDatasetLayout) {
@@ -55,14 +20,28 @@
             // layout.getNumExternalOverviews() may return -1 when no external file is present
             numExternalOverviews =
                     layout.getNumExternalOverviews() > 0 ? layout.getNumExternalOverviews() : 0;
+            hasExternalOverviews = externalOverviewsCheck(inputFile, streamSpi, readerSpi) != null;
         } else if (!spiHelper.isMultidim()) {
             // Reading image number
-            numInternalOverviews = getNumOverviews(inputFile, streamSpi, readerSpi);
+            numInternalOverviews = getNumOverviews(sourceSpiProvider);
+
+            // Let's look for external overviews only if no internal overviews are found
+            if (numInternalOverviews == 0 && !skipExternalLookup) {
+                ovrProvider = externalOverviewsCheck(inputFile, streamSpi, readerSpi);
+                hasExternalOverviews = ovrProvider != null;
+            }
+
             numExternalOverviews = 0;
             if (hasExternalOverviews) {
                 // adding +1 since the base level of the external overview is an overview in itself
                 numExternalOverviews =
-                        getNumOverviews(ovrURL, this.overviewStreamSpi, this.overviewReaderSpi) + 1;
+                        ovrProvider != null
+                                ? getNumOverviews(ovrProvider) + 1
+                                : getNumOverviews(
+                                                ovrURL,
+                                                this.overviewStreamSpi,
+                                                this.overviewReaderSpi)
+                                        + 1;
             }
         }
         numOverviews = numInternalOverviews + numExternalOverviews;
