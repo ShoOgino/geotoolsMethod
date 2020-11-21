@@ -2,7 +2,7 @@
             throws IOException, SAXException {
 
         // maintain a stack of (encoding,element declaration pairs)
-        Stack encoded = null;
+        Stack<EncodingEntry> encoded = null;
 
         // make sure the xs namespace is declared
         if (namespaces.getPrefix(XS.NAMESPACE) == null) {
@@ -62,7 +62,7 @@
                 new IOException().initCause(e);
             }
 
-            encoded = new Stack();
+            encoded = new Stack<>();
 
             // add the first entry
             XSDElementDeclaration root = index.getElementDeclaration(name);
@@ -169,7 +169,7 @@
 
                         if (sub.size() > 0) {
                             // match up by type
-                            List matches = new ArrayList();
+                            List<Object[]> matches = new ArrayList<>();
 
                             for (Iterator s = sub.iterator(); s.hasNext(); ) {
                                 XSDElementDeclaration e = (XSDElementDeclaration) s.next();
@@ -245,40 +245,7 @@
                                 }
 
                                 // try sorting by the type of the binding
-                                Collections.sort(
-                                        matches,
-                                        new Comparator() {
-                                            public int compare(Object o1, Object o2) {
-                                                Object[] match1 = (Object[]) o1;
-                                                Object[] match2 = (Object[]) o2;
-
-                                                Binding b1 = (Binding) match1[1];
-                                                Binding b2 = (Binding) match2[1];
-
-                                                if (b1.getType() != b2.getType()) {
-                                                    if (b2.getType()
-                                                            .isAssignableFrom(b1.getType())) {
-                                                        return -1;
-                                                    }
-
-                                                    if (b1.getType()
-                                                            .isAssignableFrom(b2.getType())) {
-                                                        return 1;
-                                                    }
-                                                }
-
-                                                // use binding comparability
-                                                if (b1 instanceof Comparable) {
-                                                    return ((Comparable) b1).compareTo(b2);
-                                                }
-
-                                                if (b2 instanceof Comparable) {
-                                                    return -1 * ((Comparable) b2).compareTo(b1);
-                                                }
-
-                                                return 0;
-                                            }
-                                        });
+                                Collections.sort(matches, new MatchComparator());
                             }
 
                             if (matches.size() > 0) {
@@ -487,7 +454,9 @@
                                         Collection collection = (Collection) obj;
                                         iterator = collection.iterator();
                                     } else if (obj instanceof FeatureCollection) {
-                                        FeatureCollection collection = (FeatureCollection) obj;
+                                        @SuppressWarnings("unchecked")
+                                        FeatureCollection<FeatureType, Feature> collection =
+                                                (FeatureCollection) obj;
                                         iterator = DataUtilities.iterator(collection.features());
                                     } else {
                                         iterator = new SingleIterator(obj);

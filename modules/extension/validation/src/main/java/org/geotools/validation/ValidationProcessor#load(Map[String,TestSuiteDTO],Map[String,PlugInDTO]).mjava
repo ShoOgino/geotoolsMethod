@@ -1,0 +1,91 @@
+    /**
+     * Populates this validation processor against the provided DTO objects.
+     *
+     * <p>This method is useful for testing, it is not forgiving and will error out if things go
+     * bad.
+     */
+    public void load(Map<String, TestSuiteDTO> testSuiteDTOs, Map<String, PlugInDTO> plugInDTOs)
+            throws Exception {
+        // step 1 make a list required plug-ins
+        //
+        Set<String> plugInNames = queryPlugInNames(testSuiteDTOs);
+
+        // step 2 set up real plug-ins
+        // configured with defaults
+        //
+        // (This is a map of PlugIn by name)
+        Map<String, PlugIn> plugIns = new HashMap<>(plugInNames.size());
+
+        // go through each plugIn
+        //
+        for (Iterator i = plugInNames.iterator(); i.hasNext(); ) {
+            String plugInName = (String) i.next();
+            PlugInDTO dto = (PlugInDTO) plugInDTOs.get(plugInName);
+            Class plugInClass = null;
+
+            plugInClass = Class.forName(dto.getClassName());
+
+            if (plugInClass == null) {
+                throw new ClassNotFoundException(
+                        "Could class for "
+                                + plugInName
+                                + ": class "
+                                + dto.getClassName()
+                                + " not found");
+            }
+
+            Map<String, Object> plugInArgs = dto.getArgs();
+
+            if (plugInArgs == null) {
+                plugInArgs = new HashMap<>();
+            }
+
+            PlugIn plugIn = new PlugIn(plugInName, plugInClass, dto.getDescription(), plugInArgs);
+            plugIns.put(plugInName, plugIn);
+        }
+
+        // step 3
+        // set up tests and add to processor
+        //
+        for (Iterator i = testSuiteDTOs.keySet().iterator(); i.hasNext(); ) {
+            TestSuiteDTO tdto = (TestSuiteDTO) testSuiteDTOs.get(i.next());
+            Iterator j = tdto.getTests().keySet().iterator();
+
+            // for each TEST in the test suite
+            while (j.hasNext()) {
+                TestDTO dto = (TestDTO) tdto.getTests().get(j.next());
+
+                // deal with test
+                @SuppressWarnings("unchecked")
+                Map<String, Object> testArgs = (Map) dto.getArgs();
+
+                if (testArgs == null) {
+                    testArgs = new HashMap<>();
+                } else {
+                    Map<String, Object> m = new HashMap<>();
+                    Iterator k = testArgs.keySet().iterator();
+
+                    while (k.hasNext()) {
+                        ArgumentDTO adto = (ArgumentDTO) testArgs.get(k.next());
+                        m.put(adto.getName(), adto.getValue());
+                    }
+
+                    testArgs = m;
+                }
+
+                PlugIn plugIn =
+                        (org.geotools.validation.PlugIn) plugIns.get(dto.getPlugIn().getName());
+                Validation validation =
+                        plugIn.createValidation(dto.getName(), dto.getDescription(), testArgs);
+
+                if (validation instanceof FeatureValidation) {
+                    addValidation((FeatureValidation) validation);
+                }
+
+                if (validation instanceof IntegrityValidation) {
+                    addValidation((IntegrityValidation) validation);
+                }
+            }
+        } // end each test suite
+    } // load method
+

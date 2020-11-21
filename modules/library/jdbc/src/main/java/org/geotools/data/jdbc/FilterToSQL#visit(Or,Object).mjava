@@ -10,7 +10,7 @@
         // cannot optimize index access otherwise
         // The collector contains name -> list<values> for equalities, and the filter->null
         // otherwise
-        LinkedHashMap<Object, Object> grouped = new LinkedHashMap<>();
+        LinkedHashMap<Object, List<Literal>> grouped = new LinkedHashMap<>();
         int maxGroupSize = 0;
         for (Filter child : filter.getChildren()) {
             Expression[] nameLiteral = getNameLiteralFromEquality(child);
@@ -19,7 +19,7 @@
             } else {
                 PropertyName name = (PropertyName) nameLiteral[0];
                 Literal value = (Literal) nameLiteral[1];
-                List<Literal> values = (List<Literal>) grouped.get(name);
+                List<Literal> values = grouped.get(name);
                 if (values == null) {
                     values = new ArrayList<>();
                     grouped.put(name, values);
@@ -35,7 +35,7 @@
         }
 
         try {
-            Iterator<Map.Entry<Object, Object>> iterator = grouped.entrySet().iterator();
+            Iterator<Map.Entry<Object, List<Literal>>> iterator = grouped.entrySet().iterator();
 
             // ok, we can output at least one "in" statement
             if (grouped.size() > 1) {
@@ -43,7 +43,7 @@
             }
 
             while (iterator.hasNext()) {
-                Map.Entry<Object, Object> entry = iterator.next();
+                Map.Entry<Object, List<Literal>> entry = iterator.next();
                 if (entry.getKey() instanceof PropertyName) {
                     PropertyName pn = (PropertyName) entry.getKey();
                     List<Literal> literals = (List<Literal>) entry.getValue();

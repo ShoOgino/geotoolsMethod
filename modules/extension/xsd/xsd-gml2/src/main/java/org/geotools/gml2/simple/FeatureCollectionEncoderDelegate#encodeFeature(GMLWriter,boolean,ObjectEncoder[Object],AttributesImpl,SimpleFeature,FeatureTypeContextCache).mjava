@@ -1,0 +1,40 @@
+    /** Encodes a single feature */
+    private void encodeFeature(
+            GMLWriter output,
+            boolean featureBounds,
+            ObjectEncoder<Object> ee,
+            AttributesImpl idatts,
+            SimpleFeature f,
+            FeatureTypeContextCache ftCache)
+            throws SAXException, Exception {
+        gml.startFeature(output);
+
+        FeatureTypeContext ftContext = ftCache.getFeatureTypeContext(f);
+
+        idatts.setValue(0, f.getID());
+        output.startElement(ftContext.featureQualifiedName, idatts);
+
+        for (AttributeContext attribute : ftContext.attributes) {
+            QualifiedName name = attribute.name;
+            Object value1 = null;
+            if (boundedBy.equals(name) && featureBounds) {
+                value1 = f.getBounds();
+            } else {
+                int idx = attribute.attributeIndex;
+                value1 = f.getAttribute(idx);
+            }
+            Object value = value1;
+
+            if (value == null) {
+                continue;
+            }
+
+            String gmlId = encodeGeometryIds ? f.getID() + "." + name.getLocalPart() : null;
+            encodeValue(output, ee, value, attribute, gmlId);
+        }
+
+        output.endElement(ftContext.featureQualifiedName);
+
+        gml.endFeature(output);
+    }
+

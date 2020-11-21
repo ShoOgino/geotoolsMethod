@@ -1,0 +1,39 @@
+        @SuppressWarnings("unchecked") // target can be null, cannot use target.cast
+        public <T> T get(Object object, String xpath, Class<T> target)
+                throws IllegalArgumentException {
+            if (object instanceof SimpleFeature) {
+                SimpleFeature f = (SimpleFeature) object;
+                Object defaultGeometry = f.getDefaultGeometry();
+
+                // not found? Ok, let's do a lookup then...
+                if (defaultGeometry == null) {
+                    for (Object o : f.getAttributes()) {
+                        if (o instanceof Geometry) {
+                            defaultGeometry = o;
+                            break;
+                        }
+                    }
+                }
+
+                return (T) defaultGeometry;
+            }
+
+            if (object instanceof SimpleFeatureType) {
+                SimpleFeatureType ft = (SimpleFeatureType) object;
+                GeometryDescriptor gd = ft.getGeometryDescriptor();
+
+                if (gd == null) {
+                    // look for any geometry descriptor
+                    for (AttributeDescriptor ad : ft.getAttributeDescriptors()) {
+                        if (Geometry.class.isAssignableFrom(ad.getType().getBinding())) {
+                            return (T) ad;
+                        }
+                    }
+                }
+
+                return (T) gd;
+            }
+
+            return null;
+        }
+

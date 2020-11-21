@@ -1,0 +1,56 @@
+    /**
+     * TODO summary sentence for getHandler ...
+     *
+     * @see org.geotools.xml.XMLElementHandler#getHandler(java.net.URI, java.lang.String,
+     *     java.util.Map)
+     * @return XMLElementHandler
+     */
+    public XMLElementHandler getHandler(
+            URI namespaceURI, String localName, Map<String, Object> hints) throws SAXException {
+        if (elements == null) {
+            elements = new LinkedList<>();
+        }
+
+        logger.finest("Starting search for element handler " + localName + " :: " + namespaceURI);
+
+        Element e = XMLTypeHelper.findChildElement(type, localName, namespaceURI);
+        if (e != null && namespaceURI.equals(e.getNamespace())) {
+            XMLElementHandler r = ehf.createElementHandler(e);
+
+            if (type.cache(r.getElement(), hints)) {
+                elements.add(r);
+            }
+
+            return r;
+        }
+
+        logger.finest("Checking the document schemas");
+
+        XMLElementHandler r = ehf.createElementHandler(namespaceURI, localName);
+
+        if (r != null) {
+            if (type.cache(r.getElement(), hints)) {
+                elements.add(r);
+            }
+
+            return r;
+        }
+
+        // validation?
+        if (hints != null && hints.containsKey(DocumentFactory.VALIDATION_HINT)) {
+            Boolean valid = (Boolean) hints.get(DocumentFactory.VALIDATION_HINT);
+            if (valid != null && !valid.booleanValue()) {
+                return new IgnoreHandler();
+            }
+        }
+
+        throw new SAXException(
+                "Could not find element handler for "
+                        + namespaceURI
+                        + " : "
+                        + localName
+                        + " as a child of "
+                        + type.getName()
+                        + ".");
+    }
+

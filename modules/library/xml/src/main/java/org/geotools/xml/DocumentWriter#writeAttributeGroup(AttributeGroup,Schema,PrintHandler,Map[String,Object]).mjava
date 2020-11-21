@@ -1,0 +1,56 @@
+    private static void writeAttributeGroup(
+            AttributeGroup attributeGroup,
+            Schema schema,
+            PrintHandler ph,
+            Map<String, Object> hints)
+            throws IOException {
+        AttributesImpl ai = new AttributesImpl();
+
+        if ((attributeGroup.getId() != null) && (!attributeGroup.getId().isEmpty())) {
+            ai.addAttribute("", "id", "", "ID", attributeGroup.getId());
+        }
+
+        boolean nested = false;
+
+        if (attributeGroup.getNamespace().equals(schema.getTargetNamespace())) {
+            // search schema for element, then it's a ref
+            Group[] groups = schema.getGroups();
+            boolean found = false;
+
+            for (int i = 0; (i < groups.length) && !found; i++)
+                if (attributeGroup.getName().equals(groups[i].getName())) {
+                    found = true;
+                    ai.addAttribute("", "ref", "", "QName", attributeGroup.getName());
+                }
+
+            if (!found) {
+                ai.addAttribute("", "name", "", "QName", attributeGroup.getName());
+                nested = true;
+            }
+        } else {
+            // use a ref
+            XSISAXHandler.setLogLevel(logger.getLevel());
+            Schema s = SchemaFactory.getInstance(attributeGroup.getNamespace());
+            ai.addAttribute("", "ref", "", "QName", s.getPrefix() + ":" + attributeGroup.getName());
+        }
+
+        ph.startElement(XSISimpleTypes.NAMESPACE, "group", ai);
+
+        if (nested) {
+            if (attributeGroup.getAnyAttributeNameSpace() != null) {
+                ai = new AttributesImpl();
+                ai.addAttribute(
+                        "", "namespace", "", "special", attributeGroup.getAnyAttributeNameSpace());
+                ph.element(XSISimpleTypes.NAMESPACE, "anyAttribute", ai);
+            }
+
+            if (attributeGroup.getAttributes() != null) {
+                Attribute[] attrs = attributeGroup.getAttributes();
+
+                for (int i = 0; i < attrs.length; i++) writeAttribute(attrs[i], schema, ph, hints);
+            }
+        }
+
+        ph.endElement(XSISimpleTypes.NAMESPACE, "group");
+    }
+

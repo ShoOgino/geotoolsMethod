@@ -12,7 +12,7 @@
 
                     @Override
                     public boolean run(Context ctx) {
-                        List contents = (List) pop();
+                        List<?> contents = (List) pop();
                         Selector selector = (Selector) pop();
                         String comment = null;
                         if (!ctx.getValueStack().isEmpty() && peek() instanceof String) {
@@ -24,14 +24,22 @@
                             }
                         }
 
-                        final Stream stream = contents.stream();
-                        Map<Boolean, List> splitContents =
-                                (Map<Boolean, List>)
-                                        stream.collect(
-                                                Collectors.partitioningBy(
-                                                        x -> x instanceof CssRule));
-                        List<Property> properties = splitContents.get(Boolean.FALSE);
-                        List<CssRule> subRules = splitContents.get(Boolean.TRUE);
+                        final Stream<?> stream = contents.stream();
+                        Map<Boolean, List<Object>> splitContents =
+                                stream.collect(
+                                        Collectors.partitioningBy(x -> x instanceof CssRule));
+                        List<Property> properties =
+                                splitContents
+                                        .get(Boolean.FALSE)
+                                        .stream()
+                                        .map(o -> (Property) o)
+                                        .collect(Collectors.toList());
+                        List<CssRule> subRules =
+                                splitContents
+                                        .get(Boolean.TRUE)
+                                        .stream()
+                                        .map(o -> (CssRule) o)
+                                        .collect(Collectors.toList());
 
                         final CssRule rule = new CssRule(selector, properties, comment);
                         rule.nestedRules = subRules;

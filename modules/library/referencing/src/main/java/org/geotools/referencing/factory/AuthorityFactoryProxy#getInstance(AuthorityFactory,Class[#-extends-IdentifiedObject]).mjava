@@ -1,0 +1,27 @@
+    /**
+     * Returns a proxy instance which will create objects of the specified type using the specified
+     * factory.
+     *
+     * @param factory The factory to use for object creations.
+     * @param type The type of objects to be created by the proxy.
+     */
+    public static AuthorityFactoryProxy getInstance(
+            final AuthorityFactory factory, Class<? extends IdentifiedObject> type) {
+        AbstractAuthorityFactory.ensureNonNull("type", type);
+        AbstractAuthorityFactory.ensureNonNull("factory", factory);
+        type = getType(type);
+        /*
+         * Checks for some special cases for which a fast implementation is available.
+         */
+        if (factory instanceof CRSAuthorityFactory) {
+            final CRSAuthorityFactory crsFactory = (CRSAuthorityFactory) factory;
+            if (type.equals(ProjectedCRS.class)) return new Projected(crsFactory);
+            if (type.equals(GeographicCRS.class)) return new Geographic(crsFactory);
+            if (type.equals(CoordinateReferenceSystem.class)) return new CRS(crsFactory);
+        }
+        /*
+         * Fallback on the generic case using reflection.
+         */
+        return new Default(factory, type);
+    }
+

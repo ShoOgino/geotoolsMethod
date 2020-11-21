@@ -1,0 +1,51 @@
+    /**
+     * Constructs a new grid coverage for the specified grid geometry.
+     *
+     * @param source The source for this grid coverage.
+     * @param image The image.
+     * @param geometry The grid geometry (including the new CRS).
+     * @param operation The operation used to resample the coverage
+     * @param warp The warp configuration in case a warp is being used
+     */
+    private static GridCoverage2D create(
+            final GridCoverage2D source,
+            final PlanarImage image,
+            final GridGeometry2D geometry,
+            final String operation,
+            final Warp warp,
+            final Hints hints,
+            final Map<String, Object> inProperties) {
+        GridSampleDimension[] sampleDimensions = source.getSampleDimensions();
+
+        // Ensure no SampleDimension is defined if the ColorModel must be expanded
+        if (sampleDimensions != null && isColorModelExpanded(source.getRenderedImage(), hints)) {
+            sampleDimensions = null;
+        }
+
+        /**
+         * Build up transformation info properties: this can be used by the client to decide whether
+         * it wants to actually do the resample (which might take hours with WarpAdapter on very
+         * large grids) or not
+         */
+        Map<String, Object> properties = new HashMap<>();
+        if (operation != null) {
+            properties.put(Resample.OPERATION, operation);
+            if (warp != null) {
+                properties.put(Resample.WARP_TYPE, warp.getClass());
+                if (warp instanceof WarpGrid) {
+                    WarpGrid grid = (WarpGrid) warp;
+                    Dimension dimension = new Dimension(grid.getXNumCells(), grid.getYNumCells());
+                    properties.put(Resample.GRID_DIMENSIONS, dimension);
+                }
+            }
+        }
+        properties.putAll(inProperties);
+        /*
+         * The resampling may have been performed on the geophysics view.
+         * Try to restore the original view.
+         */
+        GridCoverage2D coverage =
+                new Resampler2D(source, image, geometry, sampleDimensions, properties, hints);
+        return coverage;
+    }
+

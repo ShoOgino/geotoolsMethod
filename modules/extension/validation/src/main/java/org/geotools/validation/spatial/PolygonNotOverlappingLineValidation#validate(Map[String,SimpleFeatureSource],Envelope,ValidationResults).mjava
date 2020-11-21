@@ -1,0 +1,50 @@
+    /**
+     * Check that the polygon is not overlapping the line.
+     *
+     * @param layers Map of SimpleFeatureSource by "dataStoreID:typeName"
+     * @param envelope The bounding box that encloses the unvalidated data
+     * @param results Used to coallate results information
+     * @return <code>true</code> if all the features pass this test.
+     */
+    public boolean validate(
+            Map<String, SimpleFeatureSource> layers, Envelope envelope, ValidationResults results)
+            throws Exception {
+        SimpleFeatureSource polySource1 = layers.get(getPolygonTypeRef());
+        SimpleFeatureSource polySource2 = layers.get(getRestrictedLineTypeRef());
+
+        Object[] poly1 = polySource1.getFeatures().toArray();
+        Object[] poly2 = polySource2.getFeatures().toArray();
+
+        if (!envelope.contains(polySource1.getBounds())) {
+            results.error(
+                    (SimpleFeature) poly1[0],
+                    "Polygon Feature Source is not contained within the Envelope provided.");
+
+            return false;
+        }
+
+        if (!envelope.contains(polySource2.getBounds())) {
+            results.error(
+                    (SimpleFeature) poly1[0],
+                    "Restricted Polygon Feature Source is not contained within the Envelope provided.");
+
+            return false;
+        }
+
+        for (int i = 0; i < poly1.length; i++) {
+            SimpleFeature tmp = (SimpleFeature) poly1[i];
+            Geometry gt = (Geometry) tmp.getDefaultGeometry();
+
+            for (int j = 0; j < poly2.length; j++) {
+                SimpleFeature tmp2 = (SimpleFeature) poly2[j];
+                Geometry gt2 = (Geometry) tmp2.getDefaultGeometry();
+
+                if (gt2.touches(gt)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+

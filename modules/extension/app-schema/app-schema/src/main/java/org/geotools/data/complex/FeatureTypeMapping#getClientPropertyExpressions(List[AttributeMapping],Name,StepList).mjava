@@ -1,0 +1,37 @@
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
+    private List<Expression> getClientPropertyExpressions(
+            final List<AttributeMapping> attributeMappings,
+            final Name clientPropertyName,
+            StepList parentPath) {
+        List<Expression> clientPropertyExpressions = new ArrayList<>(attributeMappings.size());
+
+        AttributeMapping attMapping;
+        Map<Name, Expression> clientProperties;
+        Expression propertyExpression;
+        for (Iterator<AttributeMapping> it = attributeMappings.iterator(); it.hasNext(); ) {
+            attMapping = it.next();
+            if (attMapping instanceof JoiningNestedAttributeMapping
+                    && !Types.equals(clientPropertyName, XLINK.HREF)) {
+                // if it's joining for simple content feature chaining it has to be empty
+                // so it will be added to the post filter... unless this is feature chaining by
+                // reference
+                // and we are looking at the xlink:href property, whose source expression is
+                // specified
+                // in the nested attribute mapping of the parent feature
+                clientPropertyExpressions.add(null);
+            } else {
+                clientProperties = attMapping.getClientProperties();
+                // NC -added
+                if (Types.equals(clientPropertyName, GML.id)) {
+                    clientPropertyExpressions.add(attMapping.getIdentifierExpression());
+                } else if (clientProperties.containsKey(clientPropertyName)) {
+                    // end NC - added
+                    propertyExpression = (Expression) clientProperties.get(clientPropertyName);
+                    clientPropertyExpressions.add(propertyExpression);
+                }
+            }
+        }
+
+        return clientPropertyExpressions;
+    }
+

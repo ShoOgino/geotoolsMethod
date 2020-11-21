@@ -1,0 +1,33 @@
+    AbstractDerivedCRS(
+            final Map<String, Object> properties,
+            final OperationMethod method,
+            final CoordinateReferenceSystem base,
+            final MathTransform baseToDerived,
+            final CoordinateSystem derivedCS)
+            throws MismatchedDimensionException {
+        super(properties, getDatum(base), derivedCS);
+        ensureNonNull("method", method);
+        ensureNonNull("baseToDerived", baseToDerived);
+        this.baseCRS = base;
+        /*
+         * A method was explicitly specified. Make sure that the source and target
+         * dimensions match. We do not check parameters in current version of this
+         * implementation (we may add this check in a future version), since the
+         * descriptors provided in this user-supplied OperationMethod may be more
+         * accurate than the one inferred from the MathTransform.
+         */
+        checkDimensions(base, baseToDerived, derivedCS);
+        DefaultOperationMethod.checkDimensions(method, baseToDerived);
+        this.conversionFromBase =
+                (Conversion)
+                        DefaultOperation.create(
+                                /* properties */ new UnprefixedMap(properties, "conversion."),
+                                /* sourceCRS  */ base,
+                                /* targetCRS  */ this,
+                                /* transform  */ baseToDerived,
+                                /* method     */ method,
+                                /* type       */ (this instanceof ProjectedCRS)
+                                        ? Projection.class
+                                        : Conversion.class);
+    }
+
