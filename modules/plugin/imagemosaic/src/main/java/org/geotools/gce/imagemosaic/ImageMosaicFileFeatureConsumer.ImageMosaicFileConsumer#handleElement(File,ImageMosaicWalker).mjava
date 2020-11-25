@@ -1,0 +1,168 @@
+        @Override
+        public void handleElement(File file, ImageMosaicWalker provider) throws IOException {
+
+            // increment counter
+            int elementIndex = provider.getElementIndex() + 1;
+            provider.setElementIndex(elementIndex);
+
+            int numElements = provider.getNumElements();
+            ImageMosaicEventHandlers eventHandler = provider.getEventHandler();
+            ImageMosaicConfigHandler configHandler = provider.getConfigHandler();
+
+            // Check that this file is actually good to go
+            if (!checkElement(file, provider)) return;
+
+            String validFileName;
+            String extension;
+            try {
+                validFileName = file.getCanonicalPath();
+                validFileName = FilenameUtils.normalize(validFileName);
+                extension = FilenameUtils.getExtension(validFileName);
+            } catch (IOException e) {
+                eventHandler.fireFileEvent(
+                        Level.FINER,
+                        file,
+                        false,
+                        "Exception occurred while processing file " + file + ": " + e.getMessage(),
+                        ((elementIndex * 100.0) / numElements));
+                eventHandler.fireException(e);
+                return;
+            }
+            validFileName = FilenameUtils.getName(validFileName);
+            eventHandler.fireEvent(
+                    Level.INFO,
+                    "Now indexing file " + validFileName,
+                    ((elementIndex * 100.0) / numElements));
+            GridCoverage2DReader coverageReader = null;
+            try {
+                // Getting a coverage reader for this coverage.
+                final AbstractGridFormat format;
+                final AbstractGridFormat cachedFormat = configHandler.getCachedFormat();
+                if (cachedFormat == null) {
+                    // When looking for formats which may parse this file, make sure to exclude the
+                    // ImageMosaicFormat as return
+                    format = GridFormatFinder.findFormat(file, Utils.EXCLUDE_MOSAIC_HINTS);
+                } else {
+                    if (cachedFormat.accepts(file)) {
+                        format = cachedFormat;
+                    } else {
+                        format = GridFormatFinder.findFormat(file, Utils.EXCLUDE_MOSAIC_HINTS);
+                    }
+                }
+                if ((format instanceof UnknownFormat) || format == null) {
+                    if (!Utils.LOG_EXCLUDES.contains(extension)) {
+                        eventHandler.fireFileEvent(
+                                Level.INFO,
+                                file,
+                                false,
+                                "Skipped file " + file + ": File format is not supported.",
+                                ((elementIndex * 99.0) / numElements));
+                    }
+                    return;
+                }
+
+                final Hints configurationHints = configHandler.getRunConfiguration().getHints();
+                coverageReader = (GridCoverage2DReader) format.getReader(file, configurationHints);
+
+                // Setting of the ReaderSPI to use
+                if (configHandler.getCachedReaderSPI() == null) {
+                    // Get the URL associated to the file
+                    URL granuleUrl = URLs.fileToUrl(file);
+                    // Get the ImageInputStreamSPI associated to the URL
+                    ImageInputStreamSpi inStreamSpi = Utils.getInputStreamSPIFromURL(granuleUrl);
+                    // Ensure that the ImageInputStreamSPI is available
+                    if (inStreamSpi == null) {
+                        throw new IllegalArgumentException("no inputStreamSPI available!");
+                    }
+                    ImageInputStream inStream = null;
+                    try {
+                        // Get the ImageInputStream from the SPI
+                        inStream =
+                                inStreamSpi.createInputStreamInstance(
+                                        granuleUrl,
+                                        ImageIO.getUseCache(),
+                                        ImageIO.getCacheDirectory());
+                        // Throws an Exception if the ImageInputStream is not present
+                        if (inStream == null) {
+                            if (LOGGER.isLoggable(Level.WARNING)) {
+                                LOGGER.log(Level.WARNING, Utils.getFileInfo(file));
+                            }
+                            throw new IllegalArgumentException(
+                                    "Unable to get an input stream for the provided file "
+                                            + granuleUrl.toString());
+                        }
+                        // Selection of the ImageReaderSpi from the Stream
+                        ImageReaderSpi spi = Utils.getReaderSpiFromStream(null, inStream);
+                        configHandler.setCachedReaderSPI(spi);
+                    } finally {
+                        if (inStream != null) {
+                            inStream.close();
+                        }
+                    }
+                }
+
+                // Getting available coverageNames from the reader
+                String[] coverageNames = coverageReader.getGridCoverageNames();
+
+                for (String cvName : coverageNames) {
+                    ImageMosaicSourceElement element =
+                            new ImageMosaicSourceElement.FileElement(file);
+                    boolean shouldAccept = true;
+                    try {
+                        for (GranuleAcceptor acceptor : configHandler.getGranuleAcceptors()) {
+                            if (!acceptor.accepts(coverageReader, cvName, file, configHandler)) {
+                                shouldAccept = false;
+                                String message =
+                                        "Granule acceptor  "
+                                                + acceptor.getClass().getName()
+                                                + " rejected the granule being processed"
+                                                + file;
+                                element.fireHarvestingEvent(
+                                        eventHandler, elementIndex, numElements, message);
+                                break;
+                            }
+                        }
+                        // store the format only if we can accept this file, not before
+                        configHandler.setCachedFormat(format);
+                    } catch (Exception e) {
+                        LOGGER.log(
+                                Level.FINE,
+                                "Failure during potential granule evaluation, skipping it: " + file,
+                                e);
+                        shouldAccept = false;
+                    }
+
+                    if (shouldAccept) {
+                        configHandler.updateConfiguration(
+                                coverageReader,
+                                cvName,
+                                element,
+                                elementIndex,
+                                numElements,
+                                provider.getTransaction());
+                    }
+
+                    element.fireHarvestingEvent(
+                            eventHandler, elementIndex, numElements, "Done with file " + file);
+                }
+            } catch (Exception e) {
+                // we got an exception, we should stop the walk
+                eventHandler.fireException(e);
+
+                provider.stop();
+                return;
+            } finally {
+                // STEP 5
+                // release resources
+                try {
+                    if (coverageReader != null)
+                        // release resources
+                        coverageReader.dispose();
+                } catch (Throwable e) {
+                    // ignore exception
+                    if (LOGGER.isLoggable(Level.FINEST))
+                        LOGGER.log(Level.FINEST, e.getLocalizedMessage(), e);
+                }
+            }
+        }
+
