@@ -1,0 +1,63 @@
+    /** Method for harvesting on a directory */
+    private static void harvestCalculation(
+            String defaultCoverage,
+            final List<HarvestedSource> result,
+            final ImageMosaicReader reader,
+            File directory,
+            IOFileFilter filter) {
+        // prepare the walker configuration
+        CatalogBuilderConfiguration configuration = new CatalogBuilderConfiguration();
+        configuration.setParameter(
+                Utils.Prop.ABSOLUTE_PATH, Boolean.toString(Utils.DEFAULT_PATH_BEHAVIOR));
+        String indexingPath = directory.getAbsolutePath();
+        configuration.setParameter(Utils.Prop.HARVEST_DIRECTORY, indexingPath);
+        if (defaultCoverage == null) {
+            String[] coverageNames = reader.getGridCoverageNames();
+            defaultCoverage =
+                    (coverageNames != null && coverageNames.length > 0)
+                            ? coverageNames[0]
+                            : Utils.DEFAULT_INDEX_NAME;
+        }
+        configuration.setParameter(Utils.Prop.INDEX_NAME, defaultCoverage);
+        configuration.setHints(new Hints(Utils.MOSAIC_READER, reader));
+
+        File mosaicSource = URLs.urlToFile(reader.sourceURL);
+        if (!mosaicSource.isDirectory()) {
+            mosaicSource = mosaicSource.getParentFile();
+        }
+
+        configuration.setParameter(Utils.Prop.ROOT_MOSAIC_DIR, mosaicSource.getAbsolutePath());
+
+        // run the walker and collect information
+        ImageMosaicEventHandlers eventHandler = new ImageMosaicEventHandlers();
+        final ImageMosaicConfigHandler catalogHandler =
+                new HarvestedResource.HarvestMosaicConfigHandler(
+                        configuration, eventHandler, reader);
+        // build the index
+        ImageMosaicDirectoryWalker walker =
+                new ImageMosaicDirectoryWalker(catalogHandler, eventHandler, filter);
+        eventHandler.addProcessingEventListener(
+                new ImageMosaicEventHandlers.ProcessingEventListener() {
+
+                    @Override
+                    public void getNotification(ImageMosaicEventHandlers.ProcessingEvent event) {
+                        if (event instanceof ImageMosaicEventHandlers.FileProcessingEvent) {
+                            ImageMosaicEventHandlers.FileProcessingEvent fileEvent =
+                                    (ImageMosaicEventHandlers.FileProcessingEvent) event;
+                            result.add(
+                                    new DefaultHarvestedSource(
+                                            fileEvent.getFile(),
+                                            fileEvent.isIngested(),
+                                            fileEvent.getMessage()));
+                        }
+                    }
+
+                    @Override
+                    public void exceptionOccurred(ImageMosaicEventHandlers.ExceptionEvent event) {
+                        // nothing to do
+                    }
+                });
+
+        walker.run();
+    }
+

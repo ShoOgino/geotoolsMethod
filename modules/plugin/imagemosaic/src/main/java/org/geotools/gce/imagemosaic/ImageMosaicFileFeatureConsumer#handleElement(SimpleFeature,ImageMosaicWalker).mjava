@@ -1,0 +1,57 @@
+    @Override
+    public void handleElement(SimpleFeature feature, ImageMosaicWalker provider)
+            throws IOException {
+        ImageMosaicConfigHandler configHandler = provider.getConfigHandler();
+        CatalogBuilderConfiguration runConfiguration = configHandler.getRunConfiguration();
+        String locationAttrName = runConfiguration.getParameter(Utils.Prop.LOCATION_ATTRIBUTE);
+        Object locationAttrObj = feature.getAttribute(locationAttrName);
+        File file = null;
+        if (locationAttrObj instanceof String) {
+            final String path = (String) locationAttrObj;
+            if (Boolean.getBoolean(runConfiguration.getParameter(Utils.Prop.ABSOLUTE_PATH))) {
+                // absolute files
+                file = new File(path);
+                // check this is _really_ absolute
+                if (!imageMosaicFileConsumer.checkElement(file, provider)) {
+                    file = null;
+                }
+            }
+            if (file == null) {
+                // relative files
+                file = new File(runConfiguration.getParameter(Utils.Prop.ROOT_MOSAIC_DIR), path);
+                // check this is _really_ relative
+                if (!(file.exists() && file.canRead() && file.isFile())) {
+                    // let's try for absolute, despite what the config says
+                    // absolute files
+                    file = new File(path);
+                    // check this is _really_ absolute
+                    if (!imageMosaicFileConsumer.checkElement(file, provider)) {
+                        file = null;
+                    }
+                }
+            }
+
+            // final check
+            if (file == null) {
+                // SKIP and log
+                // empty table?
+                provider.skip(path);
+                return;
+            }
+
+        } else if (locationAttrObj instanceof File) {
+            file = (File) locationAttrObj;
+        } else {
+            provider.getEventHandler()
+                    .fireException(
+                            new IOException(
+                                    "Location attribute type not recognized for column name: "
+                                            + locationAttrName));
+            provider.stop();
+            return;
+        }
+
+        // process this file
+        imageMosaicFileConsumer.handleElement(file, provider);
+    }
+

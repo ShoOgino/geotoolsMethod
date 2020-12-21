@@ -1,0 +1,39 @@
+    @Test
+    public void testHarvestSingleURL() throws Exception {
+        File workDir = prepareWorkingDir("cogtest.zip", "harvest", "cogtest");
+        File file = new File(workDir, "indexer.properties");
+        Properties properties = new Properties();
+        try (FileInputStream fin = new FileInputStream(file)) {
+            properties.load(fin);
+        }
+
+        try (FileWriter fw = new FileWriter(file)) {
+            assertNotNull(properties.remove("UseExistingSchema"));
+            properties.store(fw, "");
+        }
+
+        ImageMosaicReader reader = IMAGE_MOSAIC_FORMAT.getReader(workDir);
+        String coverageName = reader.getGridCoverageNames()[0];
+        GranuleSource granules = reader.getGranules(coverageName, true);
+
+        // Only 1 granule available before doing the harvest
+        assertEquals(1, granules.getCount(Query.ALL));
+
+        try {
+            // now go and harvest the url
+            URL source =
+                    new URL(
+                            "https://s3-us-west-2.amazonaws.com/landsat-pds/c1/L8/153/075/LC08_L1TP_153075_20190515_20190515_01_RT/LC08_L1TP_153075_20190515_20190515_01_RT_B3.TIF");
+            List<HarvestedSource> summary = reader.harvest(null, source, null);
+            HarvestedSource hf = summary.get(0);
+
+            // check the granule catalog
+            granules = reader.getGranules(coverageName, true);
+
+            // We now have 2 granules
+            assertEquals(2, granules.getCount(Query.ALL));
+        } finally {
+            reader.dispose();
+        }
+    }
+
