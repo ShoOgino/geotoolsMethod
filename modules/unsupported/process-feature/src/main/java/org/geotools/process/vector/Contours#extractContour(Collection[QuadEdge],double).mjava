@@ -1,0 +1,60 @@
+    /**
+     * @param primaryEdges
+     * @param contourValue
+     * @return
+     */
+    public ArrayList<LineString> extractContour(
+            Collection<QuadEdge> primaryEdges, double contourValue) {
+        ArrayList<LineString> lines = new ArrayList<>();
+        for (QuadEdge edge : primaryEdges) {
+            Vertex[] v = new Vertex[3];
+            v[0] = edge.orig();
+            v[1] = edge.dest();
+            v[2] = edge.oNext().dest();
+            ArrayList<Integer> low = new ArrayList<>(3);
+            ArrayList<Integer> high = new ArrayList<>(3);
+            for (int i = 0; i < 3; i++) {
+                if (v[i].getZ() < contourValue) {
+                    low.add(i);
+                } else if (v[i].getZ() >= contourValue) {
+                    high.add(i);
+                }
+            }
+
+            if (low.size() == 3 || high.size() == 3) {
+                continue;
+            }
+            if (low.size() == 0 || high.size() == 0) {
+                continue;
+            }
+            QuadEdge[] edges = new QuadEdge[2];
+            if (high.size() == 2 && low.size() == 1) {
+                int start = low.get(0);
+                edges[0] = QuadEdge.makeEdge(v[start], v[high.get(0)]);
+                edges[1] = QuadEdge.makeEdge(v[start], v[high.get(1)]);
+            } else if (low.size() == 2 && high.size() == 1) {
+                int start = high.get(0);
+                edges[0] = QuadEdge.makeEdge(v[low.get(0)], v[start]);
+                edges[1] = QuadEdge.makeEdge(v[low.get(1)], v[start]);
+            } else {
+                // off the edge
+                continue;
+            }
+            // now for each edge calculate where the contour crosses
+            Coordinate[] pt = new Coordinate[2];
+            for (int i = 0; i < 2; i++) {
+                double start = edges[i].orig().getZ();
+                double end = edges[i].dest().getZ();
+
+                LineSegment lineSegment = edges[i].toLineSegment();
+                double delta = end - start;
+                double proportion = (contourValue - start) / delta;
+                pt[i] = lineSegment.pointAlong(proportion);
+            }
+            // generate a new line geometry
+            LineString l = GF.createLineString(pt);
+            lines.add(l);
+        }
+        return lines;
+    }
+

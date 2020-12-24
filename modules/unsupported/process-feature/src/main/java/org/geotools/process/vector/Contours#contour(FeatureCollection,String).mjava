@@ -1,0 +1,90 @@
+    public SimpleFeatureCollection contour(FeatureCollection features, String elevation) {
+        if (progressListener != null) {
+            progressListener.started();
+        }
+        ArrayList<Coordinate> coords = new ArrayList<>();
+
+        String ptype = "POINT";
+        if (MultiPoint.class.equals(
+                features.getSchema().getGeometryDescriptor().getType().getBinding())) {
+            ptype = "MULTI";
+        }
+        try (SimpleFeatureIterator itr = (SimpleFeatureIterator) features.features()) {
+            while (itr.hasNext()) {
+                SimpleFeature f = itr.next();
+                ArrayList<Point> points = new ArrayList<Point>();
+                if (ptype == "POINT") {
+                    points.add((Point) f.getDefaultGeometry());
+                } else {
+                    MultiPoint mp = (MultiPoint) f.getDefaultGeometry();
+                    for (int i = 0; i < mp.getNumGeometries(); i++) {
+                        points.add((Point) mp.getGeometryN(i));
+                    }
+                }
+                for (Point point : points) {
+                    Coordinate coordinate = new Coordinate();
+                    coordinate.setX(point.getCoordinate().x);
+                    coordinate.setY(point.getCoordinate().y);
+                    coordinate.setZ(((Number) f.getAttribute(elevation)).doubleValue());
+                    coords.add(coordinate);
+                }
+            }
+        }
+        SimpleFeatureTypeBuilder ftb = new SimpleFeatureTypeBuilder();
+        ftb.setName("contour");
+        ftb.add("the_geom", LineString.class);
+        ftb.add("elevation", Double.class);
+        ftb.setCRS(features.getBounds().getCoordinateReferenceSystem());
+        ftb.setDefaultGeometry("the_geom");
+        SimpleFeatureType type = ftb.buildFeatureType();
+        SimpleFeatureBuilder fBuilder = new SimpleFeatureBuilder(type);
+        DelaunayTriangulationBuilder builder = new DelaunayTriangulationBuilder();
+        builder.setSites(coords);
+        QuadEdgeSubdivision quadEdgeSubdivision = builder.getSubdivision();
+        @SuppressWarnings("unchecked")
+        Collection<QuadEdge> primaryEdges = quadEdgeSubdivision.getPrimaryEdges(false);
+
+        ArrayList<SimpleFeature> feats = new ArrayList<>();
+        int percent = 1;
+        int steps = levels.length;
+        for (double contourValue : levels) {
+            if (progressListener != null) {
+                progressListener.progress((100 / steps) * percent);
+            }
+            ArrayList<LineString> lines = extractContour(primaryEdges, contourValue);
+
+            MultiLineString ml = GF.createMultiLineString(lines.toArray(new LineString[] {}));
+
+            Geometry inter = ml.union();
+            // for each contour value "join" the lines
+            LineMerger merger = new LineMerger();
+            for (int i = 0; i < inter.getNumGeometries(); i++) {
+                merger.add(inter.getGeometryN(i));
+            }
+            @SuppressWarnings("unchecked")
+            Collection<LineString> collection = merger.getMergedLineStrings();
+
+            for (LineString l : collection) {
+
+                if (simplify) { // Should we smooth then simplify or visa versa
+
+                    DouglasPeuckerSimplifier simplifier = new DouglasPeuckerSimplifier(l);
+                    l = (LineString) simplifier.getResultGeometry();
+                }
+                if (smooth) {
+                    fBuilder.set("the_geom", JTS.smooth(l, 0.4, GF));
+                } else {
+                    fBuilder.set("the_geom", l);
+                }
+                fBuilder.set("elevation", contourValue);
+                SimpleFeature f = fBuilder.buildFeature(null);
+
+                feats.add(f);
+            }
+        }
+        if (progressListener != null) {
+            progressListener.complete();
+        }
+        return DataUtilities.collection(feats);
+    }
+

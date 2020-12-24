@@ -1,0 +1,51 @@
+    private void displayResults(SimpleFeatureCollection points, SimpleFeatureCollection results)
+            throws InterruptedException {
+        if (!show) return;
+        MapContent map = new MapContent();
+        map.addLayer(
+                new FeatureLayer(
+                        points, SLD.createPointStyle("circle", Color.red, Color.red, 1, 5)));
+        StyleBuilder sb = new StyleBuilder();
+        Font font = sb.createFont("Arial", 10);
+        map.addLayer(
+                new FeatureLayer(results, SLD.createLineStyle(Color.black, 1, "elevation", font)));
+
+        JMapFrame frame = new JMapFrame();
+
+        frame.setMapContent(map);
+        frame.enableStatusBar(true);
+        frame.enableToolBar(true);
+        frame.setSize(400, 500);
+        frame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+        frame.setVisible(true);
+
+        Thread t =
+                new Thread() {
+                    public void run() {
+                        synchronized (lock) {
+                            while (frame.isVisible())
+                                try {
+                                    lock.wait();
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                }
+                        }
+                    }
+                };
+        t.start();
+
+        frame.addWindowListener(
+                new WindowAdapter() {
+
+                    @Override
+                    public void windowClosing(WindowEvent arg0) {
+                        synchronized (lock) {
+                            frame.setVisible(false);
+                            lock.notify();
+                        }
+                    }
+                });
+
+        t.join();
+    }
+
