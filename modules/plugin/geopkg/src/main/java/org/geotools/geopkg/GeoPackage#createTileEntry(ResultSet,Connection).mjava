@@ -4,19 +4,17 @@
 
         // load all the tile matrix entries (and join with the data table to see if a certain level
         // has tiles available, given the indexes in the data table, it should be real quick)
-        PreparedStatement psm =
+        try (PreparedStatement psm =
                 cx.prepareStatement(
                         format(
                                 "SELECT *, exists(SELECT 1 FROM \"%s\" data where data.zoom_level = tileMatrix.zoom_level) as has_tiles"
                                         + " FROM %s as tileMatrix"
                                         + " WHERE table_name = ?"
                                         + " ORDER BY zoom_level ASC",
-                                e.getTableName(), TILE_MATRIX_METADATA));
-        try {
+                                e.getTableName(), TILE_MATRIX_METADATA))) {
             psm.setString(1, e.getTableName());
 
-            ResultSet rsm = psm.executeQuery();
-            try {
+            try (ResultSet rsm = psm.executeQuery()) {
                 while (rsm.next()) {
                     TileMatrix m = new TileMatrix();
                     m.setZoomLevel(rsm.getInt("zoom_level"));
@@ -30,29 +28,23 @@
 
                     e.getTileMatricies().add(m);
                 }
-            } finally {
-                close(rsm);
             }
-        } finally {
-            close(psm);
         }
         // use the tile matrix set bounds rather that gpkg_contents bounds
         // per spec, the tile matrix set bounds should be exact and used to calculate tile
         // coordinates
         // and in contrast the gpkg_contents is "informational" only
-        psm =
+        try (PreparedStatement psm =
                 cx.prepareStatement(
                         format(
                                 "SELECT * FROM %s a, %s b "
                                         + "WHERE a.table_name = ? "
                                         + "AND a.srs_id = b.srs_id "
                                         + "LIMIT 1",
-                                TILE_MATRIX_SET, SPATIAL_REF_SYS));
-        try {
+                                TILE_MATRIX_SET, SPATIAL_REF_SYS))) {
             psm.setString(1, e.getTableName());
 
-            ResultSet rsm = psm.executeQuery();
-            try {
+            try (ResultSet rsm = psm.executeQuery()) {
                 if (rsm.next()) {
 
                     int srid = rsm.getInt("organization_coordsys_id");
@@ -76,11 +68,7 @@
                                     rsm.getDouble("max_y"),
                                     crs));
                 }
-            } finally {
-                close(rsm);
             }
-        } finally {
-            close(psm);
         }
         return e;
     }

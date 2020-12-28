@@ -8,30 +8,24 @@
             String description)
             throws IOException {
         try {
-            PreparedStatement ps =
-                    cx.prepareStatement(
-                            String.format(
-                                    "SELECT srs_id FROM %s WHERE srs_id = ?", SPATIAL_REF_SYS));
-            try {
-                ResultSet rs = prepare(ps).set(srid).log(Level.FINE).statement().executeQuery();
-                try {
-                    if (rs.next()) {
-                        return;
-                    }
-                } finally {
-                    close(rs);
+            try (PreparedStatement ps =
+                            cx.prepareStatement(
+                                    String.format(
+                                            "SELECT srs_id FROM %s WHERE srs_id = ?",
+                                            SPATIAL_REF_SYS));
+                    ResultSet rs =
+                            prepare(ps).set(srid).log(Level.FINE).statement().executeQuery()) {
+                if (rs.next()) {
+                    return;
                 }
-            } finally {
-                close(ps);
             }
 
-            ps =
+            try (PreparedStatement ps =
                     cx.prepareStatement(
                             String.format(
                                     "INSERT INTO %s (srs_id, srs_name, organization, organization_coordsys_id, definition, description) "
                                             + "VALUES (?,?,?,?,?,?)",
-                                    SPATIAL_REF_SYS));
-            try {
+                                    SPATIAL_REF_SYS))) {
                 prepare(ps)
                         .set(srid)
                         .set(srsName)
@@ -42,8 +36,6 @@
                         .log(Level.FINE)
                         .statement()
                         .execute();
-            } finally {
-                close(ps);
             }
         } catch (SQLException e) {
             throw new IOException(e);

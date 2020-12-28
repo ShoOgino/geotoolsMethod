@@ -5,31 +5,16 @@
      * @return whether this feature entry has a spatial index available.
      */
     public boolean hasSpatialIndex(FeatureEntry entry) throws IOException {
-        try {
-            Connection cx = connPool.getConnection();
-
-            try {
-                String tableName = getSpatialIndexName(entry);
+        String tableName = getSpatialIndexName(entry);
+        try (Connection cx = connPool.getConnection();
                 PreparedStatement ps =
                         prepare(cx, "SELECT name FROM sqlite_master WHERE type='table' AND name=? ")
                                 .set(tableName)
                                 .log(Level.FINE)
                                 .statement();
+                ResultSet rs = ps.executeQuery()) {
 
-                try {
-                    ResultSet rs = ps.executeQuery();
-
-                    try {
-                        return rs.next();
-                    } finally {
-                        close(rs);
-                    }
-                } finally {
-                    close(ps);
-                }
-            } finally {
-                close(cx);
-            }
+            return rs.next();
         } catch (SQLException e) {
             throw new IOException(e);
         }

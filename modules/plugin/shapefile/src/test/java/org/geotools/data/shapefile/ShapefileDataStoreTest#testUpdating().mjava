@@ -10,11 +10,9 @@
         ShapefileDataStore sds = createDataStore();
         loadFeatures(sds);
 
-        FeatureWriter<SimpleFeatureType, SimpleFeature> writer = null;
-        try {
-            writer =
-                    sds.getFeatureWriter(
-                            sds.getTypeNames()[0], Filter.INCLUDE, Transaction.AUTO_COMMIT);
+        try (FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
+                sds.getFeatureWriter(
+                        sds.getTypeNames()[0], Filter.INCLUDE, Transaction.AUTO_COMMIT)) {
             while (writer.hasNext()) {
                 SimpleFeature feat = writer.next();
                 Integer b = (Integer) feat.getAttribute(1);
@@ -24,21 +22,13 @@
                     feat.setAttribute(1, Byte.valueOf((byte) -1));
                 }
             }
-        } finally {
-            if (writer != null) writer.close();
         }
         SimpleFeatureCollection fc = loadFeatures(sds);
 
         assertEquals(10, fc.size());
-        SimpleFeatureIterator features = null;
-        try {
-            features = fc.features();
+        try (SimpleFeatureIterator features = fc.features()) {
             for (SimpleFeatureIterator i = features; i.hasNext(); ) {
                 assertEquals(-1, ((Integer) i.next().getAttribute(1)).byteValue());
-            }
-        } finally {
-            if (features != null) {
-                features.close();
             }
         }
         sds.dispose();

@@ -31,91 +31,73 @@
 
         e.setLastChange(new Date());
 
-        try {
-            Connection cx = connPool.getConnection();
+        try (Connection cx = connPool.getConnection()) {
             // TODO: do all of this in a transaction
-            try {
-                PreparedStatement st;
-
-                // add entry to tile matrix set table
-                Envelope bounds = e.getTileMatrixSetBounds();
-                if (bounds == null) {
-                    bounds = e.getBounds();
-                }
-                st =
-                        prepare(cx, format("INSERT INTO %s VALUES (?,?,?,?,?,?)", TILE_MATRIX_SET))
-                                .set(e.getTableName())
-                                .set(e.getSrid())
-                                .set(bounds.getMinX())
-                                .set(bounds.getMinY())
-                                .set(bounds.getMaxX())
-                                .set(bounds.getMaxY())
-                                .statement();
-                try {
-                    st.execute();
-                } finally {
-                    close(st);
-                }
-
-                // create the tile_matrix_metadata entries
-                st =
-                        prepare(
-                                        cx,
-                                        format(
-                                                "INSERT INTO %s VALUES (?,?,?,?,?,?,?,?)",
-                                                TILE_MATRIX_METADATA))
-                                .statement();
-                try {
-                    for (TileMatrix m : e.getTileMatricies()) {
-                        prepare(st)
-                                .set(e.getTableName())
-                                .set(m.getZoomLevel())
-                                .set(m.getMatrixWidth())
-                                .set(m.getMatrixHeight())
-                                .set(m.getTileWidth())
-                                .set(m.getTileHeight())
-                                .set(m.getXPixelSize())
-                                .set(m.getYPixelSize())
-                                .statement()
-                                .execute();
-                    }
-                } finally {
-                    close(st);
-                }
-                // create the tile table itself
-                st =
-                        cx.prepareStatement(
-                                format(
-                                        "CREATE TABLE %s ("
-                                                + "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,"
-                                                + "zoom_level INTEGER NOT NULL,"
-                                                + "tile_column INTEGER NOT NULL,"
-                                                + "tile_row INTEGER NOT NULL,"
-                                                + "tile_data BLOB NOT NULL)",
-                                        e.getTableName()));
-                try {
-                    st.execute();
-                } finally {
-                    close(st);
-                }
-
-                // create an index on the tile
-                st =
-                        cx.prepareStatement(
-                                format(
-                                        "create index %s_zyx_idx on %s(zoom_level, tile_column, tile_row);",
-                                        e.getTableName(), e.getTableName()));
-                try {
-                    st.execute();
-                } finally {
-                    close(st);
-                }
-
-                // update the metadata tables
-                addGeoPackageContentsEntry(e, cx);
-            } finally {
-                close(cx);
+            // add entry to tile matrix set table
+            Envelope bounds = e.getTileMatrixSetBounds();
+            if (bounds == null) {
+                bounds = e.getBounds();
             }
+            try (PreparedStatement st =
+                    prepare(cx, format("INSERT INTO %s VALUES (?,?,?,?,?,?)", TILE_MATRIX_SET))
+                            .set(e.getTableName())
+                            .set(e.getSrid())
+                            .set(bounds.getMinX())
+                            .set(bounds.getMinY())
+                            .set(bounds.getMaxX())
+                            .set(bounds.getMaxY())
+                            .statement(); ) {
+                st.execute();
+            }
+
+            // create the tile_matrix_metadata entries
+            try (PreparedStatement st =
+                    prepare(
+                                    cx,
+                                    format(
+                                            "INSERT INTO %s VALUES (?,?,?,?,?,?,?,?)",
+                                            TILE_MATRIX_METADATA))
+                            .statement()) {
+                for (TileMatrix m : e.getTileMatricies()) {
+                    prepare(st)
+                            .set(e.getTableName())
+                            .set(m.getZoomLevel())
+                            .set(m.getMatrixWidth())
+                            .set(m.getMatrixHeight())
+                            .set(m.getTileWidth())
+                            .set(m.getTileHeight())
+                            .set(m.getXPixelSize())
+                            .set(m.getYPixelSize())
+                            .statement()
+                            .execute();
+                }
+            }
+
+            // create the tile table itself
+            try (PreparedStatement st =
+                    cx.prepareStatement(
+                            format(
+                                    "CREATE TABLE %s ("
+                                            + "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,"
+                                            + "zoom_level INTEGER NOT NULL,"
+                                            + "tile_column INTEGER NOT NULL,"
+                                            + "tile_row INTEGER NOT NULL,"
+                                            + "tile_data BLOB NOT NULL)",
+                                    e.getTableName()))) {
+                st.execute();
+            }
+
+            // create an index on the tile
+            try (PreparedStatement st =
+                    cx.prepareStatement(
+                            format(
+                                    "create index %s_zyx_idx on %s(zoom_level, tile_column, tile_row);",
+                                    e.getTableName(), e.getTableName()))) {
+                st.execute();
+            }
+
+            // update the metadata tables
+            addGeoPackageContentsEntry(e, cx);
         } catch (SQLException ex) {
             throw new IOException(ex);
         }

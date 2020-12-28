@@ -5,37 +5,24 @@
      * @return The entry, or <code>null</code> if no such entry exists.
      */
     public TileEntry tile(String name) throws IOException {
-        try {
-            Connection cx = connPool.getConnection();
-            try {
-                String sql =
-                        format(
-                                "SELECT a.*, c.organization_coordsys_id, c.definition"
-                                        + " FROM %s a, %s c"
-                                        + " WHERE a.srs_id = c.srs_id"
-                                        + " AND a.table_name = ?"
-                                        + " AND a.data_type = ?",
-                                GEOPACKAGE_CONTENTS, SPATIAL_REF_SYS);
-                LOGGER.fine(sql);
+        String sql =
+                format(
+                        "SELECT a.*, c.organization_coordsys_id, c.definition"
+                                + " FROM %s a, %s c"
+                                + " WHERE a.srs_id = c.srs_id"
+                                + " AND a.table_name = ?"
+                                + " AND a.data_type = ?",
+                        GEOPACKAGE_CONTENTS, SPATIAL_REF_SYS);
+        LOGGER.fine(sql);
+        try (Connection cx = connPool.getConnection();
+                PreparedStatement ps = cx.prepareStatement(sql)) {
+            ps.setString(1, name);
+            ps.setString(2, DataType.Tile.value());
 
-                PreparedStatement ps = cx.prepareStatement(sql);
-                try {
-                    ps.setString(1, name);
-                    ps.setString(2, DataType.Tile.value());
-
-                    ResultSet rs = ps.executeQuery();
-                    try {
-                        if (rs.next()) {
-                            return createTileEntry(rs, cx);
-                        }
-                    } finally {
-                        close(rs);
-                    }
-                } finally {
-                    close(ps);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return createTileEntry(rs, cx);
                 }
-            } finally {
-                close(cx);
             }
         } catch (SQLException e) {
             throw new IOException(e);
