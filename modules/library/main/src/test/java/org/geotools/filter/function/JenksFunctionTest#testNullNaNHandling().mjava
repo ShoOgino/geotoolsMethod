@@ -1,0 +1,55 @@
+    @Test
+    public void testNullNaNHandling() throws Exception {
+        // create a feature collection
+        SimpleFeatureType ft =
+                DataUtilities.createType("classification.nullnan", "id:0,foo:int,bar:double");
+        Integer iVal[] =
+                new Integer[] {
+                    Integer.valueOf(0),
+                    Integer.valueOf(0),
+                    Integer.valueOf(0),
+                    Integer.valueOf(13),
+                    Integer.valueOf(13),
+                    Integer.valueOf(13),
+                    null,
+                    null,
+                    null
+                };
+        Double dVal[] =
+                new Double[] {
+                    Double.valueOf(0.0),
+                    Double.valueOf(50.01),
+                    null,
+                    Double.valueOf(0.0),
+                    Double.valueOf(50.01),
+                    null,
+                    Double.valueOf(0.0),
+                    Double.valueOf(50.01),
+                    null
+                };
+
+        SimpleFeature[] testFeatures = new SimpleFeature[iVal.length];
+
+        for (int i = 0; i < iVal.length; i++) {
+            testFeatures[i] =
+                    SimpleFeatureBuilder.build(
+                            ft,
+                            new Object[] {
+                                Integer.valueOf(i + 1), iVal[i], dVal[i],
+                            },
+                            "nantest.t" + (i + 1));
+        }
+        SimpleFeatureSource source = DataUtilities.source(testFeatures);
+        SimpleFeatureCollection thisFC = source.getFeatures();
+
+        // create the expression
+        Divide divide = ff.divide(ff.property("foo"), ff.property("bar"));
+        JenksNaturalBreaksFunction qf =
+                (JenksNaturalBreaksFunction) ff.function("Jenks", divide, ff.literal(3));
+
+        RangedClassifier range = (RangedClassifier) qf.evaluate(thisFC);
+        assertEquals(3, range.getSize()); // 2 or 3?
+        assertEquals("0..0", range.getTitle(0));
+        assertEquals("0..0", range.getTitle(1));
+    }
+
