@@ -2,54 +2,70 @@
     public void testGetFeatureReaderFilterTransaction() throws NoSuchElementException, IOException {
 
         SimpleFeatureType type = data.getSchema("road");
-        FeatureReader<SimpleFeatureType, SimpleFeature> reader;
 
-        reader = data.getFeatureReader(new Query("road", Filter.EXCLUDE), defaultTransaction);
-        Assert.assertEquals(type, reader.getFeatureType());
-        Assert.assertEquals(0, count(reader));
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                data.getFeatureReader(new Query("road", Filter.EXCLUDE), defaultTransaction)) {
+            Assert.assertEquals(type, reader.getFeatureType());
+            Assert.assertEquals(0, count(reader));
+        }
 
-        reader = data.getFeatureReader(new Query("road"), defaultTransaction);
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                data.getFeatureReader(new Query("road"), defaultTransaction)) {
+            assertTrue(reader instanceof DiffFeatureReader);
+            Assert.assertEquals(type, reader.getFeatureType());
+            Assert.assertEquals(roadFeatures.length, count(reader));
+        }
 
-        assertTrue(reader instanceof DiffFeatureReader);
-        Assert.assertEquals(type, reader.getFeatureType());
-        Assert.assertEquals(roadFeatures.length, count(reader));
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                data.getFeatureReader(new Query("road", rd1Filter), defaultTransaction)) {
 
-        reader = data.getFeatureReader(new Query("road", rd1Filter), defaultTransaction);
+            Assert.assertEquals(type, reader.getFeatureType());
+            Assert.assertEquals(1, count(reader));
+        }
 
-        Assert.assertEquals(type, reader.getFeatureType());
-        Assert.assertEquals(1, count(reader));
-
-        FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
+        try (FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
                 ((ContentFeatureStore) data.getFeatureSource("road", defaultTransaction))
-                        .getWriter(Filter.INCLUDE);
-        SimpleFeature feature;
+                        .getWriter(Filter.INCLUDE)) {
+            SimpleFeature feature;
 
-        while (writer.hasNext()) {
-            feature = writer.next();
+            while (writer.hasNext()) {
+                feature = writer.next();
 
-            if (feature.getID().equals("road.rd1")) {
-                writer.remove();
+                if (feature.getID().equals("road.rd1")) {
+                    writer.remove();
+                }
             }
         }
 
-        reader = data.getFeatureReader(new Query("road", Filter.EXCLUDE), defaultTransaction);
-        Assert.assertEquals(0, count(reader));
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                data.getFeatureReader(new Query("road", Filter.EXCLUDE), defaultTransaction)) {
+            Assert.assertEquals(0, count(reader));
+        }
 
-        reader = data.getFeatureReader(new Query("road"), defaultTransaction);
-        Assert.assertEquals(roadFeatures.length - 1, count(reader));
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                data.getFeatureReader(new Query("road"), defaultTransaction)) {
+            Assert.assertEquals(roadFeatures.length - 1, count(reader));
+        }
 
-        reader = data.getFeatureReader(new Query("road", rd1Filter), defaultTransaction);
-        Assert.assertEquals(0, count(reader));
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                data.getFeatureReader(new Query("road", rd1Filter), defaultTransaction)) {
+            Assert.assertEquals(0, count(reader));
+        }
 
         defaultTransaction.rollback();
-        reader = data.getFeatureReader(new Query("road", Filter.EXCLUDE), defaultTransaction);
-        Assert.assertEquals(0, count(reader));
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                data.getFeatureReader(new Query("road", Filter.EXCLUDE), defaultTransaction)) {
+            Assert.assertEquals(0, count(reader));
+        }
 
-        reader = data.getFeatureReader(new Query("road"), defaultTransaction);
-        Assert.assertEquals(roadFeatures.length, count(reader));
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                data.getFeatureReader(new Query("road"), defaultTransaction)) {
+            Assert.assertEquals(roadFeatures.length, count(reader));
+        }
 
-        reader = data.getFeatureReader(new Query("road", rd1Filter), defaultTransaction);
-
-        Assert.assertEquals(1, count(reader));
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                data.getFeatureReader(new Query("road", rd1Filter), defaultTransaction)) {
+            Assert.assertEquals(1, count(reader));
+        }
     }
 

@@ -15,24 +15,21 @@
         tb.setName("shapefile");
         tb.add("the_geom", Point.class);
         ds.createSchema(tb.buildFeatureType());
-        Transaction transaction = Transaction.AUTO_COMMIT;
-        FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
-                ds.getFeatureWriter(ds.getTypeNames()[0], Transaction.AUTO_COMMIT);
-        SimpleFeature feature = writer.next();
-        feature.setAttribute(0, null);
-        writer.close();
-        transaction.commit();
+        try (Transaction transaction = Transaction.AUTO_COMMIT;
+                FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
+                        ds.getFeatureWriter(ds.getTypeNames()[0], Transaction.AUTO_COMMIT)) {
+            SimpleFeature feature = writer.next();
+            feature.setAttribute(0, null);
+            transaction.commit();
+        }
         ds.dispose();
 
         // Read the same file and check the geometry is null
         ShpFiles shpFiles = new ShpFiles(shpUrl);
-        ShapefileReader reader =
-                new ShapefileReader(shpFiles, false, true, new GeometryFactory(), false);
-        try {
+        try (ShapefileReader reader =
+                new ShapefileReader(shpFiles, false, true, new GeometryFactory(), false)) {
             assertTrue(reader.hasNext());
             assertNull(reader.nextRecord().shape());
-        } finally {
-            reader.close();
         }
     }
 

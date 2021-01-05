@@ -28,26 +28,27 @@
         BufferFeatureCollection process = new BufferFeatureCollection();
         SimpleFeatureCollection output = process.execute(features, null, "buffer");
         Assert.assertEquals(5, output.size());
-        SimpleFeatureIterator iterator = output.features();
-        ReferencedEnvelope expectedBounds =
-                new ReferencedEnvelope(output.getSchema().getCoordinateReferenceSystem());
-        for (int numFeatures = 0; numFeatures < 5; numFeatures++) {
-            Coordinate[] array = new Coordinate[4];
-            int j = 0;
-            for (int i = 0 + numFeatures; i < 3 + numFeatures; i++) {
-                array[j] = new Coordinate(i, i);
-                j++;
+        try (SimpleFeatureIterator iterator = output.features()) {
+            ReferencedEnvelope expectedBounds =
+                    new ReferencedEnvelope(output.getSchema().getCoordinateReferenceSystem());
+            for (int numFeatures = 0; numFeatures < 5; numFeatures++) {
+                Coordinate[] array = new Coordinate[4];
+                int j = 0;
+                for (int i = 0 + numFeatures; i < 3 + numFeatures; i++) {
+                    array[j] = new Coordinate(i, i);
+                    j++;
+                }
+                array[3] = new Coordinate(numFeatures, numFeatures);
+                LinearRing shell = gf.createLinearRing(new CoordinateArraySequence(array));
+                Geometry expected = gf.createPolygon(shell, null).buffer(numFeatures + 1);
+                expectedBounds.expandToInclude(expected.getEnvelopeInternal());
+
+                SimpleFeature sf = iterator.next();
+                Assert.assertTrue(expected.equals((Geometry) sf.getDefaultGeometry()));
             }
-            array[3] = new Coordinate(numFeatures, numFeatures);
-            LinearRing shell = gf.createLinearRing(new CoordinateArraySequence(array));
-            Geometry expected = gf.createPolygon(shell, null).buffer(numFeatures + 1);
-            expectedBounds.expandToInclude(expected.getEnvelopeInternal());
 
-            SimpleFeature sf = iterator.next();
-            Assert.assertTrue(expected.equals((Geometry) sf.getDefaultGeometry()));
+            Assert.assertEquals(expectedBounds, output.getBounds());
+            Assert.assertEquals(5, output.size());
         }
-
-        Assert.assertEquals(expectedBounds, output.getBounds());
-        Assert.assertEquals(5, output.size());
     }
 

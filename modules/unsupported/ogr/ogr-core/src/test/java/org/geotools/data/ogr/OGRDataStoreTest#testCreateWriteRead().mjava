@@ -24,32 +24,32 @@
                             null);
         }
 
-        FeatureWriter writer = ds.getFeatureWriterAppend("testw", Transaction.AUTO_COMMIT);
-        for (SimpleFeature simpleFeature : features) {
-            assertFalse(writer.hasNext());
-            SimpleFeature f = (SimpleFeature) writer.next();
-            f.setAttributes(simpleFeature.getAttributes());
-            writer.write();
-        }
-        writer.close();
-
-        FeatureReader reader = ds.getFeatureReader(new Query("testw"), null);
-        for (SimpleFeature feature : features) {
-            assertTrue(reader.hasNext());
-            SimpleFeature f = (SimpleFeature) reader.next();
-            for (int j = 0; j < schema.getAttributeCount(); j++) {
-                if (f.getAttribute(j) instanceof Geometry) {
-                    // this is necessary because geometry equality is
-                    // implemented as Geometry.equals(Geometry)
-                    Geometry a = (Geometry) f.getAttribute(j);
-                    Geometry b = (Geometry) feature.getAttribute(j);
-                    assertTrue(a.equals(b));
-                } else {
-                    assertEquals(f.getAttribute(j), feature.getAttribute(j));
-                }
+        try (FeatureWriter writer = ds.getFeatureWriterAppend("testw", Transaction.AUTO_COMMIT)) {
+            for (SimpleFeature simpleFeature : features) {
+                assertFalse(writer.hasNext());
+                SimpleFeature f = (SimpleFeature) writer.next();
+                f.setAttributes(simpleFeature.getAttributes());
+                writer.write();
             }
         }
-        assertFalse(reader.hasNext());
-        reader.close();
+
+        try (FeatureReader reader = ds.getFeatureReader(new Query("testw"), null)) {
+            for (SimpleFeature feature : features) {
+                assertTrue(reader.hasNext());
+                SimpleFeature f = (SimpleFeature) reader.next();
+                for (int j = 0; j < schema.getAttributeCount(); j++) {
+                    if (f.getAttribute(j) instanceof Geometry) {
+                        // this is necessary because geometry equality is
+                        // implemented as Geometry.equals(Geometry)
+                        Geometry a = (Geometry) f.getAttribute(j);
+                        Geometry b = (Geometry) feature.getAttribute(j);
+                        assertEquals(a, b);
+                    } else {
+                        assertEquals(f.getAttribute(j), feature.getAttribute(j));
+                    }
+                }
+            }
+            assertFalse(reader.hasNext());
+        }
     }
 

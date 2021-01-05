@@ -76,25 +76,24 @@
         // listener
         final GridCoverageReaderProgressAdapter readerAdapter =
                 new GridCoverageReaderProgressAdapter(myListener);
-        final InputStream input = TestData.openStream(GridCoverage2D.class, "CHL01195.png");
+        try (InputStream input = TestData.openStream(GridCoverage2D.class, "CHL01195.png")) {
+            ImageReader reader = ImageIO.getImageReadersByFormatName("png").next();
+            reader.setInput(ImageIOExt.createImageInputStream(input));
+            reader.addIIOReadProgressListener(readerAdapter);
+            reader.addIIOReadUpdateListener(readerAdapter);
+            TimerTask task =
+                    new TimerTask() {
 
-        ImageReader reader = ImageIO.getImageReadersByFormatName("png").next();
-        reader.setInput(ImageIOExt.createImageInputStream(input));
-        reader.addIIOReadProgressListener(readerAdapter);
-        reader.addIIOReadUpdateListener(readerAdapter);
-        TimerTask task =
-                new TimerTask() {
-
-                    @Override
-                    public void run() {
-                        readerAdapter.monitor.setCanceled(true);
-                    }
-                };
-        new Timer().schedule(task, 1500);
-        BufferedImage image = reader.read(0);
-        reader.dispose();
-        image.flush();
-        image = null;
+                        @Override
+                        public void run() {
+                            readerAdapter.monitor.setCanceled(true);
+                        }
+                    };
+            new Timer().schedule(task, 1500);
+            BufferedImage image = reader.read(0);
+            reader.dispose();
+            image.flush();
+        }
 
         if (!PackageUtil.isCodecLibAvailable()) {
             assertFalse(adaptee.isCompleted());

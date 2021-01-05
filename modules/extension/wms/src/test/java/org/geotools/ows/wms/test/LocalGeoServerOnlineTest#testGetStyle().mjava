@@ -40,36 +40,32 @@
 
         // Set encoding of response from HTTP content-type header
         ContentType contentType = new ContentType(wmsResponse.getContentType());
-        InputStreamReader stream;
-        if (contentType.getParameter("charset") != null)
-            stream =
-                    new InputStreamReader(
-                            wmsResponse.getInputStream(), contentType.getParameter("charset"));
-        else stream = new InputStreamReader(wmsResponse.getInputStream());
+        try (InputStreamReader stream = getInputStreamReader(wmsResponse, contentType)) {
 
-        Style[] styles = (new SLDParser(styleFactory, stream)).readXML();
+            Style[] styles = (new SLDParser(styleFactory, stream)).readXML();
 
-        assert styles.length > 0;
+            assert styles.length > 0;
 
-        SLDTransformer styleTransform = new SLDTransformer();
-        StyledLayerDescriptorBuilder SLDBuilder = new StyledLayerDescriptorBuilder();
+            SLDTransformer styleTransform = new SLDTransformer();
+            StyledLayerDescriptorBuilder SLDBuilder = new StyledLayerDescriptorBuilder();
 
-        NamedLayerBuilder namedLayerBuilder = SLDBuilder.namedLayer();
-        namedLayerBuilder.name(layers);
-        StyleBuilder styleBuilder = namedLayerBuilder.style();
+            NamedLayerBuilder namedLayerBuilder = SLDBuilder.namedLayer();
+            namedLayerBuilder.name(layers);
+            StyleBuilder styleBuilder = namedLayerBuilder.style();
 
-        for (int i = 0; i < styles.length; i++) {
-            styleBuilder.reset(styles[i]);
-            styles[i] = styleBuilder.build();
+            for (int i = 0; i < styles.length; i++) {
+                styleBuilder.reset(styles[i]);
+                styles[i] = styleBuilder.build();
+            }
+
+            NamedLayer namedLayer = namedLayerBuilder.build();
+
+            for (Style style : styles) namedLayer.addStyle(style);
+
+            StyledLayerDescriptor sld = (new StyledLayerDescriptorBuilder()).build();
+            sld.addStyledLayer(namedLayer);
+            String xml = styleTransform.transform(sld);
+            assert xml.length() > 300;
         }
-
-        NamedLayer namedLayer = namedLayerBuilder.build();
-
-        for (Style style : styles) namedLayer.addStyle(style);
-
-        StyledLayerDescriptor sld = (new StyledLayerDescriptorBuilder()).build();
-        sld.addStyledLayer(namedLayer);
-        String xml = styleTransform.transform(sld);
-        assert xml.length() > 300;
     }
 

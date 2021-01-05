@@ -76,26 +76,27 @@
         // listener
         final GridCoverageWriterProgressAdapter writerAdapter =
                 new GridCoverageWriterProgressAdapter(myListener);
-        final InputStream input = TestData.openStream(GridCoverage2D.class, "CHL01195.png");
-        final BufferedImage image = ImageIO.read(input);
+        try (InputStream input = TestData.openStream(GridCoverage2D.class, "CHL01195.png")) {
+            final BufferedImage image = ImageIO.read(input);
 
-        ImageWriter writer = ImageIO.getImageWritersByFormatName("tiff").next();
-        writer.setOutput(
-                ImageIOExt.createImageOutputStream(
-                        image, TestData.temp(ImageWorkerTest.class, "CHL01195.tif")));
-        writer.addIIOWriteProgressListener(writerAdapter);
-        writer.addIIOWriteWarningListener(writerAdapter);
-        TimerTask task =
-                new TimerTask() {
+            ImageWriter writer = ImageIO.getImageWritersByFormatName("tiff").next();
+            writer.setOutput(
+                    ImageIOExt.createImageOutputStream(
+                            image, TestData.temp(ImageWorkerTest.class, "CHL01195.tif")));
+            writer.addIIOWriteProgressListener(writerAdapter);
+            writer.addIIOWriteWarningListener(writerAdapter);
+            TimerTask task =
+                    new TimerTask() {
 
-                    @Override
-                    public void run() {
-                        writerAdapter.monitor.setCanceled(true);
-                    }
-                };
-        new Timer().schedule(task, 1000);
-        writer.write(image);
-        writer.dispose();
+                        @Override
+                        public void run() {
+                            writerAdapter.monitor.setCanceled(true);
+                        }
+                    };
+            new Timer().schedule(task, 1000);
+            writer.write(image);
+            writer.dispose();
+        }
 
         assertFalse(adaptee.isCompleted());
         assertTrue(adaptee.isStarted());

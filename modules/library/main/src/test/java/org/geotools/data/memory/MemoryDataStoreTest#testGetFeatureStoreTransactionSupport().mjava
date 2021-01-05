@@ -1,91 +1,92 @@
     @Test
     public void testGetFeatureStoreTransactionSupport() throws Exception {
-        Transaction t1 = new DefaultTransaction();
-        Transaction t2 = new DefaultTransaction();
+        try (Transaction t1 = new DefaultTransaction();
+                Transaction t2 = new DefaultTransaction()) {
+            SimpleFeatureStore road = (SimpleFeatureStore) data.getFeatureSource("road");
+            SimpleFeatureStore road1 = (SimpleFeatureStore) data.getFeatureSource("road");
+            SimpleFeatureStore road2 = (SimpleFeatureStore) data.getFeatureSource("road");
 
-        SimpleFeatureStore road = (SimpleFeatureStore) data.getFeatureSource("road");
-        SimpleFeatureStore road1 = (SimpleFeatureStore) data.getFeatureSource("road");
-        SimpleFeatureStore road2 = (SimpleFeatureStore) data.getFeatureSource("road");
+            road1.setTransaction(t1);
+            road2.setTransaction(t2);
 
-        road1.setTransaction(t1);
-        road2.setTransaction(t2);
+            SimpleFeature feature;
+            SimpleFeature[] ORIGIONAL = roadFeatures;
+            SimpleFeature[] REMOVE = new SimpleFeature[ORIGIONAL.length - 1];
+            SimpleFeature[] ADD = new SimpleFeature[ORIGIONAL.length + 1];
+            SimpleFeature[] FINAL = new SimpleFeature[ORIGIONAL.length];
+            int i;
+            int index;
+            index = 0;
 
-        SimpleFeature feature;
-        SimpleFeature[] ORIGIONAL = roadFeatures;
-        SimpleFeature[] REMOVE = new SimpleFeature[ORIGIONAL.length - 1];
-        SimpleFeature[] ADD = new SimpleFeature[ORIGIONAL.length + 1];
-        SimpleFeature[] FINAL = new SimpleFeature[ORIGIONAL.length];
-        int i;
-        int index;
-        index = 0;
+            for (i = 0; i < ORIGIONAL.length; i++) {
+                feature = ORIGIONAL[i];
 
-        for (i = 0; i < ORIGIONAL.length; i++) {
-            feature = ORIGIONAL[i];
-
-            if (!feature.getID().equals("road.rd1")) {
-                REMOVE[index++] = feature;
+                if (!feature.getID().equals("road.rd1")) {
+                    REMOVE[index++] = feature;
+                }
             }
+
+            for (i = 0; i < ORIGIONAL.length; i++) {
+                ADD[i] = ORIGIONAL[i];
+            }
+
+            ADD[i] = newRoad;
+
+            for (i = 0; i < REMOVE.length; i++) {
+                FINAL[i] = REMOVE[i];
+            }
+
+            FINAL[i] = newRoad;
+
+            // start of with ORIGINAL
+            assertTrue(covers(road.getFeatures().features(), ORIGIONAL));
+
+            // road1 removes road.rd1 on t1
+            // -------------------------------
+            // - tests transaction independence from DataStore
+            road1.removeFeatures(rd1Filter);
+
+            // still have ORIGIONAL and t1 has REMOVE
+            assertTrue(covers(road.getFeatures().features(), ORIGIONAL));
+            assertTrue(covers(road1.getFeatures().features(), REMOVE));
+
+            // road2 adds road.rd4 on t2
+            // ----------------------------
+            // - tests transaction independence from each other
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    DataUtilities.reader(
+                            new SimpleFeature[] {
+                                newRoad,
+                            })) {
+                road2.addFeatures(DataUtilities.collection(reader));
+            }
+
+            // We still have ORIGIONAL, t1 has REMOVE, and t2 has ADD
+            assertTrue(covers(road.getFeatures().features(), ORIGIONAL));
+            assertTrue(covers(road1.getFeatures().features(), REMOVE));
+            assertTrue(coversLax(road2.getFeatures().features(), ADD));
+
+            // commit t1
+            // ---------
+            // -ensure that delayed writing of transactions takes place
+            //
+            t1.commit();
+
+            // We now have REMOVE, as does t1 (which has not additional diffs)
+            // t2 will have FINAL
+            assertTrue(covers(road.getFeatures().features(), REMOVE));
+            assertTrue(covers(road1.getFeatures().features(), REMOVE));
+            assertTrue(coversLax(road2.getFeatures().features(), FINAL));
+
+            // commit t2
+            // ---------
+            // -ensure that everyone is FINAL at the end of the day
+            t2.commit();
+
+            // We now have Number( remove one and add one)
+            assertTrue(coversLax(road.getFeatures().features(), FINAL));
+            assertTrue(coversLax(road1.getFeatures().features(), FINAL));
+            assertTrue(coversLax(road2.getFeatures().features(), FINAL));
         }
-
-        for (i = 0; i < ORIGIONAL.length; i++) {
-            ADD[i] = ORIGIONAL[i];
-        }
-
-        ADD[i] = newRoad;
-
-        for (i = 0; i < REMOVE.length; i++) {
-            FINAL[i] = REMOVE[i];
-        }
-
-        FINAL[i] = newRoad;
-
-        // start of with ORIGINAL
-        assertTrue(covers(road.getFeatures().features(), ORIGIONAL));
-
-        // road1 removes road.rd1 on t1
-        // -------------------------------
-        // - tests transaction independence from DataStore
-        road1.removeFeatures(rd1Filter);
-
-        // still have ORIGIONAL and t1 has REMOVE
-        assertTrue(covers(road.getFeatures().features(), ORIGIONAL));
-        assertTrue(covers(road1.getFeatures().features(), REMOVE));
-
-        // road2 adds road.rd4 on t2
-        // ----------------------------
-        // - tests transaction independence from each other
-        FeatureReader<SimpleFeatureType, SimpleFeature> reader =
-                DataUtilities.reader(
-                        new SimpleFeature[] {
-                            newRoad,
-                        });
-        road2.addFeatures(DataUtilities.collection(reader));
-
-        // We still have ORIGIONAL, t1 has REMOVE, and t2 has ADD
-        assertTrue(covers(road.getFeatures().features(), ORIGIONAL));
-        assertTrue(covers(road1.getFeatures().features(), REMOVE));
-        assertTrue(coversLax(road2.getFeatures().features(), ADD));
-
-        // commit t1
-        // ---------
-        // -ensure that delayed writing of transactions takes place
-        //
-        t1.commit();
-
-        // We now have REMOVE, as does t1 (which has not additional diffs)
-        // t2 will have FINAL
-        assertTrue(covers(road.getFeatures().features(), REMOVE));
-        assertTrue(covers(road1.getFeatures().features(), REMOVE));
-        assertTrue(coversLax(road2.getFeatures().features(), FINAL));
-
-        // commit t2
-        // ---------
-        // -ensure that everyone is FINAL at the end of the day
-        t2.commit();
-
-        // We now have Number( remove one and add one)
-        assertTrue(coversLax(road.getFeatures().features(), FINAL));
-        assertTrue(coversLax(road1.getFeatures().features(), FINAL));
-        assertTrue(coversLax(road2.getFeatures().features(), FINAL));
     }
 

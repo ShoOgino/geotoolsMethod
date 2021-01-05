@@ -22,26 +22,26 @@
                         ff.featureId(fidPrefix + ".2"));
         // force creation of a fid index
         ds.indexManager.hasFidIndex(true);
-        FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
                 ds.getFeatureReader(
-                        new Query(ds.getTypeNames()[0], filter), Transaction.AUTO_COMMIT);
-        assertTrue(reader instanceof IndexedShapefileFeatureReader);
+                        new Query(ds.getTypeNames()[0], filter), Transaction.AUTO_COMMIT)) {
+            assertTrue(reader instanceof IndexedShapefileFeatureReader);
 
-        // prepare a screenmap that will heavily prune features
-        ScreenMap screenMap = new ScreenMap(-180, -90, 360, 180);
-        screenMap.setSpans(1.0, 1.0);
-        screenMap.setTransform(IdentityTransform.create(2));
-        ((ShapefileFeatureReader) reader).setScreenMap(screenMap);
-        ((ShapefileFeatureReader) reader).setSimplificationDistance(1.0);
+            // prepare a screenmap that will heavily prune features
+            ScreenMap screenMap = new ScreenMap(-180, -90, 360, 180);
+            screenMap.setSpans(1.0, 1.0);
+            screenMap.setTransform(IdentityTransform.create(2));
+            ((ShapefileFeatureReader) reader).setScreenMap(screenMap);
+            ((ShapefileFeatureReader) reader).setSimplificationDistance(1.0);
 
-        int count = 0;
-        while (reader.hasNext()) {
-            SimpleFeature feature = reader.next();
-            assertNotNull(feature);
-            assertNotSame(ShapefileFeatureReader.SKIP, feature.getDefaultGeometry());
-            count++;
+            int count = 0;
+            while (reader.hasNext()) {
+                SimpleFeature feature = reader.next();
+                assertNotNull(feature);
+                assertNotSame(ShapefileFeatureReader.SKIP, feature.getDefaultGeometry());
+                count++;
+            }
+            assertEquals(1, count);
         }
-        assertEquals(1, count);
-        reader.close();
     }
 

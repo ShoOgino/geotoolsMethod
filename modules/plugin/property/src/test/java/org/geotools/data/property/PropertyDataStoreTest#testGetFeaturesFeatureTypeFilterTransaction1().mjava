@@ -1,38 +1,38 @@
     @Test
     public void testGetFeaturesFeatureTypeFilterTransaction1() throws Exception {
         Query roadQuery = new Query("road");
-        FeatureReader<SimpleFeatureType, SimpleFeature> reader =
-                store.getFeatureReader(roadQuery, Transaction.AUTO_COMMIT);
-        int count = 0;
-        try {
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                store.getFeatureReader(roadQuery, Transaction.AUTO_COMMIT)) {
+            int count = 0;
             while (reader.hasNext()) {
                 reader.next();
                 count++;
             }
-        } finally {
-            reader.close();
+            Assert.assertEquals(5, count);
         }
-        Assert.assertEquals(5, count);
 
         Filter selectFid1;
 
         selectFid1 = ff.id(Collections.singleton(ff.featureId("fid1")));
-        reader = store.getFeatureReader(new Query("road", selectFid1), Transaction.AUTO_COMMIT);
-        Assert.assertEquals(1, count(reader));
-
-        Transaction transaction = new DefaultTransaction();
-        reader = store.getFeatureReader(roadQuery, transaction);
-        Assert.assertEquals(5, count(reader));
-
-        reader = store.getFeatureReader(roadQuery, transaction);
-        List<String> list = new ArrayList<>();
-        try {
-            while (reader.hasNext()) {
-                list.add(reader.next().getID());
-            }
-        } finally {
-            reader.close();
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                store.getFeatureReader(new Query("road", selectFid1), Transaction.AUTO_COMMIT)) {
+            Assert.assertEquals(1, count(reader));
         }
-        Assert.assertEquals("[fid1, fid2, fid3, fid4, fid5]", list.toString());
+
+        try (Transaction transaction = new DefaultTransaction()) {
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    store.getFeatureReader(roadQuery, transaction)) {
+                Assert.assertEquals(5, count(reader));
+            }
+
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    store.getFeatureReader(roadQuery, transaction)) {
+                List<String> list = new ArrayList<>();
+                while (reader.hasNext()) {
+                    list.add(reader.next().getID());
+                }
+                Assert.assertEquals("[fid1, fid2, fid3, fid4, fid5]", list.toString());
+            }
+        }
     }
 

@@ -17,37 +17,35 @@
 
         ArrayList<String> processedFeatureIds = new ArrayList<>();
 
-        FeatureIterator<Feature> guIterator = guFeatures.features();
-        while (guIterator.hasNext()) {
-            Feature guFeature = guIterator.next();
-            String guId = guFeature.getIdentifier().toString();
-            String[] mfIds = guToOccurrenceMap.get(guId).split(";");
-            Collection<Property> properties = guFeature.getProperties(OCCURENCE);
+        try (FeatureIterator<Feature> guIterator = guFeatures.features()) {
+            while (guIterator.hasNext()) {
+                Feature guFeature = guIterator.next();
+                String guId = guFeature.getIdentifier().toString();
+                String[] mfIds = guToOccurrenceMap.get(guId).split(";");
+                Collection<Property> properties = guFeature.getProperties(OCCURENCE);
 
-            assertEquals(mfIds.length, properties.size());
+                assertEquals(mfIds.length, properties.size());
 
-            int propertyIndex = 0;
-            for (Property property : properties) {
-                Object clientProps = property.getUserData().get(Attributes.class);
-                assertNotNull(clientProps);
-                assertTrue(clientProps instanceof HashMap);
-                Object hrefValue =
-                        ((Map) clientProps).get(AbstractMappingFeatureIterator.XLINK_HREF_NAME);
+                int propertyIndex = 0;
+                for (Property property : properties) {
+                    Object clientProps = property.getUserData().get(Attributes.class);
+                    assertNotNull(clientProps);
+                    assertTrue(clientProps instanceof HashMap);
+                    Object hrefValue =
+                            ((Map) clientProps).get(AbstractMappingFeatureIterator.XLINK_HREF_NAME);
 
-                // ensure the right href:xlink is there
-                assertEquals(MF_PREFIX + mfIds[propertyIndex], hrefValue);
+                    // ensure the right href:xlink is there
+                    assertEquals(MF_PREFIX + mfIds[propertyIndex], hrefValue);
 
-                // ensure no attributes would be encoded
-                assertTrue(((Collection) property.getValue()).isEmpty());
-                propertyIndex++;
+                    // ensure no attributes would be encoded
+                    assertTrue(((Collection) property.getValue()).isEmpty());
+                    propertyIndex++;
+                }
+                processedFeatureIds.add(guId);
             }
-            processedFeatureIds.add(guId);
+
+            assertEquals(guToOccurrenceMap.size(), processedFeatureIds.size());
+            assertTrue(processedFeatureIds.containsAll(guToOccurrenceMap.keySet()));
         }
-
-        assertEquals(guToOccurrenceMap.size(), processedFeatureIds.size());
-        assertTrue(processedFeatureIds.containsAll(guToOccurrenceMap.keySet()));
-
-        // clean ups
-        guIterator.close();
     }
 

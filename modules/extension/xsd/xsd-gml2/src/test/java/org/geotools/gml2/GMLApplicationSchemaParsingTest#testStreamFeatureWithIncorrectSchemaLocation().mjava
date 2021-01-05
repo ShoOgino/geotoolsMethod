@@ -1,40 +1,34 @@
     @Test
     public void testStreamFeatureWithIncorrectSchemaLocation() throws Exception {
-        InputStream in = getClass().getResourceAsStream("feature.xml");
-
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-
-        Document document = factory.newDocumentBuilder().parse(in);
-
-        // update hte schema location
-        document.getDocumentElement().removeAttribute("xsi:schemaLocation");
-
-        // reserialize the document
         File schemaFile = File.createTempFile("test", "xsd");
         schemaFile.deleteOnExit();
 
-        Transformer tx = TransformerFactory.newInstance().newTransformer();
-        tx.transform(new DOMSource(document), new StreamResult(schemaFile));
+        try (InputStream in = getClass().getResourceAsStream("feature.xml")) {
 
-        in.close();
-        in = new FileInputStream(schemaFile);
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
 
-        GMLConfiguration configuration = new GMLConfiguration();
-        StreamingParser parser = new StreamingParser(configuration, in, "//TestFeature");
+            Document document = factory.newDocumentBuilder().parse(in);
 
-        for (int i = 0; i < 3; i++) {
-            SimpleFeature f = (SimpleFeature) parser.parse();
+            // update hte schema location
+            document.getDocumentElement().removeAttribute("xsi:schemaLocation");
 
-            Assert.assertNotNull(f);
+            // reserialize the document
+            Transformer tx = TransformerFactory.newInstance().newTransformer();
+            tx.transform(new DOMSource(document), new StreamResult(schemaFile));
         }
+        try (FileInputStream in = new FileInputStream(schemaFile)) {
 
-        Assert.assertNull(parser.parse());
+            GMLConfiguration configuration = new GMLConfiguration();
+            StreamingParser parser = new StreamingParser(configuration, in, "//TestFeature");
 
-        try {
-            in.close();
-        } catch (IOException e) {
-            // nothing to do, but this throws an exception under java 6
+            for (int i = 0; i < 3; i++) {
+                SimpleFeature f = (SimpleFeature) parser.parse();
+
+                Assert.assertNotNull(f);
+            }
+
+            Assert.assertNull(parser.parse());
         }
     }
 

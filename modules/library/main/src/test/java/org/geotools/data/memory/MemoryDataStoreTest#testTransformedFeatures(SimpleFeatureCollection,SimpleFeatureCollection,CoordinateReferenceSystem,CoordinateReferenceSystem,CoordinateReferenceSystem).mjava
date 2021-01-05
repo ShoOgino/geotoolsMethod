@@ -26,30 +26,32 @@
             targetCRS = forcedCRS;
         }
 
-        SimpleFeatureIterator i = sourceFeatures.features();
-        SimpleFeatureIterator j = transformedFeatures.features();
+        try (SimpleFeatureIterator i = sourceFeatures.features();
+                SimpleFeatureIterator j = transformedFeatures.features()) {
 
-        // Go through all the features
-        while (i.hasNext() && j.hasNext()) {
-            SimpleFeature sourceFeature = i.next();
-            SimpleFeature transformedFeature = j.next();
-            Assert.assertEquals(
-                    targetCRS, transformedFeature.getFeatureType().getCoordinateReferenceSystem());
+            // Go through all the features
+            while (i.hasNext() && j.hasNext()) {
+                SimpleFeature sourceFeature = i.next();
+                SimpleFeature transformedFeature = j.next();
+                Assert.assertEquals(
+                        targetCRS,
+                        transformedFeature.getFeatureType().getCoordinateReferenceSystem());
 
-            for (int k = 0; k < sourceFeature.getAttributes().size(); k++) {
-                Object o = sourceFeature.getAttributes().get(k);
+                for (int k = 0; k < sourceFeature.getAttributes().size(); k++) {
+                    Object o = sourceFeature.getAttributes().get(k);
 
-                // Check that the geometry was transformed correctly
-                if (o instanceof Geometry) {
-                    Geometry sourceGeometry = (Geometry) o;
-                    Geometry transformedGeometry =
-                            (Geometry) transformedFeature.getAttributes().get(k);
+                    // Check that the geometry was transformed correctly
+                    if (o instanceof Geometry) {
+                        Geometry sourceGeometry = (Geometry) o;
+                        Geometry transformedGeometry =
+                                (Geometry) transformedFeature.getAttributes().get(k);
 
-                    Geometry expectedGeometry = sourceGeometry.copy();
-                    if (reprojectCRS != null) {
-                        expectedGeometry = transformer.transform(expectedGeometry);
+                        Geometry expectedGeometry = sourceGeometry.copy();
+                        if (reprojectCRS != null) {
+                            expectedGeometry = transformer.transform(expectedGeometry);
+                        }
+                        assertEquals(expectedGeometry, transformedGeometry);
                     }
-                    assertEquals(expectedGeometry, transformedGeometry);
                 }
             }
         }

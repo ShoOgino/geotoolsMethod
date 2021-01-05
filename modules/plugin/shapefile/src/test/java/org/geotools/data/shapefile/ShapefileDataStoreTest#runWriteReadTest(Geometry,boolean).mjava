@@ -28,37 +28,37 @@
         // read features
         shapeDataStore = new ShapefileDataStore(tmpFile.toURI().toURL());
         SimpleFeatureCollection fc = loadFeatures(shapeDataStore);
-        SimpleFeatureIterator fci = fc.features();
-        // verify
-        while (fci.hasNext()) {
-            SimpleFeature f = fci.next();
-            Geometry fromShape = (Geometry) f.getDefaultGeometry();
+        try (SimpleFeatureIterator fci = fc.features()) {
+            // verify
+            while (fci.hasNext()) {
+                SimpleFeature f = fci.next();
+                Geometry fromShape = (Geometry) f.getDefaultGeometry();
 
-            if (fromShape instanceof GeometryCollection) {
-                if (!(geom instanceof GeometryCollection)) {
-                    fromShape = fromShape.getGeometryN(0);
-                }
-            }
-            try {
-                // check if the original is valid as we're going to fix unclosed rings
-                // as we read them out of the shapefile
-                if (geom.isValid()) {
-                    Coordinate[] c1 = geom.getCoordinates();
-                    Coordinate[] c2 = fromShape.getCoordinates();
-                    for (int cc = 0, ccc = c1.length; cc < ccc; cc++) {
-                        if (d3) assertTrue(c1[cc].equals3D(c2[cc]));
-                        else assertTrue(c1[cc].equals2D(c2[cc]));
+                if (fromShape instanceof GeometryCollection) {
+                    if (!(geom instanceof GeometryCollection)) {
+                        fromShape = fromShape.getGeometryN(0);
                     }
                 }
-            } catch (Throwable t) {
-                fail(
-                        "Bogus : "
-                                + Arrays.asList(geom.getCoordinates())
-                                + " : "
-                                + Arrays.asList(fromShape.getCoordinates()));
+                try {
+                    // check if the original is valid as we're going to fix unclosed rings
+                    // as we read them out of the shapefile
+                    if (geom.isValid()) {
+                        Coordinate[] c1 = geom.getCoordinates();
+                        Coordinate[] c2 = fromShape.getCoordinates();
+                        for (int cc = 0, ccc = c1.length; cc < ccc; cc++) {
+                            if (d3) assertTrue(c1[cc].equals3D(c2[cc]));
+                            else assertTrue(c1[cc].equals2D(c2[cc]));
+                        }
+                    }
+                } catch (Throwable t) {
+                    fail(
+                            "Bogus : "
+                                    + Arrays.asList(geom.getCoordinates())
+                                    + " : "
+                                    + Arrays.asList(fromShape.getCoordinates()));
+                }
             }
         }
-        fci.close();
         tmpFile.delete();
         shapeDataStore.dispose();
     }

@@ -18,28 +18,28 @@
         FeatureSource<FeatureType, Feature> complexSource = dataStore.getFeatureSource(targetName);
         FeatureCollection<FeatureType, Feature> features = complexSource.getFeatures(filter);
 
-        FeatureIterator<Feature> reader = features.features();
+        try (FeatureIterator<Feature> reader = features.features()) {
+            PropertyIsEqualTo equivalentSourceFilter =
+                    ff.equals(ff.property("ph"), ff.literal(Integer.valueOf(3)));
+            FeatureCollection<?, ?> collection =
+                    mapping.getSource().getFeatures(equivalentSourceFilter);
 
-        PropertyIsEqualTo equivalentSourceFilter =
-                ff.equals(ff.property("ph"), ff.literal(Integer.valueOf(3)));
-        FeatureCollection<?, ?> collection =
-                mapping.getSource().getFeatures(equivalentSourceFilter);
+            int count = 0;
+            int expectedCount = collection.size();
 
-        int count = 0;
-        int expectedCount = collection.size();
+            Filter badFilter =
+                    ff.greater(
+                            ff.property("sample/measurement[1]/value"),
+                            ff.literal(Integer.valueOf(3)));
 
-        Filter badFilter =
-                ff.greater(
-                        ff.property("sample/measurement[1]/value"), ff.literal(Integer.valueOf(3)));
-
-        while (reader.hasNext()) {
-            Feature f = reader.next();
-            assertNotNull(f);
-            assertTrue(filter.evaluate(f));
-            assertFalse(badFilter.evaluate(f));
-            count++;
+            while (reader.hasNext()) {
+                Feature f = reader.next();
+                assertNotNull(f);
+                assertTrue(filter.evaluate(f));
+                assertFalse(badFilter.evaluate(f));
+                count++;
+            }
+            assertEquals(expectedCount, count);
         }
-        reader.close();
-        assertEquals(expectedCount, count);
     }
 
