@@ -1,0 +1,51 @@
+    private Object clipGeometry(Geometry geom, Class target, CoordinateReferenceSystem crs) {
+        // first off, clip
+        Geometry clipped = null;
+        if (clipper != null) {
+            clipped = clipper.clip(geom, true);
+        } else {
+            if (geom.getEnvelopeInternal().intersects(clip.getEnvelopeInternal())) {
+                clipped = clip.intersection(geom);
+            }
+        }
+
+        if (clipped == null) {
+            return null;
+        }
+
+        // empty intersection?
+        GeometryDimensionCollector collector = new GeometryDimensionCollector(geom.getDimension());
+        clipped.apply(collector);
+        Geometry result = collector.collect();
+        if (result == null) {
+            return null;
+        }
+
+        // manage Z preservation
+        if (preserveZ && !geom.equalsExact(clipped)) {
+            // Check if the clipped geometry has 3 ordinates across entire area.
+            GeometryEditor editor = new GeometryEditor();
+            result =
+                    editor.edit(
+                            result,
+                            new GeometryEditor.CoordinateOperation() {
+                                @Override
+                                public Coordinate[] edit(
+                                        Coordinate[] coordinates, Geometry geometry) {
+                                    return CoordinateArrays.enforceConsistency(coordinates, 3, 0);
+                                }
+                            });
+            // for polygons we need to go idw, for points and multipoints idw will do and will
+            // not
+            // add much overhead (it has optimizations for points that were already in the
+            // input)
+            if (result.getDimension() == 2 || result.getDimension() == 0) {
+                result.apply(new IDWElevationInterpolator(geom, crs));
+            } else if (result.getDimension() == 1) {
+                result.apply(new LinearElevationInterpolator(geom, crs));
+            }
+        }
+
+        return result;
+    }
+
