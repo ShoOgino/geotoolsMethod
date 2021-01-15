@@ -1,0 +1,85 @@
+    /**
+     * Constructs a coordinate system from a set of properties. The properties map is given
+     * unchanged to the {@linkplain AbstractIdentifiedObject#AbstractIdentifiedObject(Map)
+     * super-class constructor}.
+     *
+     * @param properties Set of properties. Should contains at least {@code "name"}.
+     * @param axis The set of axis.
+     */
+    public AbstractCS(final Map<String, ?> properties, final CoordinateSystemAxis... axis) {
+        super(properties);
+        ensureNonNull("axis", axis);
+        this.axis = axis.clone();
+        for (int i = 0; i < axis.length; i++) {
+            ensureNonNull("axis", axis, i);
+            final AxisDirection direction = axis[i].getDirection();
+            ensureNonNull("direction", direction);
+            /*
+             * Ensures that axis direction and units are compatible with the
+             * coordinate system to be created. For example CartesianCS will
+             * accepts only linear or dimensionless units.
+             */
+            if (!isCompatibleDirection(direction)) {
+                // TOOD: localize name()
+                throw new IllegalArgumentException(
+                        Errors.format(
+                                ErrorKeys.ILLEGAL_AXIS_ORIENTATION_$2,
+                                direction.name(),
+                                getClass()));
+            }
+            final Unit<?> unit = axis[i].getUnit();
+            ensureNonNull("unit", unit);
+            if (!isCompatibleUnit(direction, unit)) {
+                throw new IllegalArgumentException(
+                        Errors.format(ErrorKeys.INCOMPATIBLE_UNIT_$1, unit));
+            }
+            /*
+             * Ensures there is no axis along the same direction
+             * (e.g. two North axis, or an East and a West axis).
+             */
+            final AxisDirection check = direction.absolute();
+            if (!check.equals(AxisDirection.OTHER)) {
+                for (int j = i; --j >= 0; ) {
+                    if (check.equals(axis[j].getDirection().absolute())) {
+                        // TODO: localize name()
+                        final String nameI = axis[i].getDirection().name();
+                        final String nameJ = axis[j].getDirection().name();
+                        throw new IllegalArgumentException(
+                                Errors.format(ErrorKeys.COLINEAR_AXIS_$2, nameI, nameJ));
+                    }
+                }
+            }
+            /*
+             * Checks for some inconsistency in naming and direction. For example if the axis
+             * is named "Northing", then the direction must be North. Exceptions to this rule
+             * are the directions along a meridian from a pole. For example a "Northing" axis
+             * may have a "South along 180 deg" direction.
+             */
+            final String name = axis[i].getName().getCode();
+            for (final DefaultCoordinateSystemAxis candidate : DIRECTION_CHECKS) {
+                if (candidate.nameMatches(name)) {
+                    final AxisDirection expected = candidate.getDirection();
+                    if (!direction.equals(expected)) {
+                        DirectionAlongMeridian m = DirectionAlongMeridian.parse(direction);
+                        /*
+                         * Note: for the check below, maybe it would have be nice to use:
+                         *
+                         *     if (m == null || m.baseDirection.equals(expected.opposite())
+                         *
+                         * but the EPSG database contains many axis named "Northing" with
+                         * direction like "South along 180 deg", so it doesn't seem to be
+                         * considered as a contradiction...
+                         */
+                        if (m == null) {
+                            throw new IllegalArgumentException(
+                                    Errors.format(
+                                            ErrorKeys.INCONSISTENT_AXIS_ORIENTATION_$2,
+                                            name,
+                                            direction.name()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+

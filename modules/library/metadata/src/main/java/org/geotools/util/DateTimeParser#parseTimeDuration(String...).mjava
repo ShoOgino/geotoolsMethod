@@ -1,0 +1,62 @@
+    private Date[] parseTimeDuration(final String... period) throws ParseException {
+        Date[] range = null;
+
+        if (period.length == 2 || period.length == 3) {
+            Date begin = null;
+            Date end = null;
+
+            // Check first to see if we have any duration value within TIME parameter
+            if (period[0].toUpperCase().startsWith("P")
+                    || period[1].toUpperCase().startsWith("P")) {
+                long durationOffset = Long.MIN_VALUE;
+
+                // Attempt to parse a time or duration from the first portion of the
+                if (period[0].toUpperCase().startsWith("P")) {
+                    durationOffset = parsePeriod(period[0]);
+                } else {
+                    begin = beginning(getFuzzyDate(period[0]));
+                }
+
+                if (period[1].toUpperCase().startsWith("P")
+                        && !period[1].toUpperCase().startsWith("PRESENT")) {
+                    // Invalid time period of the format:
+                    // DURATION/DURATION[/PERIOD]
+                    if (durationOffset != Long.MIN_VALUE) {
+                        throw new ParseException(
+                                "Invalid time period containing duration with no paired time value: "
+                                        + Arrays.toString(period),
+                                0);
+                    }
+                    // Time period of the format:
+                    // DURATION/TIME[/PERIOD]
+                    else {
+                        durationOffset = parsePeriod(period[1]);
+                        final Calendar calendar = new GregorianCalendar();
+                        calendar.setTimeInMillis(begin.getTime() + durationOffset);
+                        end = calendar.getTime();
+                    }
+                }
+                // Time period of the format:
+                // TIME/DURATION[/PERIOD]
+                else {
+                    end = end(getFuzzyDate(period[1]));
+                    final Calendar calendar = new GregorianCalendar();
+                    calendar.setTimeInMillis(end.getTime() - durationOffset);
+                    begin = calendar.getTime();
+                }
+            }
+            // Time period of the format:
+            // TIME/TIME[/PERIOD]
+            else {
+                begin = beginning(getFuzzyDate(period[0]));
+                end = end(getFuzzyDate(period[1]));
+            }
+
+            range = new Date[2];
+            range[0] = begin;
+            range[1] = end;
+        }
+
+        return range;
+    }
+
