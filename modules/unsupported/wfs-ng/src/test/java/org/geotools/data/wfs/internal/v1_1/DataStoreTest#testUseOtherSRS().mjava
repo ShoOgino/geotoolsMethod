@@ -1,0 +1,38 @@
+    /**
+     * Test for the useDefaultSRS parameter set to false. Query in a CRS listed in OtherSRS should
+     * be done in OtherSRS and not reprojected.
+     */
+    @Test
+    public void testUseOtherSRS()
+            throws IOException, NoSuchAuthorityCodeException, FactoryException, ServiceException {
+
+        TestWFSClient wfs = createWFSClient();
+        wfs.mockGetFeatureRequest(CUBEWERX_GOVUNITCE.DATA, qTypeName, Filter.INCLUDE);
+
+        WFSDataStore ds = new WFSDataStore(wfs);
+        wfs.setUseDefaultSrs(true);
+        Query query = new Query(CUBEWERX_GOVUNITCE.FEATURETYPENAME);
+
+        // use the OtherSRS
+        CoordinateReferenceSystem otherCrs = CRS.decode("EPSG:4326");
+        query.setCoordinateSystem(otherCrs);
+        FeatureReader<SimpleFeatureType, SimpleFeature> featureReader;
+        featureReader = ds.getFeatureReader(query, Transaction.AUTO_COMMIT);
+        assertNotNull(featureReader);
+        assertTrue(featureReader instanceof ReprojectFeatureReader);
+        assertEquals(otherCrs, featureReader.getFeatureType().getCoordinateReferenceSystem());
+        GetFeatureRequest request = wfs.getRequest();
+        assertNull(request.getSrsName());
+
+        // use an SRS not supported by server
+        CoordinateReferenceSystem unknownCrs = CRS.decode("EPSG:3003");
+        query.setCoordinateSystem(unknownCrs);
+
+        featureReader = ds.getFeatureReader(query, Transaction.AUTO_COMMIT);
+        assertNotNull(featureReader);
+        assertTrue(featureReader instanceof ReprojectFeatureReader);
+        assertEquals(unknownCrs, featureReader.getFeatureType().getCoordinateReferenceSystem());
+        request = wfs.getRequest();
+        assertNull(request.getSrsName());
+    }
+

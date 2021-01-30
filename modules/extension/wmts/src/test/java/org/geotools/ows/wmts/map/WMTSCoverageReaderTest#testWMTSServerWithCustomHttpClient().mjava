@@ -6,11 +6,23 @@
         final URL wmtsUrl = new URL("http://fake.local/wmts");
 
         // Mock HTTPClient
-        MockHTTPResponse getCapabilitiesResponse = new MockHTTPResponse(KVP_CAPA_RESOURCENAME);
-        MockHTTPResponse getTileResponse = new MockHTTPResponse("test-data/world.png");
+        final File kvpCapaFile = WMTSCoverageReaderTest.this.getResourceFile(KVP_CAPA_RESOURCENAME);
+        HTTPResponse getCapabilitiesResponse =
+                new MockHttpResponse(kvpCapaFile, "application/xml; UTF-8");
+
+        final File worldFile = WMTSCoverageReaderTest.this.getResourceFile("test-data/world.png");
+        HTTPResponse getTileResponse = new MockHttpResponse(worldFile, "application/xml; UTF-8");
+
         final Map<String, String> getTileHeadersCalled = new HashMap<>();
+
         HTTPClient owsHttpClient =
-                new MockHttpClient() {
+                new AbstractHttpClient() {
+
+                    @Override
+                    public HTTPResponse get(URL url) throws IOException {
+                        return this.get(url, null);
+                    }
+
                     @Override
                     public HTTPResponse get(URL url, Map<String, String> headers) {
                         if (url.toString().toLowerCase().contains("request=getcapabilities")) {
@@ -23,6 +35,14 @@
                             throw new NotImplementedException(
                                     "request is not implemented. " + url.toString());
                         }
+                    }
+
+                    @Override
+                    public HTTPResponse post(
+                            URL url, InputStream postContent, String postContentType)
+                            throws IOException {
+                        throw new UnsupportedOperationException(
+                                "POST not supported, if needed you have to override and implement");
                     }
                 };
         owsHttpClient.setUser("username");

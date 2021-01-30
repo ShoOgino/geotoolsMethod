@@ -8,8 +8,16 @@
     public HTTPClient getHttpClient(final Map<String, ?> params) throws IOException {
         final URL capabilitiesURL = URL.lookUp(params);
         final WFSConfig config = WFSConfig.fromParams(params);
-        return config.isUseHttpConnectionPooling() && isHttp(capabilitiesURL)
-                ? new MultithreadedHttpClient(config)
-                : new SimpleHttpClient();
+        if (config.isUseHttpConnectionPooling() && isHttp(capabilitiesURL)) {
+            HTTPClient client = HTTPClientFinder.createClient(HTTPConnectionPooling.class);
+
+            client.setReadTimeout(config.getTimeoutMillis() / 1000);
+            client.setConnectTimeout(config.getTimeoutMillis() / 1000);
+            ((HTTPConnectionPooling) client).setMaxConnections(config.getMaxConnectionPoolSize());
+
+            return client;
+        } else {
+            return HTTPClientFinder.createClient();
+        }
     }
 
