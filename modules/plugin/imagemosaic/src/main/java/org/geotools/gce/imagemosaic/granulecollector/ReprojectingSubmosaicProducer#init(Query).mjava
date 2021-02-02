@@ -1,0 +1,20 @@
+    /**
+     * This method collects all CRS specific responses and raster manager, to avoid creating a
+     * deadlock caused by having a visit on granules (keeping one connection open) doing bounds
+     * query (grabbing another connection along the way, and setting the conditions for a connection
+     * pool deadlock). This is really a workaround for FeatureSource and GranuleCatalog not exposing
+     * a way to use Transactions on read-only operations (a shared transaction would make the code
+     * use the same connection in the two operations).
+     *
+     * @param query
+     * @throws IOException
+     */
+    @Override
+    public void init(Query query) throws Exception {
+        // go over the granules and collect reference ones for each CRS
+        GranuleCatalog catalog = rasterLayerResponse.getRasterManager().getGranuleCatalog();
+        ReprojectedResponseCollector collector = new ReprojectedResponseCollector();
+        catalog.getGranuleDescriptors(query, collector);
+        this.crsResponses = collector.getResponses();
+    }
+
