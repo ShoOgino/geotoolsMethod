@@ -1,0 +1,73 @@
+    @Override
+    protected int getCountInternal(Query query) throws IOException {
+        // the primaryKey from the wrapped JDBCSource
+        String idColumnName = getIdColumnName(getSchema());
+        JoiningQuery jQuery = (JoiningQuery) query;
+        FilterAttributeExtractor extractor = new FilterAttributeExtractor();
+        jQuery.getRootMapping().getFeatureIdExpression().accept(extractor, null);
+        String[] attributes = extractor.getAttributeNames();
+        // the id from the app-schema configuration
+        String idMapping = attributes.length > 0 ? extractor.getAttributeNames()[0] : null;
+        boolean idsColumnEquals = idColumnName.equals(idMapping);
+        boolean isJoining = jQuery.getQueryJoins().size() > 0;
+        // they are equals we can delegate the count to the underlying JDBCFeatureSource
+        if (idsColumnEquals && !isJoining) return super.getCountInternal(query);
+
+        // not equals the count should be over the actually used
+        // field for the ComplexFeature's id
+        if (!idsColumnEquals && idMapping != null) idColumnName = idMapping;
+
+        // rebuild a new query with the same params, but just the pre-filter
+
+        // Build the feature type returned by this query. Also build an eventual extra feature type
+        // containing the attributes we might need in order to evaluate the post filter
+        SimpleFeatureType querySchema = getSchema();
+
+        // grab connection
+        JDBCDataStore store = getDataStore();
+        Connection cx = store.getConnection(getState().getTransaction());
+        Statement st = null;
+        ResultSet rs = null;
+        try {
+
+            SQLDialect dialect = store.getSQLDialect();
+
+            if (dialect instanceof PreparedStatementSQLDialect) {
+                AtomicReference<PreparedFilterToSQL> toSQLref = new AtomicReference<>();
+                String sql =
+                        !isJoining
+                                ? createCountQuery(dialect, querySchema, jQuery, idColumnName)
+                                : createJoiningCountQuery(
+                                        dialect, querySchema, jQuery, idColumnName, toSQLref);
+                st =
+                        cx.prepareStatement(
+                                sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
+                st.setFetchSize(getDataStore().fetchSize);
+                rs = ((PreparedStatement) st).executeQuery();
+            } else {
+                String sql =
+                        !isJoining
+                                ? createCountQuery(dialect, querySchema, jQuery, idColumnName)
+                                : createJoiningCountQuery(
+                                        dialect, querySchema, jQuery, idColumnName, null);
+                st = cx.createStatement();
+                rs = st.executeQuery(sql);
+            }
+            int result = 0;
+            if (rs.next()) {
+                Object value = rs.getObject(1);
+                result = Converters.convert(value, Integer.class);
+            }
+            int maxFeatures = query.getMaxFeatures();
+            if (maxFeatures > 0 && result > maxFeatures) result = query.getMaxFeatures();
+            return result;
+        } catch (Exception e) {
+            // safely rethrow
+            throw (IOException) new IOException().initCause(e);
+        } finally {
+            store.closeSafe(rs);
+            store.closeSafe(st);
+            store.closeSafe(cx);
+        }
+    }
+

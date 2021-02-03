@@ -1,0 +1,54 @@
+    private boolean applyPaging(
+            JoiningQuery query,
+            boolean isRootFeature,
+            StringBuffer sql,
+            SimpleFeatureType featureType,
+            Set<String> pkColumnNames,
+            Set<String> tableNames,
+            FilterToSQL toSQL,
+            Filter filter,
+            Collection<String> ids,
+            String[] aliases)
+            throws IOException, SQLException, FilterToSQLException {
+        boolean pagingApplied = false;
+
+        if (isRootFeature && query.isDenormalised()) {
+            // apply inner join for paging to root feature
+            // if not denormalised, it will apply the maxFeatures and offset in the query
+            // directly later
+            pagingApplied =
+                    applyPaging(
+                            query,
+                            sql,
+                            pkColumnNames,
+                            featureType.getTypeName(),
+                            featureType.getTypeName(),
+                            tableNames,
+                            toSQL,
+                            filter,
+                            ids);
+        } else if (!isRootFeature) {
+            // also we always need to apply paging for the last queryJoin since it is the
+            // join to
+            // the root feature type (where the original paging parameters come from)
+
+            int lastJoinIndex = query.getQueryJoins().size() - 1;
+            QueryJoin lastJoin = query.getQueryJoins().get(lastJoinIndex);
+            String lastTableName = query.getQueryJoins().get(lastJoinIndex).getJoiningTypeName();
+            String lastTableAlias =
+                    aliases[lastJoinIndex] == null ? lastTableName : aliases[lastJoinIndex];
+            pagingApplied =
+                    applyPaging(
+                            lastJoin,
+                            sql,
+                            pkColumnNames,
+                            lastTableName,
+                            lastTableAlias,
+                            tableNames,
+                            toSQL,
+                            filter,
+                            ids);
+        }
+        return pagingApplied;
+    }
+

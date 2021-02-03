@@ -1,0 +1,26 @@
+    private boolean canCount(
+            Query query, FeatureSource mappedSource, FeatureTypeMapping rootMapping)
+            throws IOException {
+        boolean canCount = false;
+        if (query.getFilter().equals(Filter.INCLUDE)) canCount = true;
+        FilterCapabilities capabilities = null;
+        if (mappedSource instanceof JDBCFeatureSource) {
+            capabilities =
+                    ((JDBCFeatureSource) mappedSource).getDataStore().getFilterCapabilities();
+        } else if (mappedSource instanceof JDBCFeatureStore) {
+            capabilities = ((JDBCFeatureStore) mappedSource).getDataStore().getFilterCapabilities();
+        }
+        if (capabilities != null) {
+            ComplexFilterSplitter splitter = new ComplexFilterSplitter(capabilities, rootMapping);
+            Filter filter = query.getFilter();
+            filter.accept(splitter, null);
+            Filter postFilter = splitter.getFilterPost();
+            // if we have PostFilter with nested attributes we cannot count unless
+            // we build each Feature
+            if (postFilter == null || postFilter.equals(Filter.INCLUDE)) {
+                canCount = true;
+            }
+        }
+        return canCount;
+    }
+
