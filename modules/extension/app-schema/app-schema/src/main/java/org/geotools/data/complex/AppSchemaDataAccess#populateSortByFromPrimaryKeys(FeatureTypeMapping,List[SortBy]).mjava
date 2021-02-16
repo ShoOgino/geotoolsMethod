@@ -1,0 +1,27 @@
+    // if the store is a jdbc one, tries to build sortBy on Primary keys
+    private void populateSortByFromPrimaryKeys(FeatureTypeMapping mappings, List<SortBy> sorts) {
+        FeatureSource source = mappings.getSource();
+        FeatureType featureType = source.getSchema();
+        JDBCDataStore store = null;
+        if (source instanceof JDBCFeatureSource) {
+            JDBCFeatureSource jdbcSource = (JDBCFeatureSource) source;
+            store = jdbcSource.getDataStore();
+        } else if (source instanceof JDBCFeatureStore)
+            store = ((JDBCFeatureStore) source).getDataStore();
+        if (store != null) {
+            try {
+                PrimaryKey primaryKey = store.getPrimaryKey((SimpleFeatureType) source.getSchema());
+                if (primaryKey != null) {
+                    for (PrimaryKeyColumn column : primaryKey.getColumns()) {
+                        PropertyName pn = filterFac.property(column.getName());
+                        // check the that the attribute exists in mappings/featureType
+                        if (pn.evaluate(featureType) != null)
+                            sorts.add(new SortByImpl(pn, SortOrder.ASCENDING));
+                    }
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
