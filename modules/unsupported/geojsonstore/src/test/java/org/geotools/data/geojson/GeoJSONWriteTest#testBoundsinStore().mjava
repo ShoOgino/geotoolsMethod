@@ -1,0 +1,40 @@
+    @Test
+    public void testBoundsinStore() throws IOException {
+        URL states = TestData.url("shapes/statepop.shp");
+        FileDataStore ds = FileDataStoreFinder.getDataStore(states);
+        assertNotNull(ds);
+        String name = ds.getTypeNames()[0];
+        File out = new File(tmp, "statepop.json");
+        out.createNewFile();
+        HashMap<String, Serializable> params = new HashMap<>();
+        params.put(GeoJSONDataStoreFactory.FILE_PARAM.key, out);
+        GeoJSONDataStoreFactory factory = new GeoJSONDataStoreFactory();
+        DataStore outDS = factory.createNewDataStore(params);
+
+        assertNotNull(outDS);
+        SimpleFeatureType schema = ds.getSchema(name);
+
+        outDS.createSchema(schema);
+
+        SimpleFeatureSource featureSource = null;
+        try {
+            featureSource = outDS.getFeatureSource(schema.getTypeName());
+        } catch (IOException e1) {
+            log.log(Level.INFO, "Didn't get a featureSource", e1);
+            fail();
+        }
+
+        assertTrue("Modification not supported", featureSource instanceof SimpleFeatureStore);
+        SimpleFeatureStore store = (SimpleFeatureStore) featureSource;
+
+        store.addFeatures(ds.getFeatureSource().getFeatures());
+        ds.dispose();
+
+        /*try (BufferedReader r = new BufferedReader(new FileReader(out))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                //   System.out.println(line);
+            }
+        }*/
+    }
+
