@@ -5,8 +5,18 @@
      */
     private void writeFeature(SimpleFeature currentFeature, JsonGenerator g)
             throws IOException, JsonProcessingException {
+        Geometry defaultGeometry = (Geometry) currentFeature.getDefaultGeometry();
+        if (isEncodeFeatureBounds() && notWritenBbox) {
+            final BoundingBox bbox = currentFeature.getDefaultGeometryProperty().getBounds();
+            if (bounds == null) {
+                this.bounds = new ReferencedEnvelope(bbox);
+            } else {
+                bounds.expandToInclude((Envelope) bbox);
+            }
+        }
         g.writeStartObject();
         g.writeStringField("type", "Feature");
+
         g.writeFieldName("properties");
         g.writeStartObject();
         for (Property p : currentFeature.getProperties()) {
@@ -17,7 +27,7 @@
             Object value = p.getValue();
             String name = p.getName().getLocalPart();
             if (value == null) {
-                generator.writeNullField(name);
+                g.writeNullField(name);
                 continue;
             }
             Class<?> binding = p.getType().getBinding();
@@ -32,34 +42,16 @@
         }
         g.writeEndObject();
 
-        Geometry defaultGeometry = (Geometry) currentFeature.getDefaultGeometry();
         // Check CRS and Axis order before writing out to comply with
         // https://tools.ietf.org/html/rfc7946 unless they asked nicely
         if (!encodeFeatureCollectionCRS) {
-            CoordinateReferenceSystem inCRS =
-                    currentFeature
-                            .getDefaultGeometryProperty()
-                            .getDescriptor()
-                            .getCoordinateReferenceSystem();
-            if (transform == null || inCRS != lastCRS) {
-                lastCRS = inCRS;
-                try {
-                    transform = CRS.findMathTransform(inCRS, outCRS, true);
-                } catch (FactoryException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-            if (!CRS.equalsIgnoreMetadata(inCRS, outCRS)) {
-                // reproject
-                try {
-                    defaultGeometry = JTS.transform(defaultGeometry, transform);
-                } catch (MismatchedDimensionException | TransformException e) {
-                    throw new RuntimeException(e);
-                }
-            }
+            defaultGeometry = reprojectGeometry(currentFeature);
         }
 
         if (defaultGeometry != null) {
+            if (isEncodeFeatureBounds()) {
+                writeBbox(g, defaultGeometry);
+            }
             g.writeFieldName("geometry");
             String gString = mapper.writeValueAsString(defaultGeometry);
 

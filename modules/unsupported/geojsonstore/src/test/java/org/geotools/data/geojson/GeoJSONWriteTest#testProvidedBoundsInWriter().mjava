@@ -1,0 +1,44 @@
+    @Test
+    public void testProvidedBoundsInWriter() throws IOException {
+        URL states = TestData.url("shapes/statepop.shp");
+        FileDataStore ds = FileDataStoreFinder.getDataStore(states);
+        assertNotNull(ds);
+        String name = ds.getTypeNames()[0];
+        File out = new File(tmp, "statepop2.json");
+        ReferencedEnvelope bbox = ds.getFeatureSource().getBounds();
+
+        HashMap<String, Serializable> params = new HashMap<>();
+        params.put(GeoJSONDataStoreFactory.FILE_PARAM.key, out);
+        params.put(GeoJSONDataStoreFactory.WRITE_BOUNDS.key, true);
+        params.put(GeoJSONDataStoreFactory.BOUNDING_BOX.key, bbox);
+        GeoJSONDataStoreFactory factory = new GeoJSONDataStoreFactory();
+        DataStore outDS = factory.createNewDataStore(params);
+        SimpleFeature feature, newFeature;
+
+        SimpleFeatureType featureType = ds.getSchema();
+        outDS.createSchema(featureType);
+        Query query = new Query(featureType.getTypeName(), Filter.INCLUDE);
+        assertNotNull(outDS);
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                        ds.getFeatureReader(query, Transaction.AUTO_COMMIT);
+                FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
+                        outDS.getFeatureWriterAppend(name, Transaction.AUTO_COMMIT)) {
+            while (reader.hasNext()) {
+                feature = reader.next();
+                newFeature = writer.next();
+
+                newFeature.setAttributes(feature.getAttributes());
+                writer.write();
+            }
+        }
+
+        try (BufferedReader r = new BufferedReader(new FileReader(out))) {
+
+            assertTrue(
+                    "missing bbox",
+                    r.readLine()
+                            .startsWith(
+                                    "{\"type\":\"FeatureCollection\",\"bbox\":[-124.7314,24.956,-66.9698,49.3717],"));
+        }
+    }
+
