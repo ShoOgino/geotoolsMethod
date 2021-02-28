@@ -12,43 +12,35 @@
      *
      * @return Comparator suitable for use with Arrays.sort( SimpleFeature[], comparator )
      */
+    @SuppressWarnings("unchecked")
     public static Comparator<SimpleFeature> sortComparator(SortBy sortBy) {
         if (sortBy == null) {
             sortBy = SortBy.NATURAL_ORDER;
         }
         if (sortBy == SortBy.NATURAL_ORDER) {
-            return new Comparator<SimpleFeature>() {
-                public int compare(SimpleFeature f1, SimpleFeature f2) {
-                    return f1.getID().compareTo(f2.getID());
-                }
-            };
+            return (f1, f2) -> f1.getID().compareTo(f2.getID());
         } else if (sortBy == SortBy.REVERSE_ORDER) {
-            return new Comparator<SimpleFeature>() {
-                public int compare(SimpleFeature f1, SimpleFeature f2) {
-                    int compare = f1.getID().compareTo(f2.getID());
-                    return -compare;
-                }
+            return (f1, f2) -> {
+                int compare = f1.getID().compareTo(f2.getID());
+                return -compare;
             };
         } else {
             final PropertyName propertyName = sortBy.getPropertyName();
             final SortOrder sortOrder = sortBy.getSortOrder();
-            return new Comparator<SimpleFeature>() {
-                @SuppressWarnings("unchecked")
-                public int compare(SimpleFeature f1, SimpleFeature f2) {
-                    Object value1 = propertyName.evaluate(f1, Comparable.class);
-                    Object value2 = propertyName.evaluate(f2, Comparable.class);
-                    if (value1 == null || value2 == null) {
-                        return 0; // cannot perform comparison
-                    }
-                    if (value1 instanceof Comparable && value1.getClass().isInstance(value2)) {
-                        if (sortOrder == SortOrder.ASCENDING) {
-                            return ((Comparable<Object>) value1).compareTo(value2);
-                        } else {
-                            return ((Comparable<Object>) value2).compareTo(value1);
-                        }
+            return (f1, f2) -> {
+                Object value1 = propertyName.evaluate(f1, Comparable.class);
+                Object value2 = propertyName.evaluate(f2, Comparable.class);
+                if (value1 == null || value2 == null) {
+                    return 0; // cannot perform comparison
+                }
+                if (value1 instanceof Comparable && value1.getClass().isInstance(value2)) {
+                    if (sortOrder == SortOrder.ASCENDING) {
+                        return ((Comparable<Object>) value1).compareTo(value2);
                     } else {
-                        return 0; // cannot perform comparison
+                        return ((Comparable<Object>) value2).compareTo(value1);
                     }
+                } else {
+                    return 0; // cannot perform comparison
                 }
             };
         }
