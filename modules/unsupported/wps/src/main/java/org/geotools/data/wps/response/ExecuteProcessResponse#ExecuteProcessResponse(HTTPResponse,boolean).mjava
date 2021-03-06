@@ -21,13 +21,22 @@
                     inputStream.mark(8192);
 
                     try {
-                        XmlPullParser parser = new MXParser();
-                        parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, true);
-                        parser.setInput(inputStream, "UTF-8");
-                        parser.nextTag();
+                        XMLInputFactory factory = XMLInputFactory.newFactory();
+                        // disable DTDs
+                        factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
+                        // disable external entities
+                        factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+                        XMLStreamReader parser =
+                                factory.createXMLStreamReader(inputStream, "UTF-8");
+                        // position at root element
+                        while (parser.hasNext()) {
+                            if (START_ELEMENT == parser.next()) {
+                                break;
+                            }
+                        }
 
                         // get the first tag name
-                        String name = parser.getName();
+                        String name = parser.getName().getLocalPart();
                         inputStream.reset();
                         if ("ServiceException".equals(name)
                                 || "ExceptionReport".equals(name)
@@ -35,7 +44,7 @@
                             parseDocumentResponse(inputStream);
                             return;
                         }
-                    } catch (XmlPullParserException e) {
+                    } catch (XMLStreamException e) {
                         throw new IOException("Failed to parse the response", e);
                     }
                 } else {

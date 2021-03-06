@@ -9,13 +9,19 @@
         this.targetType = targetType;
 
         try {
-            parser = new MXParser();
-            parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, true);
-
-            // parse root element
-            parser.setInput(inputStream, "UTF-8");
-            parser.nextTag();
-            parser.require(START_TAG, WFS.NAMESPACE, WFS.FeatureCollection.getLocalPart());
+            XMLInputFactory factory = XMLInputFactory.newFactory();
+            // disable DTDs
+            factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
+            // disable external entities
+            factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+            parser = factory.createXMLStreamReader(inputStream, "UTF-8");
+            // position at root element
+            while (parser.hasNext()) {
+                if (START_ELEMENT == parser.next()) {
+                    break;
+                }
+            }
+            parser.require(START_ELEMENT, WFS.NAMESPACE, WFS.FeatureCollection.getLocalPart());
 
             String nof = parser.getAttributeValue(null, "numberOfFeatures");
             if (nof != null) {
@@ -25,7 +31,7 @@
                     LOGGER.warning("Can't parse numberOfFeatures out of " + nof);
                 }
             }
-        } catch (XmlPullParserException e) {
+        } catch (XMLStreamException e) {
             throw new DataSourceException(e);
         }
     }
