@@ -2,12 +2,12 @@
     private void arcMapTest(String version, boolean get) throws IOException {
 
         String getCapabilities =
-                "http://cartowfs.nationalmap.gov/arcgis/services/structures/MapServer/WFSServer?request=GetCapabilities&service=WFS&version="
+                "https://gis-erd-der.gnb.ca/server/services/OpenData/ARMS/MapServer/WFSServer?service=wfs&request=getcapabilities&version="
                         + version;
         Map<String, Object> connectionParameters = new HashMap<>();
         connectionParameters.put(WFSDataStoreFactory.URL.key, getCapabilities);
         connectionParameters.put(WFSDataStoreFactory.LENIENT.key, Boolean.TRUE);
-        // connectionParameters.put(WFSDataStoreFactory.WFS_STRATEGY.key, "arcgis");
+        connectionParameters.put(WFSDataStoreFactory.WFS_STRATEGY.key, "arcgis");
         connectionParameters.put(WFSDataStoreFactory.TIMEOUT.key, 30);
         //
         if (get) {
@@ -21,7 +21,7 @@
         SimpleFeatureSource source = data.getFeatureSource(typeName);
 
         FilterFactory ff = CommonFactoryFinder.getFilterFactory(GeoTools.getDefaultHints());
-        Filter filter = ff.equals(ff.property("STATE"), ff.literal("MO"));
+        Filter filter = ff.like(ff.property("NBAFR"), "YON%", "%", ".", "!");
 
         Query query = new Query();
         query.setTypeName(typeName);
@@ -29,13 +29,14 @@
         query.setFilter(filter);
         SimpleFeatureCollection features = source.getFeatures(query);
         int size = features.size();
-
-        assertTrue(size > 10);
+        // System.out.println(size);
+        assertSame("Wrong number of features", size, 79);
         // Iterator through all the features and print them out.
         int count = 0;
         try (SimpleFeatureIterator iterator = features.features()) {
             while (iterator.hasNext() && count < 10) {
                 SimpleFeature feature = iterator.next();
+                // System.out.println(feature.getID());
                 assertTrue(expected.contains(feature.getID()));
                 count++;
             }
@@ -49,6 +50,7 @@
         try (SimpleFeatureIterator iterator = features.features()) {
             while (iterator.hasNext()) {
                 SimpleFeature feature = iterator.next();
+
                 assertTrue(expected.contains(feature.getID()));
             }
         }
