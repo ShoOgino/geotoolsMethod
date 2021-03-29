@@ -1,0 +1,48 @@
+    @Test
+    public void testShapefileDataStoreFeatureWriter() throws Exception {
+        URL url = TestData.url(this, RUSSIAN);
+        ShapefileDataStore dataStore = new ShapefileDataStore(url);
+        dataStore.setTryCPGFile(true);
+        int counter = 0;
+        try {
+            try (FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
+                    dataStore.getFeatureWriter(Transaction.AUTO_COMMIT)) {
+
+                SimpleFeature feature = null;
+
+                while (writer.hasNext()) {
+                    feature = writer.next();
+                    feature.setAttribute("TEXT", "Изменено"); // "Changed"
+                    writer.write();
+                    counter++;
+                }
+
+                assertThat(feature, is(notNullValue()));
+
+                SimpleFeature newFeature = writer.next();
+                newFeature.setAttributes(feature.getAttributes());
+                newFeature.setAttribute("TEXT", "Новый"); // "New"
+                writer.write();
+                counter++;
+            }
+
+            Query q = new Query(dataStore.getTypeNames()[0]);
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    dataStore.getFeatureReader(q, Transaction.AUTO_COMMIT)) {
+
+                SimpleFeature feature;
+                for (int i = 0; i < counter - 1; i++) {
+                    assertTrue(reader.hasNext());
+                    feature = reader.next();
+                    assertThat(feature.getAttribute("TEXT"), is(equalTo("Изменено")));
+                }
+
+                assertTrue(reader.hasNext());
+                feature = reader.next();
+                assertThat(feature.getAttribute("TEXT"), is(equalTo("Новый")));
+            }
+        } finally {
+            dataStore.dispose();
+        }
+    }
+
