@@ -1,11 +1,29 @@
     @Test
     public void testUTF8Chars() throws Exception {
-        // looks like "A, B, C" in an editor, but the B and C are actually weird UTF-8 entities
         DbaseFileWriter.FieldFormatter formatter =
                 new DbaseFileWriter.FieldFormatter(
                         StandardCharsets.UTF_8, TimeZone.getDefault(), false);
-        String test = "A, \u0412, \u0421";
-        String formattedString = formatter.getFieldString(8, test);
-        assertEquals("        ".getBytes().length, formattedString.getBytes().length);
+
+        int sizeInBytes = 4;
+
+        // a short string will be padded
+        String formattedString = formatter.getFieldString(sizeInBytes, "\u0412");
+        assertEquals(sizeInBytes, formattedString.getBytes().length);
+        assertEquals("\u0412  ", formattedString);
+
+        // a string of size btyes need no padding
+        formattedString = formatter.getFieldString(sizeInBytes, "\u0412\u0412");
+        assertEquals(sizeInBytes, formattedString.getBytes().length);
+        assertEquals("\u0412\u0412", formattedString);
+
+        // large strings get trucated
+        formattedString = formatter.getFieldString(sizeInBytes, "\u0412\u0412\u0412");
+        assertEquals(sizeInBytes, formattedString.getBytes().length);
+        assertEquals("\u0412\u0412", formattedString);
+
+        // if a multi-byte character is the last to be removed then padding may be required to
+        formattedString = formatter.getFieldString(sizeInBytes, "\u0412A\u0412\u0412");
+        assertEquals(sizeInBytes, formattedString.getBytes().length);
+        assertEquals("\u0412A ", formattedString);
     }
 
