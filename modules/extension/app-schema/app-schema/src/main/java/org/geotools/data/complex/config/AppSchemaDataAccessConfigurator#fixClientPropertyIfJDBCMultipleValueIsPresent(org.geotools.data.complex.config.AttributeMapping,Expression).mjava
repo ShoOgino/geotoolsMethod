@@ -1,0 +1,30 @@
+    // fix the PropertyName of a ClientProperty specified for an AttributeMapping
+    // that has JDBCMultipleValueDirective
+    private Expression fixClientPropertyIfJDBCMultipleValueIsPresent(
+            org.geotools.data.complex.config.AttributeMapping dto, Expression clientPropertyExpr) {
+        MultipleValue multipleValue = dto.getMultipleValue();
+        if (multipleValue instanceof JdbcMultipleValue) {
+            JdbcMultipleValue jdbcMultipleValue = (JdbcMultipleValue) multipleValue;
+            DuplicatingFilterVisitor duplicatingFilterVisitor =
+                    new DuplicatingFilterVisitor() {
+                        @Override
+                        public Object visit(PropertyName propertyName, Object extraData) {
+                            // create a JoinPropertyName out of the PropertyName
+                            // using the JDBCMultipleValue id as an alias.
+                            // the same alias is being used by the JoiningJDBCFeatureSource
+                            // when joining the targetTable
+                            JoinPropertyName joinPn =
+                                    new JoinPropertyName(
+                                            null,
+                                            jdbcMultipleValue.getId(),
+                                            propertyName.getPropertyName());
+                            joinPn.namespaceSupport = propertyName.getNamespaceContext();
+                            return joinPn;
+                        }
+                    };
+            clientPropertyExpr =
+                    (Expression) clientPropertyExpr.accept(duplicatingFilterVisitor, null);
+        }
+        return clientPropertyExpr;
+    }
+
