@@ -1,0 +1,24 @@
+    protected SimpleFeatureType getFeatureType(Name name) throws IOException {
+        getHeaderMeta();
+        if (headerMeta != null) {
+            SimpleFeatureTypeBuilder ftb = new SimpleFeatureTypeBuilder();
+            ftb.setName(name);
+            ftb.setAbstract(false);
+            CoordinateReferenceSystem crs;
+            try {
+                crs = headerMeta.srid > 0 ? CRS.decode("EPSG:" + headerMeta.srid) : null;
+            } catch (FactoryException e) {
+                throw new IOException(e);
+            }
+            ftb.setCRS(crs);
+            ftb.add("geom", GeometryConversions.getGeometryClass(headerMeta.geometryType));
+            for (ColumnMeta columnMeta : headerMeta.columns)
+                ftb.add(columnMeta.name, columnMeta.getBinding());
+            SimpleFeatureType featureType = ftb.buildFeatureType();
+            return featureType;
+        } else if (phantomFeatureType != null) {
+            return phantomFeatureType;
+        }
+        throw new RuntimeException("Could not get FeatureType");
+    }
+

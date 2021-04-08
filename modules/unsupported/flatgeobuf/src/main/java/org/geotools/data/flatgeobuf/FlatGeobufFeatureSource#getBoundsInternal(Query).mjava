@@ -1,0 +1,34 @@
+    @Override
+    protected ReferencedEnvelope getBoundsInternal(Query query) throws IOException {
+        if (query.getFilter() != Filter.INCLUDE) {
+            return null;
+        }
+
+        HeaderMeta headerMeta = getDataStore().getHeaderMeta();
+        CoordinateReferenceSystem crs;
+        try {
+            crs = headerMeta.srid > 0 ? CRS.decode("EPSG:" + headerMeta.srid) : null;
+        } catch (FactoryException e) {
+            throw new IOException(e);
+        }
+        Envelope env = headerMeta.envelope;
+        if (env != null) {
+            return new ReferencedEnvelope(env, crs);
+        }
+
+        // NOTE: header does not contain envelope will enumerate features to calculate
+        try (FlatGeobufFeatureReader reader = (FlatGeobufFeatureReader) getReaderInternal(query)) {
+            SimpleFeature feature;
+            ReferencedEnvelope referencedEnvelope = null;
+            while (reader.hasNext()) {
+                feature = reader.next();
+                if (referencedEnvelope == null) {
+                    referencedEnvelope = new ReferencedEnvelope(feature.getBounds());
+                } else {
+                    referencedEnvelope.expandToInclude(new ReferencedEnvelope(feature.getBounds()));
+                }
+            }
+            return referencedEnvelope;
+        }
+    }
+

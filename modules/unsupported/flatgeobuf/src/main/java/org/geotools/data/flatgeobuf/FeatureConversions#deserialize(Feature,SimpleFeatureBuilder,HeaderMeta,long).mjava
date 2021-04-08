@@ -1,0 +1,35 @@
+    public static SimpleFeature deserialize(
+            Feature feature, SimpleFeatureBuilder fb, HeaderMeta headerMeta, long fid) {
+        Geometry geometry = feature.geometry();
+        byte geometryType = headerMeta.geometryType;
+        if (geometry != null) {
+            if (geometryType == GeometryType.Unknown) {
+                geometryType = (byte) geometry.type();
+            }
+            org.locationtech.jts.geom.Geometry jtsGeometry =
+                    GeometryConversions.deserialize(geometry, geometryType);
+            fb.add(jtsGeometry);
+        }
+        int propertiesLength = feature.propertiesLength();
+        if (propertiesLength > 0) {
+            ByteBuffer bb = feature.propertiesAsByteBuffer();
+            while (bb.hasRemaining()) {
+                short i = bb.getShort();
+                ColumnMeta columnMeta = headerMeta.columns.get(i);
+                String name = columnMeta.name;
+                byte type = columnMeta.type;
+                if (type == ColumnType.Bool) fb.set(name, bb.get() > 0 ? true : false);
+                else if (type == ColumnType.Byte) fb.set(name, bb.get());
+                else if (type == ColumnType.Short) fb.set(name, bb.getShort());
+                else if (type == ColumnType.Int) fb.set(name, bb.getInt());
+                else if (type == ColumnType.Long) fb.set(name, bb.getLong());
+                else if (type == ColumnType.Double) fb.set(name, bb.getDouble());
+                else if (type == ColumnType.DateTime) fb.set(name, readString(bb, name));
+                else if (type == ColumnType.String) fb.set(name, readString(bb, name));
+                else throw new RuntimeException("Unknown type");
+            }
+        }
+        SimpleFeature f = fb.buildFeature(fb.getFeatureType().getTypeName() + "." + fid);
+        return f;
+    }
+

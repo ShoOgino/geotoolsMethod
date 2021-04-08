@@ -1,0 +1,51 @@
+    FlatGeobufFeatureReader(ContentState state, Query q, HeaderMeta headerMeta) throws IOException {
+        this.featureType = state.getFeatureType();
+
+        DataStore dataStore = state.getEntry().getDataStore();
+        File file;
+        URL url;
+        if (dataStore instanceof FlatGeobufDirectoryDataStore) {
+            file =
+                    ((FlatGeobufDirectoryDataStore) dataStore)
+                            .getDataStore(featureType.getTypeName())
+                            .getFile();
+            url =
+                    ((FlatGeobufDirectoryDataStore) dataStore)
+                            .getDataStore(featureType.getTypeName())
+                            .getURL();
+        } else {
+            file = ((FlatGeobufDataStore) dataStore).getFile();
+            url = ((FlatGeobufDataStore) dataStore).getURL();
+        }
+
+        if (file != null && !file.exists()) {
+            isEmpty = true;
+            it = null;
+            return;
+        } else {
+            isEmpty = false;
+        }
+
+        inputStream = url.openStream();
+
+        if (headerMeta == null) {
+            headerMeta = HeaderMeta.read(inputStream);
+        } else {
+            skipNBytes(inputStream, headerMeta.offset);
+        }
+
+        Envelope bbox = new ReferencedEnvelope();
+        if (q != null && q.getFilter() != null) {
+            bbox = (Envelope) q.getFilter().accept(ExtractBoundsFilterVisitor.BOUNDS_VISITOR, bbox);
+        }
+        if (bbox.isNull()
+                || Double.isInfinite(bbox.getWidth())
+                || Double.isInfinite(bbox.getHeight())) {
+            bbox = null;
+        }
+
+        it =
+                FeatureCollectionConversions.deserialize(inputStream, headerMeta, featureType, bbox)
+                        .iterator();
+    }
+

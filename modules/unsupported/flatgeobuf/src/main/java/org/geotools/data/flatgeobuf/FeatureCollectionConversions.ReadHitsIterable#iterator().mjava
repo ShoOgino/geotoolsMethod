@@ -1,0 +1,40 @@
+        @Override
+        public Iterator<SimpleFeature> iterator() {
+            Iterator<SimpleFeature> it =
+                    new Iterator<SimpleFeature>() {
+                        int i = 0;
+                        long pos = featuresOffset;
+
+                        @Override
+                        public boolean hasNext() {
+                            return i < hits.size();
+                        }
+
+                        @Override
+                        public SimpleFeature next() {
+                            if (!hasNext()) throw new NoSuchElementException();
+                            SearchHit hit = hits.get(i);
+                            long skip = hit.offset - (pos - featuresOffset);
+                            try {
+                                FlatGeobufFeatureReader.skipNBytes(data, skip);
+                                pos += skip;
+                                int featureSize = data.readInt();
+                                pos += 4;
+                                byte[] bytes = new byte[featureSize];
+                                data.readFully(bytes);
+                                pos += featureSize;
+                                ByteBuffer bb = ByteBuffer.wrap(bytes);
+                                Feature f = Feature.getRootAsFeature(bb);
+                                SimpleFeature feature =
+                                        FeatureConversions.deserialize(
+                                                f, fb, headerMeta, hit.index);
+                                i++;
+                                return feature;
+                            } catch (IOException e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
+                    };
+            return it;
+        }
+

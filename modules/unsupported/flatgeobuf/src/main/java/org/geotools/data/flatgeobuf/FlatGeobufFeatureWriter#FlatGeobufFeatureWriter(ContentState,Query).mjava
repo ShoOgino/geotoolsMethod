@@ -1,0 +1,22 @@
+    public FlatGeobufFeatureWriter(ContentState state, Query query) throws IOException {
+        this.state = state;
+        String typeName = query.getTypeName();
+        DataStore dataStore = state.getEntry().getDataStore();
+        FlatGeobufDataStore flatGeobufDataStore;
+        if (dataStore instanceof FlatGeobufDirectoryDataStore) {
+            flatGeobufDataStore = ((FlatGeobufDirectoryDataStore) dataStore).getDataStore(typeName);
+            this.file = flatGeobufDataStore.getFile();
+        } else {
+            flatGeobufDataStore = (FlatGeobufDataStore) dataStore;
+            this.file = flatGeobufDataStore.getFile();
+        }
+        File directory = file.getParentFile();
+        this.temp =
+                File.createTempFile(typeName + System.currentTimeMillis(), "flatgeobuf", directory);
+        this.outputStream = new FileOutputStream(this.temp);
+        this.builder = FlatBuffers.newBuilder(4096);
+        this.writer = new FlatGeobufWriter(this.outputStream, this.builder);
+        this.writer.writeFeatureType(state.getFeatureType());
+        this.delegate = new FlatGeobufFeatureReader(state, query);
+    }
+

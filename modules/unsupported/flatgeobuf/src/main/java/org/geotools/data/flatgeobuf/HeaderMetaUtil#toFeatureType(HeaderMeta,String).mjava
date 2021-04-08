@@ -1,0 +1,23 @@
+    public static SimpleFeatureType toFeatureType(HeaderMeta headerMeta, String defaultName) {
+        SimpleFeatureTypeBuilder ftb = new SimpleFeatureTypeBuilder();
+        String name = headerMeta.name;
+        if (name == null || name.isEmpty()) ftb.setName(defaultName);
+        else ftb.setName(name);
+        ftb.setAbstract(false);
+        ftb.setDefaultGeometry("geom");
+        CoordinateReferenceSystem crs = null;
+        try {
+            if (headerMeta.srid != 0) {
+                crs = CRS.decode("EPSG:" + headerMeta.srid, true);
+            }
+        } catch (FactoryException e) {
+            throw new RuntimeException(e);
+        }
+        ftb.crs(crs);
+        ftb.add("geom", GeometryConversions.getGeometryClass(headerMeta.geometryType));
+        for (ColumnMeta columnMeta : headerMeta.columns)
+            ftb.add(columnMeta.name, columnMeta.getBinding());
+        SimpleFeatureType featureType = ftb.buildFeatureType();
+        return featureType;
+    }
+

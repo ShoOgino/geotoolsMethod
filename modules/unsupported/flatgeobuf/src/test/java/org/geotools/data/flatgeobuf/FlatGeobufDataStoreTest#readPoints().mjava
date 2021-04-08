@@ -1,0 +1,38 @@
+    @Test
+    public void readPoints() throws Exception {
+        URL url =
+                getClass().getClassLoader().getResource("org/geotools/data/flatgeobuf/points.fgb");
+        Map<String, Serializable> params = new HashMap<>();
+        params.put("url", url);
+        DataStore store = DataStoreFinder.getDataStore(params);
+        assertEquals(1, store.getTypeNames().length);
+        assertEquals("points", store.getTypeNames()[0]);
+        SimpleFeatureSource featureSource = store.getFeatureSource("points");
+        assertEquals(
+                "geom:Point,name:String,id:Integer",
+                DataUtilities.encodeType(featureSource.getSchema()));
+        SimpleFeatureCollection featureCollection = featureSource.getFeatures();
+        assertEquals(2, featureCollection.size());
+        try (SimpleFeatureIterator it = featureCollection.features()) {
+            int c = 0;
+            while (it.hasNext()) {
+                SimpleFeature feature = it.next();
+                if (c == 0) {
+                    assertEquals(
+                            "POINT (-8.349609375 14.349547837185362)",
+                            feature.getDefaultGeometry().toString());
+                    assertEquals(1, feature.getAttribute("id"));
+                    assertEquals("ABC", feature.getAttribute("name"));
+                } else if (c == 1) {
+                    assertEquals(
+                            "POINT (-18.349609375 24.349547837185362)",
+                            feature.getDefaultGeometry().toString());
+                    assertEquals(2, feature.getAttribute("id"));
+                    assertEquals("DEF", feature.getAttribute("name"));
+                }
+                c++;
+            }
+        }
+        store.dispose();
+    }
+

@@ -1,0 +1,26 @@
+    public static void serialize(
+            SimpleFeature feature,
+            HeaderMeta headerMeta,
+            final OutputStream to,
+            FlatBufferBuilder builder)
+            throws IOException {
+
+        final int propertiesOffset = createProperiesVector(feature, builder, headerMeta);
+        org.locationtech.jts.geom.Geometry geometry =
+                (org.locationtech.jts.geom.Geometry) feature.getDefaultGeometry();
+        final int geometryOffset =
+                geometry == null
+                        ? 0
+                        : GeometryConversions.serialize(builder, geometry, headerMeta.geometryType);
+        int featureOffset = Feature.createFeature(builder, geometryOffset, propertiesOffset, 0);
+        builder.finishSizePrefixed(featureOffset);
+
+        // Closing is caller responsibility
+        @SuppressWarnings("PMD.CloseResource")
+        WritableByteChannel channel = Channels.newChannel(to);
+        ByteBuffer dataBuffer = builder.dataBuffer();
+        while (dataBuffer.hasRemaining()) {
+            channel.write(dataBuffer);
+        }
+    }
+

@@ -1,0 +1,24 @@
+    public static void serialize(
+            SimpleFeatureCollection featureCollection,
+            long featuresCount,
+            OutputStream outputStream)
+            throws IOException {
+        SimpleFeatureType featureType = featureCollection.getSchema();
+        FlatBufferBuilder builder = FlatBuffers.newBuilder(16 * 1024);
+        try {
+            HeaderMeta headerMeta = HeaderMetaUtil.fromFeatureType(featureType, featuresCount);
+            outputStream.write(Constants.MAGIC_BYTES);
+            HeaderMeta.write(headerMeta, outputStream, builder);
+            builder.clear();
+            try (FeatureIterator<SimpleFeature> iterator = featureCollection.features()) {
+                while (iterator.hasNext()) {
+                    SimpleFeature feature = iterator.next();
+                    FeatureConversions.serialize(feature, headerMeta, outputStream, builder);
+                    builder.clear();
+                }
+            }
+        } finally {
+            FlatBuffers.release(builder);
+        }
+    }
+

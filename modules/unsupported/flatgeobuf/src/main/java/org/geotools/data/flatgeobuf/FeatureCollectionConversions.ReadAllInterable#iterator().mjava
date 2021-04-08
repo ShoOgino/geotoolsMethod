@@ -1,0 +1,53 @@
+        @Override
+        public Iterator<SimpleFeature> iterator() {
+            Iterator<SimpleFeature> it =
+                    new Iterator<SimpleFeature>() {
+                        long count = 0;
+                        SimpleFeature feature;
+                        SimpleFeature nextFeature;
+                        boolean done = false;
+
+                        @Override
+                        public boolean hasNext() {
+                            if (done) return false;
+                            if (nextFeature != null) {
+                                feature = nextFeature;
+                                nextFeature = null;
+                            } else {
+                                try {
+                                    nextFeature = next();
+                                } catch (NoSuchElementException e) {
+                                    done = true;
+                                    return false;
+                                }
+                                return true;
+                            }
+                            return true;
+                        }
+
+                        @Override
+                        public SimpleFeature next() {
+                            if (nextFeature != null) {
+                                feature = nextFeature;
+                                nextFeature = null;
+                            } else {
+                                int featureSize;
+                                try {
+                                    featureSize = data.readInt();
+                                    byte[] bytes = new byte[featureSize];
+                                    data.readFully(bytes);
+                                    ByteBuffer bb = ByteBuffer.wrap(bytes);
+                                    Feature f = Feature.getRootAsFeature(bb);
+                                    feature =
+                                            FeatureConversions.deserialize(
+                                                    f, fb, headerMeta, count++);
+                                } catch (IOException e) {
+                                    throw new NoSuchElementException();
+                                }
+                            }
+                            return feature;
+                        }
+                    };
+            return it;
+        }
+

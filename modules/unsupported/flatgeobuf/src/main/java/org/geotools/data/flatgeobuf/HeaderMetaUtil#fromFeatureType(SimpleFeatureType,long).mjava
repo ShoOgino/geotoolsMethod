@@ -1,0 +1,55 @@
+    public static HeaderMeta fromFeatureType(SimpleFeatureType featureType, long featuresCount) {
+        List<AttributeDescriptor> types = featureType.getAttributeDescriptors();
+        List<ColumnMeta> columns = new ArrayList<>();
+
+        for (AttributeDescriptor ad : types) {
+            if (ad instanceof GeometryDescriptor) continue;
+            String key = ad.getLocalName();
+            Class<?> binding = ad.getType().getBinding();
+            ColumnMeta column = new ColumnMeta();
+            column.name = key;
+            if (binding.isAssignableFrom(Boolean.class)) column.type = ColumnType.Bool;
+            else if (binding.isAssignableFrom(Byte.class)) column.type = ColumnType.Byte;
+            else if (binding.isAssignableFrom(Short.class)) column.type = ColumnType.Short;
+            else if (binding.isAssignableFrom(Integer.class)) column.type = ColumnType.Int;
+            else if (binding.isAssignableFrom(BigInteger.class)) column.type = ColumnType.Long;
+            else if (binding.isAssignableFrom(BigDecimal.class)) column.type = ColumnType.Double;
+            else if (binding.isAssignableFrom(Long.class)) column.type = ColumnType.Long;
+            else if (binding.isAssignableFrom(Double.class)) column.type = ColumnType.Double;
+            else if (binding.isAssignableFrom(LocalDateTime.class)
+                    || binding.isAssignableFrom(LocalDate.class)
+                    || binding.isAssignableFrom(LocalTime.class)
+                    || binding.isAssignableFrom(OffsetDateTime.class)
+                    || binding.isAssignableFrom(OffsetTime.class))
+                column.type = ColumnType.DateTime;
+            else if (binding.isAssignableFrom(String.class)) column.type = ColumnType.String;
+            else throw new RuntimeException("Unknown type");
+            columns.add(column);
+        }
+
+        byte geometryType = GeometryType.Unknown;
+        GeometryDescriptor geometryDescriptor = featureType.getGeometryDescriptor();
+
+        HeaderMeta headerMeta = new HeaderMeta();
+        headerMeta.featuresCount = featuresCount;
+        headerMeta.geometryType = geometryType;
+        headerMeta.columns = columns;
+
+        if (geometryDescriptor != null) {
+            CoordinateReferenceSystem crs = geometryDescriptor.getCoordinateReferenceSystem();
+            geometryType =
+                    GeometryConversions.toGeometryType(
+                            featureType.getGeometryDescriptor().getType().getBinding());
+            if (crs != null) {
+                try {
+                    Integer srid = CRS.lookupEpsgCode(crs, false);
+                    if (srid != null) headerMeta.srid = srid;
+                } catch (FactoryException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+
+        return headerMeta;
+    }
+

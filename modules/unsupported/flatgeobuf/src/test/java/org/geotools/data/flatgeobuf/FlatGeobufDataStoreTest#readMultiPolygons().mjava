@@ -1,0 +1,56 @@
+    @Test
+    public void readMultiPolygons() throws Exception {
+        URL url =
+                getClass()
+                        .getClassLoader()
+                        .getResource("org/geotools/data/flatgeobuf/multipolygons.fgb");
+        Map<String, Serializable> params = new HashMap<>();
+        params.put("url", url);
+        DataStore store = DataStoreFinder.getDataStore(params);
+        assertEquals(1, store.getTypeNames().length);
+        assertEquals("multipolygons", store.getTypeNames()[0]);
+        SimpleFeatureSource featureSource = store.getFeatureSource("multipolygons");
+        assertEquals(
+                "geom:MultiPolygon,name:String,id:Integer",
+                DataUtilities.encodeType(featureSource.getSchema()));
+        SimpleFeatureCollection featureCollection = featureSource.getFeatures();
+        assertEquals(3, featureCollection.size());
+        try (SimpleFeatureIterator it = featureCollection.features()) {
+            int c = 0;
+            while (it.hasNext()) {
+                SimpleFeature feature = it.next();
+                if (c == 0) {
+                    assertEquals(
+                            "MULTIPOLYGON (((102 2, 103 2, 103 3, 102 3, 102 2)), "
+                                    + "((102 2, 103 2, 103 3, 102 3, 102 2)), "
+                                    + "((102 2, 103 2, 103 3, 102 3, 102 2)))",
+                            feature.getDefaultGeometry().toString());
+                    assertEquals(9, feature.getAttribute("id"));
+                    assertEquals("ABC", feature.getAttribute("name"));
+                } else if (c == 1) {
+                    assertEquals(
+                            "MULTIPOLYGON ("
+                                    +
+                                    // Polygon #1
+                                    "((40 40, 20 45, 45 30, 40 40)), "
+                                    +
+                                    // Polygon #2
+                                    "((20 35, 10 30, 10 10, 30 5, 45 20, 20 35), "
+                                    + "(30 20, 20 15, 20 25, 30 20)))",
+                            feature.getDefaultGeometry().toString());
+                    assertEquals(56, feature.getAttribute("id"));
+                    assertEquals("TYU", feature.getAttribute("name"));
+                } else if (c == 2) {
+                    assertEquals(
+                            "MULTIPOLYGON (((30 20, 45 40, 10 40, 30 20)), "
+                                    + "((15 5, 40 10, 10 20, 5 10, 15 5)))",
+                            feature.getDefaultGeometry().toString());
+                    assertEquals(32, feature.getAttribute("id"));
+                    assertEquals("WER", feature.getAttribute("name"));
+                }
+                c++;
+            }
+        }
+        store.dispose();
+    }
+

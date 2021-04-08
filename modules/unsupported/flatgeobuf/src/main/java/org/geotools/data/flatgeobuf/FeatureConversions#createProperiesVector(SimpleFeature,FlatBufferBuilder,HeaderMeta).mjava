@@ -1,0 +1,34 @@
+    /** Writes the properties vector to {@code builder} and returns its offset */
+    private static int createProperiesVector(
+            SimpleFeature feature, FlatBufferBuilder builder, HeaderMeta headerMeta) {
+
+        final int minPow = 16; // 2^16 = 64KiB
+        final int maxPow = 20; // 2^20 = 1MiB
+        int size = 0;
+        for (int pow = minPow; pow <= maxPow; pow += 2) {
+            size = (int) Math.pow(2, pow);
+            ByteBuffer bb = NIOUtilities.allocate(size);
+            try {
+                buildPropertiesVector(feature, headerMeta, bb);
+            } catch (BufferOverflowException overflow) {
+                // return buffer and retry with a bigger one
+                NIOUtilities.returnToCache(bb);
+                continue;
+            }
+
+            int propertiesOffset = 0;
+            if (bb.position() > 0) {
+                bb.flip();
+                propertiesOffset = Feature.createPropertiesVector(builder, bb);
+            }
+            NIOUtilities.returnToCache(bb);
+            return propertiesOffset;
+        }
+        throw new IllegalStateException(
+                "Unable to write properties vector of feature "
+                        + feature.getID()
+                        + ". Buffer overflowed at maximum capacity of "
+                        + size
+                        + " bytes");
+    }
+

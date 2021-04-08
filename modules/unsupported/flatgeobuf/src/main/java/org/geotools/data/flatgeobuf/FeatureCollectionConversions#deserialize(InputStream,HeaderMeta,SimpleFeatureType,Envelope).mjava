@@ -1,0 +1,37 @@
+    public static Iterable<SimpleFeature> deserialize(
+            InputStream stream, HeaderMeta headerMeta, SimpleFeatureType ft, Envelope rect)
+            throws IOException {
+        int treeSize =
+                headerMeta.featuresCount > 0 && headerMeta.indexNodeSize > 0
+                        ? (int)
+                                PackedRTree.calcSize(
+                                        (int) headerMeta.featuresCount, headerMeta.indexNodeSize)
+                        : 0;
+        int featuresOffset = headerMeta.offset + treeSize;
+        SimpleFeatureBuilder fb = new SimpleFeatureBuilder(ft);
+        LittleEndianDataInputStream data = new LittleEndianDataInputStream(stream);
+
+        Iterable<SimpleFeature> iterable;
+        if (rect == null) {
+            if (treeSize > 0) {
+                FlatGeobufFeatureReader.skipNBytes(data, treeSize);
+            }
+            iterable = new ReadAllInterable(headerMeta, data, fb);
+        } else {
+            SearchResult result =
+                    PackedRTree.search(
+                            data,
+                            headerMeta.offset,
+                            (int) headerMeta.featuresCount,
+                            headerMeta.indexNodeSize,
+                            rect);
+            int skip = treeSize - result.pos;
+            if (skip > 0) {
+                FlatGeobufFeatureReader.skipNBytes(data, treeSize - result.pos);
+            }
+            iterable = new ReadHitsIterable(fb, result.hits, headerMeta, featuresOffset, data);
+        }
+
+        return iterable;
+    }
+
