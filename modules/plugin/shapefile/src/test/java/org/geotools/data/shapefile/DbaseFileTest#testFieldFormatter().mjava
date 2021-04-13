@@ -2,20 +2,28 @@
     public void testFieldFormatter() throws Exception {
         DbaseFileWriter.FieldFormatter formatter =
                 new DbaseFileWriter.FieldFormatter(
-                        Charset.defaultCharset(), TimeZone.getDefault(), false);
+                        StandardCharsets.UTF_8, TimeZone.getDefault(), false);
 
-        String stringWithInternationChars = "hello " + '\u20ac';
-        // if (verbose) {
-        // System.out.println(stringWithInternationChars);
-        // }
-        String formattedString = formatter.getFieldString(10, stringWithInternationChars);
+        int sizeInBytes = 8;
 
-        assertEquals("          ".getBytes().length, formattedString.getBytes().length);
+        // A null string should result in padding
+        String formattedString = formatter.getFieldString(sizeInBytes, null);
+        assertEquals(sizeInBytes, formattedString.getBytes().length);
+        assertEquals("        ", formattedString);
 
-        // test when the string is too big.
-        stringWithInternationChars = '\u20ac' + "1234567890";
-        formattedString = formatter.getFieldString(10, stringWithInternationChars);
+        // A short string will be padded
+        formattedString = formatter.getFieldString(sizeInBytes, "cat");
+        assertEquals(sizeInBytes, formattedString.getBytes().length);
+        assertEquals("cat     ", formattedString);
 
-        assertEquals("          ".getBytes().length, formattedString.getBytes().length);
+        // A string that has the right number of bytes needs no padding
+        formattedString = formatter.getFieldString(sizeInBytes, "12345678");
+        assertEquals(sizeInBytes, formattedString.getBytes().length);
+        assertEquals("12345678", formattedString);
+
+        // larger strings get trucated
+        formattedString = formatter.getFieldString(sizeInBytes, "12345678910");
+        assertEquals(sizeInBytes, formattedString.getBytes().length);
+        assertEquals("12345678", formattedString);
     }
 
