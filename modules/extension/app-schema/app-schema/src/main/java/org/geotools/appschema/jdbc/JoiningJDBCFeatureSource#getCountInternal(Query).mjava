@@ -3,21 +3,33 @@
         // the primaryKey from the wrapped JDBCSource
         String idColumnName = getIdColumnName(getSchema());
         JoiningQuery jQuery = (JoiningQuery) query;
-        FilterAttributeExtractor extractor = new FilterAttributeExtractor();
+
+        // Checks if the filter is based on root property
+        // and we can go with the root JdbcSource to count
+        // or we need a Join query.
+        // Uses a MultipleValueExtractor to detect
+        // if there are MultipleValues
+        MultipleValueExtractor extractor = new MultipleValueExtractor();
         jQuery.getRootMapping().getFeatureIdExpression().accept(extractor, null);
         String[] attributes = extractor.getAttributeNames();
         // the id from the app-schema configuration
         String idMapping = attributes.length > 0 ? extractor.getAttributeNames()[0] : null;
         boolean idsColumnEquals = idColumnName.equals(idMapping);
-        boolean isJoining = jQuery.getQueryJoins().size() > 0;
-        // they are equals we can delegate the count to the underlying JDBCFeatureSource
-        if (idsColumnEquals && !isJoining) return super.getCountInternal(query);
+        Filter filter = jQuery.getFilter();
+        filter.accept(extractor, null);
+
+        // check if the filter is nested, if not we might delegate to the root JDBCFeatureSource
+        boolean isNestedFilter =
+                isJoinRequired(
+                        filter, extractor.getMultipleValues(), extractor.getPropertyNameSet());
+
+        // ids are equals and the filter doesn't have nested filters
+        // we can delegate the count to the underlying JDBCFeatureSource
+        if (idsColumnEquals && !isNestedFilter) return super.getCountInternal(query);
 
         // not equals the count should be over the actually used
         // field for the ComplexFeature's id
         if (!idsColumnEquals && idMapping != null) idColumnName = idMapping;
-
-        // rebuild a new query with the same params, but just the pre-filter
 
         // Build the feature type returned by this query. Also build an eventual extra feature type
         // containing the attributes we might need in order to evaluate the post filter
@@ -35,7 +47,7 @@
             if (dialect instanceof PreparedStatementSQLDialect) {
                 AtomicReference<PreparedFilterToSQL> toSQLref = new AtomicReference<>();
                 String sql =
-                        !isJoining
+                        !isNestedFilter
                                 ? createCountQuery(dialect, querySchema, jQuery, idColumnName)
                                 : createJoiningCountQuery(
                                         dialect, querySchema, jQuery, idColumnName, toSQLref);
@@ -46,7 +58,7 @@
                 rs = ((PreparedStatement) st).executeQuery();
             } else {
                 String sql =
-                        !isJoining
+                        !isNestedFilter
                                 ? createCountQuery(dialect, querySchema, jQuery, idColumnName)
                                 : createJoiningCountQuery(
                                         dialect, querySchema, jQuery, idColumnName, null);
