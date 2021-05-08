@@ -4,50 +4,34 @@
             return null;
         }
 
-        ReadableByteChannel in = null;
-        try {
-            ByteBuffer buffer = ByteBuffer.allocate(100);
-            FileReader reader = () -> "Shapefile Datastore's getBounds Method";
+        ByteBuffer buffer = ByteBuffer.allocate(100);
+        FileReader reader = () -> "Shapefile Datastore's getBounds Method";
+        try (ReadableByteChannel in = shpFiles.getReadChannel(SHP, reader)) {
+            in.read(buffer);
+            buffer.flip();
 
-            in = shpFiles.getReadChannel(SHP, reader);
-            try {
-                in.read(buffer);
-                ((Buffer) buffer).flip();
+            ShapefileHeader header = new ShapefileHeader();
+            header.read(buffer, true);
 
-                ShapefileHeader header = new ShapefileHeader();
-                header.read(buffer, true);
+            SimpleFeatureType schema = getSchema();
 
-                SimpleFeatureType schema = getSchema();
+            Envelope env;
 
-                Envelope env;
-
-                // If it is a shapefile without any data (file length equals 50), return an empty
-                // envelope as expected
-                if (header.getFileLength() == 50) {
-                    env = new Envelope();
-                } else {
-                    env = new Envelope(header.minX(), header.maxX(), header.minY(), header.maxY());
-                }
-
-                CoordinateReferenceSystem crs = null;
-                if (schema != null) {
-                    crs = schema.getCoordinateReferenceSystem();
-                }
-                return new ReferencedEnvelope(env, crs);
-            } finally {
-                in.close();
+            // If it is a shapefile without any data (file length equals 50), return an empty
+            // envelope as expected
+            if (header.getFileLength() == 50) {
+                env = new Envelope();
+            } else {
+                env = new Envelope(header.minX(), header.maxX(), header.minY(), header.maxY());
             }
 
+            CoordinateReferenceSystem crs = null;
+            if (schema != null) {
+                crs = schema.getCoordinateReferenceSystem();
+            }
+            return new ReferencedEnvelope(env, crs);
         } catch (IOException ioe) {
             throw new DataSourceException("Problem getting Bbox", ioe);
-        } finally {
-            try {
-                if (in != null) {
-                    in.close();
-                }
-            } catch (IOException ioe) {
-                // do nothing
-            }
         }
     }
 

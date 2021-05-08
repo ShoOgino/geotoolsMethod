@@ -17,7 +17,6 @@
 
         URL url = URLs.fileToUrl(configFile);
         Config config = null;
-        Connection connection = null;
         final List<File> filesToBeDeleted = new ArrayList<>();
 
         if (!configFile.exists()) {
@@ -30,39 +29,31 @@
                 createConfigFile(configFile);
                 config = Config.readFrom(url);
                 DBDialect dialect = DBDialect.getDBDialect(config);
-                connection = dialect.getConnection();
+                try (Connection connection = dialect.getConnection()) {
 
-                // Step 3: configure raster into DB in case they haven't been imported by hand
-                // Manual import may be preferred by the user when dealing with huge datasets
-                if (!isMosaicAlreadyInDB(connection)) {
-                    if (LOGGER.isLoggable(Level.FINE)) {
-                        LOGGER.fine(
-                                "Proceeding with raster tiles automatic import using raster2pgsql");
-                    }
-                    importTilesIntoDB(connection, filesToBeDeleted);
-                } else {
-                    if (LOGGER.isLoggable(Level.INFO)) {
-                        LOGGER.info(
-                                "Skipping raster tiles import "
-                                        + "since metadata tables and tile tables already exists into the DB");
+                    // Step 3: configure raster into DB in case they haven't been imported by hand
+                    // Manual import may be preferred by the user when dealing with huge datasets
+                    if (!isMosaicAlreadyInDB(connection)) {
+                        if (LOGGER.isLoggable(Level.FINE)) {
+                            LOGGER.fine(
+                                    "Proceeding with raster tiles automatic import using raster2pgsql");
+                        }
+                        importTilesIntoDB(connection, filesToBeDeleted);
+                    } else {
+                        if (LOGGER.isLoggable(Level.INFO)) {
+                            LOGGER.info(
+                                    "Skipping raster tiles import "
+                                            + "since metadata tables and tile tables already exists into the DB");
+                        }
                     }
                 }
-
             } catch (Exception e) {
-
                 // Rollback on configFile (In case something went wrong, delete the configFile)
                 if (configFile.exists()) {
                     configFile.delete();
                 }
                 throw new RuntimeException(e);
             } finally {
-                if (connection != null) {
-                    try {
-                        connection.close();
-                    } catch (Throwable t) {
-                        // Does nothing
-                    }
-                }
                 for (File file : filesToBeDeleted) {
                     try {
                         file.delete();

@@ -33,13 +33,11 @@
 
         SimpleFeature feature, newFeature;
 
-        FeatureReader<SimpleFeatureType, SimpleFeature> reader =
-                store.getFeatureReader(new Query("locations"), Transaction.AUTO_COMMIT);
-
-        FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
-                duplicate.getFeatureWriterAppend(
-                        duplicate.getTypeNames()[0], Transaction.AUTO_COMMIT);
-        try {
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                        store.getFeatureReader(new Query("locations"), Transaction.AUTO_COMMIT);
+                FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
+                        duplicate.getFeatureWriterAppend(
+                                duplicate.getTypeNames()[0], Transaction.AUTO_COMMIT)) {
             while (reader.hasNext()) {
                 feature = reader.next();
                 newFeature = writer.next();
@@ -47,9 +45,6 @@
                 newFeature.setAttributes(feature.getAttributes());
                 writer.write();
             }
-        } finally {
-            reader.close();
-            writer.close();
         }
         assertTrue("Temp files being left behind", cleanedup());
         String contents = getFileContents(file2);

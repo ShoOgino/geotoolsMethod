@@ -1,6 +1,5 @@
     @Override
     public ReferencedEnvelope getBounds() {
-        FeatureReader<SimpleFeatureType, SimpleFeature> reader = null;
         try {
             ReferencedEnvelope result = featureSource.getBounds(query);
             if (result != null) {
@@ -23,32 +22,26 @@
                 q.setPropertyNames(geometries);
             }
             // grab the features and scan through them
-            reader = featureSource.getReader(q);
-            while (reader.hasNext()) {
-                SimpleFeature f = reader.next();
-                ReferencedEnvelope featureBounds = ReferencedEnvelope.reference(f.getBounds());
-                if (result == null) {
-                    result = featureBounds;
-                } else if (featureBounds != null) {
-                    result.expandToInclude(featureBounds);
+            try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                    featureSource.getReader(q)) {
+                while (reader.hasNext()) {
+                    SimpleFeature f = reader.next();
+                    ReferencedEnvelope featureBounds = ReferencedEnvelope.reference(f.getBounds());
+                    if (result == null) {
+                        result = featureBounds;
+                    } else if (featureBounds != null) {
+                        result.expandToInclude(featureBounds);
+                    }
                 }
-            }
-            // return the results if we got any, or return an empty one otherwise
-            if (result != null) {
-                return result;
-            } else {
-                return ReferencedEnvelope.create(getSchema().getCoordinateReferenceSystem());
+                // return the results if we got any, or return an empty one otherwise
+                if (result != null) {
+                    return result;
+                } else {
+                    return ReferencedEnvelope.create(getSchema().getCoordinateReferenceSystem());
+                }
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
-        } finally {
-            if (reader != null) {
-                try {
-                    reader.close();
-                } catch (IOException ex) {
-                    // we tried...
-                }
-            }
         }
     }
 

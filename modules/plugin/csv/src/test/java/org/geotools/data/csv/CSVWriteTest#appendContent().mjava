@@ -15,14 +15,11 @@
         duplicate.createSchema(featureType);
 
         SimpleFeature feature, newFeature;
-
         Query query = new Query(featureType.getTypeName(), Filter.INCLUDE);
-        FeatureReader<SimpleFeatureType, SimpleFeature> reader =
-                store.getFeatureReader(query, Transaction.AUTO_COMMIT);
-
-        FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
-                duplicate.getFeatureWriterAppend("duplicate", Transaction.AUTO_COMMIT);
-        try {
+        try (FeatureReader<SimpleFeatureType, SimpleFeature> reader =
+                        store.getFeatureReader(query, Transaction.AUTO_COMMIT);
+                FeatureWriter<SimpleFeatureType, SimpleFeature> writer =
+                        duplicate.getFeatureWriterAppend("duplicate", Transaction.AUTO_COMMIT)) {
             while (reader.hasNext()) {
                 feature = reader.next();
                 newFeature = writer.next();
@@ -30,9 +27,6 @@
                 newFeature.setAttributes(feature.getAttributes());
                 writer.write();
             }
-        } finally {
-            reader.close();
-            writer.close();
         }
         assertTrue("Temp files being left behind", cleanedup());
         // Test that content was appended

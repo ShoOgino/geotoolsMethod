@@ -24,66 +24,56 @@
             GridCoverageFactory coverageFactory)
             throws IOException {
         Date start = new Date();
-        Connection con = null;
         List<ImageDecoderThread> threads = new ArrayList<>();
         ExecutorService pool = getExecutorServivicePool();
 
         String gridStatement = statementMap.get(levelInfo);
 
-        try {
-            con = getConnection();
-            try (PreparedStatement s = con.prepareStatement(gridStatement)) {
-                WKBWriter w = new WKBWriter();
-                byte[] bytes = w.write(polyFromEnvelope(requestEnvelope));
-                s.setBytes(1, bytes);
-                s.setInt(2, levelInfo.getSrsId());
+        try (Connection con = getConnection();
+                PreparedStatement s = con.prepareStatement(gridStatement)) {
+            WKBWriter w = new WKBWriter();
+            byte[] bytes = w.write(polyFromEnvelope(requestEnvelope));
+            s.setBytes(1, bytes);
+            s.setInt(2, levelInfo.getSrsId());
 
-                try (ResultSet r = s.executeQuery()) {
-                    while (r.next()) {
-                        // byte[] tileBytes = getTileBytes(r,2);
-                        byte[] tileBytes = r.getBytes(2);
-                        byte[] envBytes = r.getBytes(1);
-                        WKBReader reader = new WKBReader();
-                        Geometry g;
-                        try {
-                            g = reader.read(envBytes);
-                        } catch (ParseException e) {
-                            LOGGER.log(Level.SEVERE, e.getMessage(), e);
-                            throw new IOException(e);
-                        }
-                        Envelope env = g.getEnvelopeInternal();
-                        Rectangle2D tmp =
-                                new Rectangle2D.Double(
-                                        env.getMinX(),
-                                        env.getMinY(),
-                                        env.getWidth(),
-                                        env.getHeight());
-                        GeneralEnvelope tileGeneralEnvelope = new GeneralEnvelope(tmp);
-                        tileGeneralEnvelope.setCoordinateReferenceSystem(
-                                requestEnvelope.getCoordinateReferenceSystem());
-
-                        ImageDecoderThread thread =
-                                new ImageDecoderThread(
-                                        tileBytes,
-                                        "",
-                                        tileGeneralEnvelope,
-                                        requestEnvelope,
-                                        levelInfo,
-                                        tileQueue);
-                        // thread.start();
-                        threads.add(thread);
-                        pool.execute(thread);
+            try (ResultSet r = s.executeQuery()) {
+                while (r.next()) {
+                    // byte[] tileBytes = getTileBytes(r,2);
+                    byte[] tileBytes = r.getBytes(2);
+                    byte[] envBytes = r.getBytes(1);
+                    WKBReader reader = new WKBReader();
+                    Geometry g;
+                    try {
+                        g = reader.read(envBytes);
+                    } catch (ParseException e) {
+                        LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                        throw new IOException(e);
                     }
+                    Envelope env = g.getEnvelopeInternal();
+                    Rectangle2D tmp =
+                            new Rectangle2D.Double(
+                                    env.getMinX(), env.getMinY(), env.getWidth(), env.getHeight());
+                    GeneralEnvelope tileGeneralEnvelope = new GeneralEnvelope(tmp);
+                    tileGeneralEnvelope.setCoordinateReferenceSystem(
+                            requestEnvelope.getCoordinateReferenceSystem());
+
+                    ImageDecoderThread thread =
+                            new ImageDecoderThread(
+                                    tileBytes,
+                                    "",
+                                    tileGeneralEnvelope,
+                                    requestEnvelope,
+                                    levelInfo,
+                                    tileQueue);
+                    // thread.start();
+                    threads.add(thread);
+                    pool.execute(thread);
                 }
             }
+
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, e.getMessage(), e);
             throw new IOException(e);
-        } finally {
-            try {
-                if (con != null) con.close();
-            } catch (SQLException e1) {
-            }
         }
 
         if (LOGGER.isLoggable(Level.INFO))

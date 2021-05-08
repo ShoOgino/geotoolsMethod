@@ -26,7 +26,6 @@
         // have the reader harvest it
         ImageMosaicFormat format = new ImageMosaicFormat();
         ImageMosaicReader reader = format.getReader(mosaic);
-        SimpleFeatureIterator it = null;
         assertNotNull(reader);
         try {
             String[] names = reader.getGridCoverageNames();
@@ -40,15 +39,15 @@
             q.setSortBy(ff.sort("time", SortOrder.DESCENDING));
             SimpleFeatureCollection granules = source.getGranules(q);
             assertEquals(1, granules.size());
-            it = granules.features();
-            assertTrue(it.hasNext());
-            SimpleFeature f = it.next();
-            assertEquals("20130101.METOPA.GOME2.NO2.DUMMY.nc", f.getAttribute("location"));
-            assertEquals(0, f.getAttribute("imageindex"));
-            assertEquals(
-                    "2013-01-01T00:00:00.000Z",
-                    ConvertersHack.convert(f.getAttribute("time"), String.class));
-            it.close();
+            try (SimpleFeatureIterator it = granules.features()) {
+                assertTrue(it.hasNext());
+                SimpleFeature f = it.next();
+                assertEquals("20130101.METOPA.GOME2.NO2.DUMMY.nc", f.getAttribute("location"));
+                assertEquals(0, f.getAttribute("imageindex"));
+                assertEquals(
+                        "2013-01-01T00:00:00.000Z",
+                        ConvertersHack.convert(f.getAttribute("time"), String.class));
+            }
 
             // now add another netcdf and harvest it
             File nc2 = TestData.file(this, "20130116.METOPA.GOME2.NO2.DUMMY.nc");
@@ -77,32 +76,28 @@
             // check that we have 2 times now
             granules = source.getGranules(q);
             assertEquals(3, granules.size());
-            it = granules.features();
-            f = it.next();
-            assertEquals("20130116.METOPA.GOME2.NO2.DUMMY.nc", f.getAttribute("location"));
-            assertEquals(0, f.getAttribute("imageindex"));
-            assertEquals(
-                    "2013-01-16T00:00:00.000Z",
-                    ConvertersHack.convert(f.getAttribute("time"), String.class));
-            assertTrue(it.hasNext());
-            f = it.next();
-            assertEquals("20130108.METOPA.GOME2.NO2.DUMMY.nc", f.getAttribute("location"));
-            assertEquals(0, f.getAttribute("imageindex"));
-            assertEquals(
-                    "2013-01-08T00:00:00.000Z",
-                    ConvertersHack.convert(f.getAttribute("time"), String.class));
-            f = it.next();
-            assertEquals("20130101.METOPA.GOME2.NO2.DUMMY.nc", f.getAttribute("location"));
-            assertEquals(0, f.getAttribute("imageindex"));
-            assertEquals(
-                    "2013-01-01T00:00:00.000Z",
-                    ConvertersHack.convert(f.getAttribute("time"), String.class));
-
-            it.close();
-        } finally {
-            if (it != null) {
-                it.close();
+            try (SimpleFeatureIterator it = granules.features()) {
+                SimpleFeature f = it.next();
+                assertEquals("20130116.METOPA.GOME2.NO2.DUMMY.nc", f.getAttribute("location"));
+                assertEquals(0, f.getAttribute("imageindex"));
+                assertEquals(
+                        "2013-01-16T00:00:00.000Z",
+                        ConvertersHack.convert(f.getAttribute("time"), String.class));
+                assertTrue(it.hasNext());
+                f = it.next();
+                assertEquals("20130108.METOPA.GOME2.NO2.DUMMY.nc", f.getAttribute("location"));
+                assertEquals(0, f.getAttribute("imageindex"));
+                assertEquals(
+                        "2013-01-08T00:00:00.000Z",
+                        ConvertersHack.convert(f.getAttribute("time"), String.class));
+                f = it.next();
+                assertEquals("20130101.METOPA.GOME2.NO2.DUMMY.nc", f.getAttribute("location"));
+                assertEquals(0, f.getAttribute("imageindex"));
+                assertEquals(
+                        "2013-01-01T00:00:00.000Z",
+                        ConvertersHack.convert(f.getAttribute("time"), String.class));
             }
+        } finally {
             reader.dispose();
         }
     }

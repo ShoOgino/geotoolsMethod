@@ -5,11 +5,10 @@
         ShapefileDataStore ds = new ShapefileDataStore(url);
         SimpleFeatureSource featureSource = ds.getFeatureSource();
         SimpleFeatureCollection features = featureSource.getFeatures();
-        SimpleFeatureIterator indexIter = features.features();
 
         Set<String> expectedFids = new LinkedHashSet<>();
         final Filter fidFilter;
-        try {
+        try (SimpleFeatureIterator indexIter = features.features()) {
             FilterFactory2 ff = CommonFactoryFinder.getFilterFactory2(null);
             Set<FeatureId> fids = new HashSet<>();
             while (indexIter.hasNext()) {
@@ -19,23 +18,16 @@
                 fids.add(ff.featureId(id));
             }
             fidFilter = ff.id(fids);
-        } finally {
-            indexIter.close();
         }
 
         Set<String> actualFids = new HashSet<>();
         {
             features = featureSource.getFeatures(fidFilter);
-            try {
-                indexIter = features.features();
+            try (SimpleFeatureIterator indexIter = features.features()) {
                 while (indexIter.hasNext()) {
                     SimpleFeature next = indexIter.next();
                     String id = next.getID();
                     actualFids.add(id);
-                }
-            } finally {
-                if (indexIter != null) {
-                    indexIter.close();
                 }
             }
         }
