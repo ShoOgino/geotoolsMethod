@@ -1,7 +1,7 @@
     /** Create a simpleFeatureBuilder for the current schema + these new properties. */
     private SimpleFeatureBuilder getBuilder(JsonNode props) {
 
-        typeBuilder = new SimpleFeatureTypeBuilder();
+        SimpleFeatureTypeBuilder typeBuilder = new SimpleFeatureTypeBuilder();
         // GeoJSON is always WGS84
         typeBuilder.setCRS(DefaultGeographicCRS.WGS84);
         typeBuilder.setName(baseName);
@@ -35,11 +35,28 @@
                 typeBuilder.add(n.getKey(), Integer.class);
             } else if (value instanceof DoubleNode) {
                 typeBuilder.add(n.getKey(), Double.class);
+            } else if (value instanceof BooleanNode) {
+                typeBuilder.add(n.getKey(), Boolean.class);
             } else if (value instanceof ObjectNode) {
-                String type = value.get("type").asText();
-                Geometries namedType = Geometries.getForName(type);
-                if (namedType != null) {
+                if (Optional.ofNullable(value.get("type"))
+                        .map(t -> t.asText())
+                        .map(t -> Geometries.getForName(t))
+                        .isPresent()) {
                     typeBuilder.add(n.getKey(), Geometry.class, DefaultGeographicCRS.WGS84);
+                } else {
+                    // a complex object, we don't know what it is going to be
+                    typeBuilder.add(n.getKey(), Object.class);
+                }
+            } else if (value instanceof ArrayNode) {
+                typeBuilder.add(n.getKey(), List.class);
+            } else if (value instanceof TextNode && guessingDates) {
+                // it could be a date too
+                Date date = dateParser.parse(value.asText());
+                if (date != null) {
+                    typeBuilder.add(n.getKey(), Date.class);
+                } else {
+                    typeBuilder.defaultValue("");
+                    typeBuilder.add(n.getKey(), String.class);
                 }
             } else {
                 typeBuilder.defaultValue("");

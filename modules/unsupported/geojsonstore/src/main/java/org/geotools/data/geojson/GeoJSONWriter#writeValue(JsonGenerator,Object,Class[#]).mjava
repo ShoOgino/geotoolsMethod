@@ -1,0 +1,46 @@
+    private void writeValue(JsonGenerator g, Object value, Class<?> binding) throws IOException {
+        if (value == null) {
+            g.writeNull();
+            return;
+        }
+
+        if (binding == Integer.class) {
+            g.writeNumber((int) value);
+        } else if (binding == Double.class) {
+            g.writeNumber((double) value);
+        } else if (binding == Boolean.class) {
+            g.writeBoolean((boolean) value);
+        } else if (Date.class.isAssignableFrom(binding)) {
+            g.writeString(DEFAULT_DATE_FORMATTER.format(value));
+        } else if (Object.class.isAssignableFrom(binding) && value instanceof JsonNode) {
+            ((JsonNode) value)
+                    .serialize(
+                            g,
+                            new DefaultSerializerProvider(
+                                    mapper.getSerializerProvider(),
+                                    mapper.getSerializationConfig(),
+                                    mapper.getSerializerFactory()) {
+                                @Override
+                                public DefaultSerializerProvider createInstance(
+                                        SerializationConfig config, SerializerFactory jsf) {
+                                    throw new UnsupportedOperationException();
+                                }
+                            });
+        } else if (binding.isArray()) {
+            g.writeStartArray();
+            int length = Array.getLength(value);
+            for (int i = 0; i < length; i++) {
+                writeValue(g, Array.get(value, i), binding.getComponentType());
+            }
+            g.writeEndArray();
+        } else if (Collection.class.isAssignableFrom(binding)) {
+            g.writeStartArray();
+            for (Object v : ((Collection) value)) {
+                writeValue(g, v, v == null ? null : v.getClass());
+            }
+            g.writeEndArray();
+        } else {
+            g.writeString(value.toString());
+        }
+    }
+

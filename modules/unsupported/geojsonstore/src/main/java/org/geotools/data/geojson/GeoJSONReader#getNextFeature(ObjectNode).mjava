@@ -1,6 +1,10 @@
     /** */
     private SimpleFeature getNextFeature(ObjectNode node) throws IOException {
         JsonNode type = node.get("type");
+        if (type == null) {
+            throw new RuntimeException(
+                    "Missing object type in GeoJSON Parsing, expected type=Feature here");
+        }
         if (!"Feature".equalsIgnoreCase(type.asText())) {
             throw new RuntimeException(
                     "Unexpected object type in GeoJSON Parsing, expected Feature got '"
@@ -38,13 +42,56 @@
                     builder.set(n.getKey(), n.getValue().asDouble());
                 } else if (binding == String.class) {
                     builder.set(n.getKey(), n.getValue().textValue());
-                } else if (binding.isAssignableFrom(Geometry.class)) {
+                } else if (binding == Boolean.class) {
+                    builder.set(n.getKey(), n.getValue().booleanValue());
+                } else if (binding == Object.class) {
+                    builder.set(n.getKey(), n.getValue());
+                } else if (binding == List.class) {
+                    ArrayNode array = (ArrayNode) n.getValue();
+                    List<Object> list = new ArrayList<>();
+                    for (int i = 0; i < array.size(); i++) {
+                        JsonNode item = array.get(i);
+                        Object vc;
+                        switch (item.getNodeType()) {
+                            case BOOLEAN:
+                                vc = item.asBoolean();
+                                break;
+                            case NUMBER:
+                                vc = item.asDouble();
+                                break;
+                            case STRING:
+                                vc = item.asText();
+                                break;
+                            case NULL:
+                                vc = null;
+                                break;
+                            default:
+                                throw new IllegalArgumentException(
+                                        "Cannot handle arrays with values of type "
+                                                + item.getNodeType());
+                        }
+                        list.add(vc);
+                    }
+                    builder.set(n.getKey(), list);
+                } else if (Geometry.class.isAssignableFrom(binding)) {
                     GeometryParser<Geometry> gParser = new GenericGeometryParser(gFac);
                     Geometry g = gParser.geometryFromJson(n.getValue());
                     builder.set(n.getKey(), g);
+                } else if (Date.class.isAssignableFrom(binding)) {
+                    String text = n.getValue().asText();
+                    Date date = dateParser.parse(text);
+                    if (date != null) {
+                        builder.set(n.getKey(), date);
+                    } else {
+                        // will go through the Converter machinery which, depending on the
+                        // classpath, might try out a larger set of conversions, or end up
+                        // with a null value
+                        builder.set(n.getKey(), n.getValue().asText());
+                    }
+
                 } else {
                     LOGGER.warning("Unable to parse object of type " + binding);
-                    builder.set(n.getKey(), n.getValue().toString());
+                    builder.set(n.getKey(), n.getValue().asText());
                 }
             }
             JsonNode geom = node.get("geometry");

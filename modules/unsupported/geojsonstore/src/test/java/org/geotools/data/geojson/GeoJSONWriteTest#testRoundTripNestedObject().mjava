@@ -1,0 +1,28 @@
+    @Test
+    public void testRoundTripNestedObject() throws Exception {
+        SimpleFeatureTypeBuilder tb = new SimpleFeatureTypeBuilder();
+        tb.setName("test");
+        tb.add("the_geom", Point.class, 4326);
+        tb.add("object", Object.class);
+        SimpleFeatureType type = tb.buildFeatureType();
+        SimpleFeatureBuilder builder = new SimpleFeatureBuilder(type);
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode node = mapper.readTree("{\"a\": 10, \"b\": \"foo\"}");
+        builder.add(new GeometryFactory().createPoint(new Coordinate(1, 2)));
+        builder.add(node);
+        SimpleFeature feature = builder.buildFeature(null);
+
+        // write and check
+        String json = writeSingleFeature(feature);
+        JsonNode root = mapper.readTree(json);
+        JsonNode object = root.get("properties").get("object");
+        assertEquals(JsonNodeType.NUMBER, object.get("a").getNodeType());
+        assertEquals(10, object.get("a").intValue());
+        assertEquals(JsonNodeType.STRING, object.get("b").getNodeType());
+        assertEquals("foo", object.get("b").textValue());
+
+        // parse back and check object is retained
+        SimpleFeature parsedFeature = GeoJSONReader.parseFeature(json);
+        assertEquals(feature.getAttribute("object"), parsedFeature.getAttribute("object"));
+    }
+
