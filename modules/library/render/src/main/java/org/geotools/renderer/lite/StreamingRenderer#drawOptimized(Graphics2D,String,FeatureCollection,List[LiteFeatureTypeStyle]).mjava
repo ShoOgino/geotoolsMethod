@@ -19,13 +19,27 @@
             // one is there to make sure a single feature error does not ruin the rendering
             // (best effort) whilst an exception in hasNext() + ignoring catch results in
             // an infinite loop
+            // the projection handlers and screen maps are calculated only for the first
+            // feature in the collection and are cached for reuse by subsequent features
+            boolean firstFeature = true;
+            ProjectionHandler[] handlers = new ProjectionHandler[lfts.size()];
+            ScreenMap[] screenMaps = new ScreenMap[lfts.size()];
             while (iterator.hasNext() && !renderingStopRequested) {
                 rf.setFeature(iterator.next());
                 // draw the feature on the main graphics and on the eventual extra image buffers
-                for (LiteFeatureTypeStyle liteFeatureTypeStyle : lfts) {
-                    processFeature(
-                            rf, liteFeatureTypeStyle, liteFeatureTypeStyle.projectionHandler);
+                for (int i = 0; i < lfts.size(); i++) {
+                    LiteFeatureTypeStyle liteFeatureTypeStyle = lfts.get(i);
+                    if (firstFeature) {
+                        handlers[i] =
+                                checkForReprojection(features, rf, lfts, liteFeatureTypeStyle);
+                        screenMaps[i] = rf.screenMap;
+                    } else {
+                        rf.layer = liteFeatureTypeStyle.layer;
+                        rf.setScreenMap(screenMaps[i]);
+                    }
+                    processFeature(rf, liteFeatureTypeStyle, handlers[i]);
                 }
+                firstFeature = false;
             }
             // submit the merge request
             requests.put(new MergeLayersRequest(graphics, lfts));
