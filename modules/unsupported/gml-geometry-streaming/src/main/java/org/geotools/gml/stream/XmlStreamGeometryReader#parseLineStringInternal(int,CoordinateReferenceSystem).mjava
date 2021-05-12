@@ -1,0 +1,54 @@
+    private Coordinate[] parseLineStringInternal(int dimension, CoordinateReferenceSystem crs)
+            throws XMLStreamException, IOException {
+
+        final QName lineElementName = reader.getName();
+
+        reader.nextTag();
+        Coordinate[] lineCoords;
+
+        final QName coordsName = reader.getName();
+        String tagName = reader.getLocalName();
+        if (GML.pos.equals(coordsName)) {
+            Coordinate[] point;
+            List<Coordinate> coords = new ArrayList<>();
+            int eventType;
+            do {
+                point = parseCoordList(dimension, crs);
+                coords.add(point[0]);
+                reader.nextTag();
+                tagName = reader.getLocalName();
+                eventType = reader.getEventType();
+            } while (eventType == START_ELEMENT && GML.pos.getLocalPart().equals(tagName));
+
+            lineCoords = coords.toArray(new Coordinate[coords.size()]);
+
+        } else if (GML.posList.equals(coordsName)) {
+            // parser.require(START_ELEMENT, GML.NAMESPACE,
+            // GML.posList.getLocalPart());
+            lineCoords = parseCoordList(dimension, crs);
+            reader.nextTag();
+        } else if (GML.coordinates.equals(coordsName)) {
+            lineCoords = parseCoordinates(dimension, crs);
+            reader.nextTag();
+        } else if (GML.coord.equals(coordsName)) {
+            Coordinate point;
+            List<Coordinate> coords = new ArrayList<>();
+            int eventType;
+            do {
+                point = parseCoord();
+                coords.add(point);
+                reader.nextTag();
+                tagName = reader.getLocalName();
+                eventType = reader.getEventType();
+            } while (eventType == START_ELEMENT && GML.coord.getLocalPart().equals(tagName));
+
+            lineCoords = coords.toArray(new Coordinate[coords.size()]);
+        } else {
+            throw new IllegalStateException(
+                    "Expected posList or pos inside LinearRing: " + tagName);
+        }
+        reader.require(
+                END_ELEMENT, lineElementName.getNamespaceURI(), lineElementName.getLocalPart());
+        return lineCoords;
+    }
+

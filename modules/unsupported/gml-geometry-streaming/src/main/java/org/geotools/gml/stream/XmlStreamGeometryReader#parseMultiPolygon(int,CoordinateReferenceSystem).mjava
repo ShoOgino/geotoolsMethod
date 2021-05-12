@@ -1,0 +1,28 @@
+    private Geometry parseMultiPolygon(int dimension, CoordinateReferenceSystem crs)
+            throws XMLStreamException, IOException, NoSuchAuthorityCodeException, FactoryException {
+
+        reader.require(START_ELEMENT, GML.NAMESPACE, GML.MultiPolygon.getLocalPart());
+
+        List<Polygon> polygons = new ArrayList<>(2);
+        reader.nextTag();
+        while (true) {
+            reader.require(START_ELEMENT, GML.NAMESPACE, GML.polygonMember.getLocalPart());
+            reader.nextTag();
+            reader.require(START_ELEMENT, GML.NAMESPACE, GML.Polygon.getLocalPart());
+            Polygon p = parsePolygon(dimension, crs);
+            polygons.add(p);
+            reader.nextTag();
+            reader.require(END_ELEMENT, GML.NAMESPACE, GML.polygonMember.getLocalPart());
+            reader.nextTag();
+            if (END_ELEMENT == reader.getEventType()
+                    && GML.MultiPolygon.getLocalPart().equals(reader.getLocalName())) {
+                // we're done
+                break;
+            }
+        }
+        reader.require(END_ELEMENT, GML.NAMESPACE, GML.MultiPolygon.getLocalPart());
+
+        Geometry geom = geomFac.createMultiPolygon(polygons.toArray(new Polygon[polygons.size()]));
+        return geom;
+    }
+

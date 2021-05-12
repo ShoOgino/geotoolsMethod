@@ -1,0 +1,75 @@
+    /**
+     * Parses a polygon.
+     *
+     * <p>Precondition: parser positioned at a {@link GML#Polygon Polygon} start tag
+     *
+     * <p>Postcondition: parser positioned at the {@link GML#Polygon Polygon} end tag of the
+     * starting tag
+     */
+    private Polygon parsePolygon(int dimension, CoordinateReferenceSystem crs)
+            throws XMLStreamException, IOException, NoSuchAuthorityCodeException, FactoryException {
+        LinearRing shell;
+        List<LinearRing> holes = null;
+
+        reader.nextTag();
+        reader.require(START_ELEMENT, GML.NAMESPACE, null);
+
+        QName name = reader.getName();
+
+        if (GML.exterior.equals(name)) {
+            reader.nextTag();
+            shell = parseLinearRing(dimension, crs);
+            reader.nextTag();
+            reader.require(END_ELEMENT, GML.NAMESPACE, GML.exterior.getLocalPart());
+        } else if (GML.outerBoundaryIs.equals(name)) {
+            reader.nextTag();
+            reader.require(START_ELEMENT, GML.NAMESPACE, GML.LinearRing.getLocalPart());
+            shell = parseLinearRing(dimension, crs);
+            reader.nextTag();
+            reader.require(END_ELEMENT, GML.NAMESPACE, GML.outerBoundaryIs.getLocalPart());
+        } else {
+            throw new IllegalStateException("Unknown polygon boundary element: " + name);
+        }
+
+        reader.nextTag();
+
+        name = reader.getName();
+
+        if (START_ELEMENT == reader.getEventType()) {
+            if (GML.interior.equals(name) || GML.innerBoundaryIs.equals(name)) {
+                // parse interior rings
+                holes = new ArrayList<>(2);
+                while (true) {
+                    reader.require(START_ELEMENT, GML.NAMESPACE, name.getLocalPart());
+                    reader.nextTag();
+                    reader.require(START_ELEMENT, GML.NAMESPACE, GML.LinearRing.getLocalPart());
+
+                    LinearRing hole = parseLinearRing(dimension, crs);
+
+                    reader.require(END_ELEMENT, GML.NAMESPACE, GML.LinearRing.getLocalPart());
+
+                    holes.add(hole);
+
+                    reader.nextTag();
+                    reader.require(END_ELEMENT, GML.NAMESPACE, name.getLocalPart());
+                    reader.nextTag();
+                    if (END_ELEMENT == reader.getEventType()) {
+                        // we're done
+                        reader.require(END_ELEMENT, GML.NAMESPACE, GML.Polygon.getLocalPart());
+                        break;
+                    }
+                }
+            }
+        }
+
+        reader.require(END_ELEMENT, GML.NAMESPACE, GML.Polygon.getLocalPart());
+
+        LinearRing[] holesArray = null;
+        if (holes != null) {
+            holesArray = holes.toArray(new LinearRing[holes.size()]);
+        }
+        Polygon geom = geomFac.createPolygon(shell, holesArray);
+        geom.setUserData(crs);
+        return geom;
+    }
+

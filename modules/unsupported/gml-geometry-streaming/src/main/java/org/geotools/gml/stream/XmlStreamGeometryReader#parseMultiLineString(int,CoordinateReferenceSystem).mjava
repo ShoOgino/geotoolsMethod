@@ -1,0 +1,39 @@
+    /**
+     * Parses a MultiLineString.
+     *
+     * <p>Precondition: parser positioned at a {@link GML#MultiLineString MultiLineString} start tag
+     *
+     * <p>Postcondition: parser positioned at the {@link GML#MultiLineString MultiLineString} end
+     * tag of the starting tag
+     */
+    private MultiLineString parseMultiLineString(int dimension, CoordinateReferenceSystem crs)
+            throws XMLStreamException, IOException, NoSuchAuthorityCodeException, FactoryException {
+
+        reader.require(START_ELEMENT, GML.NAMESPACE, GML.MultiLineString.getLocalPart());
+
+        List<LineString> lines = new ArrayList<>(2);
+
+        while (true) {
+            reader.nextTag();
+            if (END_ELEMENT == reader.getEventType()
+                    && GML.MultiLineString.getLocalPart().equals(reader.getLocalName())) {
+                // we're done
+                break;
+            }
+            reader.require(START_ELEMENT, GML.NAMESPACE, GML.lineStringMember.getLocalPart());
+            reader.nextTag();
+            reader.require(START_ELEMENT, GML.NAMESPACE, GML.LineString.getLocalPart());
+
+            LineString line = parseLineString(dimension, crs);
+            lines.add(line);
+            reader.nextTag();
+            reader.require(END_ELEMENT, GML.NAMESPACE, GML.lineStringMember.getLocalPart());
+        }
+
+        reader.require(END_ELEMENT, GML.NAMESPACE, GML.MultiLineString.getLocalPart());
+
+        MultiLineString geom =
+                geomFac.createMultiLineString(lines.toArray(new LineString[lines.size()]));
+        return geom;
+    }
+

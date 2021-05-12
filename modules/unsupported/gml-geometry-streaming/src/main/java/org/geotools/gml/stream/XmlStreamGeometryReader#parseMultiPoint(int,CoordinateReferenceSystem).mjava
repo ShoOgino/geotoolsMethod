@@ -1,0 +1,48 @@
+    /**
+     * Parses a MultiPoint.
+     *
+     * <p>Precondition: parser positioned at a {@link GML#MultiPoint MultiPoint} start tag
+     *
+     * <p>Postcondition: parser positioned at the {@link GML#MultiPoint MultiPoint} end tag of the
+     * starting tag
+     */
+    private Geometry parseMultiPoint(int dimension, CoordinateReferenceSystem crs)
+            throws XMLStreamException, IOException, NoSuchAuthorityCodeException, FactoryException {
+        reader.nextTag();
+        final QName memberTag = reader.getName();
+        List<Point> points = new ArrayList<>(4);
+        if (GML.pointMembers.equals(memberTag)) {
+            while (true) {
+                reader.nextTag();
+                if (END_ELEMENT == reader.getEventType()
+                        && GML.pointMembers.getLocalPart().equals(reader.getLocalName())) {
+                    // we're done
+                    break;
+                }
+                Point p = parsePoint(dimension, crs);
+                points.add(p);
+            }
+            reader.nextTag();
+        } else if (GML.pointMember.equals(memberTag)) {
+            while (true) {
+                reader.nextTag();
+                reader.require(START_ELEMENT, GML.NAMESPACE, GML.Point.getLocalPart());
+
+                Point p = parsePoint(dimension, crs);
+                points.add(p);
+                reader.nextTag();
+                reader.require(END_ELEMENT, GML.NAMESPACE, GML.pointMember.getLocalPart());
+                reader.nextTag();
+                if (END_ELEMENT == reader.getEventType()
+                        && GML.MultiPoint.getLocalPart().equals(reader.getLocalName())) {
+                    // we're done
+                    break;
+                }
+            }
+        }
+        reader.require(END_ELEMENT, GML.NAMESPACE, GML.MultiPoint.getLocalPart());
+
+        Geometry geom = geomFac.createMultiPoint(points.toArray(new Point[points.size()]));
+        return geom;
+    }
+

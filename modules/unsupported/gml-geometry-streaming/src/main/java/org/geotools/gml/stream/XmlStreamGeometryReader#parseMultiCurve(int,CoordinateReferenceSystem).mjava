@@ -1,0 +1,40 @@
+    private Geometry parseMultiCurve(int dimension, CoordinateReferenceSystem crs)
+            throws IOException, NoSuchAuthorityCodeException, FactoryException, XMLStreamException {
+
+        reader.require(START_ELEMENT, GML.NAMESPACE, GML.MultiCurve.getLocalPart());
+
+        List<LineString> lines = new ArrayList<>(2);
+
+        while (true) {
+            reader.nextTag();
+            if (END_ELEMENT == reader.getEventType()
+                    && GML.MultiCurve.getLocalPart().equals(reader.getLocalName())) {
+                // we're done
+                break;
+            }
+            reader.require(START_ELEMENT, GML.NAMESPACE, GML.curveMember.getLocalPart());
+            reader.nextTag();
+            final QName startingGeometryTagName =
+                    new QName(reader.getNamespaceURI(), reader.getLocalName());
+            if (GML.LineString.equals(startingGeometryTagName)) {
+                lines.add(parseLineString(dimension, crs));
+            } else if (GML.CompositeCurve.equals(startingGeometryTagName)) {
+                throw new UnsupportedOperationException(
+                        GML.CompositeCurve + " is not supported yet");
+            } else if (GML.Curve.equals(startingGeometryTagName)) {
+                throw new UnsupportedOperationException(GML.Curve + " is not supported yet");
+            } else if (GML.OrientableCurve.equals(startingGeometryTagName)) {
+                throw new UnsupportedOperationException(
+                        GML.OrientableCurve + " is not supported yet");
+            }
+
+            reader.nextTag();
+            reader.require(END_ELEMENT, GML.NAMESPACE, GML.curveMember.getLocalPart());
+        }
+
+        reader.require(END_ELEMENT, GML.NAMESPACE, GML.MultiCurve.getLocalPart());
+
+        MultiCurve geom = new MultiCurve(lines, geomFac, 1.0);
+        return geom;
+    }
+
