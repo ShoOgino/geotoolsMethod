@@ -1,0 +1,42 @@
+    private LinearRing parseRing(final int dimension, CoordinateReferenceSystem crs)
+            throws XMLStreamException, IOException, NoSuchAuthorityCodeException, FactoryException {
+
+        QName name = reader.getName();
+
+        if (GML.LinearRing.equals(name)) {
+            return parseLinearRing(dimension, crs);
+        }
+
+        reader.require(START_ELEMENT, GML.NAMESPACE, GML.Ring.getLocalPart());
+
+        List<LineString> components = new ArrayList<>();
+
+        reader.nextTag();
+        while (true) {
+            reader.require(START_ELEMENT, GML.NAMESPACE, GML.curveMember.getLocalPart());
+            reader.nextTag();
+
+            name = reader.getName();
+            reader.require(START_ELEMENT, GML.NAMESPACE, null);
+            if (GML.LineString.equals(name)) {
+                components.add(parseLineString(dimension, crs));
+            } else {
+                components.add(parseCurve(dimension, crs));
+            }
+
+            reader.nextTag();
+            reader.require(END_ELEMENT, GML.NAMESPACE, GML.curveMember.getLocalPart());
+            reader.nextTag();
+            if (END_ELEMENT == reader.getEventType()
+                    && GML.Ring.getLocalPart().equals(reader.getLocalName())) {
+                // we're done
+                break;
+            }
+        }
+        // createCurvedGeometry() will create a CompoundRing which extends LinearRing
+        LinearRing linearRing =
+                (LinearRing) this.curvedGeometryFactory.createCurvedGeometry(components);
+        linearRing.setUserData(crs);
+        return linearRing;
+    }
+
