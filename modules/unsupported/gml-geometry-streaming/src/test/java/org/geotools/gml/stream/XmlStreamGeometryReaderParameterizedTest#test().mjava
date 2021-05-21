@@ -1,26 +1,28 @@
     @Test
-    public void test()
-            throws IOException, XMLStreamException, FactoryException, ParserConfigurationException,
-                    SAXException {
-        try (InputStream input =
+    public void test() throws Exception {
+
+        String gml = null;
+
+        try (InputStream gmlBytes =
                 getClass()
                         .getClassLoader()
                         .getResourceAsStream("org/geotools/gml/stream/" + gmlResource)) {
-            XMLInputFactory f = XMLInputFactory.newInstance();
-            f.setProperty(XMLInputFactory.SUPPORT_DTD, Boolean.FALSE);
-            XMLStreamReader r = f.createXMLStreamReader(input);
-            XmlStreamGeometryReader geometryReader = new XmlStreamGeometryReader(r);
-            r.nextTag();
-            Geometry g = geometryReader.readGeometry();
-            assertNotNull(g);
-            assertEquals(expectedGeometryClass, g.getClass());
-            assertEquals(expectedWKT, g.toString());
 
-            if (compareXSD) {
-                Geometry xsdGeometry = parseWithXSD();
-                // Compare via default WKT toString()
-                assertEquals(xsdGeometry.toString(), g.toString());
-            }
+            gml =
+                    new BufferedReader(new InputStreamReader(gmlBytes, StandardCharsets.UTF_8))
+                            .lines()
+                            .collect(Collectors.joining("\n"));
         }
+
+        /* Just use a simple string replace on the namespace URI to make GML 3.2 testcases, assuming no differences in the
+         * geometries exist between GML 2/3.1 and 3.2.
+         */
+        String gml3_2 =
+                gml.replaceAll(
+                        Pattern.quote("http://www.opengis.net/gml"),
+                        "http://www.opengis.net/gml/3.2");
+
+        testWithGmlString(gml, false);
+        testWithGmlString(gml3_2, true);
     }
 
